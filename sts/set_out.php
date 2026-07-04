@@ -84,6 +84,7 @@
       // was the Finish button clicked?
       if (isset($_GET['finish_btn']))
       {
+        $num_cars_set_out = 0;
         // only try to close out a switchlist if there was one to be closed out in the first place
         if (isset($_GET['row_count']))
         {
@@ -119,6 +120,10 @@
               if(!mysqli_query($dbc, $sql))
               {
                 print 'Update Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br />';
+              }
+              else
+              {
+                $num_cars_set_out++;
               }
 
               // get the info that the history table needs
@@ -273,6 +278,10 @@
             }
           }
         }
+        print '<div class="alert alert-success noprint d-flex align-items-center justify-content-between gap-3 flex-wrap">';
+        print '<span>' . $num_cars_set_out . ' car(s) set out.</span>';
+        print '<a class="btn btn-success" href="build_switchlists.php">Return to Build Switch Lists</a>';
+        print '</div>';
       }
       print '<div class="noprint">';
       // choose to display all set out location possibilities for the selected job or only the default locations
