@@ -2,6 +2,10 @@
 
 All notable HART fork changes use semantic versioning (`x.y.z`).
 
+## [0.2.4] - 2026-07-04
+
+- Redrew the Menu and Site Map image labels to better match the original STS menu icon font size and borders.
+
 ## [0.2.3] - 2026-07-04
 
 - Renamed the main menu image labels from "Menu (Touch)" to "Menu" and from "Menu (Text)" to "Site Map".
