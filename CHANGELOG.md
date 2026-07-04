@@ -2,6 +2,10 @@
 
 All notable HART fork changes use semantic versioning (`x.y.z`).
 
+## [0.4.2] - 2026-07-04
+
+- Swapped the Data Files and Session Reset Tools cards on the Database Maintenance page.
+
 ## [0.4.1] - 2026-07-04
 
 - Moved Database Management Data Files actions to the Database Maintenance page.
