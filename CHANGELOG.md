@@ -2,6 +2,10 @@
 
 All notable HART fork changes use semantic versioning (`x.y.z`).
 
+## [0.2.2] - 2026-07-04
+
+- Changed the Database Management header shortcut to link to Database Maintenance using the red DB Maintain icon.
+
 ## [0.2.1] - 2026-07-04
 
 - Added a post-setout navigation button back to Build Switch Lists.
