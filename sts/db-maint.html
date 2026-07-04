@@ -80,7 +80,7 @@
     </div>
   </nav>
 
-  <div class="container mt-4" style="max-width: 960px;">
+  <div class="container mt-4" style="max-width: 1080px;">
     <div class="page-hero mb-4">
       <div class="row g-0 align-items-center">
         <div class="col-md-2 text-center p-3">
@@ -91,13 +91,13 @@
         </div>
         <div class="col-md-5 p-3">
           <h4 class="mb-1">Database Maintenance</h4>
-          <p class="mb-0 text-muted">Validate data integrity, restart the session, reset cars, wipe data, or adjust system settings.</p>
+          <p class="mb-0 text-muted">Validate data integrity, manage data files, restart the session, reset cars, wipe data, or adjust system settings.</p>
         </div>
       </div>
     </div>
 
     <div class="row g-4">
-      <div class="col-md-6">
+      <div class="col-md-4">
         <div class="maint-group">
           <div class="section-header red"><i class="bi bi-heart-pulse"></i> Maintenance</div>
           <a href="validate_db.php" class="maint-btn red-link">
@@ -117,7 +117,7 @@
         </div>
       </div>
 
-      <div class="col-md-6">
+      <div class="col-md-4">
         <div class="maint-group">
           <div class="section-header dark-red"><i class="bi bi-exclamation-triangle"></i> Session Reset Tools</div>
           <a href="restart.php" class="maint-btn danger-link">
@@ -139,6 +139,40 @@
             <div>
               <div class="maint-btn-title">Wipe Database</div>
               <div class="maint-btn-desc">Remove STS data. Use only when intentionally rebuilding.</div>
+            </div>
+          </a>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="maint-group">
+          <div class="section-header red"><i class="bi bi-hdd"></i> Data Files</div>
+          <a href="backup_db.php" class="maint-btn red-link">
+            <i class="bi bi-download maint-icon"></i>
+            <div>
+              <div class="maint-btn-title">Create Backup</div>
+              <div class="maint-btn-desc">Export the current STS database.</div>
+            </div>
+          </a>
+          <a href="restore_db.php" class="maint-btn red-link">
+            <i class="bi bi-upload maint-icon"></i>
+            <div>
+              <div class="maint-btn-title">Restore Backup</div>
+              <div class="maint-btn-desc">Restore STS data from a backup file.</div>
+            </div>
+          </a>
+          <a href="remove_backup.php" class="maint-btn red-link">
+            <i class="bi bi-trash maint-icon"></i>
+            <div>
+              <div class="maint-btn-title">Remove Backup</div>
+              <div class="maint-btn-desc">Clean up old backup files.</div>
+            </div>
+          </a>
+          <a href="import_tables.php" class="maint-btn red-link">
+            <i class="bi bi-file-earmark-arrow-up maint-icon"></i>
+            <div>
+              <div class="maint-btn-title">Import Data</div>
+              <div class="maint-btn-desc">Import tables from external files.</div>
             </div>
           </a>
         </div>

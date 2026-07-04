@@ -51,15 +51,12 @@
     .brown { background-color: #795548; }
     .dark-brown { background-color: #5d4037; }
     .tan { background-color: #8d6e63; }
-    .red { background-color: #dc3545; }
     .brown-link:hover { background-color: #fff8f4; }
     .brown-link .db-icon { color: #795548; }
     .dark-brown-link:hover { background-color: #faf5f2; }
     .dark-brown-link .db-icon { color: #5d4037; }
     .tan-link:hover { background-color: #fbf6f2; }
     .tan-link .db-icon { color: #8d6e63; }
-    .red-link:hover { background-color: #fff5f5; }
-    .red-link .db-icon { color: #dc3545; }
   </style>
 </head>
 <body>
@@ -94,7 +91,7 @@
         </div>
         <div class="col-md-5 p-3">
           <h4 class="mb-1">Database Management</h4>
-          <p class="mb-0 text-muted">Browse tables, scan records, review rolling stock, and manage STS data files.</p>
+          <p class="mb-0 text-muted">Browse tables, scan records, review rolling stock, and manage STS records.</p>
         </div>
       </div>
     </div>
@@ -194,37 +191,6 @@
           </a>
         </div>
 
-        <div class="db-group mt-4">
-          <div class="section-header red"><i class="bi bi-hdd"></i> Data Files</div>
-          <a href="backup_db.php" class="db-btn red-link">
-            <i class="bi bi-download db-icon"></i>
-            <div>
-              <div class="db-btn-title">Create Backup</div>
-              <div class="db-btn-desc">Export the current STS database</div>
-            </div>
-          </a>
-          <a href="restore_db.php" class="db-btn red-link">
-            <i class="bi bi-upload db-icon"></i>
-            <div>
-              <div class="db-btn-title">Restore Backup</div>
-              <div class="db-btn-desc">Restore STS data from a backup file</div>
-            </div>
-          </a>
-          <a href="remove_backup.php" class="db-btn red-link">
-            <i class="bi bi-trash db-icon"></i>
-            <div>
-              <div class="db-btn-title">Remove Backup</div>
-              <div class="db-btn-desc">Clean up old backup files</div>
-            </div>
-          </a>
-          <a href="import_tables.php" class="db-btn red-link">
-            <i class="bi bi-file-earmark-arrow-up db-icon"></i>
-            <div>
-              <div class="db-btn-title">Import Data</div>
-              <div class="db-btn-desc">Import tables from external files</div>
-            </div>
-          </a>
-        </div>
       </div>
     </div>
   </div>
