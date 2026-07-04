@@ -26,37 +26,29 @@
       border-radius: 4px;
       font-weight: 600;
     }
-    .menu-group {
+    .menu-table {
       border-radius: 6px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.1);
       overflow: hidden;
       background: #fff;
-      height: 100%;
-    }
-    .section-header {
-      color: white;
-      font-weight: 600;
-      padding: 10px 16px;
-      font-size: 0.95rem;
-      display: flex;
-      align-items: center;
-      gap: 8px;
+      border: 1px solid #dee2e6;
     }
     .menu-btn {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 16px;
+      gap: 16px;
+      min-height: 112px;
+      padding: 20px;
       text-decoration: none;
       color: #333;
       background: #fff;
-      border-bottom: 1px solid #dee2e6;
+      border: 1px solid #dee2e6;
       transition: background-color 0.15s;
+      height: 100%;
     }
-    .menu-btn:last-child { border-bottom: none; }
     .menu-btn:hover { color: #333; text-decoration: none; }
-    .menu-btn i.menu-icon { font-size: 1.5rem; width: 28px; flex-shrink: 0; }
-    .menu-btn-title { font-weight: 600; line-height: 1.2; }
+    .menu-btn i.menu-icon { font-size: 2rem; width: 40px; flex-shrink: 0; }
+    .menu-btn-title { font-weight: 700; line-height: 1.2; }
     .menu-btn-desc { color: #666; font-size: 0.82rem; margin-top: 2px; }
     .green { background-color: #2e7d32; }
     .blue { background-color: #0000cc; }
@@ -64,16 +56,22 @@
     .red { background-color: #dc3545; }
     .orange { background-color: #f39c12; }
     .gray { background-color: #6c757d; }
+    .green-link { border-left: 8px solid #2e7d32; }
     .green-link:hover { background-color: #f0fff4; }
     .green-link .menu-icon { color: #2e7d32; }
+    .blue-link { border-left: 8px solid #0000cc; }
     .blue-link:hover { background-color: #f2f4ff; }
     .blue-link .menu-icon { color: #0000cc; }
+    .brown-link { border-left: 8px solid #795548; }
     .brown-link:hover { background-color: #fff8f4; }
     .brown-link .menu-icon { color: #795548; }
+    .red-link { border-left: 8px solid #dc3545; }
     .red-link:hover { background-color: #fff5f5; }
     .red-link .menu-icon { color: #dc3545; }
+    .orange-link { border-left: 8px solid #f39c12; }
     .orange-link:hover { background-color: #fff9ed; }
     .orange-link .menu-icon { color: #f39c12; }
+    .gray-link { border-left: 8px solid #6c757d; }
     .gray-link:hover { background-color: #f8f9fa; }
     .gray-link .menu-icon { color: #6c757d; }
   </style>
@@ -121,43 +119,39 @@
       </div>
     </div>
 
-    <div class="row g-4">
-      <div class="col-md-4">
-        <div class="menu-group">
-          <div class="section-header green"><i class="bi bi-train-freight-front"></i> Operations</div>
+    <div class="menu-table">
+      <div class="row g-0">
+        <div class="col-md-4">
           <a href="operations.html" class="menu-btn green-link">
-            <i class="bi bi-list-check menu-icon"></i>
+            <i class="bi bi-train-freight-front menu-icon"></i>
             <div>
-              <div class="menu-btn-title">Operations Menu</div>
+              <div class="menu-btn-title">Operations</div>
               <div class="menu-btn-desc">Generate, assign, pick up, set out, and load cars</div>
             </div>
           </a>
         </div>
-      </div>
 
-      <div class="col-md-4">
-        <div class="menu-group">
-          <div class="section-header blue"><i class="bi bi-file-text"></i> Reports</div>
+        <div class="col-md-4">
           <a href="reports.html" class="menu-btn blue-link">
-            <i class="bi bi-printer menu-icon"></i>
+            <i class="bi bi-file-text menu-icon"></i>
             <div>
-              <div class="menu-btn-title">Reports Menu</div>
+              <div class="menu-btn-title">Reports</div>
               <div class="menu-btn-desc">Switchlists, station reports, waybills, and fleet reports</div>
             </div>
           </a>
         </div>
-      </div>
 
-      <div class="col-md-4">
-        <div class="menu-group">
-          <div class="section-header brown"><i class="bi bi-database"></i> Database</div>
+        <div class="col-md-4">
           <a href="database.html" class="menu-btn brown-link">
-            <i class="bi bi-table menu-icon"></i>
+            <i class="bi bi-database menu-icon"></i>
             <div>
               <div class="menu-btn-title">Database Management</div>
               <div class="menu-btn-desc">Browse cars, shipments, locations, jobs, and routing</div>
             </div>
           </a>
+        </div>
+
+        <div class="col-md-4">
           <a href="db-maint.html" class="menu-btn red-link">
             <i class="bi bi-tools menu-icon"></i>
             <div>
@@ -166,36 +160,23 @@
             </div>
           </a>
         </div>
-      </div>
 
-      <div class="col-md-6">
-        <div class="menu-group">
-          <div class="section-header orange"><i class="bi bi-people"></i> Club</div>
+        <div class="col-md-4">
           <a href="club_index.html" class="menu-btn orange-link">
-            <i class="bi bi-building menu-icon"></i>
+            <i class="bi bi-people menu-icon"></i>
             <div>
               <div class="menu-btn-title">Club Operations</div>
               <div class="menu-btn-desc">Tools for multi-user or club operating sessions</div>
             </div>
           </a>
         </div>
-      </div>
 
-      <div class="col-md-6">
-        <div class="menu-group">
-          <div class="section-header gray"><i class="bi bi-info-circle"></i> System</div>
+        <div class="col-md-4">
           <a href="about.html" class="menu-btn gray-link">
-            <i class="bi bi-question-circle menu-icon"></i>
+            <i class="bi bi-info-circle menu-icon"></i>
             <div>
               <div class="menu-btn-title">About STS</div>
               <div class="menu-btn-desc">About, version, contact, and documentation links</div>
-            </div>
-          </a>
-          <a href="index-t.html" class="menu-btn gray-link">
-            <i class="bi bi-diagram-3 menu-icon"></i>
-            <div>
-              <div class="menu-btn-title">Site Map</div>
-              <div class="menu-btn-desc">Text-based index of all STS pages</div>
             </div>
           </a>
         </div>

@@ -2,6 +2,10 @@
 
 All notable HART fork changes use semantic versioning (`x.y.z`).
 
+## [0.3.1] - 2026-07-04
+
+- Refined the main menu into a single six-tile grid and removed the duplicate Site Map tile from the page body.
+
 ## [0.3.0] - 2026-07-04
 
 - Modernized the main menu with a responsive Bootstrap card layout while preserving the section color scheme.
