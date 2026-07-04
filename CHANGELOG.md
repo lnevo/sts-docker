@@ -2,6 +2,10 @@
 
 All notable HART fork changes use semantic versioning (`x.y.z`).
 
+## [0.2.0] - 2026-07-04
+
+- Added workflow navigation buttons after generating car orders, assigning switchlists, auto-assigning cars, and picking up cars.
+
 ## [0.1.3] - 2026-07-04
 
 - Changed build switchlists bulk-assignment checkboxes to default unchecked so no cars are selected automatically.

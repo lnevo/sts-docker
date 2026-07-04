@@ -81,6 +81,7 @@
     {
       print '<br />No cars were selected to be assigned to Job/Train ' . $job_name;
     }
+    print '<br /><br /><a href="pick_up.php"><button type="button">Go to Pick Up Cars</button></a>';
   }
   else
   {  

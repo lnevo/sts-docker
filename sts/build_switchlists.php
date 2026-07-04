@@ -83,6 +83,7 @@
       {
         // get the number of rows that were on the page
         $row_count = $_POST['row_count'];
+        $num_cars_assigned = 0;
 
         // mark the cars selected for pickup by the user
         for ($i=0; $i<$row_count; $i++)
@@ -101,6 +102,10 @@
             if(!mysqli_query($dbc, $sql))
             {
               print 'Update Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql;
+            }
+            else
+            {
+              $num_cars_assigned++;
             }
 
             // get the info that the history table needs
@@ -134,6 +139,10 @@
             }
           }
         }
+        print '<div class="alert alert-success noprint d-flex align-items-center justify-content-between gap-3 flex-wrap">';
+        print '<span>' . $num_cars_assigned . ' car(s) assigned to pickup jobs.</span>';
+        print '<a class="btn btn-success" href="pick_up.php">Go to Pick Up Cars</a>';
+        print '</div>';
       }
     ?>
     <br /><br />

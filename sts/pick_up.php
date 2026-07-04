@@ -102,6 +102,7 @@
       // was the Finish button clicked?
       if (isset($_GET['finish_btn']))
       {
+        $num_cars_picked_up = 0;
         // only try to pick cars if there were some to be picked up in the first place
         if (isset($_GET['row_count']))
         {
@@ -169,9 +170,17 @@
               {
                 print 'Insert error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
               }
+              else
+              {
+                $num_cars_picked_up++;
+              }
             }
           }
         }
+        print '<div class="alert alert-success noprint d-flex align-items-center justify-content-between gap-3 flex-wrap">';
+        print '<span>' . $num_cars_picked_up . ' car(s) picked up.</span>';
+        print '<a class="btn btn-success" href="set_out.php">Go to Set Out Cars</a>';
+        print '</div>';
       }
       print '<div class="noprint mb-3">';
       // generate the list of jobs from which the user can choose

@@ -146,6 +146,8 @@
 
       // get a database connection
       $dbc = open_db();
+      $orders_generated = false;
+      $generated_order_count = 0;
 
       // bring in and display the current operating session number
       $sql = 'select setting_value from settings where setting_name = "session_nbr"';
@@ -234,11 +236,14 @@
           }
           // display the number of car orders created
           print $waybill_counter . ' car orders generated<br /><br />';
+          $orders_generated = true;
+          $generated_order_count = $waybill_counter;
         }
       }
       elseif (isset($_POST['mangenerate_btn']))         // -------------------------------- was the "Manual Generate" button clicked?
       {
         // initialize the waybill counter
+        $manual_generated_count = 0;
         $sql = 'select max(substr(waybill_number, 6, 2)) from car_orders where waybill_number like "' . str_pad($session_number, 3, '0', STR_PAD_LEFT) . '-M__"';
         $rs = mysqli_query($dbc, $sql);
         $row = mysqli_fetch_row($rs);
@@ -282,9 +287,21 @@
                 print 'Insert Error: [' . mysqli_error($dbc) . '] SQL: ' . $sql . '<br /><br />';
                 die();
               }
+              $manual_generated_count++;
             }
           }
         }
+        print $manual_generated_count . ' manual car orders generated<br /><br />';
+        $orders_generated = true;
+        $generated_order_count = $manual_generated_count;
+      }
+
+      if ($orders_generated)
+      {
+        print '<div class="alert alert-success noprint d-flex align-items-center justify-content-between gap-3 flex-wrap">';
+        print '<span>' . $generated_order_count . ' car order(s) ready for filling.</span>';
+        print '<a class="btn btn-success" href="fill_orders.php">Go to Fill Car Orders</a>';
+        print '</div>';
       }
 
 //-------------------------------------------- automatic generation -------------------------------------------
