@@ -2,6 +2,10 @@
 
 All notable HART fork changes use semantic versioning (`x.y.z`).
 
+## [0.3.2] - 2026-07-04
+
+- Moved Cars into Reference Data on the Database Management page and renamed the remaining table group to Traffic and Routing.
+
 ## [0.3.1] - 2026-07-04
 
 - Refined the main menu into a single six-tile grid and removed the duplicate Site Map tile from the page body.
