@@ -2,6 +2,11 @@
 
 All notable HART fork changes use semantic versioning (`x.y.z`).
 
+## [0.4.3] - 2026-07-04
+
+- Modernized the Site Map page while preserving accessible text navigation.
+- Polished About page navigation and external-link handling.
+
 ## [0.4.2] - 2026-07-04
 
 - Swapped the Data Files and Session Reset Tools cards on the Database Maintenance page.

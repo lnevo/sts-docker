@@ -1,153 +1,199 @@
-<html>
-  <head>
-    <title>STS - Site Map</title>
-    <style>
-      body {font: normal 20px Verdana, Ariel, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px; vertical-align: middle; font: normal 25px Verdana, Ariel, sans-serif;}
-      td {border: 1px solid black; padding: 10px;}
-    </style>
-    <script>
-      function get_session_nbr()
-      {
-        // submit the request for the cars at the selected station
-        var xmlhttp = new XMLHttpRequest();
-        xmlhttp.onreadystatechange = function()
-        {
-          if (this.readyState == 4 && this.status == 200)
-          {
-             display_session_nbr(this);
-          }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STS - Site Map</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f8f9fa; font-size: 1.1rem; }
+    .navbar-sitemap { background-color: #6c757d; }
+    .page-hero {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    .page-hero img { max-height: 110px; object-fit: contain; }
+    .site-card {
+      background: #fff;
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      overflow: hidden;
+      height: 100%;
+    }
+    .site-card h2 {
+      background-color: #6c757d;
+      color: #fff;
+      font-size: 1.25rem;
+      margin: 0;
+      padding: 12px 16px;
+    }
+    .site-section { padding: 16px; border-bottom: 1px solid #dee2e6; }
+    .site-section:last-child { border-bottom: none; }
+    .site-section h3 { font-size: 1.05rem; margin-bottom: 10px; }
+    .site-section ul { margin-bottom: 0; padding-left: 1.4rem; }
+    .site-section li { margin-bottom: 10px; }
+    .site-section a { font-weight: 500; }
+  </style>
+  <script>
+    function get_session_nbr() {
+      const xmlhttp = new XMLHttpRequest();
+      xmlhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+          document.getElementById("session_number").innerText = " Operating Session " + this.responseText;
         }
-        var url = 'get_session_nbr.php';
-        xmlhttp.open('GET', url, true);
-        xmlhttp.send();
       }
-      
-      function display_session_nbr(xmlhttp)
-      {
-        document.getElementById("title").innerHTML = document.getElementById("title").innerHTML + " Operating Session " + xmlhttp.responseText;
-      }
-    </script>
-  </head>
-  <body onload="get_session_nbr();">
-<table border="1" cellspacing="2" cellpadding="2" width="30%">
-  <tr> 
-    <td bgcolor="CCCCCC"><img src="ImageStore/GUI/STS-logo.jpg" width="114" height="114"></td>
-    <td bgcolor="CCCCCC"><img src="ImageStore/GUI/logo.jpg" width="224" height="114"></td>
-    <td bgcolor="CCCCCC"><img src="ImageStore/GUI/steam.gif" width="202" height="114"></td>
-    <td bgcolor="#000000"><p>&nbsp;</p>
-      <p align="center"><a href="index.html"><img src="ImageStore/GUI/Menu/Touch-s.png" width="138" height="38"></a></p>
-      <p align="center">&nbsp;</p></td>
-  </tr>
-</table>
-<h1 id="title">Shipper-driven Traffic Simulator</h1>
-    <table>
-      <tr>
-        <th>Simulation Operations</th>
-        <th>Reports</th>
-        <th>Database Operations</th>
-      </tr>
-      <tr>
-        <td>
-          <b>Before Ops</b>
-          <ul>
-            <li><a href="generate.php">Generate Car Orders</a></li><br />
-            <li><a href="fill_orders.php">Fill Car Orders</a></li><br />
-            <li><a href="reposition.php">Reposition Empty Cars</a></li><br />
-          </ul>
-          <b>During Ops</b>
-          <ul>
-            <li><a href="build_switchlists.php">Assign Cars</a></li><br />
-            <li><a href="pick_up.php">Pick Up Cars</a></li><br />
-            <li><a href="organize_cars.php">View/Organize Cars</a></li><br />
-            <li><a href="set_out.php">Set Out Cars</a></li><br />
-          </ul>
-          <b>After Ops</b>
-          <ul>
-            <li><a href="load_unload.php">Load/Unload Cars</a></li><br />
-          </ul>
-        </td>
-        <td>
-          <b>Operating Documents</b>
-          <ul>
-            <li><a href="display_switchlist.php">Switchlists</a></li><br />
-            <li><a href="display_station_report.php">Station Car Report</a></li><br />
-            <li><a href="wheel_report.php">Wheel Report</a></li><br />
-          </ul>
-          <b>Waybills</b>
-          <ul>
-            <li><a href="display_waybill.php">Large Format Waybills (using filled car orders)</a></li><br />
-            <li><a href="printable_ccwaybill2.php">Small Format Waybills (using car orders)</a></li><br />
-            <li><a href="printable_ccwaybill.php">Small Format Waybills (using shipments)</a></li><br />
-          </ul>
-          <b>Management Reports</b>
-          <ul>
-            <li><a href="display_fleet_report.php">Car Fleet Management Report</a></li><br />
-            <li><a href="shipment_forecast.php">Shipment Forecast</a></li><br />
-            <li><a href="car_forecast.php">Car Loading Forecast</a></li><br />
-            <li><a href="display_car_qr_report.php">Car QR or Bar Code Report</a></li><br />
-            <li><a href="display_station_qr_code_report.php">Location QR or Bar Code Report</a></li><br />
-          </ul>
-        </td>
-        <td>
-          <b>Quick Query and Photo ID</b>
-          <ul>
-            <li><a href="scan_car.php">Scan/Query Car</a></li><br />
-            <li><a href="scan_location.php">Scan/Query Location</a></li><br />
-            <li><a href="rollingstock_album.php">Rollingstock Photo Album</a></li><br />
-          </ul>
-          <b>Database Contents Management</b>
-          <ul>
-            <li><a href="db_list.php?tbl_name=car_orders">Car Orders</a></li><br />
-            <li><a href="db_list.php?tbl_name=jobs">Jobs</a></li><br />
-            <li><a href="db_list.php?tbl_name=cars">Cars</a></li><br />
-            <li><a href="db_list.php?tbl_name=shipments">Shipments</a></li><br />
-            <li><a href="db_list.php?tbl_name=locations">Locations</a></li><br />
-            <li><a href="db_list.php?tbl_name=routing">Stations and Routing Instructions</a></li><br />
-            <li><a href="db_list.php?tbl_name=car_codes">Car Codes</a></li><br />
-            <li><a href="db_list.php?tbl_name=commodities">Commodities</a></li><br>
-          </ul>
-          <b>Database Maintenance</b>
-          <ul>
-            <li><a href="club_index.html">Club Operations</a></li><br />
-            <li><a href="backup_db.php">Create a backup copy of the database</a></li><br />
-            <li><a href="restore_db.php">Restore the database from a backup copy</a></li><br />
-            <li><a href="remove_backup.php">Remove a backup copy</a></li><br />
-            <li><a href="import_tables.php">Import data from a file into a table</a></li><br />
-            <li><a href="validate_db.php">Validate important database contents</a></li><br />
-            <li><a href="restart.php">Restart System</a> (Restarts shippers, cancels waybills, releases all cars)</li><br />
-            <li><a href="reset.php">Reset System</a> (Same as Restart but also resets cars)</li><br />
-            <li><a href="wipe.php">Wipe System</a> (WARNING! This will erase everything!)</li><br />
-            <li><a href="settings.php">Settings</a></li><br />
-          </ul>
-        </td>
-      </tr>
-    </table>
-  <p>
-    <script>
-      function get_session_nbr()
-      {
-        // submit the request for the cars at the selected station
-        var xmlhttp = new XMLHttpRequest();
-        xmlhttp.onreadystatechange = function()
-        {
-          if (this.readyState == 4 && this.status == 200)
-          {
-             display_session_nbr(this);
-          }
-        }
-        var url = 'get_session_nbr.php';
-        xmlhttp.open('GET', url, true);
-        xmlhttp.send();
-      }
-      
-      function display_session_nbr(xmlhttp)
-      {
-        document.getElementById("title").innerHTML = document.getElementById("title").innerHTML + " - Operating Session " + xmlhttp.responseText;
-      }
-    </script>
-  </head>
-  <body onload="get_session_nbr();">&nbsp;</p></body>
+      xmlhttp.open('GET', 'get_session_nbr.php', true);
+      xmlhttp.send();
+    }
+  </script>
+</head>
+<body onload="get_session_nbr();">
+  <nav class="navbar navbar-dark navbar-sitemap noprint">
+    <div class="container-fluid">
+      <span class="navbar-brand"><i class="bi bi-diagram-3"></i> Site Map</span>
+      <div>
+        <a href="index.html" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-house"></i> Home
+        </a>
+        <a href="operations.html" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-train-freight-front"></i> Operations
+        </a>
+        <a href="reports.html" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-file-text"></i> Reports
+        </a>
+        <a href="database.html" class="btn btn-outline-light btn-sm">
+          <i class="bi bi-database"></i> Database
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container mt-4" style="max-width: 1140px;">
+    <div class="page-hero mb-4">
+      <div class="row g-0 align-items-center">
+        <div class="col-md-2 text-center p-3">
+          <img src="ImageStore/GUI/STS-logo.jpg" class="img-fluid" alt="STS">
+        </div>
+        <div class="col-md-5 text-center p-3">
+          <img src="ImageStore/GUI/logo.jpg" class="img-fluid" alt="Shipper-driven Traffic Simulator">
+        </div>
+        <div class="col-md-5 p-3">
+          <h1 id="title" class="h3 mb-1">Shipper-driven Traffic Simulator<span id="session_number"></span></h1>
+          <p class="mb-0 text-muted">Text site map for accessible navigation.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-4">
+      <section class="col-lg-4" aria-labelledby="simulation-operations">
+        <div class="site-card">
+          <h2 id="simulation-operations">Simulation Operations</h2>
+          <div class="site-section">
+            <h3>Before Ops</h3>
+            <ul>
+              <li><a href="generate.php">Generate Car Orders</a></li>
+              <li><a href="fill_orders.php">Fill Car Orders</a></li>
+              <li><a href="reposition.php">Reposition Empty Cars</a></li>
+            </ul>
+          </div>
+          <div class="site-section">
+            <h3>During Ops</h3>
+            <ul>
+              <li><a href="build_switchlists.php">Assign Cars</a></li>
+              <li><a href="pick_up.php">Pick Up Cars</a></li>
+              <li><a href="organize_cars.php">View/Organize Cars</a></li>
+              <li><a href="set_out.php">Set Out Cars</a></li>
+            </ul>
+          </div>
+          <div class="site-section">
+            <h3>After Ops</h3>
+            <ul>
+              <li><a href="load_unload.php">Load/Unload Cars</a></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="col-lg-4" aria-labelledby="reports">
+        <div class="site-card">
+          <h2 id="reports">Reports</h2>
+          <div class="site-section">
+            <h3>Operating Documents</h3>
+            <ul>
+              <li><a href="display_switchlist.php">Switchlists</a></li>
+              <li><a href="display_station_report.php">Station Car Report</a></li>
+              <li><a href="wheel_report.php">Wheel Report</a></li>
+            </ul>
+          </div>
+          <div class="site-section">
+            <h3>Waybills</h3>
+            <ul>
+              <li><a href="display_waybill.php">Large Format Waybills (using filled car orders)</a></li>
+              <li><a href="printable_ccwaybill2.php">Small Format Waybills (using car orders)</a></li>
+              <li><a href="printable_ccwaybill.php">Small Format Waybills (using shipments)</a></li>
+            </ul>
+          </div>
+          <div class="site-section">
+            <h3>Management Reports</h3>
+            <ul>
+              <li><a href="display_fleet_report.php">Car Fleet Management Report</a></li>
+              <li><a href="shipment_forecast.php">Shipment Forecast</a></li>
+              <li><a href="car_forecast.php">Car Loading Forecast</a></li>
+              <li><a href="display_car_qr_report.php">Car QR or Bar Code Report</a></li>
+              <li><a href="display_station_qr_code_report.php">Location QR or Bar Code Report</a></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="col-lg-4" aria-labelledby="database-operations">
+        <div class="site-card">
+          <h2 id="database-operations">Database Operations</h2>
+          <div class="site-section">
+            <h3>Quick Query and Photo ID</h3>
+            <ul>
+              <li><a href="scan_car.php">Scan/Query Car</a></li>
+              <li><a href="scan_location.php">Scan/Query Location</a></li>
+              <li><a href="rollingstock_album.php">Rollingstock Photo Album</a></li>
+            </ul>
+          </div>
+          <div class="site-section">
+            <h3>Database Contents Management</h3>
+            <ul>
+              <li><a href="db_list.php?tbl_name=car_orders">Car Orders</a></li>
+              <li><a href="db_list.php?tbl_name=jobs">Jobs</a></li>
+              <li><a href="db_list.php?tbl_name=cars">Cars</a></li>
+              <li><a href="db_list.php?tbl_name=shipments">Shipments</a></li>
+              <li><a href="db_list.php?tbl_name=locations">Locations</a></li>
+              <li><a href="db_list.php?tbl_name=routing">Stations and Routing Instructions</a></li>
+              <li><a href="db_list.php?tbl_name=car_codes">Car Codes</a></li>
+              <li><a href="db_list.php?tbl_name=commodities">Commodities</a></li>
+            </ul>
+          </div>
+          <div class="site-section">
+            <h3>Database Maintenance</h3>
+            <ul>
+              <li><a href="club_index.html">Club Operations</a></li>
+              <li><a href="backup_db.php">Create a backup copy of the database</a></li>
+              <li><a href="restore_db.php">Restore the database from a backup copy</a></li>
+              <li><a href="remove_backup.php">Remove a backup copy</a></li>
+              <li><a href="import_tables.php">Import data from a file into a table</a></li>
+              <li><a href="validate_db.php">Validate important database contents</a></li>
+              <li><a href="restart.php">Restart System</a> (Restarts shippers, cancels waybills, releases all cars)</li>
+              <li><a href="reset.php">Reset System</a> (Same as Restart but also resets cars)</li>
+              <li><a href="wipe.php">Wipe System</a> (WARNING! This will erase everything!)</li>
+              <li><a href="settings.php">Settings</a></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</body>
 </html>
