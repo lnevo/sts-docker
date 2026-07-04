@@ -1,80 +1,235 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<title>STS - Database Management</title>
-<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STS - Database Management</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f8f9fa; }
+    .navbar-db { background-color: #795548; }
+    .db-hero {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    .db-hero img { max-height: 110px; object-fit: contain; }
+    .db-group {
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      overflow: hidden;
+      background: #fff;
+      height: 100%;
+    }
+    .section-header {
+      color: white;
+      font-weight: 600;
+      padding: 10px 16px;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .db-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid #dee2e6;
+      background: #fff;
+      text-decoration: none;
+      color: #333;
+      transition: background-color 0.15s;
+    }
+    .db-btn:last-child { border-bottom: none; }
+    .db-btn:hover { color: #333; text-decoration: none; }
+    .db-btn i.db-icon { font-size: 1.4rem; width: 26px; flex-shrink: 0; }
+    .db-btn-title { font-weight: 600; font-size: 0.95rem; line-height: 1.2; }
+    .db-btn-desc { font-size: 0.8rem; color: #666; margin-top: 2px; }
+    .brown { background-color: #795548; }
+    .dark-brown { background-color: #5d4037; }
+    .tan { background-color: #8d6e63; }
+    .red { background-color: #dc3545; }
+    .brown-link:hover { background-color: #fff8f4; }
+    .brown-link .db-icon { color: #795548; }
+    .dark-brown-link:hover { background-color: #faf5f2; }
+    .dark-brown-link .db-icon { color: #5d4037; }
+    .tan-link:hover { background-color: #fbf6f2; }
+    .tan-link .db-icon { color: #8d6e63; }
+    .red-link:hover { background-color: #fff5f5; }
+    .red-link .db-icon { color: #dc3545; }
+  </style>
 </head>
-
-<body bgcolor="#CCCCCC">
-<table width="30%" border="1" align="center" cellpadding="2" cellspacing="2">
-  <tr> 
-    <td rowspan="4"><img src="ImageStore/GUI/STS-logo.jpg" width="170" height="170"></td>
-    <td rowspan="4"><img src="ImageStore/GUI/logo.jpg" width="335" height="170"></td>
-    <td rowspan="4"><img src="ImageStore/GUI/steam.gif" width="302" height="170"></td>
-    <td bgcolor="#000000"><p align="center"><a href="index.html"><img src="ImageStore/GUI/Menu/Touch-s.png" width="138" height="38"></a></p></td>
-  </tr>
-  <tr> 
-    <td height="25" bgcolor="#000000"><div align="center"><a href="operations.html"><img src="ImageStore/GUI/Menu/Ops-sm.png" width="138" height="38" border="0"></a></div></td>
-  </tr>
-  <tr> 
-    <td height="28" bgcolor="#000000"><div align="center"><a href="db-maint.html"><img src="ImageStore/GUI/Menu/DB_maint-sm.png" width="138" height="38" border="0"></a></div></td>
-  </tr>
-  <tr> 
-    <td bgcolor="#000000"><div align="center"><font color="#FFFFFF" size="7" face="Verdana, Arial, Helvetica, sans-serif"><strong><a href="reports.html"><img src="ImageStore/GUI/Menu/Reports-sm.png" width="138" height="38" border="0"></a></strong></font></div></td>
-  </tr>
-</table>
-<table width="60%" border="1" align="center" cellpadding="2" cellspacing="2" bordercolor="#993333" bgcolor="#993333">
-  <tr bgcolor="#000000"> 
-    <td colspan="3"><div align="center"><font color="#FFFFFF" size="7" face="Verdana, Arial, Helvetica, sans-serif"><strong><img src="ImageStore/GUI/Menu/DB_manage.png" width="362" height="62"></strong></font></div></td>
-  </tr>
-  <tr bgcolor="#CCCCCC">
-    <td colspan="3">&nbsp;</td>
-  </tr>
-  <tr bgcolor="#000000"> 
-    <td width="33%"><div align="center"><font color="#FFFFFF" size="7" face="Verdana, Arial, Helvetica, sans-serif"><strong><img src="ImageStore/GUI/Menu/DB_manage-Q-W.png" width="362" height="62"></strong></font></div></td>
-    <td width="33%"><div align="center"><font color="#FFFFFF" size="7" face="Verdana, Arial, Helvetica, sans-serif"><strong><img src="ImageStore/GUI/Menu/DB_manage-C-W.png" width="362" height="62"></strong></font></div></td>
-    <td width="33%"><div align="center"><font color="#FFFFFF" size="7" face="Verdana, Arial, Helvetica, sans-serif"><strong><img src="ImageStore/GUI/Menu/DB_manage-D-W.png" width="362" height="62"></strong></font></div></td>
-  </tr>
-  <tr bgcolor="#000000"> 
-    <td rowspan="2"><div align="left"> 
-        <p align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="scan_car.php"><img src="ImageStore/GUI/Menu/DB_manage-SQC.png" width="362" height="87" border="0"></a></font><font color="#FFFFFF" size="6" face="Verdana, Arial, Helvetica, sans-serif"><strong></strong></font></p>
+<body>
+  <nav class="navbar navbar-dark navbar-db noprint">
+    <div class="container-fluid">
+      <span class="navbar-brand"><i class="bi bi-database"></i> Database Management</span>
+      <div>
+        <a href="index.html" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-house"></i> Home
+        </a>
+        <a href="operations.html" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-train-freight-front"></i> Operations
+        </a>
+        <a href="db-maint.html" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-tools"></i> DB Maintain
+        </a>
+        <a href="reports.html" class="btn btn-outline-light btn-sm">
+          <i class="bi bi-file-text"></i> Reports
+        </a>
       </div>
-      <div align="left"> 
-        <p align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"></font><font size="6"><strong><font size="6"><strong><font color="#FFFFFF" face="Verdana, Arial, Helvetica, sans-serif"></font></strong></font><font color="#FFFFFF" face="Verdana, Arial, Helvetica, sans-serif"></font></strong></font></p>
-      </div></td>
-    <td height="80" align="center" valign="middle" nowrap><div align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="db_list.php?tbl_name=car_orders"> 
-        </a></font></div>
-      <font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="db_list.php?tbl_name=car_orders"><img src="ImageStore/GUI/Menu/DB_manage-CO.png" width="362" height="87" align="absmiddle"></a></font></td>
-    <td rowspan="2" align="center" valign="middle"> <p align="center"><a href="backup_db.php"><img src="ImageStore/GUI/Menu/DB_manage-CBU.png" width="362" height="87"></a></p></td>
-  </tr>
-  <tr> 
-    <td height="80" nowrap bgcolor="#000000"><div align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="db_list.php?tbl_name=jobs"><img src="ImageStore/GUI/Menu/DB_manage-JT.png" width="362" height="87"></a></font></div></td>
-  </tr>
-  <tr bgcolor="#000000"> 
-    <td rowspan="2"><div align="center"><a href="rollingstock_album.php"><img src="ImageStore/GUI/Menu/DB_manage-RSA.png" width="362" height="87" border="0"></a></div></td>
-    <td height="80"><div align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="db_list.php?tbl_name=cars"><img src="ImageStore/GUI/Menu/DB_manage-C.png" width="362" height="87"></a></font></div></td>
-    <td rowspan="2" align="center" valign="middle"><div align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="restore_db.php"><img src="ImageStore/GUI/Menu/DB_manage-ResBU.png" width="362" height="87"></a></font></div></td>
-  </tr>
-  <tr> 
-    <td height="80" bgcolor="#000000"><div align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="db_list.php?tbl_name=shipments"><img src="ImageStore/GUI/Menu/DB_manage-S.png" width="362" height="87"></a></font></div></td>
-  </tr>
-  <tr bgcolor="#000000"> 
-    <td rowspan="2"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="scan_location.php"><img src="ImageStore/GUI/Menu/DB_manage-SQL.png" width="362" height="87" border="0"></a></font></td>
-    <td height="80"><div align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="db_list.php?tbl_name=locations"><img src="ImageStore/GUI/Menu/DB_manage-L.png" width="362" height="87"></a></font></div></td>
-    <td rowspan="2"><div align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="remove_backup.php"><img src="ImageStore/GUI/Menu/DB_manage-RemBU.png" width="362" height="87"></a></font></div></td>
-  </tr>
-  <tr> 
-    <td height="130" bgcolor="#000000"> <p align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="db_list.php?tbl_name=routing"><img src="ImageStore/GUI/Menu/DB_manage-SandRI.png" width="362" height="87"></a></font></p></td>
-  </tr>
-  <tr> 
-    <td rowspan="2" bgcolor="#999999">&nbsp;</td>
-    <td height="80" bgcolor="#000000"><div align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="db_list.php?tbl_name=car_codes"><img src="ImageStore/GUI/Menu/DB_manage-CC.png" width="362" height="87"></a></font></div></td>
-    <td rowspan="2" bgcolor="#000000"><div align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="import_tables.php"><img src="ImageStore/GUI/Menu/DB_manage-ID.png" width="362" height="87"></a></font></div></td>
-  </tr>
-  <tr> 
-    <td height="80" bgcolor="#000000"><div align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="db_list.php?tbl_name=commodities"><img src="ImageStore/GUI/Menu/DB_manage-Cm.png" width="362" height="87"></a></font></div></td>
-  </tr>
-</table>
-<p>&nbsp;</p>
+    </div>
+  </nav>
+
+  <div class="container mt-4" style="max-width: 1080px;">
+    <div class="db-hero mb-4">
+      <div class="row g-0 align-items-center">
+        <div class="col-md-2 text-center p-3">
+          <img src="ImageStore/GUI/STS-logo.jpg" class="img-fluid" alt="STS">
+        </div>
+        <div class="col-md-5 text-center p-3">
+          <img src="ImageStore/GUI/logo.jpg" class="img-fluid" alt="Shipper-driven Traffic Simulator">
+        </div>
+        <div class="col-md-5 p-3">
+          <h4 class="mb-1">Database Management</h4>
+          <p class="mb-0 text-muted">Browse tables, scan records, review rolling stock, and manage STS data files.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-md-4">
+        <div class="db-group">
+          <div class="section-header brown"><i class="bi bi-search"></i> Quick Query</div>
+          <a href="scan_car.php" class="db-btn brown-link">
+            <i class="bi bi-upc-scan db-icon"></i>
+            <div>
+              <div class="db-btn-title">Scan / Query Car</div>
+              <div class="db-btn-desc">Find an individual car by reporting mark or scan code</div>
+            </div>
+          </a>
+          <a href="scan_location.php" class="db-btn brown-link">
+            <i class="bi bi-geo-alt db-icon"></i>
+            <div>
+              <div class="db-btn-title">Scan / Query Location</div>
+              <div class="db-btn-desc">Look up a station, industry, track, or spot</div>
+            </div>
+          </a>
+          <a href="rollingstock_album.php" class="db-btn brown-link">
+            <i class="bi bi-images db-icon"></i>
+            <div>
+              <div class="db-btn-title">Rolling Stock Album</div>
+              <div class="db-btn-desc">Browse photos and car records together</div>
+            </div>
+          </a>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="db-group">
+          <div class="section-header dark-brown"><i class="bi bi-table"></i> Core Tables</div>
+          <a href="db_list.php?tbl_name=car_orders" class="db-btn dark-brown-link">
+            <i class="bi bi-card-checklist db-icon"></i>
+            <div>
+              <div class="db-btn-title">Car Orders</div>
+              <div class="db-btn-desc">Open and historical car order records</div>
+            </div>
+          </a>
+          <a href="db_list.php?tbl_name=jobs" class="db-btn dark-brown-link">
+            <i class="bi bi-train-front db-icon"></i>
+            <div>
+              <div class="db-btn-title">Jobs / Trains</div>
+              <div class="db-btn-desc">Switching jobs, steps, and routing work</div>
+            </div>
+          </a>
+          <a href="db_list.php?tbl_name=cars" class="db-btn dark-brown-link">
+            <i class="bi bi-boxcar-front db-icon"></i>
+            <div>
+              <div class="db-btn-title">Cars</div>
+              <div class="db-btn-desc">Fleet roster, locations, statuses, and assignments</div>
+            </div>
+          </a>
+          <a href="db_list.php?tbl_name=shipments" class="db-btn dark-brown-link">
+            <i class="bi bi-box-seam db-icon"></i>
+            <div>
+              <div class="db-btn-title">Shipments</div>
+              <div class="db-btn-desc">Waybill templates and commodity movements</div>
+            </div>
+          </a>
+          <a href="db_list.php?tbl_name=locations" class="db-btn dark-brown-link">
+            <i class="bi bi-signpost-split db-icon"></i>
+            <div>
+              <div class="db-btn-title">Locations</div>
+              <div class="db-btn-desc">Stations, industries, tracks, and spots</div>
+            </div>
+          </a>
+          <a href="db_list.php?tbl_name=routing" class="db-btn dark-brown-link">
+            <i class="bi bi-shuffle db-icon"></i>
+            <div>
+              <div class="db-btn-title">Stations and Routing</div>
+              <div class="db-btn-desc">Routing instructions and station relationships</div>
+            </div>
+          </a>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="db-group">
+          <div class="section-header tan"><i class="bi bi-diagram-3"></i> Reference Data</div>
+          <a href="db_list.php?tbl_name=car_codes" class="db-btn tan-link">
+            <i class="bi bi-tags db-icon"></i>
+            <div>
+              <div class="db-btn-title">Car Codes</div>
+              <div class="db-btn-desc">Equipment classes and car type definitions</div>
+            </div>
+          </a>
+          <a href="db_list.php?tbl_name=commodities" class="db-btn tan-link">
+            <i class="bi bi-boxes db-icon"></i>
+            <div>
+              <div class="db-btn-title">Commodities</div>
+              <div class="db-btn-desc">Commodity names and traffic categories</div>
+            </div>
+          </a>
+        </div>
+
+        <div class="db-group mt-4">
+          <div class="section-header red"><i class="bi bi-hdd"></i> Data Files</div>
+          <a href="backup_db.php" class="db-btn red-link">
+            <i class="bi bi-download db-icon"></i>
+            <div>
+              <div class="db-btn-title">Create Backup</div>
+              <div class="db-btn-desc">Export the current STS database</div>
+            </div>
+          </a>
+          <a href="restore_db.php" class="db-btn red-link">
+            <i class="bi bi-upload db-icon"></i>
+            <div>
+              <div class="db-btn-title">Restore Backup</div>
+              <div class="db-btn-desc">Restore STS data from a backup file</div>
+            </div>
+          </a>
+          <a href="remove_backup.php" class="db-btn red-link">
+            <i class="bi bi-trash db-icon"></i>
+            <div>
+              <div class="db-btn-title">Remove Backup</div>
+              <div class="db-btn-desc">Clean up old backup files</div>
+            </div>
+          </a>
+          <a href="import_tables.php" class="db-btn red-link">
+            <i class="bi bi-file-earmark-arrow-up db-icon"></i>
+            <div>
+              <div class="db-btn-title">Import Data</div>
+              <div class="db-btn-desc">Import tables from external files</div>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </body>
 </html>

@@ -1,94 +1,209 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<title>STS - Main GUI Menu</title>
-<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
-<script language="JavaScript" type="text/JavaScript">
-<!--
-
-function MM_preloadImages() { //v3.0
-  var d=document; if(d.images){ if(!d.MM_p) d.MM_p=new Array();
-    var i,j=d.MM_p.length,a=MM_preloadImages.arguments; for(i=0; i<a.length; i++)
-    if (a[i].indexOf("#")!=0){ d.MM_p[j]=new Image; d.MM_p[j++].src=a[i];}}
-}
-//-->
-</script>
-
-  <script>
-  function get_session_nbr()
-  {
-    // submit the request for the current operating session
-    var xmlhttp = new XMLHttpRequest();
-    xmlhttp.onreadystatechange = function()
-    {
-      if (this.readyState == 4 && this.status == 200)
-      {
-         display_session_nbr(this);
-      }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STS - Main Menu</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f8f9fa; }
+    .hero {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      overflow: hidden;
     }
-    var url = 'get_session_nbr.php';
-    xmlhttp.open('GET', url, true);
-    xmlhttp.send();
-  }
-      
-  function display_session_nbr(xmlhttp)
-  {
-    // replace the text in the cell with id of "os_number" with the results of the SQL query
-    document.getElementById("os_number").innerHTML = document.getElementById("os_number").innerHTML + xmlhttp.responseText;
-  }
-</script>
+    .hero-logo { max-height: 130px; object-fit: contain; }
+    .hero-steam { width: 100%; height: 170px; object-fit: cover; }
+    .session-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #000;
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .menu-group {
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      overflow: hidden;
+      background: #fff;
+      height: 100%;
+    }
+    .section-header {
+      color: white;
+      font-weight: 600;
+      padding: 10px 16px;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .menu-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      text-decoration: none;
+      color: #333;
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      transition: background-color 0.15s;
+    }
+    .menu-btn:last-child { border-bottom: none; }
+    .menu-btn:hover { color: #333; text-decoration: none; }
+    .menu-btn i.menu-icon { font-size: 1.5rem; width: 28px; flex-shrink: 0; }
+    .menu-btn-title { font-weight: 600; line-height: 1.2; }
+    .menu-btn-desc { color: #666; font-size: 0.82rem; margin-top: 2px; }
+    .green { background-color: #2e7d32; }
+    .blue { background-color: #0000cc; }
+    .brown { background-color: #795548; }
+    .red { background-color: #dc3545; }
+    .orange { background-color: #f39c12; }
+    .gray { background-color: #6c757d; }
+    .green-link:hover { background-color: #f0fff4; }
+    .green-link .menu-icon { color: #2e7d32; }
+    .blue-link:hover { background-color: #f2f4ff; }
+    .blue-link .menu-icon { color: #0000cc; }
+    .brown-link:hover { background-color: #fff8f4; }
+    .brown-link .menu-icon { color: #795548; }
+    .red-link:hover { background-color: #fff5f5; }
+    .red-link .menu-icon { color: #dc3545; }
+    .orange-link:hover { background-color: #fff9ed; }
+    .orange-link .menu-icon { color: #f39c12; }
+    .gray-link:hover { background-color: #f8f9fa; }
+    .gray-link .menu-icon { color: #6c757d; }
+  </style>
+  <script>
+    function get_session_nbr() {
+      const xmlhttp = new XMLHttpRequest();
+      xmlhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+          document.getElementById("os_number").innerText = this.responseText;
+        }
+      }
+      xmlhttp.open('GET', 'get_session_nbr.php', true);
+      xmlhttp.send();
+    }
+  </script>
 </head>
+<body onload="get_session_nbr();">
+  <nav class="navbar navbar-dark" style="background-color: #2e7d32;">
+    <div class="container-fluid">
+      <span class="navbar-brand"><i class="bi bi-house"></i> STS Main Menu</span>
+      <div>
+        <a href="index-t.html" class="btn btn-outline-light btn-sm">
+          <i class="bi bi-diagram-3"></i> Site Map
+        </a>
+      </div>
+    </div>
+  </nav>
 
-<body bgcolor="#CCCCCC" onload="get_session_nbr();">
+  <div class="container mt-4" style="max-width: 1060px;">
+    <div class="hero mb-4">
+      <div class="row g-0 align-items-center">
+        <div class="col-md-2 text-center p-3">
+          <img src="ImageStore/GUI/STS-logo.jpg" class="img-fluid hero-logo" alt="STS">
+        </div>
+        <div class="col-md-5 text-center p-3">
+          <img src="ImageStore/GUI/logo.jpg" class="img-fluid hero-logo" alt="Shipper-driven Traffic Simulator">
+        </div>
+        <div class="col-md-5">
+          <img src="ImageStore/GUI/steam.gif" class="hero-steam" alt="Steam locomotive">
+        </div>
+      </div>
+      <div class="p-3 border-top d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <h5 class="mb-0">HART Railroad Operations</h5>
+        <span class="session-badge"><i class="bi bi-calendar-check"></i> Operating Session <span id="os_number"></span></span>
+      </div>
+    </div>
 
-<div align="left"> 
-  <table width="40%" border="1" align="center" cellpadding="2" cellspacing="2">
-    <tr> 
-      <td><img src="ImageStore/GUI/STS-logo.jpg" width="240" height="240" colspan="2"></td>
-      <td width="520" rowspan="2"><img src="ImageStore/GUI/logo.jpg" width="520" height="263" align="absmiddle"> 
-      </td>
-      <td width="480" rowspan="2"><img src="ImageStore/GUI/steam.gif" width="480" height="270" align="absmiddle"></td>
-    </tr>
-    <tr>
-      <td id="os_number" style="background-color: black; color:white; font-size:25px; font-family:Verdana, Arial, Helvetica, sans-serif; vertical-align: bottom;">
-        <img src="ImageStore/GUI/OS.png" width="200" height="28" align="left">
-      </td>
-      <!-- <td><img src="ImageStore/session.png" width="253" height="51"></td> -->
-    </tr>
-  </table>
-  <p>&nbsp;</p>
-  <table width="75%" border="0" align="center" cellpadding="2" cellspacing="2">
-    <tr>
-      <td><table width="20%" border="1" align="center" cellpadding="2" cellspacing="2" bordercolor="#000000" bgcolor="#000000">
-          <tr bgcolor="#000000"> 
-            <td><div align="center"><font size="7" face="Verdana, Arial, Helvetica, sans-serif"><a href="index.html"><img src="ImageStore/GUI/Menu/Touch.png" width="362" height="62" border="0"></a></font></div></td>
-            <td><a href="index-t.html"><img src="ImageStore/GUI/Menu/Text.png" width="362" height="62" border="0"></a></td>
-          </tr>
-        </table></td>
-    </tr>
-    <tr>
-      <td>&nbsp;</td>
-    </tr>
-    <tr>
-      <td><table width="40%" border="1" align="center" cellpadding="2" cellspacing="2" bordercolor="#000000" bgcolor="#000000">
-          <tr bgcolor="#000000"> 
-            <td><div align="center"><a href="operations.html"><img src="ImageStore/GUI/Menu/Ops.png" width="362" height="62"></a></div></td>
-            <td><div align="center"><a href="reports.html"><img src="ImageStore/GUI/Menu/Reports.png" width="362" height="62"></a></div></td>
-          </tr>
-          <tr bgcolor="#000000"> 
-            <td><div align="center"><a href="database.html"><img src="ImageStore/GUI/Menu/DB_manage.png" width="362" height="62"></a></div></td>
-            <td><div align="center"><a href="db-maint.html"><img src="ImageStore/GUI/Menu/DB_maint.png" width="362" height="62" border="0"></a></div></td>
-          </tr>
-          <tr bgcolor="#000000"> 
-            <td><div align="center"><a href="club_index.html"><img src="ImageStore/GUI/Menu/ClubOps-M.png" width="362" height="62" border="0"></a></div></td>
-            <td><div align="center"><a href="about.html"><img src="ImageStore/GUI/Menu/about.png" width="362" height="62" border="0"></a></div></td>
-          </tr>
-        </table></td>
-    </tr>
-  </table>
-  <div align="center"></div>
-  <p align="center">&nbsp;</p>
-  <p><font size="4" face="Verdana, Arial, Helvetica, sans-serif"></font> </p>
-</div>
+    <div class="row g-4">
+      <div class="col-md-4">
+        <div class="menu-group">
+          <div class="section-header green"><i class="bi bi-train-freight-front"></i> Operations</div>
+          <a href="operations.html" class="menu-btn green-link">
+            <i class="bi bi-list-check menu-icon"></i>
+            <div>
+              <div class="menu-btn-title">Operations Menu</div>
+              <div class="menu-btn-desc">Generate, assign, pick up, set out, and load cars</div>
+            </div>
+          </a>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="menu-group">
+          <div class="section-header blue"><i class="bi bi-file-text"></i> Reports</div>
+          <a href="reports.html" class="menu-btn blue-link">
+            <i class="bi bi-printer menu-icon"></i>
+            <div>
+              <div class="menu-btn-title">Reports Menu</div>
+              <div class="menu-btn-desc">Switchlists, station reports, waybills, and fleet reports</div>
+            </div>
+          </a>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="menu-group">
+          <div class="section-header brown"><i class="bi bi-database"></i> Database</div>
+          <a href="database.html" class="menu-btn brown-link">
+            <i class="bi bi-table menu-icon"></i>
+            <div>
+              <div class="menu-btn-title">Database Management</div>
+              <div class="menu-btn-desc">Browse cars, shipments, locations, jobs, and routing</div>
+            </div>
+          </a>
+          <a href="db-maint.html" class="menu-btn red-link">
+            <i class="bi bi-tools menu-icon"></i>
+            <div>
+              <div class="menu-btn-title">Database Maintenance</div>
+              <div class="menu-btn-desc">Validate, reset, import, backup, and restore</div>
+            </div>
+          </a>
+        </div>
+      </div>
+
+      <div class="col-md-6">
+        <div class="menu-group">
+          <div class="section-header orange"><i class="bi bi-people"></i> Club</div>
+          <a href="club_index.html" class="menu-btn orange-link">
+            <i class="bi bi-building menu-icon"></i>
+            <div>
+              <div class="menu-btn-title">Club Operations</div>
+              <div class="menu-btn-desc">Tools for multi-user or club operating sessions</div>
+            </div>
+          </a>
+        </div>
+      </div>
+
+      <div class="col-md-6">
+        <div class="menu-group">
+          <div class="section-header gray"><i class="bi bi-info-circle"></i> System</div>
+          <a href="about.html" class="menu-btn gray-link">
+            <i class="bi bi-question-circle menu-icon"></i>
+            <div>
+              <div class="menu-btn-title">About STS</div>
+              <div class="menu-btn-desc">About, version, contact, and documentation links</div>
+            </div>
+          </a>
+          <a href="index-t.html" class="menu-btn gray-link">
+            <i class="bi bi-diagram-3 menu-icon"></i>
+            <div>
+              <div class="menu-btn-title">Site Map</div>
+              <div class="menu-btn-desc">Text-based index of all STS pages</div>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </body>
 </html>

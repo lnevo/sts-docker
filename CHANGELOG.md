@@ -2,6 +2,11 @@
 
 All notable HART fork changes use semantic versioning (`x.y.z`).
 
+## [0.3.0] - 2026-07-04
+
+- Modernized the main menu with a responsive Bootstrap card layout while preserving the section color scheme.
+- Modernized the Database Management page to match the Operations page style, grouping quick query, core tables, reference data, and data file actions.
+
 ## [0.2.5] - 2026-07-04
 
 - Updated embedded header banner labels so pages like System Settings no longer show "Menu (Touch)" or "Menu (Text)".
