@@ -2,6 +2,10 @@
 
 All notable HART fork changes use semantic versioning (`x.y.z`).
 
+## [0.1.3] - 2026-07-04
+
+- Changed build switchlists bulk-assignment checkboxes to default unchecked so no cars are selected automatically.
+
 ## [0.1.2] - 2026-07-04
 
 - Added row-selection checkboxes and a select-all header checkbox to the build switchlists table so bulk train/job assignment only applies to selected cars.

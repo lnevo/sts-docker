@@ -64,7 +64,7 @@
     $data_table = '<div class="table-responsive"><table id="car_table" class="table table-sm table-bordered table-hover">';
     $data_table .= '<tr><td colspan="9">' . nl2br($instructions) . '</td></tr>';
     $data_table .= '<tr style="position: sticky; top: 0; background-color: #F5F5F5">
-                      <th style="width: 1%; text-align: center;"><input class="form-check-input" id="select_all_cars" type="checkbox" checked onclick="toggleAllCarAssignments(this.checked)" aria-label="Select all cars for bulk assignment"></th>
+                      <th style="width: 1%; text-align: center;"><input class="form-check-input" id="select_all_cars" type="checkbox" onclick="toggleAllCarAssignments(this.checked)" aria-label="Select all cars for bulk assignment"></th>
                       <th>Select Job</th>
                       <th>Reporting Marks</th>
                       <th>Car Code</th>
@@ -91,7 +91,7 @@
       $data_table .= '<tr>';
 
       // column 1 - include this row when using the bulk job selector
-      $data_table .= '<td class="text-center"><input class="form-check-input bulk-assign-row" type="checkbox" checked aria-label="Include this car in bulk assignment"></td>';
+      $data_table .= '<td class="text-center"><input class="form-check-input bulk-assign-row" type="checkbox" aria-label="Include this car in bulk assignment"></td>';
 
       // column 2 - list of eligible jobs
       $data_table .= '<td>' . get_jobs_at_station($dbc, $station, $row_count) . '</td>';
