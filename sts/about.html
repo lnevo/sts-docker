@@ -1,71 +1,163 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<title>About STS</title>
-<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About STS</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f8f9fa; }
+    .navbar-about { background-color: #6c757d; }
+    .page-hero {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    .page-hero img { max-height: 110px; object-fit: contain; }
+    .about-group {
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      overflow: hidden;
+      background: #fff;
+      height: 100%;
+    }
+    .section-header {
+      background-color: #6c757d;
+      color: white;
+      font-weight: 600;
+      padding: 10px 16px;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .about-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid #dee2e6;
+      color: #333;
+      text-decoration: none;
+      background: #fff;
+      transition: background-color 0.15s;
+    }
+    .about-item:last-child { border-bottom: none; }
+    a.about-item:hover { background-color: #f8f9fa; color: #333; text-decoration: none; }
+    .about-icon { color: #6c757d; font-size: 1.4rem; width: 26px; flex-shrink: 0; text-align: center; }
+    .about-title { font-weight: 600; line-height: 1.2; }
+    .about-desc { color: #666; font-size: 0.82rem; margin-top: 2px; }
+    .person-img { width: 40px; max-height: 40px; object-fit: cover; border-radius: 4px; }
+  </style>
 </head>
+<body>
+  <nav class="navbar navbar-dark navbar-about noprint">
+    <div class="container-fluid">
+      <span class="navbar-brand"><i class="bi bi-info-circle"></i> About STS</span>
+      <div>
+        <a href="index.html" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-house"></i> Home
+        </a>
+        <a href="operations.html" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-train-freight-front"></i> Operations
+        </a>
+        <a href="index-t.html" class="btn btn-outline-light btn-sm">
+          <i class="bi bi-diagram-3"></i> Site Map
+        </a>
+      </div>
+    </div>
+  </nav>
 
-<body bgcolor="#CCCCCC">
-<table width="30%" border="1" align="center" cellpadding="2" cellspacing="2">
-  <tr> 
-    <td rowspan="3"><img src="ImageStore/GUI/STS-logo.jpg" width="170" height="170"></td>
-    <td rowspan="3"><img src="ImageStore/GUI/logo.jpg" width="335" height="170"></td>
-    <td rowspan="3"><img src="ImageStore/GUI/steam.gif" width="302" height="170"></td>
-    <td bgcolor="#000000"><p align="center"><a href="index.html"><img src="ImageStore/GUI/Menu/Touch-s.png" width="138" height="38" border="0"></a></p></td>
-  </tr>
-  <tr> 
-    <td height="91" bgcolor="#666666"><div align="center"></div>
-      <div align="center"></div></td>
-  </tr>
-  <tr> 
-    <td bgcolor="#000000"><div align="center"><font color="#FFFFFF" size="7" face="Verdana, Arial, Helvetica, sans-serif"><strong><a href="index-t.html"><img src="ImageStore/GUI/Menu/Text-s.png" width="138" height="38" border="0"></a></strong></font></div></td>
-  </tr>
-</table>
-<p>&nbsp;</p><div align="left"> </div>
-<table width="20%" border="1" align="center" cellpadding="2" cellspacing="2" bordercolor="#FF9900" bgcolor="#000000">
-  <tr bgcolor="#000000"> 
-    <td colspan="2"><div align="center"><img src="ImageStore/GUI/Menu/about.png" width="362" height="62"></div></td>
-  </tr>
-  <tr> 
-    <td width="40%" height="49" bgcolor="#666666"><div align="center"> 
-        <p align="left"><strong><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><img src="ImageStore/GUI/Menu/version.png" width="222" height="32"></a></font></strong></p>
-      </div></td>
-    <td><div align="center"> 
-        <p align="left"><img src="ImageStore/GUI/Menu/4.png" width="222" height="32"></p>
-      </div></td>
-  </tr>
-  <tr bgcolor="#000000"> 
-    <td height="49" colspan="2"><div align="center"><img src="ImageStore/GUI/Menu/links.png" width="232" height="42"></div></td>
-  </tr>
-  <tr> 
-    <td height="46" bgcolor="#000000"><img src="ImageStore/GUI/Menu/social.png" width="222" height="32"></td>
-    <td><div align="center"><a href="https://www.facebook.com/groups/541367466453352/" target="_blank"><img src="ImageStore/GUI/fb.png" width="40" height="40" border="0"></a> 
-      </div></td>
-  </tr>
-  <tr> 
-    <td height="130" rowspan="2" bgcolor="#000000"><img src="ImageStore/GUI/Menu/website.png" width="222" height="32"></td>
-    <td><a href="https://drive.google.com/drive/folders/1FBQzxxBRhtz0rK5plvw2pim55jO0Njiz?usp=sharing" target="_blank"><img src="ImageStore/GUI/Menu/download.png" width="222" height="32"></a></td>
-  </tr>
-  <tr> 
-    <td><a href="https://drive.google.com/drive/folders/1FBQzxxBRhtz0rK5plvw2pim55jO0Njiz?usp=sharing" target="_blank"><img src="ImageStore/GUI/Menu/doc.png" width="222" height="32"></a></td>
-  </tr>
-  <tr> 
-    <td height="130" rowspan="2" bgcolor="#000000"><p><img src="ImageStore/GUI/Menu/dev.png" width="222" height="32"></p></td>
-    <td><div align="left"><font color="#FFFFFF" size="3" face="Verdana, Arial, Helvetica, sans-serif"><strong><img src="ImageStore/GUI/TE.jpg" width="40" height="40" align="absmiddle">Tom 
-        Edwards (USA)</strong></font></div></td>
-  </tr>
-  <tr> 
-    <td><a href="mailto:tre.taliesin@gmail.com" target="_blank"><img src="ImageStore/GUI/Menu/contact.png" width="222" height="32" border="0" align="bottom"></a></td>
-  </tr>
-  <tr> 
-    <td height="130" rowspan="2" bgcolor="#000000"><img src="ImageStore/GUI/Menu/graphics.png" width="222" height="32"></td>
-    <td><font color="#FFFFFF" size="3" face="Verdana, Arial, Helvetica, sans-serif"><strong><img src="ImageStore/GUI/B.jpg" width="40" height="34" align="absmiddle">Ron 
-      Spencer (AUS)</strong></font></td>
-  </tr>
-  <tr> 
-    <td><a href="mailto:Ron.Spencer@basics.net.au" target="_blank"><img src="ImageStore/GUI/Menu/contact.png" width="222" height="32" border="0" align="bottom"></a></td>
-  </tr>
-</table>
-<p>&nbsp;</p>
+  <div class="container mt-4" style="max-width: 960px;">
+    <div class="page-hero mb-4">
+      <div class="row g-0 align-items-center">
+        <div class="col-md-2 text-center p-3">
+          <img src="ImageStore/GUI/STS-logo.jpg" class="img-fluid" alt="STS">
+        </div>
+        <div class="col-md-5 text-center p-3">
+          <img src="ImageStore/GUI/logo.jpg" class="img-fluid" alt="Shipper-driven Traffic Simulator">
+        </div>
+        <div class="col-md-5 p-3">
+          <h4 class="mb-1">About STS</h4>
+          <p class="mb-0 text-muted">Shipper-driven Traffic Simulator information, links, credits, and contacts.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-md-6">
+        <div class="about-group">
+          <div class="section-header"><i class="bi bi-info-circle"></i> Project</div>
+          <div class="about-item">
+            <i class="bi bi-tag about-icon"></i>
+            <div>
+              <div class="about-title">Version</div>
+              <div class="about-desc">STS version 4</div>
+            </div>
+          </div>
+          <a href="https://www.facebook.com/groups/541367466453352/" target="_blank" class="about-item">
+            <i class="bi bi-facebook about-icon"></i>
+            <div>
+              <div class="about-title">Social</div>
+              <div class="about-desc">Open the STS Facebook group</div>
+            </div>
+          </a>
+          <a href="https://drive.google.com/drive/folders/1FBQzxxBRhtz0rK5plvw2pim55jO0Njiz?usp=sharing" target="_blank" class="about-item">
+            <i class="bi bi-download about-icon"></i>
+            <div>
+              <div class="about-title">Download</div>
+              <div class="about-desc">Open the STS download folder</div>
+            </div>
+          </a>
+          <a href="https://drive.google.com/drive/folders/1FBQzxxBRhtz0rK5plvw2pim55jO0Njiz?usp=sharing" target="_blank" class="about-item">
+            <i class="bi bi-journal-text about-icon"></i>
+            <div>
+              <div class="about-title">Documentation</div>
+              <div class="about-desc">Open the STS documentation folder</div>
+            </div>
+          </a>
+        </div>
+      </div>
+
+      <div class="col-md-6">
+        <div class="about-group">
+          <div class="section-header"><i class="bi bi-person-lines-fill"></i> Credits</div>
+          <div class="about-item">
+            <img src="ImageStore/GUI/TE.jpg" class="person-img" alt="Tom Edwards">
+            <div>
+              <div class="about-title">Tom Edwards (USA)</div>
+              <div class="about-desc">Developer</div>
+            </div>
+          </div>
+          <a href="mailto:tre.taliesin@gmail.com" target="_blank" class="about-item">
+            <i class="bi bi-envelope about-icon"></i>
+            <div>
+              <div class="about-title">Contact Developer</div>
+              <div class="about-desc">Email Tom Edwards</div>
+            </div>
+          </a>
+          <div class="about-item">
+            <img src="ImageStore/GUI/B.jpg" class="person-img" alt="Ron Spencer">
+            <div>
+              <div class="about-title">Ron Spencer (AUS)</div>
+              <div class="about-desc">Graphics</div>
+            </div>
+          </div>
+          <a href="mailto:Ron.Spencer@basics.net.au" target="_blank" class="about-item">
+            <i class="bi bi-envelope about-icon"></i>
+            <div>
+              <div class="about-title">Contact Graphics</div>
+              <div class="about-desc">Email Ron Spencer</div>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </body>
 </html>

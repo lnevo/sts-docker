@@ -1,46 +1,125 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<title>STS - Club Operations Menu</title>
-<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STS - Club Operations Menu</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f8f9fa; }
+    .navbar-club { background-color: #f39c12; }
+    .page-hero {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    .page-hero img { max-height: 110px; object-fit: contain; }
+    .club-group {
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      overflow: hidden;
+      background: #fff;
+    }
+    .section-header {
+      background-color: #f39c12;
+      color: white;
+      font-weight: 600;
+      padding: 10px 16px;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .club-btn {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 18px;
+      border-bottom: 1px solid #dee2e6;
+      background: #fff;
+      text-decoration: none;
+      color: #333;
+      transition: background-color 0.15s;
+      min-height: 110px;
+    }
+    .club-btn:last-child { border-bottom: none; }
+    .club-btn:hover { background-color: #fff9ed; color: #333; text-decoration: none; }
+    .club-btn i.club-icon { color: #f39c12; font-size: 1.8rem; width: 34px; flex-shrink: 0; }
+    .club-btn-title { font-weight: 600; line-height: 1.2; }
+    .club-btn-desc { color: #666; font-size: 0.82rem; margin-top: 2px; }
+  </style>
 </head>
+<body>
+  <nav class="navbar navbar-dark navbar-club noprint">
+    <div class="container-fluid">
+      <span class="navbar-brand"><i class="bi bi-people"></i> Club Operations</span>
+      <div>
+        <a href="index.html" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-house"></i> Home
+        </a>
+        <a href="operations.html" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-train-freight-front"></i> Operations
+        </a>
+        <a href="index-t.html" class="btn btn-outline-light btn-sm">
+          <i class="bi bi-diagram-3"></i> Site Map
+        </a>
+      </div>
+    </div>
+  </nav>
 
-<body bgcolor="#CCCCCC">
-<table width="30%" border="1" align="center" cellpadding="2" cellspacing="2">
-  <tr> 
-    <td rowspan="3"><img src="ImageStore/GUI/STS-logo.jpg" width="170" height="170"></td>
-    <td rowspan="3"><img src="ImageStore/GUI/logo.jpg" width="335" height="170"></td>
-    <td rowspan="3"><img src="ImageStore/GUI/steam.gif" width="302" height="170"></td>
-    <td bgcolor="#000000"><p align="center"><a href="index.html"><img src="ImageStore/GUI/Menu/Touch-s.png" width="138" height="38" border="0"></a></p></td>
-  </tr>
-  <tr> 
-    <td height="91" bgcolor="#666666"><div align="center"></div>
-      <div align="center"></div></td>
-  </tr>
-  <tr> 
-    <td bgcolor="#000000"><div align="center"><font color="#FFFFFF" size="7" face="Verdana, Arial, Helvetica, sans-serif"><strong><a href="index-t.html"><img src="ImageStore/GUI/Menu/Text-s.png" width="133" height="38" border="0"></a></strong></font></div></td>
-  </tr>
-</table>
-<table width="40%" border="1" align="center" cellpadding="2" cellspacing="2" bordercolor="#FF9900" bgcolor="#666666">
-  <tr bgcolor="#000000"> 
-    <td colspan="3"><div align="center"><font color="#FFFFFF" size="7" face="Verdana, Arial, Helvetica, sans-serif"><img src="ImageStore/GUI/Menu/ClubOps-M.png" width="362" height="62"></font></div></td>
-  </tr>
-  <tr bgcolor="#CCCCCC">
-    <td colspan="3">&nbsp;</td>
-  </tr>
-  <tr bgcolor="#000000"> 
-    <td width="40%" height="130"><div align="center"> 
-        <p><strong><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="add_remove.php"><img src="ImageStore/GUI/Menu/ClubOps-AURS.png" width="362" height="87" border="0"></a></font></strong></p>
-      </div></td>
-    <td width="34%"><div align="center"> 
-        <p><strong><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="ownership.php"><img src="ImageStore/GUI/Menu/ClubOps-AO.png" width="362" height="87" border="0"></a></font></strong></p>
-      </div></td>
-    <td width="26%"><div align="center"> 
-        <p><strong><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="owners.php"><img src="ImageStore/GUI/Menu/ClubOps-MO.png" width="362" height="87" border="0"></a></font></strong></p>
-      </div></td>
-  </tr>
-</table>
-<p>&nbsp;</p>
-<p>&nbsp;</p>
+  <div class="container mt-4" style="max-width: 880px;">
+    <div class="page-hero mb-4">
+      <div class="row g-0 align-items-center">
+        <div class="col-md-2 text-center p-3">
+          <img src="ImageStore/GUI/STS-logo.jpg" class="img-fluid" alt="STS">
+        </div>
+        <div class="col-md-5 text-center p-3">
+          <img src="ImageStore/GUI/logo.jpg" class="img-fluid" alt="Shipper-driven Traffic Simulator">
+        </div>
+        <div class="col-md-5 p-3">
+          <h4 class="mb-1">Club Operations</h4>
+          <p class="mb-0 text-muted">Manage shared rolling stock and ownership records for club operating sessions.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="club-group">
+      <div class="section-header"><i class="bi bi-people"></i> Ownership Tools</div>
+      <div class="row g-0">
+        <div class="col-md-4">
+          <a href="add_remove.php" class="club-btn h-100">
+            <i class="bi bi-plus-slash-minus club-icon"></i>
+            <div>
+              <div class="club-btn-title">Add / Remove Rolling Stock</div>
+              <div class="club-btn-desc">Add or remove club rolling stock from the roster.</div>
+            </div>
+          </a>
+        </div>
+        <div class="col-md-4">
+          <a href="ownership.php" class="club-btn h-100">
+            <i class="bi bi-person-check club-icon"></i>
+            <div>
+              <div class="club-btn-title">Assign Ownership</div>
+              <div class="club-btn-desc">Assign cars and equipment to owners.</div>
+            </div>
+          </a>
+        </div>
+        <div class="col-md-4">
+          <a href="owners.php" class="club-btn h-100">
+            <i class="bi bi-person-gear club-icon"></i>
+            <div>
+              <div class="club-btn-title">Manage Owners</div>
+              <div class="club-btn-desc">Create and update club member owner records.</div>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </body>
 </html>

@@ -1,65 +1,152 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<title>STS - Database Maintenance</title>
-<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STS - Database Maintenance</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f8f9fa; }
+    .navbar-maint { background-color: #dc3545; }
+    .page-hero {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    .page-hero img { max-height: 110px; object-fit: contain; }
+    .maint-group {
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      overflow: hidden;
+      background: #fff;
+      height: 100%;
+    }
+    .section-header {
+      color: white;
+      font-weight: 600;
+      padding: 10px 16px;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .red { background-color: #dc3545; }
+    .dark-red { background-color: #a71d2a; }
+    .gray { background-color: #6c757d; }
+    .maint-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      border-bottom: 1px solid #dee2e6;
+      background: #fff;
+      text-decoration: none;
+      color: #333;
+      transition: background-color 0.15s;
+    }
+    .maint-btn:last-child { border-bottom: none; }
+    .maint-btn:hover { color: #333; text-decoration: none; }
+    .maint-btn i.maint-icon { font-size: 1.55rem; width: 30px; flex-shrink: 0; }
+    .maint-btn-title { font-weight: 600; line-height: 1.2; }
+    .maint-btn-desc { color: #666; font-size: 0.82rem; margin-top: 2px; }
+    .red-link:hover { background-color: #fff5f5; }
+    .red-link .maint-icon { color: #dc3545; }
+    .danger-link:hover { background-color: #fff0f0; }
+    .danger-link .maint-icon { color: #a71d2a; }
+    .gray-link:hover { background-color: #f8f9fa; }
+    .gray-link .maint-icon { color: #6c757d; }
+  </style>
 </head>
+<body>
+  <nav class="navbar navbar-dark navbar-maint noprint">
+    <div class="container-fluid">
+      <span class="navbar-brand"><i class="bi bi-tools"></i> Database Maintenance</span>
+      <div>
+        <a href="index.html" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-house"></i> Home
+        </a>
+        <a href="database.html" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-database"></i> DB Manage
+        </a>
+        <a href="operations.html" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-train-freight-front"></i> Operations
+        </a>
+        <a href="reports.html" class="btn btn-outline-light btn-sm">
+          <i class="bi bi-file-text"></i> Reports
+        </a>
+      </div>
+    </div>
+  </nav>
 
-<body bgcolor="#CCCCCC">
-<table width="30%" border="1" align="center" cellpadding="2" cellspacing="2">
-  <tr> 
-    <td rowspan="4"><img src="ImageStore/GUI/STS-logo.jpg" width="170" height="170"></td>
-    <td rowspan="4"><img src="ImageStore/GUI/logo.jpg" width="335" height="170"></td>
-    <td rowspan="4"><img src="ImageStore/GUI/steam.gif" width="302" height="170"></td>
-    <td bgcolor="#000000"><p align="center"><a href="index.html"><img src="ImageStore/GUI/Menu/Touch-s.png" width="138" height="38"></a></p></td>
-  </tr>
-  <tr> 
-    <td height="25" bgcolor="#000000"><div align="center"><a href="operations.html"><img src="ImageStore/GUI/Menu/Ops-sm.png" width="138" height="38" border="0"></a></div></td>
-  </tr>
-  <tr> 
-    <td height="28" bgcolor="#000000"><div align="center"><a href="database.html"><img src="ImageStore/GUI/Menu/DB_manage-Sm.png" width="138" height="38" border="0"></a></div></td>
-  </tr>
-  <tr> 
-    <td bgcolor="#000000"><div align="center"><font color="#FFFFFF" size="7" face="Verdana, Arial, Helvetica, sans-serif"><strong><a href="reports.html"><img src="ImageStore/GUI/Menu/Reports-sm.png" width="138" height="38" border="0"></a></strong></font></div></td>
-  </tr>
-</table>
-<table width="60%" border="1" align="center" cellpadding="2" cellspacing="2" bordercolor="#FFFFFF" bgcolor="#FF0000">
-  <tr bgcolor="#000000"> 
-    <td colspan="3"><div align="center"><font color="#FFFFFF" size="7" face="Verdana, Arial, Helvetica, sans-serif"><strong><img src="ImageStore/GUI/Menu/DB_maint.png" width="362" height="62"></strong></font></div></td>
-  </tr>
-  <tr bgcolor="#CCCCCC">
-    <td colspan="3">&nbsp;</td>
-  </tr>
-  <tr bgcolor="#000000"> 
-    <td colspan="3"><div align="center"> 
-        <p><a href="validate_db.php"><img src="ImageStore/GUI/Menu/validate.png" width="362" height="87" border="0"></a></p>
-        <p><strong><font color="#FFFFFF" size="4" face="Verdana, Arial, Helvetica, sans-serif">Checks 
-          system for broken links. Contains links for repair tools.</font></strong></p>
-      </div></td>
-  </tr>
-  <tr bgcolor="#000000"> 
-    <td colspan="3"><div align="center"> 
-        <p><font color="#FFFFFF" size="7" face="Verdana, Arial, Helvetica, sans-serif"><strong><a href="restart.php"><img src="ImageStore/GUI/Menu/DB_maint_Restart.png" width="362" height="87"></a></strong></font></p>
-        <p><strong><font color="#FFFFFF" size="4" face="Verdana, Arial, Helvetica, sans-serif">Restarts 
-          shippers. Cancels waybills. Releases all cars.</font></strong></p>
-      </div></td>
-  </tr>
-  <tr bgcolor="#000000"> 
-    <td height="36" colspan="3"><div align="left"> 
-        <p align="center"><a href="reset.php"><img src="ImageStore/GUI/Menu/DB_maint_Reset.png" width="362" height="87"></a></p>
-        <p align="center"><font color="#FFFFFF" size="4" face="Verdana, Arial, Helvetica, sans-serif"><strong>Same 
-          as &quot;Restart&quot; but also resets all cars.</strong></font></p>
-      </div></td>
-  </tr>
-  <tr bgcolor="#FF00ff"> 
-    <td bgcolor="#FFFFFF"> <p align="center"><img src="ImageStore/GUI/grade-anim.gif" width="100" height="100"></p></td>
-    <td bgcolor="#000000"><p align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="wipe.php"><img src="ImageStore/GUI/Menu/DB_maint_wipe.png" width="362" height="87" border="0"></a></font></p>
-      <p align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><img src="ImageStore/GUI/WipeW.gif" width="550" height="30"></font></p></td>
-    <td bgcolor="#FFFFFF"><div align="center"><img src="ImageStore/GUI/grade-anim.gif" width="100" height="100"></div></td>
-  </tr>
-  <tr bgcolor="#000000"> 
-    <td height="80" colspan="3"><div align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="settings.php"><img src="ImageStore/GUI/Menu/DB_maint_settings.png" width="362" height="87"></a></font></div></td>
-  </tr>
-</table>
+  <div class="container mt-4" style="max-width: 960px;">
+    <div class="page-hero mb-4">
+      <div class="row g-0 align-items-center">
+        <div class="col-md-2 text-center p-3">
+          <img src="ImageStore/GUI/STS-logo.jpg" class="img-fluid" alt="STS">
+        </div>
+        <div class="col-md-5 text-center p-3">
+          <img src="ImageStore/GUI/logo.jpg" class="img-fluid" alt="Shipper-driven Traffic Simulator">
+        </div>
+        <div class="col-md-5 p-3">
+          <h4 class="mb-1">Database Maintenance</h4>
+          <p class="mb-0 text-muted">Validate data integrity, restart the session, reset cars, wipe data, or adjust system settings.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-md-6">
+        <div class="maint-group">
+          <div class="section-header red"><i class="bi bi-heart-pulse"></i> Maintenance</div>
+          <a href="validate_db.php" class="maint-btn red-link">
+            <i class="bi bi-check2-circle maint-icon"></i>
+            <div>
+              <div class="maint-btn-title">Validate Database</div>
+              <div class="maint-btn-desc">Check the system for broken links and open repair tools.</div>
+            </div>
+          </a>
+          <a href="settings.php" class="maint-btn gray-link">
+            <i class="bi bi-sliders maint-icon"></i>
+            <div>
+              <div class="maint-btn-title">System Settings</div>
+              <div class="maint-btn-desc">Manage configurable STS settings.</div>
+            </div>
+          </a>
+        </div>
+      </div>
+
+      <div class="col-md-6">
+        <div class="maint-group">
+          <div class="section-header dark-red"><i class="bi bi-exclamation-triangle"></i> Session Reset Tools</div>
+          <a href="restart.php" class="maint-btn danger-link">
+            <i class="bi bi-arrow-clockwise maint-icon"></i>
+            <div>
+              <div class="maint-btn-title">Restart Session</div>
+              <div class="maint-btn-desc">Restart shippers, cancel waybills, and release all cars.</div>
+            </div>
+          </a>
+          <a href="reset.php" class="maint-btn danger-link">
+            <i class="bi bi-arrow-counterclockwise maint-icon"></i>
+            <div>
+              <div class="maint-btn-title">Reset Session</div>
+              <div class="maint-btn-desc">Same as restart, and also reset all cars.</div>
+            </div>
+          </a>
+          <a href="wipe.php" class="maint-btn danger-link">
+            <i class="bi bi-trash3 maint-icon"></i>
+            <div>
+              <div class="maint-btn-title">Wipe Database</div>
+              <div class="maint-btn-desc">Remove STS data. Use only when intentionally rebuilding.</div>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </body>
 </html>

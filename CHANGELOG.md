@@ -2,6 +2,11 @@
 
 All notable HART fork changes use semantic versioning (`x.y.z`).
 
+## [0.4.0] - 2026-07-04
+
+- Modernized the Reports, Database Maintenance, Club Operations, and About pages with responsive Bootstrap layouts.
+- Replaced legacy image-table menu layouts on those pages with text-and-icon cards while preserving existing links and section colors.
+
 ## [0.3.2] - 2026-07-04
 
 - Moved Cars into Reference Data on the Database Management page and renamed the remaining table group to Traffic and Routing.
