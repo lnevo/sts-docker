@@ -306,4 +306,134 @@ These are changes specific to running STS inside Docker rather than under XAMPP/
 - **Database configured via environment variables.** The original STS hardcoded the database hostname, username, password, and database name in `credentials.php`. This fork reads those from Docker environment variables (`MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`) set in `docker-compose.yml`. Hardcoded defaults are kept as a fallback.
 - **Automatic directory setup.** The Dockerfile creates the required `temp/`, `backups/`, `uploads/`, and `ImageStore/` directories and sets the correct permissions automatically on first run.
 - **Database provisioning flag.** Set `PROVISION_DATABASE=1` in `docker-compose.yml` to create a fresh database on startup. Set it back to `0` after first run to prevent accidentally wiping your data on container restarts.
+- **HART layout seed data.** On first provision, `start.sh` loads [`sts/seed_hart_data.sql`](sts/seed_hart_data.sql) immediately after the empty schema. This populates stations, industry spots, commodities, car codes, shipments, the freight fleet, and switching jobs for the HART layout.
 - **`open_db.php` SQL fix.** The history query contained an over-specified `GROUP BY` clause (`group by car_id, session_nbr`) that caused errors on strict MariaDB servers. Simplified to `group by car_id`.
+
+---
+
+## HART layout seed data
+
+The Docker image can provision a populated HART reference database (no jobs or live session state). Sources live in `~/Desktop/HART/Car Cards/` and are converted to SQL by a generator script.
+
+### Regenerating the seed file
+
+When spot assignments, waybills, or the roster change:
+
+```bash
+cd sts-docker
+python3 scripts/generate_hart_seed.py
+```
+
+Optional flags: `--hart-dir`, `--config`, `--output`. Defaults read from `~/Desktop/HART/Car Cards/` and write `sts/seed_hart_data.sql`.
+
+### Reload database with new seed (usual workflow)
+
+No image rebuild — containers stay up; seed is copied in and SQL is reloaded:
+
+```bash
+cd sts-docker
+./scripts/reseed_hart_db.sh
+```
+
+Optional: `--sync-images`, `--skip-generate`, `--recreate-containers` (down -v + up first).
+
+Manual equivalent:
+
+```bash
+python3 scripts/generate_hart_seed.py
+docker cp sts/seed_hart_data.sql sts-docker-web-1:/var/www/html/sts/
+docker exec sts-docker-web-1 bash -c '
+  mysql -h "$MYSQL_HOST" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" \
+    -e "DROP DATABASE IF EXISTS \`$MYSQL_DATABASE\`; CREATE DATABASE \`$MYSQL_DATABASE\`;"
+  mysql -h "$MYSQL_HOST" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" \
+    < /var/www/html/sts/create_sts_db3.sql
+  mysql -h "$MYSQL_HOST" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" \
+    < /var/www/html/sts/seed_hart_data.sql
+'
+```
+
+### Full rebuild (seed + Docker image)
+
+Only needed when PHP/sts files in the image changed, not for seed-only updates:
+
+```bash
+cd sts-docker
+./scripts/rebuild_hart_docker.sh
+```
+
+Empty-move shipments (`inbound_empty`, `outbound_empty`) use commodity code **`EMPTY`** so **Validate DB** does not report “missing Commodity”.
+
+Only freight cars with a **CarImagesFinal** photo in `image_metadata.csv` are seeded (60 of 77 roster cars). Car IDs keep the same gaps as the full roster so `./images/{id}.jpg` files stay aligned.
+
+**Car codes** use [AAR mechanical designators](sts/uploads/MRR-AAR_Class_Codes.csv) without length digits (`HA`, `HC`, `HP`, `XM`, …). Open hoppers → `HA`; outside-dump/coke hoppers → `HB`; covered gravity (cement/carbon) → `HC`; covered pneumatic (plastic pellets) → `HP`; lined chemical tanks → `TL`. Shipments pick the matching AAR code in the fleet for each car type/commodity.
+
+### Applying seed changes (no database volume)
+
+For seed-only updates, use **`./scripts/reseed_hart_db.sh`** (see above). It does not require `docker compose build`.
+
+To reprovision via container startup instead (ephemeral DB, no `./db` volume):
+
+```bash
+cd sts-docker
+python3 scripts/generate_hart_seed.py
+docker compose --profile build down -v
+docker compose --profile build up -d
+# then copy seed + reload, or rebuild web image so COPY sts picks up the file
+```
+
+`start.sh` loads the seed only when `/opt/sql.initialized` is absent and `PROVISION_DATABASE=1`. The reseed script reloads SQL directly and is simpler when containers are already running.
+
+### Expected row counts
+
+| Table | Count |
+|-------|------:|
+| `routing` (stations) | 12 |
+| `locations` | 81 |
+| `commodities` | 34 |
+| `car_codes` | varies (AAR mechanical designators) |
+| `shipments` | 88 |
+| `cars` (freight + MOW with photos) | 63 |
+| `jobs` | 5 |
+
+Settings are updated to `railroad_name=HART Railroad, Pittsburgh & Chartiers Valley Division` and `railroad_initials=HART`. Jobs are seeded from the Neville Island dispatcher and yardmaster ops documents (`D749`, `NVL`, `South Yard`, `CK-1`, `CKX`). Passenger moves (Neville Queen, OCS-1) are dispatcher-managed and not seeded as switching jobs.
+
+**Existing database (without full reprovision):** empty-move shipments use commodity `EMPTY` (not `consignment=0`). Apply [`sts/patch_empty_commodity.sql`](sts/patch_empty_commodity.sql):
+
+```bash
+docker exec -i sts-docker-db-1 mariadb -usts_user -psts_password sts_db3 < sts/patch_empty_commodity.sql
+```
+
+### Rolling stock photos
+
+STS reads car photos from `ImageStore/DB_Images/RollingStock/{car_id}.jpg` inside the container. That path is bind-mounted from **`./images`** in this repo (see `docker-compose.yml`), so drop or generate JPGs there on the host.
+
+```bash
+cd sts-docker
+python3 scripts/sync_hart_car_images.py   # writes to ./images/{car_id}.jpg
+```
+
+The script reads `~/Desktop/HART/Car Cards/image_metadata.csv`, uses rows tagged `final_ref=CarImagesFinal/...`, maps `roster_id` to STS car IDs, and converts PNG → JPG. About **60 freight cars** get images; engines, MOW, and promotional cars are skipped.
+
+Restart or recreate the web container after syncing so the mount picks up new files:
+
+```bash
+docker compose --profile build up -d
+```
+
+### Persistent database (optional)
+
+MariaDB data is ephemeral unless you enable a host volume. To persist across container recreations, uncomment in `docker-compose.yml` under the `db` service:
+
+```yaml
+volumes:
+  - ./db:/var/lib/mysql
+```
+
+The `db/` folder is reserved for that mount (see `db/.gitkeep`).
+
+### First-time provision
+
+1. Set `PROVISION_DATABASE=1` in `docker-compose.yml`.
+2. Start with a fresh database volume (or first run on a new machine).
+3. Open STS and use **DB Maint → Validate DB** to confirm no orphan records.
+4. Set `PROVISION_DATABASE=0` before subsequent restarts.

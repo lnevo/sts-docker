@@ -1,0 +1,173 @@
+{
+  "railroad_name": "HART Railroad, Pittsburgh & Chartiers Valley Division",
+  "railroad_initials": "HART",
+  "skip_usages": ["Off Spot", "Storage"],
+  "stations": [
+    {"id": 11, "name": "North Yard", "sort_seq": 150},
+    {"id": 2, "name": "West Yard", "sort_seq": 200},
+    {"id": 9, "name": "Scully Yard", "sort_seq": 250},
+    {"id": 12, "name": "East Yard", "sort_seq": 275},
+    {"id": 3, "name": "Neville Island", "sort_seq": 300},
+    {"id": 8, "name": "South Yard", "sort_seq": 800},
+    {"id": 10, "name": "Demmler Yard", "sort_seq": 850}
+  ],
+  "island_local_station": 3,
+  "outbound_empty_return": {
+    "Aristech Plastics": {"yard_code": "SCULLY", "via": "POHC"},
+    "Calgon Carbon": {"yard_code": "SCULLY", "via": "POHC"},
+    "A Stucki Co": {"yard_code": "DEMMLER", "via": "CSX"},
+    "Ferrel Gas": {"yard_code": "DEMMLER", "via": "CSX"},
+    "Kosmos Cement": {"yard_code": "DEMMLER", "via": "CSX"}
+  },
+  "car_home_yard": {
+    "start_yard_code": "SOUTH-YARD",
+    "pohc_yard_code": "SCULLY",
+    "csx_yard_code": "DEMMLER",
+    "unit_train_hopper_max_length_ft": 40
+  },
+  "default_setout_locations": {
+    "North Yard": "NORTH-YARD",
+    "West Yard": "WEST-YARD",
+    "East Yard": "EAST-YARD",
+    "Scully Yard": "SCULLY",
+    "South Yard": "SOUTH-YARD",
+    "Demmler Yard": "DEMMLER"
+  },
+  "routing_instructions": {
+    "North Yard": "SY1 yardmaster staging.\nCars for island industries or South Yard classification.",
+    "West Yard": "SY1 yardmaster retrieves and stages cars.",
+    "Scully Yard": "POHC interchange — NVL set out outbound; pick up inbound.",
+    "East Yard": "Coke storage — CK-1 to South Yard when authorized.\nSY1 yardmaster staging.",
+    "Neville Island": "Island locals — NVL spots and pulls at Aristech, Stucki, Calgon, Ferrel, and Kosmos.",
+    "South Yard": "Classification hub for D749 and NVL.\nInbound CSX for D749 (Demmler); POHC for NVL (Scully).\nIndustry-bound locals for NVL.",
+    "Demmler Yard": "CSX interchange — D749 set out outbound; pick up inbound."
+  },
+  "shipment_tank_code": "TA",
+  "tank_lined_commodities": [
+    "Caustic Soda",
+    "Hydrochloric Acid",
+    "Phosphoric Acid",
+    "Ethyl Acrylate",
+    "Methyl Methacrylate",
+    "Styrene Monomer"
+  ],
+  "open_hopper_outside_keywords": [
+    "coke hopper",
+    "coke"
+  ],
+  "open_hopper_outside_roster_ids": [
+    "BO132315",
+    "BO132392",
+    "BO133007"
+  ],
+  "covered_hopper_roster_ids": [
+    "BO600401",
+    "BO600409",
+    "BO600421",
+    "BO628038",
+    "BO631140",
+    "KSMX101",
+    "KSMX105",
+    "KSMX110",
+    "NW12986"
+  ],
+  "pneumatic_covered_hopper_roster_ids": [
+    "CO2052",
+    "CO2063"
+  ],
+  "covered_hopper_note_keywords": [
+    "covered hopper",
+    "cement hopper",
+    "portland cement",
+    "kosmos"
+  ],
+  "mow_equipment": [
+    {
+      "roster_id": "COST1",
+      "car_id": 78,
+      "aar_code": "WF",
+      "description": "Scale test car"
+    },
+    {
+      "roster_id": "COW86",
+      "car_id": 79,
+      "aar_code": "WF",
+      "description": "MOW camp car"
+    },
+    {
+      "roster_id": "CO377700",
+      "car_id": 80,
+      "aar_code": "WC",
+      "description": "MOW crane car"
+    }
+  ],
+  "extra_commodities": [
+    {"code": "GENFREIGHT", "description": "General Freight"},
+    {"code": "PROCCHEM", "description": "Process Chemicals"}
+  ],
+  "layout_party_names": [
+    "Aristech Plastics",
+    "A Stucki Co",
+    "Calgon Carbon",
+    "Ferrel Gas",
+    "Kosmos Cement",
+    "Ferrellgas Co (Taneytown, MD)",
+    "Ferrellgas pipeline terminal"
+  ],
+  "jobs": [
+    {
+      "id": 1,
+      "name": "D749",
+      "description": "CSX Neville Island Switcher.\n- Demmler Yard: Pick up for Scully Yard\n- Demmler Yard: Pick up for Neville Island\n- South Yard: Set out inbound; Pick up for Demmler Yard\n- Demmler Yard: Set out outbound",
+      "steps": [
+        {"step_number": 10, "station": 10, "pickup": true, "setout": false, "remarks": "Pick up inbound for Scully Yard"},
+        {"step_number": 20, "station": 10, "pickup": true, "setout": false, "remarks": "Pick up inbound for Neville Island"},
+        {"step_number": 30, "station": 8, "pickup": true, "setout": true, "remarks": "Set out inbound; Pick up outbound for Demmler Yard"},
+        {"step_number": 40, "station": 10, "pickup": false, "setout": true, "remarks": "Set out outbound at Demmler Yard"}
+      ]
+    },
+    {
+      "id": 2,
+      "name": "NVL",
+      "description": "POHC Neville Local.\n- Scully Yard: Pick up for Neville Island and Demmler Yard\n- South Yard: Set out; Pick up Neville Island block\n- Neville Island: Spot and pull for island, Scully, and Demmler\n- South Yard: Set out; Pick up for Scully Yard\n- Scully Yard: Set out outbound",
+      "steps": [
+        {"step_number": 10, "station": 9, "pickup": true, "setout": false, "remarks": "Pick up inbound for Neville Island"},
+        {"step_number": 20, "station": 9, "pickup": true, "setout": false, "remarks": "Pick up inbound for Demmler Yard"},
+        {"step_number": 30, "station": 8, "pickup": true, "setout": true, "remarks": "Set out; Pick up Neville Island block"},
+        {"step_number": 40, "station": 3, "pickup": true, "setout": true, "remarks": "Island work — pick up for Neville Island, Scully Yard, and Demmler Yard"},
+        {"step_number": 50, "station": 8, "pickup": true, "setout": true, "remarks": "Set out; Pick up outbound for Scully Yard"},
+        {"step_number": 60, "station": 9, "pickup": false, "setout": true, "remarks": "Set out outbound at Scully Yard"}
+      ]
+    },
+    {
+      "id": 3,
+      "name": "SY1",
+      "description": "South Yard yardmaster (SY1) — inter-island switching on Neville Island.\nRetrieve and stage cars across North, East, and West yards for island industries.\nSort inbound traffic and build outbound blocks for CSX D749 (via Demmler) and POHC NVL (via Scully).\nD749 and NVL handle industry spotting and interchange; SY1 works the satellite yards only.",
+      "steps": [
+        {"step_number": 10, "station": 8, "pickup": true, "setout": false, "remarks": "Pick up inbound cars from D749 and NVL for classification"},
+        {"step_number": 20, "station": 11, "pickup": true, "setout": true, "remarks": "Retrieve and stage cars at North Yard"},
+        {"step_number": 30, "station": 12, "pickup": true, "setout": true, "remarks": "Retrieve and stage cars at East Yard"},
+        {"step_number": 40, "station": 2, "pickup": true, "setout": true, "remarks": "Retrieve and stage cars at West Yard"},
+        {"step_number": 50, "station": 8, "pickup": false, "setout": true, "remarks": "Build NVL industry block; stage CSX block for D749 (Demmler) and POHC block for NVL (Scully)"}
+      ]
+    },
+    {
+      "id": 4,
+      "name": "CK-1",
+      "description": "Coke transfer — optional yard move.\nMove coke loads from East Yard to South Yard for weighing and classification when authorized and traffic warrants.\nRun only when it will not interfere with NVL or passenger movements.",
+      "steps": [
+        {"step_number": 10, "station": 12, "pickup": true, "setout": false, "remarks": "Pick up coke loads at East Yard"},
+        {"step_number": 20, "station": 8, "pickup": false, "setout": true, "remarks": "Set out coke loads at South Yard for weighing/classification"}
+      ]
+    },
+    {
+      "id": 5,
+      "name": "CKX",
+      "description": "Coke extra — optional outbound coke move.\nDepart South Yard with weighed coke loads when enough cars are ready.\nMay run via CSX (Demmler) or POHC as directed by car routing.",
+      "steps": [
+        {"step_number": 10, "station": 8, "pickup": true, "setout": false, "remarks": "Pick up weighed coke loads at South Yard"},
+        {"step_number": 20, "station": 10, "pickup": false, "setout": true, "remarks": "Set out coke for CSX at Demmler Yard"}
+      ]
+    }
+  ]
+}

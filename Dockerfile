@@ -30,7 +30,8 @@ RUN find /var/www/html -type f -exec chmod 644 {} \; && \
 # Edit permissions for directories and create folder structure
 RUN mkdir -p /var/www/html/sts/temp \
     /var/www/html/sts/ImageStore/DB_Images/barcodes \
-    /var/www/html/sts/ImageStore/DB_Images/qrcodes && \
+    /var/www/html/sts/ImageStore/DB_Images/qrcodes \
+    /var/www/html/sts/ImageStore/DB_Images/RollingStock && \
     chmod -R 757 /var/www/html/sts/backups \
     /var/www/html/sts/ImageStore \
     /var/www/html/sts/temp \
@@ -43,7 +44,8 @@ RUN mkdir -p /var/www/html/sts/temp \
 
 # Copy start script
 COPY start.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/start.sh && \
+    chmod +x /var/www/html/sts/load_hart_seed.sh
 
 # Health check using curl
 HEALTHCHECK --interval=30s --timeout=10s \

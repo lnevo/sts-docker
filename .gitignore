@@ -35,3 +35,13 @@ Temporary Items
 *.icloud
 
 # End of https://www.toptal.com/developers/gitignore/api/macos
+
+# Local persistent data (keep directory placeholders)
+/db/*
+!/db/.gitkeep
+/images/*
+!/images/.gitkeep
+
+# Python cache from seed tooling
+__pycache__/
+*.pyc

@@ -14,12 +14,13 @@ services:
       # Set to 1 to provision the database by running the MySQL setup script
       # It is STRONGLY RECOMMENDED that you set this to 0 once initially deployed,
       # So you don't inadverdently wipe your database when deploying a new container instance!
-      - PROVISION_DATABASE=0
+      - PROVISION_DATABASE=1
 
-    # Uncomment below and change the path you with to store your backups for STS in. format is <Source Path on PC>:<Path on Container>
-    # You only want to change the <Source Path on PC> Variable.
     volumes:
+      # STS database backups (existing)
       - ~/sts-backups:/var/www/html/sts/backups
+      # Rolling stock photos: host ./images -> STS album folder in the container
+      - ./images:/var/www/html/sts/ImageStore/DB_Images/RollingStock
 
     depends_on:
       db:
@@ -41,10 +42,9 @@ services:
       # So you don't inadverdently wipe your database when deploying a new container instance!
       - PROVISION_DATABASE=0
 
-    # Uncomment below and change the path you with to store your backups for STS in. format is <Source Path on PC>:<Path on Container>
-    # You only want to change the <Source Path on PC> Variable.
     volumes:
       - ~/sts-backups:/var/www/html/sts/backups
+      - ./images:/var/www/html/sts/ImageStore/DB_Images/RollingStock
 
     depends_on:
       db:
@@ -61,10 +61,10 @@ services:
 
     command: --sql_mode="" # Required to disable STRICT_TRANS_TABLES. Causes issues with pu_criteria.php
 
-    # If you want to persist your database somewhere outside of the container (you should) uncomment this line,
-    # and change the path on the left hand side of the colon.
+    # Persist MariaDB data on the host (recommended). Uncomment to keep the database
+    # across container recreations. Uses ./db in this repo (see db/.gitkeep).
     #volumes:
-      #- /volume1/docker/sts/db:/var/lib/mysql
+    #  - ./db:/var/lib/mysql
 
     healthcheck:
       interval: 10s

@@ -492,7 +492,7 @@
           '5' => 'sct',
           '4' => 'ssr',
           'n' => 'manildra',
-          default => 'nswgr'
+          default => 'hart'
         };
 
         $driverNameWidth = "14%";

@@ -77,12 +77,15 @@
     
     // create the pick up criteria table if it doesn't exist
     $sql = 'create table if not exists pu_criteria (id int not null auto_increment primary key,
-            job_id int, step_nbr int, car_status varchar(256), commodity_id int, car_code_id int, dest_station_id int)';
+            job_id varchar(64), step_nbr int, car_status varchar(256), commodity_id int, car_code_id int, dest_station_id int)';
     if (!mysqli_query($dbc, $sql))
     {
       print "Error creating pick up criteria table";
       die;
     }
+
+    // HART jobs use non-numeric names (D749, NVL, South Yard).
+    mysqli_query($dbc, 'ALTER TABLE pu_criteria MODIFY job_id varchar(64) DEFAULT NULL');
 
     // check to see if the cars table already had the "block" column
     $block_col_found = false;

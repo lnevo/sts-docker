@@ -43,7 +43,7 @@
   $row  = mysqli_fetch_array($rs);
   $job_name = $row['name'];
 
-  print '<a href="http://localhost/sts/build_switchlists.php">Return to Assign Cars</a><br /><br />';
+  print '<a href="http://localhost:8980/sts/build_switchlists.php">Return to Assign Cars</a><br /><br />';
   
   // decide if this is the second time this page was called (after the assign button was clicked)
   if (isset($_GET['assign_cars']))
@@ -99,7 +99,7 @@
                    routing.id as dest_station_id,
                    routing.station as dest_station
               from pu_criteria
-              left join jobs on pu_criteria.job_id = jobs.id
+              left join jobs on pu_criteria.job_id = jobs.name
               left join commodities on pu_criteria.commodity_id = commodities.id
               left join car_codes on pu_criteria.car_code_id = car_codes.id
               left join routing on pu_criteria.dest_station_id = routing.id
