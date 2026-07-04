@@ -2,6 +2,10 @@
 
 All notable HART fork changes use semantic versioning (`x.y.z`).
 
+## [0.1.1] - 2026-07-04
+
+- Added a bulk train/job selector to `build_switchlists.php` for assigning all listed cars to the same pickup job.
+
 ## [0.1.0] - 2026-07-04
 
 - Added HART layout seed generation and generated STS seed SQL.

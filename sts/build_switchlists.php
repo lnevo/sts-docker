@@ -145,6 +145,12 @@
       The cars will be added to the selected job for pick up at this location.<br />
       If the job column is left blank, the car will remain in place.<br />
       The next destination in each car's route is displayed in <b>bold</b> text.
+      <div class="noprint mt-3">
+      <label for="bulk_job" class="form-label fw-semibold">Assign all cars to train/job:</label>
+      <select id="bulk_job" name="bulk_job" class="form-select" onchange="updateAllJobs(this.value)">
+        <option value="">Select train/job</option>
+      </select>
+      </div>
       <div class="mt-2">
       <button id="build_btn" name="build_btn" value="ASSIGN" type="submit" disabled
         class="btn btn-success btn-lg">ASSIGN</button>
@@ -196,6 +202,7 @@
 
           // hide the table that doesn't contain any cars
           document.getElementById("car_table_div").style.visibility = "hidden";
+          document.getElementById("bulk_job").innerHTML = '<option value="">Select train/job</option>';
         }
         else
         {
@@ -208,9 +215,40 @@
           // display the table being returned from the server
           document.getElementById("car_table_div").innerHTML = xmlhttp.responseText;
           document.getElementById("car_table_div").style.visibility = "visible";
+
+          // Populate after the table HTML exists.
+          setTimeout(populateBulkJobDropdown, 100);
         }
       }
 
+    </script>
+    <script>
+      function populateBulkJobDropdown() {
+        const firstDropdown = document.querySelector('select[name^="job_list"]');
+        if (!firstDropdown) return;
+        const bulkDropdown = document.getElementById('bulk_job');
+        if (!bulkDropdown) return;
+        bulkDropdown.innerHTML = '<option value="">Select train/job</option>';
+        Array.from(firstDropdown.options).forEach(option => {
+          if (option.value) {
+            const newOption = document.createElement('option');
+            newOption.value = option.value;
+            newOption.text = option.text;
+            bulkDropdown.add(newOption);
+          }
+        });
+      }
+
+      function updateAllJobs(selectedValue) {
+        if (!selectedValue) return;
+        const dropdowns = document.querySelectorAll('select[name^="job_list"]');
+        dropdowns.forEach(dropdown => {
+          const optionExists = Array.from(dropdown.options).some(option => option.value === selectedValue);
+          if (optionExists) {
+            dropdown.value = selectedValue;
+          }
+        });
+      }
     </script>
   </div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
