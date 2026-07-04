@@ -62,8 +62,9 @@
   if (mysqli_num_rows($rs) > 0)
   {
     $data_table = '<div class="table-responsive"><table id="car_table" class="table table-sm table-bordered table-hover">';
-    $data_table .= '<tr><td colspan="8">' . nl2br($instructions) . '</td></tr>';
+    $data_table .= '<tr><td colspan="9">' . nl2br($instructions) . '</td></tr>';
     $data_table .= '<tr style="position: sticky; top: 0; background-color: #F5F5F5">
+                      <th style="width: 1%; text-align: center;"><input class="form-check-input" id="select_all_cars" type="checkbox" checked onclick="toggleAllCarAssignments(this.checked)" aria-label="Select all cars for bulk assignment"></th>
                       <th>Select Job</th>
                       <th>Reporting Marks</th>
                       <th>Car Code</th>
@@ -81,7 +82,7 @@
       if ($group_key !== $current_location_group)
       {
         $current_location_group = $group_key;
-        $data_table .= '<tr class="table-dark"><td colspan="8" class="fw-semibold">'
+        $data_table .= '<tr class="table-dark"><td colspan="9" class="fw-semibold">'
             . htmlspecialchars($row['current_station']) . ' &mdash; ' . htmlspecialchars($row['current_location'])
             . '</td></tr>';
       }
@@ -89,10 +90,13 @@
       // generate the table rows
       $data_table .= '<tr>';
 
-      // column 1 - list of eligible jobs
+      // column 1 - include this row when using the bulk job selector
+      $data_table .= '<td class="text-center"><input class="form-check-input bulk-assign-row" type="checkbox" checked aria-label="Include this car in bulk assignment"></td>';
+
+      // column 2 - list of eligible jobs
       $data_table .= '<td>' . get_jobs_at_station($dbc, $station, $row_count) . '</td>';
 
-      // column 2 - reporting marks
+      // column 3 - reporting marks
       if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row['id'] . '.jpg'))
       {
         $parm_string = '\'' . $row['id'] . '\', \'' . $row['reporting_marks'] . '\'';
@@ -105,13 +109,13 @@
       $data_table .= '<td onclick="show_image(' . $parm_string . ');">' . $row['reporting_marks'] . '<input name="car' . $row_count . '"';
       $data_table = $data_table . ' value="' . $row['id'] . '" type="hidden"></td>';
 
-      // column 3 - car code
+      // column 4 - car code
       $data_table .= '<td>' . $row['car_code'] . '</td>';
 
-      // column 4 - current location
+      // column 5 - current location
       $data_table .= '<td>' . $row['current_station'] . '<br />' . $row['current_location'] . '</td>';
 
-      // column 5 - loading location
+      // column 6 - loading location
       if (substr($row['waybill_number'], 4, 1) == 'E')
       {
         $data_table .= '<td>N/A</td>';
@@ -129,10 +133,10 @@
         }
       }
 
-      // column 6 - status
+      // column 7 - status
       $data_table .= '<td><span class="status-' . strtolower($row['status']) . '">' . $row['status'] . '</span></td>';
 
-      // column 7 - unloading location
+      // column 8 - unloading location
       if (substr($row['waybill_number'], 4, 1) == 'E')
       {
         // run a couple quick queries to find this car's destination since it isn't linked to a shipment
@@ -160,7 +164,7 @@
         }
       }
 
-      // column 8 - consignment -  if this is a non-revenue move, display "Non-Revenue", otherwise display the consignment
+      // column 9 - consignment -  if this is a non-revenue move, display "Non-Revenue", otherwise display the consignment
       if (substr($row['waybill_number'], 4, 1) == 'E')
       {
         $data_table .= '<td>Non-Revenue</td>';

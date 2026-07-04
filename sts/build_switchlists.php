@@ -243,10 +243,18 @@
         if (!selectedValue) return;
         const dropdowns = document.querySelectorAll('select[name^="job_list"]');
         dropdowns.forEach(dropdown => {
+          const rowCheckbox = dropdown.closest('tr')?.querySelector('.bulk-assign-row');
+          if (rowCheckbox && !rowCheckbox.checked) return;
           const optionExists = Array.from(dropdown.options).some(option => option.value === selectedValue);
           if (optionExists) {
             dropdown.value = selectedValue;
           }
+        });
+      }
+
+      function toggleAllCarAssignments(checked) {
+        document.querySelectorAll('.bulk-assign-row').forEach(checkbox => {
+          checkbox.checked = checked;
         });
       }
     </script>
