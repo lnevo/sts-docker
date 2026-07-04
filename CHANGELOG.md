@@ -2,6 +2,10 @@
 
 All notable HART fork changes use semantic versioning (`x.y.z`).
 
+## [0.2.5] - 2026-07-04
+
+- Updated embedded header banner labels so pages like System Settings no longer show "Menu (Touch)" or "Menu (Text)".
+
 ## [0.2.4] - 2026-07-04
 
 - Redrew the Menu and Site Map image labels to better match the original STS menu icon font size and borders.
