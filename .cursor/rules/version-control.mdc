@@ -1,0 +1,13 @@
+---
+description: Version and commit all project changes
+alwaysApply: true
+---
+
+# Version Control
+
+- Before editing, check the current branch and working tree with `git status`.
+- Keep work on a named branch; do not make project changes directly on `master` unless explicitly requested.
+- Use semantic versioning (`x.y.z`) in `VERSION`. Update `CHANGELOG.md` with every intentional project change.
+- Commit completed work before ending the task when the user has asked for changes to be backed by version control.
+- Do not include local data, caches, PDFs, database volumes, or generated duplicate artifacts unless explicitly requested.
+- Push the active work branch after committing when the user has requested GitHub backup.
