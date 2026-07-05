@@ -14,6 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $categories = fill_order_parse_categories($_POST['categories'] ?? null);
 $filters = fill_order_parse_filters($_POST['filters'] ?? null);
+$car_filters = fill_order_parse_car_filters($_POST['car_filters'] ?? null);
 $selected_waybills = null;
 if (isset($_POST['waybills']) && is_array($_POST['waybills'])) {
     $selected_waybills = array_values(array_filter(array_map('trim', $_POST['waybills'])));
@@ -51,7 +52,7 @@ foreach ($waybills as $waybill_number) {
     }
 
     $available_cars = fill_order_get_available_cars($dbc, $order_row);
-    $selected_car = fill_order_pick_car_for_categories($available_cars, $categories);
+    $selected_car = fill_order_pick_car_for_categories($available_cars, $categories, $car_filters);
     if ($selected_car === null) {
         $skipped[] = [
             'waybill_number' => $waybill_number,
@@ -92,6 +93,7 @@ echo json_encode([
     'skipped' => $skipped,
     'categories' => $categories,
     'filters' => $filters,
+    'car_filters' => $car_filters,
 ]);
 
 ?>

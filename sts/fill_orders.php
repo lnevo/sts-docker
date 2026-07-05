@@ -68,6 +68,33 @@ $filter_unloading_options = fill_orders_unique_values($open_orders, 'unloading_l
 $filter_consignment_options = fill_orders_unique_values($open_orders, 'consignment');
 $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
 
+$car_filter_station_options = [];
+$car_filter_location_options = [];
+$sql_car_filters = 'SELECT DISTINCT routing.station as current_station,
+                           locations.code as current_location
+                    FROM cars
+                    LEFT JOIN locations ON locations.id = cars.current_location_id
+                    LEFT JOIN routing ON routing.id = locations.station
+                    WHERE cars.status = "Empty"
+                      AND cars.id NOT IN (SELECT car FROM car_orders WHERE car != "" AND car IS NOT NULL AND car != "0")
+                      AND locations.code IS NOT NULL
+                    ORDER BY routing.station, locations.code';
+$rs_car_filters = mysqli_query($dbc, $sql_car_filters);
+while ($row = mysqli_fetch_array($rs_car_filters)) {
+    $station = trim((string) ($row['current_station'] ?? ''));
+    $location = trim((string) ($row['current_location'] ?? ''));
+    if ($station !== '') {
+        $car_filter_station_options[$station] = true;
+    }
+    if ($location !== '') {
+        $car_filter_location_options[$location] = true;
+    }
+}
+$car_filter_station_options = array_keys($car_filter_station_options);
+$car_filter_location_options = array_keys($car_filter_location_options);
+sort($car_filter_station_options, SORT_NATURAL | SORT_FLAG_CASE);
+sort($car_filter_location_options, SORT_NATURAL | SORT_FLAG_CASE);
+
 ?>
 
 <!DOCTYPE html>
@@ -78,6 +105,7 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
     <title>STS - Fill Car Orders</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="operations_ui.css" rel="stylesheet">
     <style>
         .order-card {
             margin-bottom: 1rem;
@@ -190,22 +218,155 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
             text-align: center;
             padding: 2rem;
         }
-        .auto-assign-panel {
-            min-width: 280px;
+        .fill-orders-page {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
         }
-        .auto-assign-options {
-            border-top: 1px solid #dee2e6;
+        .fill-orders-summary {
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            padding: 0.65rem 0.9rem;
+        }
+        .fill-orders-summary strong {
+            font-size: 0.95rem;
+        }
+        .fill-orders-summary p {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin: 0.15rem 0 0;
+        }
+        .fill-orders-filters-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 0.75rem;
+            align-items: stretch;
+        }
+        .fill-orders-bulk-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5rem 0.75rem;
+            padding: 0.5rem 0.75rem;
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+        }
+        .fill-filter-panel {
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            padding: 0.65rem 0.75rem;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 0.45rem;
+        }
+        .fill-filter-panel.auto-assign {
+            background: #e8f3ea;
+            border-color: #c5dcc8;
+        }
+        .fill-filter-panel-title {
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: #495057;
+            margin-bottom: 0.15rem;
+        }
+        .fill-filter-panel-hint {
+            font-size: 0.75rem;
+            color: #6c757d;
+            margin-bottom: 0.5rem;
+            line-height: 1.3;
+        }
+        .fill-filter-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.35rem 0.5rem;
+        }
+        .fill-filter-grid .form-label {
+            font-size: 0.68rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #6c757d;
+            margin-bottom: 0.1rem;
+        }
+        .fill-car-filter-row {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 0.35rem 0.5rem;
+            align-items: flex-end;
+        }
+        .fill-car-filter-row .fill-car-filter-field {
+            flex: 1 1 0;
+            min-width: 0;
+        }
+        .fill-car-filter-row .fill-car-filter-type {
+            flex: 0 0 4.25rem;
+            max-width: 4.25rem;
+        }
+        .fill-car-filter-row .form-label {
+            font-size: 0.68rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #6c757d;
+            margin-bottom: 0.1rem;
+        }
+        .fill-car-sources {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem 0.65rem;
+            margin-bottom: 0;
+        }
+        .fill-car-sources .form-check {
+            margin-bottom: 0;
+            min-height: auto;
+        }
+        .fill-car-sources .form-check-label {
+            font-size: 0.82rem;
+        }
+        .fill-auto-assign-sources {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.35rem 0.5rem;
+        }
+        .fill-auto-assign-sources-label {
+            font-size: 0.68rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #6c757d;
+            flex-shrink: 0;
+        }
+        .fill-auto-assign-sources .fill-car-sources {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        .fill-auto-assign-sources .fill-filter-actions {
+            margin-top: 0;
+            flex: 0 0 auto;
+        }
+        .fill-auto-assign-footer {
+            margin-top: auto;
             padding-top: 0.75rem;
-            margin-top: 0.75rem;
+            display: flex;
+            justify-content: flex-end;
+        }
+        .fill-filter-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: auto;
+            padding-top: 0.75rem;
         }
         .order-card.filtered-out {
             display: none;
         }
-        .filter-label {
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            color: #666;
+        @media (max-width: 991.98px) {
+            .fill-orders-filters-row {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -227,107 +388,145 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
   </div>
 </nav>
     <div class="container-fluid px-4">
-        <h5 class="mb-1">Fill Car Orders</h5>
-        <p class="text-muted mb-3">Check orders to select them, expand to pick a car manually, or use Auto Assign on the selection.</p>
+        <h5 class="mb-3">Fill Car Orders</h5>
 
         <?php if (count($open_orders) > 0) { ?>
-            <div id="openOrdersSummary" class="mb-4 p-3 bg-light border rounded">
-                <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
-                    <p class="mb-0">
-                        <strong id="openOrdersCount"><?php echo count($open_orders); ?> open car orders</strong>
-                        <span id="filteredOrdersNote" class="text-muted"></span><br/>
-                        Click on any order below to see available cars. Check orders for bulk actions, or click a car to assign it.
-                    </p>
-                    <div class="auto-assign-panel">
-                        <button id="autoAssignBtn" type="button" class="btn btn-success btn-lg w-100" onclick="autoAssignAll()">
-                            <i class="bi bi-lightning-charge"></i> Auto Assign
-                        </button>
-                        <div class="auto-assign-options">
-                            <div class="filter-label mb-1">Car source</div>
-                            <div class="d-flex flex-wrap gap-3 mb-3">
-                                <div class="form-check">
-                                    <input class="form-check-input auto-category" type="checkbox" value="pool" id="catPool" checked>
+            <div class="fill-orders-page" id="fillOrdersPage">
+                <div id="openOrdersSummary" class="fill-orders-summary">
+                    <strong id="openOrdersCount"><?php echo count($open_orders); ?> open car orders</strong>
+                    <span id="filteredOrdersNote" class="text-muted"></span>
+                    <p>Expand an order to pick a car, or check orders and use Auto Assign.</p>
+                </div>
+
+                <div class="fill-orders-filters-row" id="fillOrdersFilters">
+                    <div class="fill-filter-panel">
+                        <div class="fill-filter-panel-title">Display</div>
+                        <div class="fill-filter-panel-hint">Filter which orders appear in the list.</div>
+                        <div class="fill-filter-grid">
+                            <div>
+                                <label class="form-label" for="filterLoading">Loading</label>
+                                <select id="filterLoading" class="form-select form-select-sm order-filter">
+                                    <option value="">All</option>
+                                    <?php foreach ($filter_loading_options as $value) { ?>
+                                        <option value="<?php echo htmlspecialchars($value); ?>"><?php echo htmlspecialchars($value); ?></option>
+                                    <?php } ?>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label" for="filterUnloading">Unloading</label>
+                                <select id="filterUnloading" class="form-select form-select-sm order-filter">
+                                    <option value="">All</option>
+                                    <?php foreach ($filter_unloading_options as $value) { ?>
+                                        <option value="<?php echo htmlspecialchars($value); ?>"><?php echo htmlspecialchars($value); ?></option>
+                                    <?php } ?>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label" for="filterConsignment">Commodity</label>
+                                <select id="filterConsignment" class="form-select form-select-sm order-filter">
+                                    <option value="">All</option>
+                                    <?php foreach ($filter_consignment_options as $value) { ?>
+                                        <option value="<?php echo htmlspecialchars($value); ?>"><?php echo htmlspecialchars($value); ?></option>
+                                    <?php } ?>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label" for="filterCarCode">Car type</label>
+                                <select id="filterCarCode" class="form-select form-select-sm order-filter">
+                                    <option value="">All</option>
+                                    <?php foreach ($filter_car_code_options as $value) { ?>
+                                        <option value="<?php echo htmlspecialchars($value); ?>"><?php echo htmlspecialchars($value); ?></option>
+                                    <?php } ?>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="fill-filter-actions">
+                            <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="clearOrderFilters()">Clear</button>
+                        </div>
+                    </div>
+
+                    <div class="fill-filter-panel auto-assign">
+                        <div class="fill-filter-panel-title">Auto assign</div>
+
+                        <div class="fill-auto-assign-sources">
+                            <span class="fill-auto-assign-sources-label">Source</span>
+                            <div class="fill-car-sources">
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input car-filter-input" type="checkbox" value="pool" id="catPool" checked>
                                     <label class="form-check-label" for="catPool">Pool</label>
                                 </div>
-                                <div class="form-check">
-                                    <input class="form-check-input auto-category" type="checkbox" value="priority" id="catPriority" checked>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input car-filter-input" type="checkbox" value="priority" id="catPriority" checked>
                                     <label class="form-check-label" for="catPriority">Priority</label>
                                 </div>
-                                <div class="form-check">
-                                    <input class="form-check-input auto-category" type="checkbox" value="station" id="catStation" checked>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input car-filter-input" type="checkbox" value="station" id="catStation" checked>
                                     <label class="form-check-label" for="catStation">Station</label>
                                 </div>
-                                <div class="form-check">
-                                    <input class="form-check-input auto-category" type="checkbox" value="system" id="catSystem">
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input car-filter-input" type="checkbox" value="system" id="catSystem" checked>
                                     <label class="form-check-label" for="catSystem">System</label>
                                 </div>
                             </div>
-                            <div class="filter-label mb-1">Auto-assign order filters</div>
-                            <div class="row g-2">
-                                <div class="col-md-6">
-                                    <label class="form-label small mb-1" for="filterLoading">Loading</label>
-                                    <select id="filterLoading" class="form-select form-select-sm order-filter">
-                                        <option value="">All loading locations</option>
-                                        <?php foreach ($filter_loading_options as $value) { ?>
-                                            <option value="<?php echo htmlspecialchars($value); ?>"><?php echo htmlspecialchars($value); ?></option>
-                                        <?php } ?>
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label small mb-1" for="filterUnloading">Unloading</label>
-                                    <select id="filterUnloading" class="form-select form-select-sm order-filter">
-                                        <option value="">All unloading locations</option>
-                                        <?php foreach ($filter_unloading_options as $value) { ?>
-                                            <option value="<?php echo htmlspecialchars($value); ?>"><?php echo htmlspecialchars($value); ?></option>
-                                        <?php } ?>
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label small mb-1" for="filterConsignment">Commodity</label>
-                                    <select id="filterConsignment" class="form-select form-select-sm order-filter">
-                                        <option value="">All commodities</option>
-                                        <?php foreach ($filter_consignment_options as $value) { ?>
-                                            <option value="<?php echo htmlspecialchars($value); ?>"><?php echo htmlspecialchars($value); ?></option>
-                                        <?php } ?>
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label small mb-1" for="filterCarCode">Car type</label>
-                                    <select id="filterCarCode" class="form-select form-select-sm order-filter">
-                                        <option value="">All car types</option>
-                                        <?php foreach ($filter_car_code_options as $value) { ?>
-                                            <option value="<?php echo htmlspecialchars($value); ?>"><?php echo htmlspecialchars($value); ?></option>
-                                        <?php } ?>
-                                    </select>
-                                </div>
+                            <div class="fill-filter-actions">
+                                <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="clearCarFilters()">Clear</button>
                             </div>
-                            <div class="d-flex justify-content-end mt-2">
-                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearOrderFilters()">Clear filters</button>
+                        </div>
+
+                        <div class="fill-car-filter-row">
+                            <div class="fill-car-filter-field">
+                                <label class="form-label" for="filterCarStation">Station</label>
+                                <select id="filterCarStation" class="form-select form-select-sm car-filter">
+                                    <option value="">All</option>
+                                    <?php foreach ($car_filter_station_options as $value) { ?>
+                                        <option value="<?php echo htmlspecialchars($value); ?>"><?php echo htmlspecialchars($value); ?></option>
+                                    <?php } ?>
+                                </select>
                             </div>
+                            <div class="fill-car-filter-field">
+                                <label class="form-label" for="filterCarLocation">Location</label>
+                                <select id="filterCarLocation" class="form-select form-select-sm car-filter">
+                                    <option value="">All</option>
+                                    <?php foreach ($car_filter_location_options as $value) { ?>
+                                        <option value="<?php echo htmlspecialchars($value); ?>"><?php echo htmlspecialchars($value); ?></option>
+                                    <?php } ?>
+                                </select>
+                            </div>
+                            <div class="fill-car-filter-field fill-car-filter-type">
+                                <label class="form-label" for="filterCarType">Type</label>
+                                <select id="filterCarType" class="form-select form-select-sm car-filter">
+                                    <option value="">All</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="fill-auto-assign-footer">
+                            <button id="autoAssignBtn" type="button" class="btn btn-success" onclick="autoAssignAll()">
+                                <i class="bi bi-lightning-charge"></i> Auto Assign
+                            </button>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div id="autoAssignStatus" class="alert d-none mb-3" role="alert"></div>
+                <div id="autoAssignStatus" class="alert d-none mb-0 py-2" role="alert"></div>
 
-            <div class="d-flex flex-wrap align-items-center gap-3 mb-3 p-3 bg-white border rounded">
-                <div class="form-check mb-0">
-                    <input class="form-check-input" type="checkbox" id="checkAllOrders" onchange="checkAllOrders()">
-                    <label class="form-check-label fw-semibold" for="checkAllOrders">Check all</label>
+                <div class="fill-orders-bulk-toolbar">
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="checkAllOrders" onchange="checkAllOrders()">
+                        <label class="form-check-label fw-semibold" for="checkAllOrders">Check all</label>
+                    </div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="expandCheckedOrders()">
+                        <i class="bi bi-arrows-expand"></i> Expand
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="collapseCheckedOrders()">
+                        <i class="bi bi-arrows-collapse"></i> Collapse
+                    </button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="cancelCheckedOrders()">
+                        <i class="bi bi-x-circle"></i> Cancel
+                    </button>
                 </div>
-                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="expandCheckedOrders()">
-                    <i class="bi bi-arrows-expand"></i> Expand selected
-                </button>
-                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="collapseCheckedOrders()">
-                    <i class="bi bi-arrows-collapse"></i> Collapse selected
-                </button>
-                <button type="button" class="btn btn-outline-danger btn-sm" onclick="cancelCheckedOrders()">
-                    <i class="bi bi-x-circle"></i> Cancel selected
-                </button>
-            </div>
 
-            <div id="ordersContainer">
+                <div id="ordersContainer">
                 <?php
                 foreach ($open_orders as $row) {
                     $is_pool = $row['pool_count'] > 0 ? true : false;
@@ -408,6 +607,7 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
                 }
                 mysqli_close($dbc);
                 ?>
+                </div>
             </div>
         <?php } else { ?>
             <div id="allFilledMessage">
@@ -426,16 +626,21 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
 
         function showAllFilledState()
         {
-            const ordersContainer = document.getElementById('ordersContainer');
-            const openOrdersSummary = document.getElementById('openOrdersSummary');
+            const page = document.getElementById('fillOrdersPage');
             const autoAssignStatus = document.getElementById('autoAssignStatus');
 
-            if (openOrdersSummary) {
-                openOrdersSummary.classList.add('d-none');
+            if (page) {
+                page.outerHTML = '<div id="allFilledMessage">' + renderAllFilledMessageHtml() + '</div>';
+            } else if (!document.getElementById('allFilledMessage')) {
+                const container = document.querySelector('.container-fluid.px-4');
+                if (container) {
+                    const message = document.createElement('div');
+                    message.id = 'allFilledMessage';
+                    message.innerHTML = renderAllFilledMessageHtml();
+                    container.appendChild(message);
+                }
             }
-            if (ordersContainer) {
-                ordersContainer.innerHTML = renderAllFilledMessageHtml();
-            }
+
             if (autoAssignStatus) {
                 autoAssignStatus.classList.add('d-none');
             }
@@ -452,16 +657,99 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
             updateFilteredOrdersNote(visibleCount, remainingCount);
             if (remainingCount === 0) {
                 showAllFilledState();
+            } else {
+                updateCarTypeFilterOptions();
+            }
+        }
+
+        function getOrderCarTypeOptions()
+        {
+            const codes = new Set();
+            getVisibleOrderCards().forEach(function(card) {
+                const code = (card.dataset.carCode || '').trim();
+                if (code) {
+                    codes.add(code);
+                }
+            });
+            return Array.from(codes).sort(function(a, b) {
+                return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+            });
+        }
+
+        function updateCarTypeFilterOptions()
+        {
+            const select = document.getElementById('filterCarType');
+            if (!select) {
+                return;
+            }
+
+            const previous = select.value;
+            const codes = getOrderCarTypeOptions();
+
+            select.innerHTML = '<option value="">All</option>';
+            codes.forEach(function(code) {
+                const option = document.createElement('option');
+                option.value = code;
+                option.textContent = code;
+                select.appendChild(option);
+            });
+
+            if (previous && codes.includes(previous)) {
+                select.value = previous;
+            } else if (previous) {
+                select.value = '';
+                reloadExpandedOrderCars();
             }
         }
 
         function getSelectedCategories()
         {
+            return getCarFilters().categories;
+        }
+
+        function getCarFilters()
+        {
             const categories = [];
-            document.querySelectorAll('.auto-category:checked').forEach(function(input) {
+            document.querySelectorAll('.car-filter-input:checked').forEach(function(input) {
                 categories.push(input.value);
             });
-            return categories;
+
+            return {
+                categories: categories,
+                current_station: document.getElementById('filterCarStation').value,
+                current_location: document.getElementById('filterCarLocation').value,
+                car_code: document.getElementById('filterCarType').value
+            };
+        }
+
+        function carFiltersAreActive()
+        {
+            const filters = getCarFilters();
+            return filters.categories.length < 4
+                || !!filters.current_station
+                || !!filters.current_location
+                || !!filters.car_code;
+        }
+
+        function buildCarFilterQueryParams()
+        {
+            const filters = getCarFilters();
+            const params = {};
+
+            filters.categories.forEach(function(category, index) {
+                params['categories[' + index + ']'] = category;
+            });
+            if (filters.current_station) {
+                params.current_station = filters.current_station;
+            }
+            if (filters.current_location) {
+                params.current_location = filters.current_location;
+            }
+            if (filters.car_code) {
+                params.car_code = filters.car_code;
+            }
+
+            return params;
         }
 
         function getOrderFilters()
@@ -573,6 +861,7 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
             const totalCount = document.querySelectorAll('.order-card').length;
             updateFilteredOrdersNote(visibleCount, totalCount);
             syncFilteredOrderChecks();
+            updateCarTypeFilterOptions();
         }
 
         function clearOrderFilters()
@@ -589,13 +878,46 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
             updateCheckAllOrdersState();
         }
 
+        function clearCarFilters()
+        {
+            document.getElementById('filterCarStation').value = '';
+            document.getElementById('filterCarLocation').value = '';
+            document.getElementById('filterCarType').value = '';
+            document.querySelectorAll('.car-filter-input').forEach(function(input) {
+                input.checked = true;
+            });
+            reloadExpandedOrderCars();
+        }
+
+        function reloadExpandedOrderCars()
+        {
+            document.querySelectorAll('.order-card').forEach(function(card) {
+                if (!isOrderExpanded(card)) {
+                    return;
+                }
+                loadAvailableCars(card, card.getAttribute('data-waybill'));
+            });
+        }
+
+        function applyCarFilters()
+        {
+            reloadExpandedOrderCars();
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('.order-filter').forEach(function(select) {
                 select.addEventListener('change', applyOrderFilters);
             });
+            document.querySelectorAll('.car-filter').forEach(function(select) {
+                select.addEventListener('change', applyCarFilters);
+            });
+            document.querySelectorAll('.car-filter-input').forEach(function(input) {
+                input.addEventListener('change', applyCarFilters);
+            });
             document.querySelectorAll('.order-row-check').forEach(function(checkbox) {
                 checkbox.addEventListener('change', updateCheckAllOrdersState);
             });
+            updateCarTypeFilterOptions();
         });
 
         function removeOrderCard(waybill)
@@ -647,9 +969,11 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
             if (categories.length === 0) {
                 autoAssignStatus.className = 'alert alert-danger mb-3';
                 autoAssignStatus.classList.remove('d-none');
-                autoAssignStatus.innerHTML = 'Select at least one car source: Pool, Priority, Station, or System.';
+                autoAssignStatus.innerHTML = 'Select at least one car source in Car filters: Pool, Priority, Station, or System.';
                 return;
             }
+
+            const carFilters = getCarFilters();
 
             autoAssignBtn.disabled = true;
             autoAssignStatus.className = 'alert alert-info mb-3';
@@ -665,7 +989,8 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
                 dataType: 'json',
                 data: {
                     categories: categories,
-                    waybills: selectedWaybills
+                    waybills: selectedWaybills,
+                    car_filters: carFilters
                 },
                 success: function(response) {
                     if (response.all_filled) {
@@ -773,21 +1098,32 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
 
         function loadAvailableCars(card, waybill) {
             const carsContainer = card.querySelector('.cars-container');
+            const requestData = Object.assign({ waybill_number: waybill }, buildCarFilterQueryParams());
 
             $.ajax({
                 url: 'get_available_cars_ajax.php',
                 type: 'GET',
-                data: { waybill_number: waybill },
+                data: requestData,
                 dataType: 'json',
                 success: function(data) {
                     let html = '';
 
                     if (data.total_cars_found === 0) {
-                        html = '<div class="alert alert-warning mb-0">No eligible cars found on the system</div>';
+                        if (data.total_cars_unfiltered > 0 && carFiltersAreActive()) {
+                            html = '<div class="alert alert-warning mb-0">'
+                                + data.total_cars_unfiltered + ' eligible cars found, but none match the current car filters.'
+                                + '</div>';
+                        } else {
+                            html = '<div class="alert alert-warning mb-0">No eligible cars found on the system</div>';
+                        }
                     } else {
+                        const filterNote = (data.total_cars_unfiltered > data.total_cars_found)
+                            ? ' <span class="text-muted">(' + data.total_cars_unfiltered + ' before car filters)</span>'
+                            : '';
+
                         html = `<div class="mb-3 text-muted">
                             <small>
-                                <strong>${data.total_cars_found} eligible cars found:</strong><br/>
+                                <strong>${data.total_cars_found} eligible cars found${filterNote}:</strong><br/>
                                 <span class="badge" style="background-color: gray; color: white;">Pool: ${data.pool_count}</span>
                                 <span class="badge" style="background-color: darkgray; color: white;">Station: ${data.station_count}</span>
                                 <span class="badge" style="background-color: lightgray; color: black;">Priority: ${data.priority_count}</span>

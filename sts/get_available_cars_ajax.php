@@ -23,27 +23,9 @@ if ($order_row === null) {
 }
 
 $all_cars = fill_order_get_available_cars($dbc, $order_row);
-
-$pool_count = 0;
-$station_count = 0;
-$priority_count = 0;
-$system_count = 0;
-foreach ($all_cars as $car) {
-    switch ($car['category']) {
-        case 'pool':
-            $pool_count++;
-            break;
-        case 'station':
-            $station_count++;
-            break;
-        case 'priority':
-            $priority_count++;
-            break;
-        default:
-            $system_count++;
-            break;
-    }
-}
+$car_filters = fill_order_parse_car_filters($_GET);
+$filtered_cars = fill_order_filter_cars($all_cars, $car_filters);
+$counts = fill_order_count_cars_by_category($filtered_cars);
 
 mysqli_close($dbc);
 
@@ -57,12 +39,14 @@ echo json_encode([
     'unloading_station' => $order_row['unloading_station'],
     'unloading_location' => $order_row['unloading_location'],
     'remarks' => $order_row['remarks'],
-    'total_cars_found' => count($all_cars),
-    'pool_count' => $pool_count,
-    'station_count' => $station_count,
-    'priority_count' => $priority_count,
-    'system_count' => $system_count,
-    'cars' => $all_cars
+    'total_cars_found' => count($filtered_cars),
+    'total_cars_unfiltered' => count($all_cars),
+    'pool_count' => $counts['pool'],
+    'station_count' => $counts['station'],
+    'priority_count' => $counts['priority'],
+    'system_count' => $counts['system'],
+    'cars' => $filtered_cars,
+    'car_filters' => $car_filters,
 ]);
 
 ?>

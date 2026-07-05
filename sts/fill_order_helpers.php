@@ -193,6 +193,107 @@ function fill_order_parse_categories($input)
     return count($selected) > 0 ? $selected : $valid;
 }
 
+function fill_order_parse_car_filters($input)
+{
+    $filters = [
+        'categories' => fill_order_valid_categories(),
+    ];
+
+    if (!is_array($input)) {
+        return $filters;
+    }
+
+    if (isset($input['categories'])) {
+        $filters['categories'] = fill_order_parse_categories($input['categories']);
+    }
+
+    if (!empty($input['current_station'])) {
+        $filters['current_station'] = trim((string) $input['current_station']);
+    }
+
+    if (!empty($input['current_location'])) {
+        $filters['current_location'] = trim((string) $input['current_location']);
+    }
+
+    if (!empty($input['car_code'])) {
+        $filters['car_code'] = trim((string) $input['car_code']);
+    }
+
+    return $filters;
+}
+
+function fill_order_car_code_matches_filter($car_code, $filter_code)
+{
+    $car_code = (string) $car_code;
+    $filter_code = trim((string) $filter_code);
+    if ($filter_code === '') {
+        return true;
+    }
+    if (strpos($filter_code, '*') !== false) {
+        $prefix = str_replace('*', '', $filter_code);
+        if ($prefix === '') {
+            return true;
+        }
+
+        return stripos($car_code, $prefix) === 0;
+    }
+
+    return $car_code === $filter_code;
+}
+
+function fill_order_filter_cars($cars, $car_filters)
+{
+    if (empty($car_filters)) {
+        return $cars;
+    }
+
+    $categories = $car_filters['categories'] ?? fill_order_valid_categories();
+
+    return array_values(array_filter($cars, function ($car) use ($car_filters, $categories) {
+        if (!in_array($car['category'], $categories, true)) {
+            return false;
+        }
+
+        if (!empty($car_filters['current_station'])
+            && (string) ($car['current_station'] ?? '') !== (string) $car_filters['current_station']) {
+            return false;
+        }
+
+        if (!empty($car_filters['current_location'])
+            && (string) ($car['current_location'] ?? '') !== (string) $car_filters['current_location']) {
+            return false;
+        }
+
+        if (!empty($car_filters['car_code'])
+            && !fill_order_car_code_matches_filter($car['car_code'] ?? '', $car_filters['car_code'])) {
+            return false;
+        }
+
+        return true;
+    }));
+}
+
+function fill_order_count_cars_by_category($cars)
+{
+    $counts = [
+        'pool' => 0,
+        'station' => 0,
+        'priority' => 0,
+        'system' => 0,
+    ];
+
+    foreach ($cars as $car) {
+        $category = $car['category'] ?? 'system';
+        if (isset($counts[$category])) {
+            $counts[$category]++;
+        } else {
+            $counts['system']++;
+        }
+    }
+
+    return $counts;
+}
+
 function fill_order_parse_filters($input)
 {
     if (!is_array($input)) {
@@ -234,8 +335,13 @@ function fill_order_matches_filters($order_row, $filters)
     return true;
 }
 
-function fill_order_pick_car_for_categories($available_cars, $categories)
+function fill_order_pick_car_for_categories($available_cars, $categories, $car_filters = null)
 {
+    if ($car_filters !== null) {
+        $available_cars = fill_order_filter_cars($available_cars, $car_filters);
+        $categories = $car_filters['categories'] ?? $categories;
+    }
+
     $tier_order = [
         ['tier' => 'pool', 'key' => 'pool'],
         ['tier' => 'priority', 'key' => 'priority'],

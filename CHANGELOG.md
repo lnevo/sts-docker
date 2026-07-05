@@ -2,6 +2,11 @@
 
 All notable changes use semantic versioning (`x.y.z`).
 
+## [0.4.18] - 2026-07-05
+
+- Added separate car filters to Fill Car Orders for manual assignment and auto-assign: car source checkboxes (Pool, Priority, Station, System), current station, current location, and car type, independent of order filters.
+- Reorganized Fill Car Orders layout with display and auto-assign panels side by side under the order summary; car type options follow visible display filters.
+
 ## [0.4.17] - 2026-07-05
 
 - Reordered Track Scale weigh flow: assign order above car list; car list below weigh buttons.
