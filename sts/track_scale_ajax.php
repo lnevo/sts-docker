@@ -54,6 +54,9 @@ try {
                     'active_waybill' => $active_order['waybill_number'] ?? null,
                     'position' => $car['position'],
                     'car_code' => $car['car_code'],
+                    'current_location' => $car['current_location'],
+                    'weigh_source' => $car['weigh_source'] ?? null,
+                    'train_job' => $car['train_job'] ?? null,
                     'load_limit_tons' => $profile['load_limit_tons'],
                     'tare_tons' => $profile['tare_tons'],
                     'tare_only' => !empty($profile['tare_only']),
@@ -74,8 +77,8 @@ try {
             if ($car === null) {
                 track_scale_json_error('Car not found', 404);
             }
-            if (!track_scale_car_at_scale($car, $config)) {
-                track_scale_json_error('Car is not at the scale location', 403);
+            if (!track_scale_car_weighable($car, $dbc, $config)) {
+                track_scale_json_error(track_scale_weighable_car_error($car, $config), 403);
             }
             echo json_encode(track_scale_build_car_response($car, $config, $dbc));
             break;
@@ -106,13 +109,8 @@ try {
             if ($car === null) {
                 track_scale_json_error('Car not found', 404);
             }
-            if (!track_scale_car_at_scale($car, $config)) {
-                $scale_location = track_scale_loading_location_code($config);
-                $current = $car['current_location'] ?: 'unknown';
-                track_scale_json_error(
-                    'Car must be at ' . $scale_location . ' to weigh (currently at ' . $current . ')',
-                    403
-                );
+            if (!track_scale_car_weighable($car, $dbc, $config)) {
+                track_scale_json_error(track_scale_weighable_car_error($car, $config), 403);
             }
             $profile = track_scale_profile_for_marks($reporting_marks, $config);
             $is_test_car = !empty($profile['tare_only']) || track_scale_is_test_car_marks($reporting_marks, $config);
@@ -351,7 +349,11 @@ try {
                 track_scale_json_error($lock_error);
             }
             track_scale_reset_calibration();
-            echo json_encode(['success' => true, 'message' => 'Calibration reset']);
+            echo json_encode([
+                'success' => true,
+                'message' => 'Calibration reset',
+                'calibration' => track_scale_build_calibration_readings($config, $dbc),
+            ]);
             break;
 
         case 'calibration_state':

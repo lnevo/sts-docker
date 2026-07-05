@@ -239,7 +239,7 @@ $config = track_scale_load_config();
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
             <h5 class="mb-1">South Yard Scale</h5>
-            <p class="text-muted small mb-0">Select a car at <strong>SOUTH-YARD-SCALE</strong>, weigh it, then assign a coke order.</p>
+            <p class="text-muted small mb-0">Select a car at <strong>SOUTH-YARD-SCALE</strong> or in a train routed to South Yard, then weigh and assign a coke order.</p>
         </div>
         <div class="btn-group" role="group" aria-label="Scale mode">
             <input type="radio" class="btn-check" name="scaleMode" id="modeWeigh" autocomplete="off" checked>
@@ -253,13 +253,13 @@ $config = track_scale_load_config();
     <div id="weighCarSection">
     <div class="card mb-3">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-list-ul"></i> Cars at Scale</span>
+            <span><i class="bi bi-list-ul"></i> Cars at Scale / Inbound Train</span>
             <button type="button" class="btn btn-outline-success btn-sm" id="refreshCarsBtn">
                 <i class="bi bi-arrow-clockwise"></i> Refresh
             </button>
         </div>
         <div class="card-body p-0">
-            <div id="carsListEmpty" class="p-3 text-muted d-none">No cars at the scale right now.</div>
+            <div id="carsListEmpty" class="p-3 text-muted d-none">No cars at the scale or on a South Yard train right now.</div>
             <div id="carsListError" class="alert alert-danger m-3 d-none" role="alert"></div>
             <div class="list-group list-group-flush" id="carsList"></div>
         </div>
@@ -500,7 +500,7 @@ $config = track_scale_load_config();
                         <div><span class="value" id="calAverageDisplay">—</span> <span class="unit">tons</span></div>
                         <div class="small mt-2" style="color:#6bdc6b;">
                             Expected test car: <span id="calExpected">30.00</span> t &nbsp;|&nbsp;
-                            Average error: <span id="calAverageError">—</span> t
+                            Average adjustment: <span id="calAverageAdjustment">—</span> t
                             <span class="text-muted" id="calAverageMeta"></span>
                         </div>
                     </div>
@@ -509,9 +509,6 @@ $config = track_scale_load_config();
                 <div class="d-flex flex-wrap gap-2 align-items-center">
                     <button type="button" class="btn btn-success btn-sm" id="calSaveBtn" disabled>
                         <i class="bi bi-lock"></i> Save calibration
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="calClearPositionBtn">
-                        Clear car position
                     </button>
                     <button type="button" class="btn btn-outline-danger btn-sm" id="calResetBtn">Reset calibration</button>
                     <span id="calStatus" class="small ms-2"></span>
@@ -657,6 +654,9 @@ async function loadCarsAtScale() {
                 <div>
                     <strong>${car.reporting_marks}</strong>
                     <span class="text-muted small ms-2">${car.car_code || ''}</span>
+                    ${car.weigh_source === 'in_train' && car.train_job
+                        ? `<span class="badge bg-info text-dark ms-1">Train ${car.train_job}</span>`
+                        : ''}
                 </div>
                 <div class="d-flex align-items-center gap-2">
                     <span class="text-muted small">${car.tare_only
@@ -838,7 +838,10 @@ function renderCar(data) {
     };
     img.src = data.car.image_url + '?' + Date.now();
 
-    document.getElementById('statLocation').textContent = data.car.current_location || '—';
+    const locationLabel = data.car.weigh_source === 'in_train'
+        ? ('In train · ' + (data.car.train_job || 'South Yard job'))
+        : (data.car.current_location || '—');
+    document.getElementById('statLocation').textContent = locationLabel;
     document.getElementById('statLocation').className = 'stat-value text-success';
     document.getElementById('weighBtn').disabled = !scaleInService;
     const assignedMsg = assignedOrderMessage(data.car);
@@ -1104,7 +1107,6 @@ function renderCalibration(cal) {
         }
     });
 
-    document.getElementById('calClearPositionBtn').disabled = calibrationLocked;
     document.getElementById('calResetBtn').disabled = calibrationLocked;
     const saveBtn = document.getElementById('calSaveBtn');
     if (saveBtn) {
@@ -1113,15 +1115,15 @@ function renderCalibration(cal) {
 
     if (cal.average) {
         document.getElementById('calAverageDisplay').textContent = fmt(cal.average.display_tons);
-        document.getElementById('calAverageError').textContent =
-            cal.average.error_tons !== null && cal.average.error_tons !== undefined
-                ? fmt(cal.average.error_tons)
+        document.getElementById('calAverageAdjustment').textContent =
+            cal.average.adjustment_tons !== null && cal.average.adjustment_tons !== undefined
+                ? fmt(cal.average.adjustment_tons)
                 : '—';
         document.getElementById('calAverageMeta').textContent =
             `(${cal.average.sensor_count || 0} of 3 sensors weighed)`;
     } else {
         document.getElementById('calAverageDisplay').textContent = '—';
-        document.getElementById('calAverageError').textContent = '—';
+        document.getElementById('calAverageAdjustment').textContent = '—';
         document.getElementById('calAverageMeta').textContent = '(weigh each position to build average)';
     }
 
@@ -1247,8 +1249,6 @@ async function saveCalibration() {
 
 document.getElementById('calSaveBtn').addEventListener('click', saveCalibration);
 
-document.getElementById('calClearPositionBtn').addEventListener('click', () => setScaleCarPosition(''));
-
 async function refreshCalibrationState() {
     const data = await apiGet('calibration_state');
     if (data.success) {
@@ -1257,30 +1257,16 @@ async function refreshCalibrationState() {
 }
 
 document.getElementById('calResetBtn').addEventListener('click', async () => {
-    await apiPost('calibrate_reset');
-    SENSOR_POSITIONS.forEach(pos => {
-        document.getElementById('sensorDisplay-' + pos).textContent = '—';
-        document.getElementById('sensorError-' + pos).textContent = '—';
-        document.getElementById('sensorAdjustInput-' + pos).value = '0.00';
-        document.getElementById('sensorAdj-' + pos).textContent = 'adj 0.00 (step ±0.10 t)';
-        const fineToggle = document.getElementById('sensorFineTune-' + pos);
-        if (fineToggle) {
-            fineToggle.checked = false;
-            fineToggle.disabled = true;
-        }
-        document.getElementById('sensorCard-' + pos).classList.remove('calibrated', 'car-at-position', 'adjustment-locked');
-        document.getElementById('sensorCarHere-' + pos).classList.add('d-none');
-        document.querySelector('#sensorCard-' + pos + ' .cal-position-btn').classList.remove('active');
-        document.querySelector('#sensorCard-' + pos + ' .cal-weigh-btn').disabled = true;
-        document.querySelectorAll('#sensorCard-' + pos + ' .cal-adj-btn').forEach(btn => { btn.disabled = true; });
-        const resetBtn = document.querySelector('#sensorCard-' + pos + ' .cal-adj-reset-btn');
-        if (resetBtn) resetBtn.disabled = true;
-    });
-    document.getElementById('calAverageDisplay').textContent = '—';
-    document.getElementById('calAverageError').textContent = '—';
-    document.getElementById('calAverageMeta').textContent = '';
-    document.getElementById('calStatus').textContent = '';
-    updateCalTrackCar('left');
+    const data = await apiPost('calibrate_reset');
+    if (!data.success) {
+        document.getElementById('calStatus').innerHTML =
+            `<span class="text-danger">${data.error || 'Could not reset calibration'}</span>`;
+        return;
+    }
+    if (data.calibration) {
+        renderCalibration(data.calibration);
+        return;
+    }
     await refreshCalibrationState();
 });
 

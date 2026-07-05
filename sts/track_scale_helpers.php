@@ -1,6 +1,6 @@
 <?php
 // track_scale_helpers.php — South Yard track scale (self-contained helpers)
-// Persistent data (config, seed, settings, session.log) lives under sts-backups/track_scale.
+// Config, roster, seed, settings, and session.log live under sts-backups/track_scale.
 // In Docker that directory is bind-mounted at sts/backups/track_scale.
 
 function track_scale_data_dir()
@@ -13,7 +13,9 @@ function track_scale_data_dir()
     $mounted = __DIR__ . '/backups/track_scale';
     $repo = dirname(__DIR__, 2) . '/sts-backups/track_scale';
     if (is_dir($repo) && (
-        is_readable($repo . '/seed.json')
+        is_readable($repo . '/track_scale_config.json')
+        || is_readable($repo . '/car_card_roster.csv')
+        || is_readable($repo . '/seed.json')
         || is_readable($repo . '/settings.json')
         || is_readable($repo . '/session.log')
     )) {
@@ -93,7 +95,7 @@ function track_scale_default_config()
 
 function track_scale_roster_path()
 {
-    return __DIR__ . '/data/car_card_roster.csv';
+    return track_scale_data_dir() . '/car_card_roster.csv';
 }
 
 function track_scale_logs_dir()
@@ -317,11 +319,36 @@ function track_scale_last_calibration_from_settings()
     return is_array($last) ? $last : null;
 }
 
+function track_scale_last_calibration_session_number($last = null)
+{
+    $last = $last ?? track_scale_last_calibration_from_settings();
+    if (!is_array($last) || empty($last['saved_at'])) {
+        return null;
+    }
+
+    return (int) ($last['session_number'] ?? 0);
+}
+
+function track_scale_session_before_last_calibration($session_number, $last = null)
+{
+    $session_number = (int) $session_number;
+    $last_session = track_scale_last_calibration_session_number($last);
+    if ($last_session === null) {
+        return false;
+    }
+
+    return $session_number < $last_session;
+}
+
 function track_scale_calibration_history_valid_for_session($session_number)
 {
     $session_number = (int) $session_number;
     $last = track_scale_last_calibration_from_settings();
     if (!is_array($last) || empty($last['saved_at'])) {
+        return false;
+    }
+
+    if (track_scale_session_before_last_calibration($session_number, $last)) {
         return false;
     }
 
@@ -331,6 +358,30 @@ function track_scale_calibration_history_valid_for_session($session_number)
     }
 
     return $session_number >= $last_session;
+}
+
+function track_scale_requires_calibration_init($dbc, $session_number = null)
+{
+    $session_number = $session_number ?? track_scale_get_session_number($dbc);
+    if (track_scale_session_before_last_calibration($session_number)) {
+        return true;
+    }
+
+    return !track_scale_calibration_history_valid_for_session($session_number);
+}
+
+function track_scale_unlock_seed_calibration(array $seed)
+{
+    $seed['calibration']['locked'] = false;
+    $seed['calibration']['saved_at'] = null;
+    return track_scale_strip_carried_calibration_from_seed($seed);
+}
+
+function track_scale_reset_uninitialized_calibration_state()
+{
+    track_scale_reset_calibration();
+    track_scale_session_init();
+    $_SESSION['track_scale']['drift_applied_sessions'] = -1;
 }
 
 function track_scale_calibration_history_is_valid($dbc)
@@ -416,7 +467,7 @@ function track_scale_get_last_calibration_display_info($dbc)
     $last = track_scale_last_calibration_from_settings();
     if (is_array($last) && !empty($last['saved_at'])) {
         $last_session = (int) ($last['session_number'] ?? 0);
-        if ($last_session > 0 && $current_session < $last_session) {
+        if ($current_session < $last_session) {
             return [
                 'session_number' => null,
                 'saved_at' => null,
@@ -451,6 +502,10 @@ function track_scale_sessions_since_calibration($dbc)
     $last_session = (int) ($last['session_number'] ?? 0);
     if ($last_session < 0 || empty($last['saved_at'])) {
         return max(1, $current);
+    }
+
+    if ($current < $last_session) {
+        return 0;
     }
 
     return max(0, $current - $last_session);
@@ -497,6 +552,11 @@ function track_scale_is_out_of_service($dbc, $config = null)
     $config = $config ?? track_scale_load_config();
     if (track_scale_is_calibration_locked($dbc)) {
         return false;
+    }
+
+    $current = track_scale_get_session_number($dbc);
+    if (track_scale_session_before_last_calibration($current)) {
+        return true;
     }
 
     if (!track_scale_has_ever_been_calibrated($dbc)) {
@@ -573,7 +633,8 @@ function track_scale_build_scale_status($dbc, $config = null)
     ];
 
     if ($out_of_service) {
-        if (!track_scale_calibration_history_is_valid($dbc)) {
+        if (!track_scale_calibration_history_is_valid($dbc)
+            || track_scale_session_before_last_calibration(track_scale_get_session_number($dbc))) {
             $status['needs_initial_calibration'] = true;
             $status['message'] = 'OUT OF SERVICE — initial calibration must be completed before weighing cars.';
         } else {
@@ -635,8 +696,9 @@ function track_scale_load_seed_state($dbc)
     }
 
     $cal_locked = !empty($seed['calibration']['locked']);
-    if (!$cal_locked && !track_scale_calibration_history_valid_for_session($session_number)) {
-        $seed = track_scale_strip_carried_calibration_from_seed($seed);
+    $history_valid = track_scale_calibration_history_valid_for_session($session_number);
+    if (!$history_valid) {
+        $seed = track_scale_unlock_seed_calibration($seed);
         track_scale_write_json_file(track_scale_seed_path(), $seed);
     } elseif ($cal_locked) {
         $normalized = track_scale_normalize_seed_calibration_lock($seed, $dbc);
@@ -671,6 +733,10 @@ function track_scale_is_calibration_locked($dbc, array $seed = null)
     }
 
     $current = track_scale_get_session_number($dbc);
+    if (track_scale_session_before_last_calibration($current)) {
+        return false;
+    }
+
     if ((int) ($seed['session_number'] ?? -1) !== $current) {
         return false;
     }
@@ -742,6 +808,32 @@ function track_scale_sync_session_calibration($dbc)
     $synced_session = (int) ($_SESSION['track_scale']['synced_session_number'] ?? -1);
     $session_changed = $synced_session !== $session_number;
 
+    if (track_scale_requires_calibration_init($dbc, $session_number)) {
+        $init_reset_for = (int) ($_SESSION['track_scale']['calibration_init_reset_for'] ?? -1);
+        $needs_init_reset = $session_changed || $init_reset_for !== $session_number;
+
+        if ($needs_init_reset) {
+            $seed = track_scale_unlock_seed_calibration($seed);
+            track_scale_save_seed_state($seed);
+            track_scale_reset_calibration();
+            $_SESSION['track_scale']['calibration_init_reset_for'] = $session_number;
+            $_SESSION['track_scale']['synced_session_number'] = $session_number;
+        } elseif (!empty($seed['calibration']['locked'])) {
+            $seed = track_scale_unlock_seed_calibration($seed);
+            track_scale_save_seed_state($seed);
+        }
+
+        $_SESSION['track_scale']['calibration_locked'] = false;
+        $_SESSION['track_scale']['sessions_since_calibration'] = track_scale_sessions_since_calibration($dbc);
+        $_SESSION['track_scale']['drift_session_key'] = $session_number;
+        $_SESSION['track_scale']['out_of_service'] = track_scale_is_out_of_service($dbc);
+        $_SESSION['track_scale']['calibration_history_valid'] = false;
+        $_SESSION['track_scale']['drift_applied_sessions'] = -1;
+        return;
+    }
+
+    unset($_SESSION['track_scale']['calibration_init_reset_for']);
+
     if (track_scale_is_calibration_locked($dbc, $seed)) {
         $_SESSION['track_scale']['calibration_locked'] = true;
         $_SESSION['track_scale']['synced_session_number'] = $session_number;
@@ -762,8 +854,10 @@ function track_scale_sync_session_calibration($dbc)
         return;
     }
 
-    // Stale lock flag in seed — use carried values from settings when seed has none.
-    if (!empty($cal['locked'])) {
+    $cal_valid = track_scale_calibration_history_is_valid($dbc);
+
+    // Stale lock flag in seed — only carry prior values when history is still valid.
+    if (!empty($cal['locked']) && $cal_valid) {
         $last = track_scale_last_calibration_from_settings();
         if (is_array($last)) {
             foreach (track_scale_sensor_positions() as $position) {
@@ -784,8 +878,15 @@ function track_scale_sync_session_calibration($dbc)
     $_SESSION['track_scale']['sessions_since_calibration'] = track_scale_sessions_since_calibration($dbc);
     $_SESSION['track_scale']['drift_session_key'] = $session_number;
     $_SESSION['track_scale']['out_of_service'] = track_scale_is_out_of_service($dbc);
-    $_SESSION['track_scale']['calibration_history_valid'] = track_scale_calibration_history_is_valid($dbc);
-    $cal_valid = !empty($_SESSION['track_scale']['calibration_history_valid']);
+    $_SESSION['track_scale']['calibration_history_valid'] = $cal_valid;
+
+    if (!$cal_valid) {
+        track_scale_reset_uninitialized_calibration_state();
+        if (!$session_changed) {
+            return;
+        }
+    }
+
     $last = track_scale_last_calibration_from_settings();
     $last_session = is_array($last) ? (int) ($last['session_number'] ?? -1) : -1;
     $needs_drift = $cal_valid && $last_session >= 0 && $session_number > $last_session;
@@ -1410,6 +1511,26 @@ function track_scale_average_sensor_display_tons($true_gross, $config = null)
     return track_scale_round(array_sum($values) / count($values), $config);
 }
 
+function track_scale_build_calibration_sensor_reading($position, $expected_gross, $config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    $position = track_scale_normalize_position($position);
+    $error = track_scale_get_sensor_error($position, $config);
+    $adjustment = track_scale_get_sensor_adjustment($position);
+    $raw_display = track_scale_round((float) $expected_gross + $error, $config);
+    $residual_error = track_scale_round($error + $adjustment, $config);
+
+    return [
+        'position' => $position,
+        'display_tons' => $raw_display,
+        'expected_tons' => track_scale_round($expected_gross, $config),
+        'error_tons' => $residual_error,
+        'sensor_error_tons' => track_scale_round($error, $config),
+        'adjustment_tons' => track_scale_round($adjustment, $config),
+        'is_zero' => abs($residual_error) < 0.005,
+    ];
+}
+
 function track_scale_build_sensor_reading($position, $true_gross, $expected_gross, $config = null)
 {
     $config = $config ?? track_scale_load_config();
@@ -1503,7 +1624,8 @@ function track_scale_build_calibration_readings($config = null, $dbc = null)
     $calibration_locked = ($dbc !== null) && track_scale_is_calibration_locked($dbc);
 
     $sensors = [];
-    $average_values = [];
+    $average_adjustment_values = [];
+    $average_corrected_values = [];
     foreach (track_scale_sensor_positions() as $position) {
         $car_at_position = $test_car_at_scale && ($active_position === $position);
         $has_reading = track_scale_sensor_has_reading($position) || $calibration_locked;
@@ -1531,31 +1653,44 @@ function track_scale_build_calibration_readings($config = null, $dbc = null)
             continue;
         }
 
-        $reading = track_scale_build_sensor_reading($position, $expected, $expected, $config);
+        $reading = track_scale_build_calibration_sensor_reading($position, $expected, $config);
         $reading['has_reading'] = true;
         $reading['car_at_position'] = $car_at_position;
         $reading['adjustment_locked'] = $calibration_locked || !$car_at_position;
         $reading['fine_tune'] = $fine_tune;
         $reading['adjust_step_tons'] = track_scale_round($adjust_step, $config);
         $sensors[] = $reading;
-        $average_values[] = $reading['display_tons'];
+        $average_adjustment_values[] = $reading['adjustment_tons'];
+        $average_corrected_values[] = track_scale_round(
+            $reading['display_tons'] + $reading['adjustment_tons'],
+            $config
+        );
     }
 
     $average = null;
-    if (count($average_values) > 0) {
-        $average_display = track_scale_round(array_sum($average_values) / count($average_values), $config);
-        $average_error = track_scale_round($average_display - $expected, $config);
+    if (count($average_adjustment_values) > 0) {
+        $average_adjustment = track_scale_round(
+            array_sum($average_adjustment_values) / count($average_adjustment_values),
+            $config
+        );
+        $average_display = track_scale_round(
+            array_sum($average_corrected_values) / count($average_corrected_values),
+            $config
+        );
+        $average_residual_error = track_scale_round($average_display - (float) $expected, $config);
         $average = [
             'display_tons' => $average_display,
             'expected_tons' => track_scale_round($expected, $config),
-            'error_tons' => $average_error,
-            'is_zero' => abs($average_error) < 0.005,
-            'sensor_count' => count($average_values),
+            'adjustment_tons' => $average_adjustment,
+            'error_tons' => $average_residual_error,
+            'is_zero' => abs($average_residual_error) < 0.005,
+            'sensor_count' => count($average_adjustment_values),
         ];
     } elseif (!$calibration_locked) {
         $average = [
             'display_tons' => track_scale_round(0.0, $config),
             'expected_tons' => track_scale_round($expected, $config),
+            'adjustment_tons' => null,
             'error_tons' => null,
             'is_zero' => false,
             'sensor_count' => 0,
@@ -1752,6 +1887,108 @@ function track_scale_loading_location_code($config = null)
     return (string) ($config['loading_location_code'] ?? 'SOUTH-YARD-SCALE');
 }
 
+function track_scale_south_yard_routing_id($dbc, $config = null)
+{
+    static $cache = [];
+    $config = $config ?? track_scale_load_config();
+    $key = track_scale_loading_location_code($config);
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+
+    $code = mysqli_real_escape_string($dbc, $key);
+    $sql = 'SELECT station FROM locations WHERE code = "' . $code . '" LIMIT 1';
+    $rs = mysqli_query($dbc, $sql);
+    $row = $rs ? mysqli_fetch_assoc($rs) : null;
+    $cache[$key] = $row ? (int) ($row['station'] ?? 0) : 0;
+
+    return $cache[$key];
+}
+
+function track_scale_job_ids_for_south_yard_routing($dbc, $config = null)
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+
+    $routing_id = track_scale_south_yard_routing_id($dbc, $config);
+    if ($routing_id <= 0) {
+        $cache = [];
+        return $cache;
+    }
+
+    $job_ids = [];
+    $rs = mysqli_query($dbc, 'SELECT Id, name FROM jobs ORDER BY Id');
+    while ($rs && ($job = mysqli_fetch_assoc($rs))) {
+        $table = preg_replace('/[^A-Za-z0-9_]/', '', (string) ($job['name'] ?? ''));
+        if ($table === '') {
+            continue;
+        }
+
+        $step_rs = mysqli_query(
+            $dbc,
+            'SELECT COUNT(*) AS cnt FROM `' . $table . '` WHERE station = ' . (int) $routing_id
+        );
+        if (!$step_rs) {
+            continue;
+        }
+        $row = mysqli_fetch_assoc($step_rs);
+        if ((int) ($row['cnt'] ?? 0) > 0) {
+            $job_ids[] = (int) $job['Id'];
+        }
+    }
+
+    $cache = $job_ids;
+    return $cache;
+}
+
+function track_scale_car_in_south_yard_train($car, $dbc, $config = null)
+{
+    if (!is_array($car)) {
+        return false;
+    }
+
+    $location_id = (int) ($car['current_location_id'] ?? -1);
+    $job_id = (int) ($car['handled_by_job_id'] ?? 0);
+    if ($location_id !== 0 || $job_id <= 0) {
+        return false;
+    }
+
+    $status = strtoupper(trim((string) ($car['status'] ?? '')));
+    if ($status === 'UNAVAILABLE') {
+        return false;
+    }
+
+    return in_array($job_id, track_scale_job_ids_for_south_yard_routing($dbc, $config), true);
+}
+
+function track_scale_car_weighable($car, $dbc, $config = null)
+{
+    return track_scale_car_at_scale($car, $config)
+        || track_scale_car_in_south_yard_train($car, $dbc, $config);
+}
+
+function track_scale_weighable_car_error($car, $config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    $scale_location = track_scale_loading_location_code($config);
+    $current = trim((string) ($car['current_location'] ?? ''));
+    $train_job = trim((string) ($car['train_job'] ?? ''));
+    if ($current === '' || strcasecmp($current, 'In train') === 0) {
+        if ($train_job !== '') {
+            $current = 'in train (' . $train_job . ')';
+        } elseif ((int) ($car['handled_by_job_id'] ?? 0) > 0) {
+            $current = 'in train (job ' . (int) $car['handled_by_job_id'] . ')';
+        } elseif ($current === '') {
+            $current = 'unknown';
+        }
+    }
+
+    return 'Car must be at ' . $scale_location
+        . ' or in a train routed to South Yard to weigh (currently at ' . $current . ')';
+}
+
 function track_scale_car_at_scale($car, $config = null)
 {
     if (!is_array($car)) {
@@ -1810,12 +2047,16 @@ function track_scale_lookup_car($dbc, $scan_code)
                    cars.reporting_marks as reporting_marks,
                    cars.status as status,
                    cars.position as position,
+                   cars.current_location_id as current_location_id,
+                   cars.handled_by_job_id as handled_by_job_id,
                    cars.car_code_id as car_code_id,
                    car_codes.code as car_code,
-                   loc.code as current_location
+                   loc.code as current_location,
+                   jobs.name as train_job
             FROM cars
             LEFT JOIN car_codes ON car_codes.id = cars.car_code_id
             LEFT JOIN locations loc ON loc.id = cars.current_location_id
+            LEFT JOIN jobs ON jobs.Id = cars.handled_by_job_id
             WHERE cars.reporting_marks = "' . $upper . '"
                OR cars.RFID_code = "' . $escaped . '"';
 
@@ -1846,18 +2087,46 @@ function track_scale_get_cars_at_scale($dbc, $config = null)
 {
     $config = $config ?? track_scale_load_config();
     $location_code = mysqli_real_escape_string($dbc, track_scale_loading_location_code($config));
+    $job_ids = track_scale_job_ids_for_south_yard_routing($dbc, $config);
+    $job_filter = count($job_ids) > 0
+        ? ' AND cars.handled_by_job_id IN (' . implode(', ', array_map('intval', $job_ids)) . ')'
+        : ' AND 1 = 0';
 
     $sql = 'SELECT cars.id as id,
                    cars.reporting_marks as reporting_marks,
                    cars.status as status,
                    cars.position as position,
+                   cars.current_location_id as current_location_id,
+                   cars.handled_by_job_id as handled_by_job_id,
                    car_codes.code as car_code,
-                   loc.code as current_location
+                   loc.code as current_location,
+                   "at_scale" as weigh_source,
+                   NULL as train_job
             FROM cars
             INNER JOIN locations loc ON loc.id = cars.current_location_id
             LEFT JOIN car_codes ON car_codes.id = cars.car_code_id
             WHERE loc.code = "' . $location_code . '"
-            ORDER BY cars.reporting_marks';
+
+            UNION ALL
+
+            SELECT cars.id as id,
+                   cars.reporting_marks as reporting_marks,
+                   cars.status as status,
+                   cars.position as position,
+                   cars.current_location_id as current_location_id,
+                   cars.handled_by_job_id as handled_by_job_id,
+                   car_codes.code as car_code,
+                   "In train" as current_location,
+                   "in_train" as weigh_source,
+                   jobs.name as train_job
+            FROM cars
+            INNER JOIN jobs ON jobs.Id = cars.handled_by_job_id
+            LEFT JOIN car_codes ON car_codes.id = cars.car_code_id
+            WHERE cars.current_location_id = 0
+              AND cars.status != "Unavailable"'
+        . $job_filter . '
+
+            ORDER BY reporting_marks';
 
     $rs = mysqli_query($dbc, $sql);
     if (!$rs) {
@@ -1932,6 +2201,8 @@ function track_scale_build_car_response($car, $config = null, $dbc = null)
     return [
         'success' => true,
         'at_scale' => track_scale_car_at_scale($car, $config),
+        'in_train' => track_scale_car_in_south_yard_train($car, $dbc, $config),
+        'weighable' => track_scale_car_weighable($car, $dbc, $config),
         'required_location' => $scale_location,
         'scale_status' => $dbc !== null ? track_scale_build_scale_status($dbc, $config) : null,
         'car' => [
@@ -1948,6 +2219,8 @@ function track_scale_build_car_response($car, $config = null, $dbc = null)
             'position' => $car['position'] ?? null,
             'car_code' => $car['car_code'],
             'current_location' => $car['current_location'],
+            'weigh_source' => $car['weigh_source'] ?? null,
+            'train_job' => $car['train_job'] ?? null,
             'image_url' => './ImageStore/DB_Images/RollingStock/' . $car['id'] . '.jpg',
         ],
         'profile' => $profile,
