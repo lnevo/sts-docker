@@ -113,26 +113,121 @@ $config = track_scale_load_config();
             max-height: 220px;
             object-fit: contain;
         }
+        .car-panel-header {
+            margin-bottom: 0.75rem;
+            text-align: center;
+        }
+        .car-panel-header #carMarks {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.2rem;
+        }
+        .car-panel-header #carMeta {
+            font-size: 1rem;
+            line-height: 1.35;
+        }
+        .car-panel-body {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: stretch;
+            gap: 0.75rem;
+            container-type: inline-size;
+        }
+        .car-panel-body .car-photo-col {
+            flex: 1 1 calc(100% - 24rem - 0.75rem);
+            min-width: 12rem;
+            max-width: 100%;
+        }
+        .car-panel-body .car-stats-col {
+            flex: 1 1 24rem;
+            min-width: 24rem;
+            max-width: 100%;
+        }
+        .car-panel-body .car-photo {
+            width: 100%;
+            min-height: 100%;
+            height: 100%;
+        }
+        @container (max-width: 37rem) {
+            .car-panel-body .car-photo-col,
+            .car-panel-body .car-stats-col {
+                flex: 1 1 100%;
+                min-width: 100%;
+                max-width: 100%;
+            }
+            .car-panel-body .car-photo {
+                aspect-ratio: 16 / 9;
+                height: auto;
+                min-height: 0;
+                max-height: 14rem;
+            }
+        }
         .stat-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 0.75rem;
+            gap: 0.5rem 0.65rem;
+            height: 100%;
         }
         .stat-box {
             background: #fff;
             border: 1px solid #dee2e6;
             border-radius: 0.375rem;
-            padding: 0.75rem;
+            padding: 0.5rem 0.6rem;
         }
         .stat-box .stat-label {
-            font-size: 0.72rem;
+            font-size: 0.65rem;
             color: #6c757d;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.03em;
+            line-height: 1.15;
+            white-space: nowrap;
         }
         .stat-box .stat-value {
-            font-size: 1.15rem;
+            font-size: 1rem;
             font-weight: 600;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+        @media (max-width: 767.98px) {
+            .car-panel-header #carMarks {
+                font-size: 1.25rem;
+            }
+            .car-panel-header #carMeta {
+                font-size: 0.88rem;
+            }
+            .car-panel-body {
+                gap: 0.5rem;
+            }
+            .car-panel-body .car-stats-col {
+                flex: 1 1 100%;
+                min-width: 100%;
+            }
+            .car-panel-body .car-photo-col {
+                flex: 1 1 100%;
+            }
+            .car-photo {
+                min-height: 0;
+                aspect-ratio: 16 / 9;
+                height: auto;
+                max-height: 12rem;
+            }
+            .car-photo img {
+                max-height: 100%;
+            }
+            .stat-grid {
+                gap: 0.35rem 0.5rem;
+                height: auto;
+            }
+            .stat-box {
+                padding: 0.35rem 0.45rem;
+                border-radius: 0.25rem;
+            }
+            .stat-box .stat-label {
+                font-size: 0.58rem;
+            }
+            .stat-box .stat-value {
+                font-size: 0.85rem;
+            }
         }
         .routing-reload { color: #dc3545; }
         .routing-outbound { color: #198754; }
@@ -215,6 +310,15 @@ $config = track_scale_load_config();
             background-color: #d1e7dd;
             border-color: #2e7d32 !important;
         }
+        .car-list-position {
+            font-size: 0.75rem;
+            color: #6c757d;
+            min-width: 2rem;
+            text-align: right;
+        }
+        .car-list-marks {
+            font-weight: 400;
+        }
         .status-badge {
             font-size: 0.75rem;
             font-weight: 600;
@@ -252,11 +356,17 @@ $config = track_scale_load_config();
     <!-- Weigh mode: car selection -->
     <div id="weighCarSection">
     <div class="card mb-3">
-        <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
             <span><i class="bi bi-list-ul"></i> Cars at Scale / Inbound Train</span>
-            <button type="button" class="btn btn-outline-success btn-sm" id="refreshCarsBtn">
-                <i class="bi bi-arrow-clockwise"></i> Refresh
-            </button>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <select class="form-select form-select-sm" id="trainFilter" style="width: auto; min-width: 10rem;" aria-label="Filter by train">
+                    <option value="">All cars</option>
+                    <option value="scale">At scale only</option>
+                </select>
+                <button type="button" class="btn btn-outline-success btn-sm" id="refreshCarsBtn">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
         </div>
         <div class="card-body p-0">
             <div id="carsListEmpty" class="p-3 text-muted d-none">No cars at the scale or on a South Yard train right now.</div>
@@ -266,42 +376,46 @@ $config = track_scale_load_config();
     </div>
 
     <div id="carPanel" class="d-none">
-        <div class="row g-3 mb-3">
-            <div class="col-md-5">
-                <div class="car-photo" id="carPhotoWrap">
-                    <span class="text-muted" id="carPhotoPlaceholder">No photo</span>
-                    <img id="carPhoto" alt="" class="d-none">
-                </div>
-            </div>
-            <div class="col-md-7">
+        <div class="mb-2 mb-md-3">
+            <div class="car-panel-header">
                 <h4 id="carMarks" class="mb-1"></h4>
-                <p class="text-muted mb-2">
+                <p class="text-muted mb-0">
                     <span id="carMeta"></span>
                 </p>
-                <div class="stat-grid">
-                    <div class="stat-box">
-                        <div class="stat-label">Tare (LT WT)</div>
-                        <div class="stat-value" id="statTare">—</div>
+            </div>
+            <div class="car-panel-body">
+                <div class="car-photo-col">
+                    <div class="car-photo" id="carPhotoWrap">
+                        <span class="text-muted" id="carPhotoPlaceholder">No photo</span>
+                        <img id="carPhoto" alt="" class="d-none">
                     </div>
-                    <div class="stat-box">
-                        <div class="stat-label">Load limit (LD LMT)</div>
-                        <div class="stat-value" id="statLoadLimit">—</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-label">Capacity (CAPY)</div>
-                        <div class="stat-value" id="statCapy">—</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-label">Target net</div>
-                        <div class="stat-value" id="statTarget">—</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-label">Status</div>
-                        <div class="stat-value" id="statStatus">—</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-label">Location</div>
-                        <div class="stat-value" id="statLocation">—</div>
+                </div>
+                <div class="car-stats-col">
+                    <div class="stat-grid">
+                        <div class="stat-box">
+                            <div class="stat-label">Tare (LT WT)</div>
+                            <div class="stat-value" id="statTare">—</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Load limit (LD LMT)</div>
+                            <div class="stat-value" id="statLoadLimit">—</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Capacity (CAPY)</div>
+                            <div class="stat-value" id="statCapy">—</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Target net</div>
+                            <div class="stat-value" id="statTarget">—</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Status</div>
+                            <div class="stat-value" id="statStatus">—</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Location</div>
+                            <div class="stat-value" id="statLocation">—</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -334,9 +448,14 @@ $config = track_scale_load_config();
 
         <div class="card mb-3">
             <div class="card-body d-flex flex-wrap gap-2 align-items-center justify-content-between">
-                <button type="button" class="btn btn-primary btn-lg" id="weighBtn" disabled>
-                    <i class="bi bi-speedometer"></i> Weigh Car
-                </button>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <button type="button" class="btn btn-primary btn-lg" id="weighBtn" disabled>
+                        <i class="bi bi-speedometer"></i> Weigh Car
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-lg d-none" id="nextCarBtn">
+                        <i class="bi bi-skip-forward"></i> Next Car
+                    </button>
+                </div>
                 <div id="weighResult" class="small text-muted">Select a car from the list, then weigh.</div>
             </div>
         </div>
@@ -536,7 +655,71 @@ let currentReading = null;
 let currentRouting = null;
 let selectedCarId = null;
 let scaleInService = true;
+let pendingNextCar = null;
 const SENSOR_POSITIONS = ['left', 'center', 'right'];
+
+function hideNextCarButton() {
+    pendingNextCar = null;
+    const btn = document.getElementById('nextCarBtn');
+    if (!btn) return;
+    btn.classList.add('d-none');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-skip-forward"></i> Next Car';
+}
+
+function showNextCarButton(nextCar) {
+    const btn = document.getElementById('nextCarBtn');
+    if (!btn) return;
+    if (!nextCar || !nextCar.id) {
+        hideNextCarButton();
+        return;
+    }
+    pendingNextCar = nextCar;
+    btn.classList.remove('d-none');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-skip-forward"></i> Next Car';
+}
+
+function getTrainFilterValue() {
+    const select = document.getElementById('trainFilter');
+    return select ? select.value : '';
+}
+
+function populateTrainFilter(trains, selectedValue) {
+    const select = document.getElementById('trainFilter');
+    if (!select) return;
+
+    const current = selectedValue !== undefined ? selectedValue : select.value;
+    select.innerHTML = '';
+    [
+        { value: '', label: 'All cars' },
+        { value: 'scale', label: 'At scale only' },
+    ].forEach(option => {
+        const opt = document.createElement('option');
+        opt.value = option.value;
+        opt.textContent = option.label;
+        select.appendChild(opt);
+    });
+    (trains || []).forEach(train => {
+        const opt = document.createElement('option');
+        opt.value = String(train.id);
+        opt.textContent = 'Train ' + train.name;
+        select.appendChild(opt);
+    });
+    if ([...select.options].some(opt => opt.value === current)) {
+        select.value = current;
+    }
+}
+
+function carListPositionLabel(car) {
+    if (car.weigh_source === 'in_train' && car.position) {
+        return `#${car.position}`;
+    }
+    if (car.weigh_source === 'at_scale' && car.position) {
+        return `#${car.position}`;
+    }
+    return '';
+}
 
 function statusBadgeClass(status) {
     const s = (status || '').toLowerCase();
@@ -679,9 +862,10 @@ async function loadCarsAtScale() {
     const listEl = document.getElementById('carsList');
     const emptyEl = document.getElementById('carsListEmpty');
     const errorEl = document.getElementById('carsListError');
+    const filterValue = getTrainFilterValue();
 
     errorEl.classList.add('d-none');
-    const data = await apiGet('cars_at_scale');
+    const data = await apiGet('cars_at_scale', filterValue ? { job_id: filterValue } : {});
     if (!data.success) {
         errorEl.textContent = data.error || 'Could not load cars at scale';
         errorEl.classList.remove('d-none');
@@ -689,6 +873,8 @@ async function loadCarsAtScale() {
         emptyEl.classList.add('d-none');
         return;
     }
+
+    populateTrainFilter(data.trains, filterValue);
 
     if (data.scale_status) {
         applyScaleServiceState(data.scale_status);
@@ -699,6 +885,7 @@ async function loadCarsAtScale() {
         emptyEl.classList.remove('d-none');
         document.getElementById('carPanel').classList.add('d-none');
         document.getElementById('weighBtn').disabled = true;
+        hideNextCarButton();
         selectedCarId = null;
         currentCar = null;
         return;
@@ -711,14 +898,21 @@ async function loadCarsAtScale() {
         item.className = 'list-group-item list-group-item-action car-list-item'
             + (String(car.id) === String(selectedCarId) ? ' active' : '');
         item.dataset.carId = car.id;
+        const positionLabel = carListPositionLabel(car);
         item.innerHTML = `
             <div class="d-flex justify-content-between align-items-center gap-2">
-                <div>
-                    <strong>${car.reporting_marks}</strong>
-                    <span class="text-muted small ms-2">${car.car_code || ''}</span>
-                    ${car.weigh_source === 'in_train' && car.train_job
-                        ? `<span class="badge bg-info text-dark ms-1">Train ${car.train_job}</span>`
-                        : ''}
+                <div class="d-flex align-items-center gap-2 min-w-0">
+                    ${positionLabel ? `<span class="car-list-position">${positionLabel}</span>` : ''}
+                    <div>
+                        <span class="car-list-marks">${car.reporting_marks}</span>
+                        <span class="text-muted small ms-2">${car.car_code || ''}</span>
+                        ${car.tare_only
+                            ? '<span class="badge bg-dark ms-1">Scale car</span>'
+                            : ''}
+                        ${car.weigh_source === 'in_train' && car.train_job
+                            ? `<span class="badge bg-info text-dark ms-1">Train ${car.train_job}</span>`
+                            : ''}
+                    </div>
                 </div>
                 <div class="d-flex align-items-center gap-2">
                     <span class="text-muted small">${car.tare_only
@@ -739,11 +933,13 @@ async function loadCarsAtScale() {
         currentCar = null;
         document.getElementById('carPanel').classList.add('d-none');
         document.getElementById('weighBtn').disabled = true;
+        hideNextCarButton();
     }
 }
 
 async function selectCar(carId) {
     selectedCarId = carId;
+    hideNextCarButton();
     document.querySelectorAll('.car-list-item').forEach(el => {
         el.classList.toggle('active', el.dataset.carId === String(carId));
     });
@@ -934,7 +1130,12 @@ function renderCar(data) {
     hideOrderSection();
 }
 
+document.getElementById('trainFilter').addEventListener('change', () => loadCarsAtScale());
 document.getElementById('refreshCarsBtn').addEventListener('click', () => loadCarsAtScale());
+document.getElementById('nextCarBtn').addEventListener('click', () => {
+    if (!pendingNextCar || !pendingNextCar.id) return;
+    selectCar(pendingNextCar.id);
+});
 
 document.getElementById('weighBtn').addEventListener('click', async () => {
     if (!currentCar || document.getElementById('weighBtn').disabled) return;
@@ -965,6 +1166,7 @@ document.getElementById('weighBtn').addEventListener('click', async () => {
             '<span class="text-muted"><i class="bi bi-info-circle"></i> Scale test car — gross is tare weight only.</span>';
         setWeightLed('off');
         document.getElementById('orderSection').classList.add('d-none');
+        hideNextCarButton();
         return;
     }
     if (data.reading.unloaded_weigh) {
@@ -972,11 +1174,13 @@ document.getElementById('weighBtn').addEventListener('click', async () => {
             '<span class="text-muted"><i class="bi bi-info-circle"></i> Empty car — gross is unloaded (tare) weight only.</span>';
         setWeightLed('off');
         document.getElementById('orderSection').classList.add('d-none');
+        showNextCarButton(data.next_car);
         return;
     }
 
     const inTol = data.reading.in_tolerance;
     setWeightLed(inTol ? 'ok' : 'fail');
+    showNextCarButton(data.next_car);
     if (!carNeedsAssignment(currentCar)) {
         resultEl.innerHTML = assignedOrderMessage(currentCar)
             || '<span class="text-muted">Weigh complete.</span>';

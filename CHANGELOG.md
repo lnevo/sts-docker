@@ -2,6 +2,13 @@
 
 All notable changes use semantic versioning (`x.y.z`).
 
+## [0.4.16] - 2026-07-05
+
+- Improved Track Scale car list with train filter, consist-order display, and Next Car workflow for in-train weighing.
+- Refined To Weigh operations stat to count only cars eligible for post-weigh order assignment (excludes scale test car and empty tare weighs).
+- Show in-train cars on scale-capable trains after reassignment; train filter lists trains with cars currently in consist.
+- Responsive car detail panel: centered marks/description, photo and stats side-by-side with full-width photo when wrapped.
+
 ## [0.4.15] - 2026-07-05
 
 - Modernized operations workflow pages (Build Switch Lists, Pick Up, Set Out, Load/Unload) with shared instruction panels, pale-green bulk/filter toolbars, location group checkboxes, and filter-aware bulk actions.

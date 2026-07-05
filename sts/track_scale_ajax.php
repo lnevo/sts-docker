@@ -38,7 +38,8 @@ track_scale_sync_session_calibration($dbc);
 try {
     switch ($action) {
         case 'cars_at_scale':
-            $cars = track_scale_get_cars_at_scale($dbc, $config);
+            $filter = trim((string) ($_GET['job_id'] ?? ''));
+            $cars = track_scale_get_cars_at_scale($dbc, $config, $filter);
             $list = [];
             foreach ($cars as $car) {
                 $profile = track_scale_profile_for_marks($car['reporting_marks'], $config);
@@ -59,7 +60,7 @@ try {
                     'active_waybill' => $active_order['waybill_number'] ?? null,
                     'active_shipment_code' => $active_order['shipment_code'] ?? null,
                     'active_unloading_location' => $active_order['unloading_location'] ?? null,
-                    'position' => $car['position'],
+                    'position' => (int) ($car['position'] ?? 0),
                     'car_code' => $car['car_code'],
                     'current_location' => $car['current_location'],
                     'weigh_source' => $car['weigh_source'] ?? null,
@@ -74,6 +75,8 @@ try {
                 'location' => track_scale_loading_location_code($config),
                 'count' => count($list),
                 'cars' => $list,
+                'trains' => track_scale_get_south_yard_train_jobs($dbc, $config),
+                'filter_job_id' => $filter,
                 'scale_status' => track_scale_build_scale_status($dbc, $config),
             ]);
             break;
@@ -143,6 +146,7 @@ try {
                 echo json_encode([
                     'success' => true,
                     'reading' => $reading,
+                    'next_car' => null,
                 ]);
                 break;
             }
@@ -174,9 +178,20 @@ try {
                 $reading['unloaded_weigh'] = false;
             }
             track_scale_record_weigh_log($dbc, $reporting_marks, $reading, $config);
+            $next_car = track_scale_get_next_car_in_train($dbc, $car, $config);
+            $next_car_payload = null;
+            if ($next_car !== null) {
+                $next_car_payload = [
+                    'id' => (int) $next_car['id'],
+                    'reporting_marks' => $next_car['reporting_marks'],
+                    'position' => (int) ($next_car['position'] ?? 0),
+                    'train_job' => $next_car['train_job'] ?? null,
+                ];
+            }
             echo json_encode([
                 'success' => true,
                 'reading' => $reading,
+                'next_car' => $next_car_payload,
             ]);
             break;
 

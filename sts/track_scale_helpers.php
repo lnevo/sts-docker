@@ -1246,8 +1246,10 @@ function track_scale_profile_for_marks($reporting_marks, $config = null)
     $roster = track_scale_load_roster();
     $row = $roster[$marks] ?? null;
 
-    if ($row !== null && track_scale_is_tare_only_car($marks, $row, $config)) {
-        $tare = (float) $row['tare_tons'];
+    if (track_scale_is_tare_only_car($marks, $row, $config)) {
+        $tare = ($row !== null && ($row['tare_tons'] ?? '') !== '')
+            ? (float) $row['tare_tons']
+            : track_scale_test_car_expected_gross($config);
         return [
             'reporting_marks' => $marks,
             'car_type' => $row['car_type'] ?? '',
@@ -1905,6 +1907,72 @@ function track_scale_south_yard_routing_id($dbc, $config = null)
     return $cache[$key];
 }
 
+function track_scale_job_ids_with_scale_destinations($dbc, $config = null)
+{
+    static $cache = [];
+    $config = $config ?? track_scale_load_config();
+    $location_code = track_scale_loading_location_code($config);
+    if (array_key_exists($location_code, $cache)) {
+        return $cache[$location_code];
+    }
+
+    $escaped = mysqli_real_escape_string($dbc, $location_code);
+    $sql = 'SELECT DISTINCT cars.handled_by_job_id AS job_id
+            FROM cars
+            INNER JOIN car_orders co ON co.car = cars.id
+            INNER JOIN shipments ON shipments.id = co.shipment
+            INNER JOIN locations loc ON loc.id = shipments.unloading_location
+            WHERE cars.current_location_id = 0
+              AND cars.handled_by_job_id > 0
+              AND cars.status != "Unavailable"
+              AND loc.code = "' . $escaped . '"';
+
+    $job_ids = [];
+    $rs = mysqli_query($dbc, $sql);
+    while ($rs && ($row = mysqli_fetch_assoc($rs))) {
+        $job_id = (int) ($row['job_id'] ?? 0);
+        if ($job_id > 0) {
+            $job_ids[] = $job_id;
+        }
+    }
+
+    $cache[$location_code] = $job_ids;
+    return $job_ids;
+}
+
+function track_scale_job_ids_for_scale_trains($dbc, $config = null)
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+
+    $routing_ids = track_scale_job_ids_for_south_yard_routing($dbc, $config);
+    if (count($routing_ids) === 0) {
+        $cache = [];
+        return $cache;
+    }
+
+    $ids_sql = implode(', ', array_map('intval', $routing_ids));
+    $sql = 'SELECT DISTINCT cars.handled_by_job_id AS job_id
+            FROM cars
+            WHERE cars.current_location_id = 0
+              AND cars.handled_by_job_id IN (' . $ids_sql . ')
+              AND cars.status != "Unavailable"';
+
+    $job_ids = [];
+    $rs = mysqli_query($dbc, $sql);
+    while ($rs && ($row = mysqli_fetch_assoc($rs))) {
+        $job_id = (int) ($row['job_id'] ?? 0);
+        if ($job_id > 0) {
+            $job_ids[] = $job_id;
+        }
+    }
+
+    $cache = $job_ids;
+    return $cache;
+}
+
 function track_scale_job_ids_for_south_yard_routing($dbc, $config = null)
 {
     static $cache = null;
@@ -2083,70 +2151,211 @@ function track_scale_get_car_by_id($dbc, $car_id)
     return track_scale_lookup_car($dbc, '-' . $car_id . '-');
 }
 
-function track_scale_get_cars_at_scale($dbc, $config = null)
+function track_scale_is_weigh_list_car($car, $config = null)
+{
+    if (!is_array($car)) {
+        return false;
+    }
+    if (track_scale_is_test_car_marks($car['reporting_marks'] ?? '', $config)) {
+        return false;
+    }
+    $profile = track_scale_profile_for_marks($car['reporting_marks'] ?? '', $config);
+    return empty($profile['tare_only']);
+}
+
+function track_scale_counts_toward_weigh_stat($car, $dbc, $config = null)
 {
     $config = $config ?? track_scale_load_config();
+    if (!is_array($car) || $dbc === null) {
+        return false;
+    }
+    if (track_scale_is_test_car_marks($car['reporting_marks'] ?? '', $config)) {
+        return false;
+    }
+    $profile = track_scale_profile_for_marks($car['reporting_marks'] ?? '', $config);
+    if (!empty($profile['tare_only'])) {
+        return false;
+    }
+    if (!track_scale_car_weighable($car, $dbc, $config)) {
+        return false;
+    }
+    if (!track_scale_car_needs_assignment($car, $dbc, $config)) {
+        return false;
+    }
+    // Match the weigh UI: empty/tare-only weighs do not offer order assignment.
+    if (track_scale_car_weighs_unloaded($car)) {
+        return false;
+    }
+
+    return true;
+}
+
+function track_scale_get_south_yard_train_jobs($dbc, $config = null)
+{
+    $job_ids = track_scale_job_ids_for_scale_trains($dbc, $config);
+    if (count($job_ids) === 0) {
+        return [];
+    }
+
+    $jobs = [];
+    $rs = mysqli_query(
+        $dbc,
+        'SELECT Id, name FROM jobs WHERE Id IN (' . implode(', ', array_map('intval', $job_ids)) . ') ORDER BY name'
+    );
+    while ($rs && ($row = mysqli_fetch_assoc($rs))) {
+        $jobs[] = [
+            'id' => (int) $row['Id'],
+            'name' => (string) $row['name'],
+        ];
+    }
+
+    return $jobs;
+}
+
+function track_scale_sort_weigh_cars(array $cars, $train_only = false)
+{
+    usort($cars, function ($a, $b) use ($train_only) {
+        if (!$train_only) {
+            $a_scale = (($a['weigh_source'] ?? '') === 'at_scale') ? 0 : 1;
+            $b_scale = (($b['weigh_source'] ?? '') === 'at_scale') ? 0 : 1;
+            if ($a_scale !== $b_scale) {
+                return $a_scale <=> $b_scale;
+            }
+            $train_cmp = strcmp((string) ($a['train_job'] ?? ''), (string) ($b['train_job'] ?? ''));
+            if ($train_cmp !== 0) {
+                return $train_cmp;
+            }
+        }
+
+        $pos_a = (int) ($a['position'] ?? 0);
+        $pos_b = (int) ($b['position'] ?? 0);
+        if ($pos_a !== $pos_b) {
+            return $pos_a <=> $pos_b;
+        }
+
+        return strcmp((string) ($a['reporting_marks'] ?? ''), (string) ($b['reporting_marks'] ?? ''));
+    });
+
+    return $cars;
+}
+
+function track_scale_get_cars_at_scale($dbc, $config = null, $filter = null)
+{
+    $config = $config ?? track_scale_load_config();
+    $filter = trim((string) ($filter ?? ''));
     $location_code = mysqli_real_escape_string($dbc, track_scale_loading_location_code($config));
     $job_ids = track_scale_job_ids_for_south_yard_routing($dbc, $config);
     $job_filter = count($job_ids) > 0
         ? ' AND cars.handled_by_job_id IN (' . implode(', ', array_map('intval', $job_ids)) . ')'
         : ' AND 1 = 0';
 
-    $sql = 'SELECT cars.id as id,
-                   cars.reporting_marks as reporting_marks,
-                   cars.status as status,
-                   cars.position as position,
-                   cars.current_location_id as current_location_id,
-                   cars.handled_by_job_id as handled_by_job_id,
-                   car_codes.code as car_code,
-                   loc.code as current_location,
-                   "at_scale" as weigh_source,
-                   NULL as train_job
-            FROM cars
-            INNER JOIN locations loc ON loc.id = cars.current_location_id
-            LEFT JOIN car_codes ON car_codes.id = cars.car_code_id
-            WHERE loc.code = "' . $location_code . '"
-
-            UNION ALL
-
-            SELECT cars.id as id,
-                   cars.reporting_marks as reporting_marks,
-                   cars.status as status,
-                   cars.position as position,
-                   cars.current_location_id as current_location_id,
-                   cars.handled_by_job_id as handled_by_job_id,
-                   car_codes.code as car_code,
-                   "In train" as current_location,
-                   "in_train" as weigh_source,
-                   jobs.name as train_job
-            FROM cars
-            INNER JOIN jobs ON jobs.Id = cars.handled_by_job_id
-            LEFT JOIN car_codes ON car_codes.id = cars.car_code_id
-            WHERE cars.current_location_id = 0
-              AND cars.status != "Unavailable"'
-        . $job_filter . '
-
-            ORDER BY reporting_marks';
-
-    $rs = mysqli_query($dbc, $sql);
-    if (!$rs) {
-        return [];
-    }
-
     $cars = [];
-    while ($row = mysqli_fetch_assoc($rs)) {
-        $cars[] = $row;
+
+    if ($filter === '' || $filter === 'scale') {
+        $sql = 'SELECT cars.id as id,
+                       cars.reporting_marks as reporting_marks,
+                       cars.status as status,
+                       cars.position as position,
+                       cars.current_location_id as current_location_id,
+                       cars.handled_by_job_id as handled_by_job_id,
+                       car_codes.code as car_code,
+                       loc.code as current_location,
+                       "at_scale" as weigh_source,
+                       NULL as train_job
+                FROM cars
+                INNER JOIN locations loc ON loc.id = cars.current_location_id
+                LEFT JOIN car_codes ON car_codes.id = cars.car_code_id
+                WHERE loc.code = "' . $location_code . '"';
+
+        $rs = mysqli_query($dbc, $sql);
+        while ($rs && ($row = mysqli_fetch_assoc($rs))) {
+            $cars[] = $row;
+        }
     }
+
+    if ($filter === '' || ($filter !== 'scale' && ctype_digit($filter))) {
+        $train_filter = $job_filter;
+        if ($filter !== '' && $filter !== 'scale') {
+            $train_filter = ' AND cars.handled_by_job_id = ' . (int) $filter;
+        }
+
+        $sql = 'SELECT cars.id as id,
+                       cars.reporting_marks as reporting_marks,
+                       cars.status as status,
+                       cars.position as position,
+                       cars.current_location_id as current_location_id,
+                       cars.handled_by_job_id as handled_by_job_id,
+                       car_codes.code as car_code,
+                       "In train" as current_location,
+                       "in_train" as weigh_source,
+                       jobs.name as train_job
+                FROM cars
+                INNER JOIN jobs ON jobs.Id = cars.handled_by_job_id
+                LEFT JOIN car_codes ON car_codes.id = cars.car_code_id
+                WHERE cars.current_location_id = 0
+                  AND cars.status != "Unavailable"'
+            . $train_filter;
+
+        $rs = mysqli_query($dbc, $sql);
+        while ($rs && ($row = mysqli_fetch_assoc($rs))) {
+            $cars[] = $row;
+        }
+    }
+
+    $train_only = ($filter !== '' && $filter !== 'scale');
+    $cars = track_scale_sort_weigh_cars($cars, $train_only);
+
     return $cars;
+}
+
+function track_scale_car_weigh_source($car, $dbc, $config = null)
+{
+    if (track_scale_car_at_scale($car, $config)) {
+        return 'at_scale';
+    }
+    if (track_scale_car_in_south_yard_train($car, $dbc, $config)) {
+        return 'in_train';
+    }
+
+    return null;
+}
+
+function track_scale_get_next_car_in_train($dbc, $car, $config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    if (!is_array($car) || track_scale_car_weigh_source($car, $dbc, $config) !== 'in_train') {
+        return null;
+    }
+
+    $job_id = (int) ($car['handled_by_job_id'] ?? 0);
+    if ($job_id <= 0) {
+        return null;
+    }
+
+    $train_cars = track_scale_get_cars_at_scale($dbc, $config, (string) $job_id);
+    $found_current = false;
+    foreach ($train_cars as $candidate) {
+        if (!track_scale_is_weigh_list_car($candidate, $config)) {
+            continue;
+        }
+        if (!$found_current) {
+            if ((int) $candidate['id'] === (int) $car['id']) {
+                $found_current = true;
+            }
+            continue;
+        }
+
+        return $candidate;
+    }
+
+    return null;
 }
 
 function track_scale_count_weighable_cars($dbc, $config = null)
 {
-    $config = $config ?? track_scale_load_config();
     $count = 0;
     foreach (track_scale_get_cars_at_scale($dbc, $config) as $car) {
-        $profile = track_scale_profile_for_marks($car['reporting_marks'], $config);
-        if (empty($profile['tare_only'])) {
+        if (track_scale_counts_toward_weigh_stat($car, $dbc, $config)) {
             $count++;
         }
     }
