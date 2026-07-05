@@ -93,7 +93,8 @@
         <div>
           <a href="index.html" class="btn btn-outline-light btn-sm me-2"><i class="bi bi-house"></i> Home</a>
           <a href="reports.html" class="btn btn-outline-light btn-sm me-2"><i class="bi bi-file-text"></i> Reports</a>
-          <button class="btn btn-light btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
+          <button class="btn btn-light btn-sm me-2" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
+          <a href="index-t.html" class="btn btn-outline-light btn-sm"><i class="bi bi-diagram-3"></i> Site Map</a>
         </div>
       </div>
     </nav>

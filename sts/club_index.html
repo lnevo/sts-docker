@@ -46,6 +46,9 @@
       overflow: hidden;
       background: #fff;
     }
+    .club-group-body {
+      padding: 1rem;
+    }
     .section-header {
       background-color: #f39c12;
       color: white;
@@ -61,14 +64,14 @@
       align-items: center;
       gap: 14px;
       padding: 18px;
-      border-bottom: 1px solid #dee2e6;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
       background: #fff;
       text-decoration: none;
       color: #333;
       transition: background-color 0.15s;
       min-height: 110px;
     }
-    .club-btn:last-child { border-bottom: none; }
     .club-btn:hover { background-color: #fff9ed; color: #333; text-decoration: none; }
     .club-btn i.club-icon { color: #f39c12; font-size: 1.8rem; width: 34px; flex-shrink: 0; }
     .club-btn-title { font-weight: 600; line-height: 1.2; }
@@ -111,33 +114,35 @@
 
     <div class="club-group">
       <div class="section-header"><i class="bi bi-people"></i> Ownership Tools</div>
-      <div class="row g-0">
-        <div class="col-md-4">
-          <a href="add_remove.php" class="club-btn h-100">
-            <i class="bi bi-plus-slash-minus club-icon"></i>
-            <div>
-              <div class="club-btn-title">Add / Remove Rolling Stock</div>
-              <div class="club-btn-desc">Add or remove club rolling stock from the roster.</div>
-            </div>
-          </a>
-        </div>
-        <div class="col-md-4">
-          <a href="ownership.php" class="club-btn h-100">
-            <i class="bi bi-person-check club-icon"></i>
-            <div>
-              <div class="club-btn-title">Assign Ownership</div>
-              <div class="club-btn-desc">Assign cars and equipment to owners.</div>
-            </div>
-          </a>
-        </div>
-        <div class="col-md-4">
-          <a href="owners.php" class="club-btn h-100">
-            <i class="bi bi-person-gear club-icon"></i>
-            <div>
-              <div class="club-btn-title">Manage Owners</div>
-              <div class="club-btn-desc">Create and update club member owner records.</div>
-            </div>
-          </a>
+      <div class="club-group-body">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <a href="add_remove.php" class="club-btn h-100">
+              <i class="bi bi-plus-slash-minus club-icon"></i>
+              <div>
+                <div class="club-btn-title">Add / Remove Rolling Stock</div>
+                <div class="club-btn-desc">Add or remove club rolling stock from the roster.</div>
+              </div>
+            </a>
+          </div>
+          <div class="col-md-4">
+            <a href="ownership.php" class="club-btn h-100">
+              <i class="bi bi-person-check club-icon"></i>
+              <div>
+                <div class="club-btn-title">Assign Ownership</div>
+                <div class="club-btn-desc">Assign cars and equipment to owners.</div>
+              </div>
+            </a>
+          </div>
+          <div class="col-md-4">
+            <a href="owners.php" class="club-btn h-100">
+              <i class="bi bi-person-gear club-icon"></i>
+              <div>
+                <div class="club-btn-title">Manage Owners</div>
+                <div class="club-btn-desc">Create and update club member owner records.</div>
+              </div>
+            </a>
+          </div>
         </div>
       </div>
     </div>

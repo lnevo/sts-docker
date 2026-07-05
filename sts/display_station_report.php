@@ -946,8 +946,9 @@ if (isset($_GET['generate_report'])) {
         <button id="reading-btn" class="btn btn-outline-light btn-sm" onclick="toggleReadingMode()" title="Toggle easy reading mode">
           <i class="bi bi-eye"></i> Aa
         </button>
-        <a href="index.html" class="btn btn-outline-light btn-sm"><i class="bi bi-house"></i> Home</a>
-        <a href="reports.html" class="btn btn-outline-light btn-sm"><i class="bi bi-file-text"></i> Reports</a>
+        <a href="index.html" class="btn btn-outline-light btn-sm me-2"><i class="bi bi-house"></i> Home</a>
+        <a href="reports.html" class="btn btn-outline-light btn-sm me-2"><i class="bi bi-file-text"></i> Reports</a>
+        <a href="index-t.html" class="btn btn-outline-light btn-sm"><i class="bi bi-diagram-3"></i> Site Map</a>
       </div>
     </div>
   </nav>

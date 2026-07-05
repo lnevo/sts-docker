@@ -56,7 +56,7 @@
   {
     $data_table = '<div class="table-responsive"><table id="job_table" class="table table-sm table-bordered table-hover">';
     $data_table .= '<tr style="position: sticky; top: 0; background-color: #F5F5F5">
-                     <th>Check All <input id="check_all" name="check_all" type="checkbox" onchange="checkall();"></th>
+                     <th style="text-align: center;">Check All <input class="form-check-input" id="check_all" name="check_all" type="checkbox" onchange="checkall();" aria-label="Check all cars for pickup"></th>
                      <th>Pickup Location</th>
                      <th>Reporting Marks</th>
                      <th>Car Code</th>
@@ -113,17 +113,19 @@
       }
 
         // insert a group header row when the pickup location changes
-        $group_key = $row['current_station'] . ' | ' . $row['current_location'];
+        $group_key = $row['current_station'] . '|' . $row['current_location'];
         if ($group_key !== $current_pickup_group)
         {
           $current_pickup_group = $group_key;
-          $data_table .= '<tr class="table-dark pickup-group-header"><td colspan="8" class="fw-semibold">'
-                      . htmlspecialchars($row['current_station']) . ' &mdash; ' . htmlspecialchars($row['current_location'])
-                      . '</td></tr>';
+          $group_label = htmlspecialchars($row['current_station']) . ' &mdash; ' . htmlspecialchars($row['current_location']);
+          $data_table .= '<tr class="table-dark pickup-group-header" data-group-key="' . htmlspecialchars($group_key, ENT_QUOTES) . '">'
+                      . '<td class="text-center"><input class="form-check-input location-group-check" type="checkbox" onchange="togglePickupLocationGroup(this);" aria-label="Check all cars at this location"></td>'
+                      . '<td colspan="7" class="fw-semibold">' . $group_label . '</td></tr>';
         }
 
       // generate the table rows
       $data_table .= '<tr class="job-car-row"'
+                  . ' data-location-group="' . htmlspecialchars($group_key, ENT_QUOTES) . '"'
                   . ' data-pickup-station="' . htmlspecialchars($pickup_filter_station, ENT_QUOTES) . '"'
                   . ' data-pickup-location="' . htmlspecialchars($pickup_filter_location, ENT_QUOTES) . '"'
                   . ' data-reporting-marks="' . htmlspecialchars($row['reporting_marks'], ENT_QUOTES) . '"'
@@ -138,7 +140,7 @@
                   . ' data-final-destination-location="' . htmlspecialchars($final_dest_location, ENT_QUOTES) . '">';
 
       // column 1 - check box to indicate that the car was picked up
-      $data_table .= '<td style="text-align: center;"><input id="check' . $row_count . '" name="check' . $row_count . '" type="checkbox"></td>';
+      $data_table .= '<td class="text-center"><input class="form-check-input pickup-row-check" id="check' . $row_count . '" name="check' . $row_count . '" type="checkbox" aria-label="Pick up this car"></td>';
 
       // column 2 - where the car was picked up (current location)
       $data_table .= '<td>' . $row['current_station'] . '<br />' . $row['current_location'] . '</td>';

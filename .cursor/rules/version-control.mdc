@@ -1,13 +1,25 @@
 ---
-description: Version and commit all project changes
+description: Git workflow, versioning, and commits for sts-docker
 alwaysApply: true
 ---
 
 # Version Control
 
-- Before editing, check the current branch and working tree with `git status`.
-- Keep work on a named branch; do not make project changes directly on `master` unless explicitly requested.
-- Use semantic versioning (`x.y.z`) in `VERSION`. Update `CHANGELOG.md` with every intentional project change.
-- Commit completed work before ending the task when the user has asked for changes to be backed by version control.
-- Do not include local data, caches, PDFs, database volumes, or generated duplicate artifacts unless explicitly requested.
-- Push the active work branch after committing when the user has requested GitHub backup.
+- Work on a named feature branch (for example `ui-improvements`); do not commit directly to `master` unless explicitly requested.
+- Before ending a feature session, check `git status` and commit completed work with a clear message focused on the final outcome.
+- Bump `VERSION` and add a concise entry to `CHANGELOG.md` for each intentional release-worthy change set.
+- Stage only source files that belong in the repo; exclude local data, caches, PDFs, database volumes, and abandoned experiments.
+- Do not commit unused helper files left over from reverted approaches.
+- Push the active branch to `origin` when the user asks for backup or a PR-ready state.
+- Prefer one well-written commit message over many tiny fixup commits when wrapping up a feature batch.
+
+## Commit message style
+
+- Lead with a short imperative summary of the user-visible result.
+- Body bullets grouped by area (operations pages, menus, generate/fill orders, shared infrastructure).
+- Omit iteration noise; describe what shipped, not what was tried and reverted.
+
+## HART local deploy
+
+- After changing files under `sts/`, copy updated files into the running container when testing locally:
+  `docker cp sts/<file> sts-docker-web-1:/var/www/html/sts/<file>`

@@ -114,8 +114,11 @@
           <a href="operations.html" class="btn btn-outline-light btn-sm me-2">
             <i class="bi bi-arrow-left"></i> Operations
           </a>
-          <a href="index.html" class="btn btn-outline-light btn-sm">
+          <a href="index.html" class="btn btn-outline-light btn-sm me-2">
             <i class="bi bi-house"></i> Home
+          </a>
+          <a href="index-t.html" class="btn btn-outline-light btn-sm">
+            <i class="bi bi-diagram-3"></i> Site Map
           </a>
         </div>
       </div>

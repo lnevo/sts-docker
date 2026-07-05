@@ -14,6 +14,15 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $categories = fill_order_parse_categories($_POST['categories'] ?? null);
 $filters = fill_order_parse_filters($_POST['filters'] ?? null);
+$selected_waybills = null;
+if (isset($_POST['waybills']) && is_array($_POST['waybills'])) {
+    $selected_waybills = array_values(array_filter(array_map('trim', $_POST['waybills'])));
+    if (count($selected_waybills) === 0) {
+        http_response_code(400);
+        echo json_encode(['error' => 'No orders selected']);
+        exit;
+    }
+}
 
 $dbc = open_db();
 $waybills = fill_order_get_unfilled_waybills($dbc);
@@ -23,6 +32,10 @@ $skipped = [];
 $filtered_out = 0;
 
 foreach ($waybills as $waybill_number) {
+    if ($selected_waybills !== null && !in_array($waybill_number, $selected_waybills, true)) {
+        continue;
+    }
+
     $order_row = fill_order_get_details($dbc, $waybill_number);
     if ($order_row === null) {
         $skipped[] = [
@@ -32,7 +45,7 @@ foreach ($waybills as $waybill_number) {
         continue;
     }
 
-    if (!fill_order_matches_filters($order_row, $filters)) {
+    if ($selected_waybills === null && !fill_order_matches_filters($order_row, $filters)) {
         $filtered_out++;
         continue;
     }

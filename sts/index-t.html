@@ -7,35 +7,83 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
   <style>
-    body { background-color: #f8f9fa; font-size: 1.1rem; }
+    body { background-color: #f8f9fa; font-size: 1.05rem; }
     .navbar-sitemap { background-color: #6c757d; }
-    .page-hero {
+    .sitemap-banner {
       background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      overflow: hidden;
-    }
-    .page-hero img { max-height: 110px; object-fit: contain; }
-    .site-card {
-      background: #fff;
+      border: 1px solid #dee2e6;
       border-radius: 6px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
       overflow: hidden;
-      height: 100%;
     }
-    .site-card h2 {
+    .sitemap-banner-cell {
+      padding: 0.75rem;
+      background: #ccc;
+      text-align: center;
+    }
+    .sitemap-banner-cell img {
+      max-height: 114px;
+      width: auto;
+      max-width: 100%;
+      object-fit: contain;
+    }
+    .sitemap-banner-steam img {
+      width: 100%;
+      max-width: 202px;
+      height: 114px;
+      object-fit: cover;
+    }
+    .sitemap-title {
+      font-size: 1.75rem;
+      margin: 1rem 0 1.25rem;
+    }
+    .sitemap-table {
+      background: #fff;
+      table-layout: fixed;
+    }
+    .sitemap-table th {
       background-color: #6c757d;
       color: #fff;
       font-size: 1.25rem;
-      margin: 0;
-      padding: 12px 16px;
+      font-weight: 600;
+      vertical-align: middle;
+      padding: 12px;
     }
-    .site-section { padding: 16px; border-bottom: 1px solid #dee2e6; }
-    .site-section:last-child { border-bottom: none; }
-    .site-section h3 { font-size: 1.05rem; margin-bottom: 10px; }
-    .site-section ul { margin-bottom: 0; padding-left: 1.4rem; }
-    .site-section li { margin-bottom: 10px; }
-    .site-section a { font-weight: 500; }
+    .sitemap-table td {
+      vertical-align: top;
+      padding: 14px;
+    }
+    .sitemap-table ul {
+      margin-bottom: 1rem;
+      padding-left: 1.4rem;
+    }
+    .sitemap-table li {
+      margin-bottom: 0.65rem;
+    }
+    .sitemap-table li:last-child {
+      margin-bottom: 0;
+    }
+    .sitemap-table a {
+      font-weight: 500;
+    }
+    .sitemap-subhead {
+      display: block;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    @media (max-width: 991px) {
+      .sitemap-table,
+      .sitemap-table thead,
+      .sitemap-table tbody,
+      .sitemap-table tr,
+      .sitemap-table th,
+      .sitemap-table td {
+        display: block;
+        width: 100%;
+      }
+      .sitemap-table tr + tr td {
+        border-top: none;
+      }
+    }
   </style>
   <script>
     function get_session_nbr() {
@@ -64,119 +112,106 @@
         <a href="reports.html" class="btn btn-outline-light btn-sm me-2">
           <i class="bi bi-file-text"></i> Reports
         </a>
-        <a href="database.html" class="btn btn-outline-light btn-sm">
+        <a href="database.html" class="btn btn-outline-light btn-sm me-2">
           <i class="bi bi-database"></i> Database
+        </a>
+        <a href="about.html" class="btn btn-outline-light btn-sm">
+          <i class="bi bi-info-circle"></i> About
         </a>
       </div>
     </div>
   </nav>
 
-  <main class="container mt-4" style="max-width: 1140px;">
-    <div class="page-hero mb-4">
-      <div class="row g-0 align-items-center">
-        <div class="col-md-2 text-center p-3">
-          <img src="ImageStore/GUI/STS-logo.jpg" class="img-fluid" alt="STS">
+  <main class="container-fluid px-4 py-3">
+    <div class="sitemap-banner">
+      <div class="row g-0 align-items-stretch">
+        <div class="col-sm-4 col-md-3 sitemap-banner-cell">
+          <img src="ImageStore/GUI/STS-logo.jpg" alt="STS">
         </div>
-        <div class="col-md-5 text-center p-3">
-          <img src="ImageStore/GUI/logo.jpg" class="img-fluid" alt="Shipper-driven Traffic Simulator">
+        <div class="col-sm-4 col-md-4 sitemap-banner-cell">
+          <img src="ImageStore/GUI/logo.jpg" alt="Shipper-driven Traffic Simulator">
         </div>
-        <div class="col-md-5 p-3">
-          <h1 id="title" class="h3 mb-1">Shipper-driven Traffic Simulator<span id="session_number"></span></h1>
-          <p class="mb-0 text-muted">Text site map for accessible navigation.</p>
+        <div class="col-sm-4 col-md-5 sitemap-banner-cell sitemap-banner-steam">
+          <img src="ImageStore/GUI/steam.gif" alt="Steam locomotive">
         </div>
       </div>
     </div>
 
-    <div class="row g-4">
-      <section class="col-lg-4" aria-labelledby="simulation-operations">
-        <div class="site-card">
-          <h2 id="simulation-operations">Simulation Operations</h2>
-          <div class="site-section">
-            <h3>Before Ops</h3>
+    <h1 id="title" class="sitemap-title">Shipper-driven Traffic Simulator<span id="session_number"></span></h1>
+
+    <table class="table table-bordered sitemap-table">
+      <thead>
+        <tr>
+          <th scope="col">Simulation Operations</th>
+          <th scope="col">Reports</th>
+          <th scope="col">Database Operations</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <span class="sitemap-subhead">Before Ops</span>
             <ul>
               <li><a href="generate.php">Generate Car Orders</a></li>
               <li><a href="fill_orders.php">Fill Car Orders</a></li>
               <li><a href="reposition.php">Reposition Empty Cars</a></li>
             </ul>
-          </div>
-          <div class="site-section">
-            <h3>During Ops</h3>
+            <span class="sitemap-subhead">During Ops</span>
             <ul>
-              <li><a href="build_switchlists.php">Assign Cars</a></li>
+              <li><a href="build_switchlists.php">Build Switch Lists</a></li>
               <li><a href="pick_up.php">Pick Up Cars</a></li>
-              <li><a href="organize_cars.php">View/Organize Cars</a></li>
+              <li><a href="organize_cars.php">Organize Cars</a></li>
               <li><a href="set_out.php">Set Out Cars</a></li>
             </ul>
-          </div>
-          <div class="site-section">
-            <h3>After Ops</h3>
+            <span class="sitemap-subhead">After Ops</span>
             <ul>
-              <li><a href="load_unload.php">Load/Unload Cars</a></li>
+              <li><a href="load_unload.php">Load / Unload Cars</a></li>
             </ul>
-          </div>
-        </div>
-      </section>
-
-      <section class="col-lg-4" aria-labelledby="reports">
-        <div class="site-card">
-          <h2 id="reports">Reports</h2>
-          <div class="site-section">
-            <h3>Operating Documents</h3>
+          </td>
+          <td>
+            <span class="sitemap-subhead">Operating Documents</span>
             <ul>
-              <li><a href="display_switchlist.php">Switchlists</a></li>
+              <li><a href="display_switchlist.php">Switch Lists</a></li>
               <li><a href="display_station_report.php">Station Car Report</a></li>
               <li><a href="wheel_report.php">Wheel Report</a></li>
             </ul>
-          </div>
-          <div class="site-section">
-            <h3>Waybills</h3>
+            <span class="sitemap-subhead">Waybills</span>
             <ul>
-              <li><a href="display_waybill.php">Large Format Waybills (using filled car orders)</a></li>
-              <li><a href="printable_ccwaybill2.php">Small Format Waybills (using car orders)</a></li>
-              <li><a href="printable_ccwaybill.php">Small Format Waybills (using shipments)</a></li>
+              <li><a href="display_waybill.php">Waybill List</a></li>
+              <li><a href="printable_ccwaybill2.php">Waybill Sheets for Cars</a></li>
+              <li><a href="printable_ccwaybill.php">Waybill Sheets for Shipments</a></li>
             </ul>
-          </div>
-          <div class="site-section">
-            <h3>Management Reports</h3>
+            <span class="sitemap-subhead">Management Reports</span>
             <ul>
-              <li><a href="display_fleet_report.php">Car Fleet Management Report</a></li>
+              <li><a href="display_fleet_report.php">Car Fleet Report</a></li>
               <li><a href="shipment_forecast.php">Shipment Forecast</a></li>
-              <li><a href="car_forecast.php">Car Loading Forecast</a></li>
-              <li><a href="display_car_qr_report.php">Car QR or Bar Code Report</a></li>
-              <li><a href="display_station_qr_code_report.php">Location QR or Bar Code Report</a></li>
+              <li><a href="car_forecast.php">Car Forecast</a></li>
+              <li><a href="display_car_qr_report.php">Car QR Codes</a></li>
+              <li><a href="display_station_qr_code_report.php">Location QR Codes</a></li>
             </ul>
-          </div>
-        </div>
-      </section>
-
-      <section class="col-lg-4" aria-labelledby="database-operations">
-        <div class="site-card">
-          <h2 id="database-operations">Database Operations</h2>
-          <div class="site-section">
-            <h3>Quick Query and Photo ID</h3>
+          </td>
+          <td>
+            <span class="sitemap-subhead">Quick Query and Photo ID</span>
             <ul>
-              <li><a href="scan_car.php">Scan/Query Car</a></li>
-              <li><a href="scan_location.php">Scan/Query Location</a></li>
-              <li><a href="rollingstock_album.php">Rollingstock Photo Album</a></li>
+              <li><a href="scan_car.php">Scan / Query Car</a></li>
+              <li><a href="scan_location.php">Scan / Query Location</a></li>
+              <li><a href="rollingstock_album.php">Rolling Stock Album</a></li>
             </ul>
-          </div>
-          <div class="site-section">
-            <h3>Database Contents Management</h3>
+            <span class="sitemap-subhead">Database Contents Management</span>
             <ul>
               <li><a href="db_list.php?tbl_name=car_orders">Car Orders</a></li>
-              <li><a href="db_list.php?tbl_name=jobs">Jobs</a></li>
+              <li><a href="db_list.php?tbl_name=jobs">Jobs / Trains</a></li>
               <li><a href="db_list.php?tbl_name=cars">Cars</a></li>
               <li><a href="db_list.php?tbl_name=shipments">Shipments</a></li>
               <li><a href="db_list.php?tbl_name=locations">Locations</a></li>
-              <li><a href="db_list.php?tbl_name=routing">Stations and Routing Instructions</a></li>
+              <li><a href="db_list.php?tbl_name=routing">Stations and Routing</a></li>
               <li><a href="db_list.php?tbl_name=car_codes">Car Codes</a></li>
               <li><a href="db_list.php?tbl_name=commodities">Commodities</a></li>
             </ul>
-          </div>
-          <div class="site-section">
-            <h3>Database Maintenance</h3>
+            <span class="sitemap-subhead">Database Maintenance</span>
             <ul>
               <li><a href="club_index.html">Club Operations</a></li>
+              <li><a href="db-maint.html">Database Maintenance Menu</a></li>
               <li><a href="backup_db.php">Create a backup copy of the database</a></li>
               <li><a href="restore_db.php">Restore the database from a backup copy</a></li>
               <li><a href="remove_backup.php">Remove a backup copy</a></li>
@@ -187,10 +222,10 @@
               <li><a href="wipe.php">Wipe System</a> (WARNING! This will erase everything!)</li>
               <li><a href="settings.php">Settings</a></li>
             </ul>
-          </div>
-        </div>
-      </section>
-    </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
   </main>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>

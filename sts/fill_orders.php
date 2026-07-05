@@ -95,6 +95,18 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
             align-items: center;
             background-color: #f8f9fa;
             border-radius: 0.375rem 0.375rem 0 0;
+            gap: 0.75rem;
+        }
+        .order-header-main {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+        .order-row-check {
+            margin-top: 0.2rem;
+            flex-shrink: 0;
         }
         .order-header:hover {
             background-color: #e9ecef;
@@ -205,15 +217,18 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
       <a href="operations.html" class="btn btn-outline-light btn-sm me-2">
         <i class="bi bi-arrow-left"></i> Operations
       </a>
-      <a href="index.html" class="btn btn-outline-light btn-sm">
+      <a href="index.html" class="btn btn-outline-light btn-sm me-2">
         <i class="bi bi-house"></i> Home
+      </a>
+      <a href="index-t.html" class="btn btn-outline-light btn-sm">
+        <i class="bi bi-diagram-3"></i> Site Map
       </a>
     </div>
   </div>
 </nav>
     <div class="container-fluid px-4">
         <h5 class="mb-1">Fill Car Orders</h5>
-        <p class="text-muted mb-3">Select an order to see available cars, then click a car to assign it.</p>
+        <p class="text-muted mb-3">Check orders to select them, expand to pick a car manually, or use Auto Assign on the selection.</p>
 
         <?php if (count($open_orders) > 0) { ?>
             <div id="openOrdersSummary" class="mb-4 p-3 bg-light border rounded">
@@ -221,7 +236,7 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
                     <p class="mb-0">
                         <strong id="openOrdersCount"><?php echo count($open_orders); ?> open car orders</strong>
                         <span id="filteredOrdersNote" class="text-muted"></span><br/>
-                        Click on any order below to see available cars. Click on a car to assign it to the order.
+                        Click on any order below to see available cars. Check orders for bulk actions, or click a car to assign it.
                     </p>
                     <div class="auto-assign-panel">
                         <button id="autoAssignBtn" type="button" class="btn btn-success btn-lg w-100" onclick="autoAssignAll()">
@@ -296,6 +311,22 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
 
             <div id="autoAssignStatus" class="alert d-none mb-3" role="alert"></div>
 
+            <div class="d-flex flex-wrap align-items-center gap-3 mb-3 p-3 bg-white border rounded">
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="checkAllOrders" onchange="checkAllOrders()">
+                    <label class="form-check-label fw-semibold" for="checkAllOrders">Check all</label>
+                </div>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="expandCheckedOrders()">
+                    <i class="bi bi-arrows-expand"></i> Expand selected
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="collapseCheckedOrders()">
+                    <i class="bi bi-arrows-collapse"></i> Collapse selected
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="cancelCheckedOrders()">
+                    <i class="bi bi-x-circle"></i> Cancel selected
+                </button>
+            </div>
+
             <div id="ordersContainer">
                 <?php
                 foreach ($open_orders as $row) {
@@ -308,17 +339,22 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
                          data-unloading-location="<?php echo htmlspecialchars($row['unloading_location']); ?>"
                          data-consignment="<?php echo htmlspecialchars($row['consignment']); ?>"
                          data-car-code="<?php echo htmlspecialchars($row['car_code']); ?>">
-                        <div class="order-header" onclick="toggleOrder(this)">
-                            <div>
-                                <div style="font-weight: bold; font-size: 1.1rem;">
-                                    <?php echo htmlspecialchars($row['waybill_number']); ?>
-                                    <?php if ($is_pool) echo '<span class="badge bg-warning text-dark ms-2">Pool</span>'; ?>
-                                </div>
-                                <div style="font-size: 0.9rem; color: #666;">
-                                    <?php echo htmlspecialchars($row['shipment']) . ' - ' . htmlspecialchars($row['description']); ?>
+                        <div class="order-header" onclick="toggleOrderFromHeader(event, this)">
+                            <div class="order-header-main">
+                                <input class="form-check-input order-row-check" type="checkbox"
+                                       aria-label="Select order <?php echo htmlspecialchars($row['waybill_number']); ?>"
+                                       onclick="event.stopPropagation(); updateCheckAllOrdersState();">
+                                <div>
+                                    <div style="font-weight: bold; font-size: 1.1rem;">
+                                        <?php echo htmlspecialchars($row['waybill_number']); ?>
+                                        <?php if ($is_pool) echo '<span class="badge bg-warning text-dark ms-2">Pool</span>'; ?>
+                                    </div>
+                                    <div style="font-size: 0.9rem; color: #666;">
+                                        <?php echo htmlspecialchars($row['shipment']) . ' - ' . htmlspecialchars($row['description']); ?>
+                                    </div>
                                 </div>
                             </div>
-                            <div style="font-size: 1.2rem;">
+                            <div style="font-size: 1.2rem; flex-shrink: 0;">
                                 <i class="bi bi-chevron-down"></i>
                             </div>
                         </div>
@@ -356,13 +392,7 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
                             </div>
 
                             <div class="mt-3">
-                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                                    <h6 class="mb-0">Available Cars:</h6>
-                                    <button type="button" class="btn btn-outline-danger btn-sm"
-                                            onclick='cancelOrder(<?php echo json_encode($row['waybill_number']); ?>, this)'>
-                                        <i class="bi bi-x-circle"></i> Cancel Order
-                                    </button>
-                                </div>
+                                <h6 class="mb-2">Available Cars:</h6>
                                 <div class="cars-container">
                                     <div class="spinner-container">
                                         <div class="spinner-border" role="status">
@@ -452,6 +482,81 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
                 && (!filters.car_code || card.dataset.carCode === filters.car_code);
         }
 
+        function getVisibleOrderCards()
+        {
+            return Array.from(document.querySelectorAll('.order-card:not(.filtered-out)'));
+        }
+
+        function getCheckedOrderCards()
+        {
+            return getVisibleOrderCards().filter(function(card) {
+                const checkbox = card.querySelector('.order-row-check');
+                return checkbox && checkbox.checked && !checkbox.disabled;
+            });
+        }
+
+        function getSelectedWaybills()
+        {
+            return getCheckedOrderCards().map(function(card) {
+                return card.dataset.waybill;
+            });
+        }
+
+        function filtersAreActive()
+        {
+            const filters = getOrderFilters();
+            return !!(filters.loading_location || filters.unloading_location || filters.consignment || filters.car_code);
+        }
+
+        function updateCheckAllOrdersState()
+        {
+            const checkAll = document.getElementById('checkAllOrders');
+            if (!checkAll) return;
+
+            const visibleChecks = getVisibleOrderCards()
+                .map(function(card) { return card.querySelector('.order-row-check'); })
+                .filter(function(checkbox) { return checkbox && !checkbox.disabled; });
+
+            checkAll.checked = visibleChecks.length > 0 && visibleChecks.every(function(checkbox) { return checkbox.checked; });
+            checkAll.indeterminate = visibleChecks.some(function(checkbox) { return checkbox.checked; })
+                && !visibleChecks.every(function(checkbox) { return checkbox.checked; });
+        }
+
+        function checkAllOrders()
+        {
+            const checked = document.getElementById('checkAllOrders').checked;
+            getVisibleOrderCards().forEach(function(card) {
+                const checkbox = card.querySelector('.order-row-check');
+                if (checkbox && !checkbox.disabled) {
+                    checkbox.checked = checked;
+                }
+            });
+            updateCheckAllOrdersState();
+        }
+
+        function syncFilteredOrderChecks()
+        {
+            const filtersActive = filtersAreActive();
+
+            document.querySelectorAll('.order-card').forEach(function(card) {
+                const checkbox = card.querySelector('.order-row-check');
+                if (!checkbox) return;
+
+                if (card.classList.contains('filtered-out')) {
+                    checkbox.checked = false;
+                    checkbox.disabled = true;
+                    return;
+                }
+
+                checkbox.disabled = false;
+                if (filtersActive) {
+                    checkbox.checked = true;
+                }
+            });
+
+            updateCheckAllOrdersState();
+        }
+
         function applyOrderFilters()
         {
             const filters = getOrderFilters();
@@ -467,27 +572,7 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
 
             const totalCount = document.querySelectorAll('.order-card').length;
             updateFilteredOrdersNote(visibleCount, totalCount);
-        }
-
-        function updateFilteredOrdersNote(visibleCount, totalCount)
-        {
-            const note = document.getElementById('filteredOrdersNote');
-            if (!note) {
-                return;
-            }
-
-            const filters = getOrderFilters();
-            const filtersActive = filters.loading_location
-                || filters.unloading_location
-                || filters.consignment
-                || filters.car_code;
-
-            if (!filtersActive) {
-                note.textContent = '';
-                return;
-            }
-
-            note.textContent = ' (' + visibleCount + ' match current filters)';
+            syncFilteredOrderChecks();
         }
 
         function clearOrderFilters()
@@ -497,11 +582,19 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
             document.getElementById('filterConsignment').value = '';
             document.getElementById('filterCarCode').value = '';
             applyOrderFilters();
+            document.querySelectorAll('.order-row-check').forEach(function(checkbox) {
+                checkbox.checked = false;
+                checkbox.disabled = false;
+            });
+            updateCheckAllOrdersState();
         }
 
         document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('.order-filter').forEach(function(select) {
                 select.addEventListener('change', applyOrderFilters);
+            });
+            document.querySelectorAll('.order-row-check').forEach(function(checkbox) {
+                checkbox.addEventListener('change', updateCheckAllOrdersState);
             });
         });
 
@@ -518,7 +611,23 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
             setTimeout(function() {
                 card.remove();
                 updateOpenOrdersCount();
+                updateCheckAllOrdersState();
             }, 300);
+        }
+
+        function updateFilteredOrdersNote(visibleCount, totalCount)
+        {
+            const note = document.getElementById('filteredOrdersNote');
+            if (!note) {
+                return;
+            }
+
+            if (!filtersAreActive()) {
+                note.textContent = '';
+                return;
+            }
+
+            note.textContent = ' (' + visibleCount + ' match current filters)';
         }
 
         function autoAssignAll()
@@ -526,6 +635,14 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
             const autoAssignBtn = document.getElementById('autoAssignBtn');
             const autoAssignStatus = document.getElementById('autoAssignStatus');
             const categories = getSelectedCategories();
+            const selectedWaybills = getSelectedWaybills();
+
+            if (selectedWaybills.length === 0) {
+                autoAssignStatus.className = 'alert alert-danger mb-3';
+                autoAssignStatus.classList.remove('d-none');
+                autoAssignStatus.innerHTML = 'Check one or more orders to auto assign.';
+                return;
+            }
 
             if (categories.length === 0) {
                 autoAssignStatus.className = 'alert alert-danger mb-3';
@@ -539,7 +656,7 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
             autoAssignStatus.classList.remove('d-none');
             autoAssignStatus.innerHTML = '<div class="d-flex align-items-center gap-2">'
                 + '<div class="spinner-border spinner-border-sm" role="status"></div>'
-                + '<span>Auto assigning cars using selected sources and filters...</span>'
+                + '<span>Auto assigning ' + selectedWaybills.length + ' selected order(s)...</span>'
                 + '</div>';
 
             $.ajax({
@@ -548,7 +665,7 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
                 dataType: 'json',
                 data: {
                     categories: categories,
-                    filters: getOrderFilters()
+                    waybills: selectedWaybills
                 },
                 success: function(response) {
                     if (response.all_filled) {
@@ -559,9 +676,6 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
                     let message = response.filled_count + ' car order(s) auto assigned.';
                     if (response.skipped_count > 0) {
                         message += ' ' + response.skipped_count + ' order(s) still need manual attention.';
-                    }
-                    if (response.filtered_out_count > 0) {
-                        message += ' ' + response.filtered_out_count + ' order(s) skipped by filters.';
                     }
                     autoAssignStatus.className = 'alert alert-warning mb-3';
                     autoAssignStatus.innerHTML = message;
@@ -585,24 +699,75 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
             });
         }
 
+        function toggleOrderFromHeader(event, headerElement)
+        {
+            if (event.target.closest('.order-row-check')) {
+                return;
+            }
+            toggleOrder(headerElement);
+        }
+
+        function isOrderExpanded(card)
+        {
+            const details = card.querySelector('.order-details');
+            return details && details.style.display !== 'none';
+        }
+
+        function expandOrderCard(card)
+        {
+            const header = card.querySelector('.order-header');
+            const details = card.querySelector('.order-details');
+            const chevron = header.querySelector('i');
+            if (!details || isOrderExpanded(card)) {
+                return;
+            }
+
+            details.style.display = 'block';
+            chevron.classList.remove('bi-chevron-down');
+            chevron.classList.add('bi-chevron-up');
+            loadAvailableCars(card, card.getAttribute('data-waybill'));
+        }
+
+        function collapseOrderCard(card)
+        {
+            const header = card.querySelector('.order-header');
+            const details = card.querySelector('.order-details');
+            const chevron = header.querySelector('i');
+            if (!details || !isOrderExpanded(card)) {
+                return;
+            }
+
+            details.style.display = 'none';
+            chevron.classList.add('bi-chevron-down');
+            chevron.classList.remove('bi-chevron-up');
+        }
+
+        function expandCheckedOrders()
+        {
+            const checked = getCheckedOrderCards();
+            if (checked.length === 0) {
+                alert('Check one or more orders to expand.');
+                return;
+            }
+            checked.forEach(expandOrderCard);
+        }
+
+        function collapseCheckedOrders()
+        {
+            const checked = getCheckedOrderCards();
+            if (checked.length === 0) {
+                alert('Check one or more orders to collapse.');
+                return;
+            }
+            checked.forEach(collapseOrderCard);
+        }
+
         function toggleOrder(headerElement) {
             const card = headerElement.closest('.order-card');
-            const details = card.querySelector('.order-details');
-            const chevron = headerElement.querySelector('i');
-
-            if (details.style.display === 'none') {
-                // Expanding - load cars
-                details.style.display = 'block';
-                chevron.classList.remove('bi-chevron-down');
-                chevron.classList.add('bi-chevron-up');
-
-                const waybill = card.getAttribute('data-waybill');
-                loadAvailableCars(card, waybill);
+            if (isOrderExpanded(card)) {
+                collapseOrderCard(card);
             } else {
-                // Collapsing
-                details.style.display = 'none';
-                chevron.classList.add('bi-chevron-down');
-                chevron.classList.remove('bi-chevron-up');
+                expandOrderCard(card);
             }
         }
 
@@ -696,35 +861,54 @@ $filter_car_code_options = fill_orders_unique_values($open_orders, 'car_code');
             });
         }
 
-        function cancelOrder(waybill, buttonElement) {
-            if (!confirm('Cancel car order ' + waybill + '?')) {
-                return;
-            }
-
-            const originalHtml = buttonElement.innerHTML;
-            buttonElement.disabled = true;
-            buttonElement.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Canceling...';
-
-            $.ajax({
+        function cancelOrder(waybill)
+        {
+            return $.ajax({
                 url: 'cancel_car_order_ajax.php',
                 type: 'POST',
                 contentType: 'application/json',
                 data: JSON.stringify({
                     waybill_number: waybill
                 }),
-                dataType: 'json',
-                success: function(response) {
-                    removeOrderCard(waybill);
-                },
-                error: function(xhr) {
-                    buttonElement.disabled = false;
-                    buttonElement.innerHTML = originalHtml;
-                    let message = 'Error canceling order. Please try again.';
+                dataType: 'json'
+            }).done(function() {
+                removeOrderCard(waybill);
+            });
+        }
+
+        function cancelCheckedOrders()
+        {
+            const checked = getCheckedOrderCards();
+            if (checked.length === 0) {
+                alert('Check one or more orders to cancel.');
+                return;
+            }
+
+            const waybills = checked.map(function(card) { return card.dataset.waybill; });
+            if (!confirm('Cancel ' + waybills.length + ' selected car order(s)?')) {
+                return;
+            }
+
+            const cancelBtn = document.querySelector('button[onclick="cancelCheckedOrders()"]');
+            if (cancelBtn) {
+                cancelBtn.disabled = true;
+            }
+
+            const requests = waybills.map(function(waybill) {
+                return cancelOrder(waybill).fail(function(xhr) {
+                    let message = 'Error canceling order ' + waybill + '.';
                     if (xhr.responseJSON && xhr.responseJSON.error) {
                         message = xhr.responseJSON.error;
                     }
                     alert(message);
+                });
+            });
+
+            $.when.apply($, requests).always(function() {
+                if (cancelBtn) {
+                    cancelBtn.disabled = false;
                 }
+                updateCheckAllOrdersState();
             });
         }
     </script>

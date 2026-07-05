@@ -75,6 +75,17 @@ function operations_get_stats($dbc)
     return $stats;
 }
 
+function operations_get_session_nbr($dbc)
+{
+    $sql = 'SELECT setting_value FROM settings WHERE setting_name = "session_nbr"';
+    $rs = mysqli_query($dbc, $sql);
+    if ($rs && ($row = mysqli_fetch_array($rs))) {
+        return (int)$row['setting_value'];
+    }
+
+    return 0;
+}
+
 function operations_render_stat_column($label, $value)
 {
     return '<div class="op-stat-col">'

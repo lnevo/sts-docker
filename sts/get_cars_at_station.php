@@ -81,8 +81,8 @@
     $data_table = '<div class="table-responsive"><table id="car_table" class="table table-sm table-bordered table-hover">';
     $data_table .= '<tr><td colspan="9">' . nl2br($instructions) . '</td></tr>';
     $data_table .= '<tr style="position: sticky; top: 0; background-color: #F5F5F5">
-                      <th style="width: 1%; text-align: center;"><input class="form-check-input" id="select_all_cars" type="checkbox" onclick="toggleAllCarAssignments(this.checked)" aria-label="Select all cars for bulk assignment"></th>
-                      <th>Select Job</th>
+                      <th style="width: 1%; text-align: center;">Check All <input class="form-check-input" id="check_all" name="check_all" type="checkbox" onchange="checkall_build();" aria-label="Check all cars for bulk assignment"></th>
+                      <th>Pickup Job</th>
                       <th>Reporting Marks</th>
                       <th>Car Code</th>
                       <th>Current Location</th>
@@ -143,13 +143,15 @@
       if ($group_key !== $current_location_group)
       {
         $current_location_group = $group_key;
-        $data_table .= '<tr class="table-dark location-group-header"><td colspan="9" class="fw-semibold">'
-            . htmlspecialchars($row['current_station']) . ' &mdash; ' . htmlspecialchars($row['current_location'])
-            . '</td></tr>';
+        $group_label = htmlspecialchars($row['current_station']) . ' &mdash; ' . htmlspecialchars($row['current_location']);
+        $data_table .= '<tr class="table-dark location-group-header" data-group-key="' . htmlspecialchars($group_key, ENT_QUOTES) . '">'
+            . '<td class="text-center"><input class="form-check-input location-group-check" type="checkbox" onchange="toggleBuildLocationGroup(this);" aria-label="Check all cars at this location"></td>'
+            . '<td colspan="8" class="fw-semibold">' . $group_label . '</td></tr>';
       }
 
       // generate the table rows
       $data_table .= '<tr class="job-car-row"'
+                  . ' data-location-group="' . htmlspecialchars($group_key, ENT_QUOTES) . '"'
                   . ' data-pickup-station="' . htmlspecialchars($pickup_filter_station, ENT_QUOTES) . '"'
                   . ' data-pickup-location="' . htmlspecialchars($pickup_filter_location, ENT_QUOTES) . '"'
                   . ' data-reporting-marks="' . htmlspecialchars($row['reporting_marks'], ENT_QUOTES) . '"'

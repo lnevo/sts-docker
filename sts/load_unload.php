@@ -67,26 +67,64 @@
       }
     </script>
     <script>
+      function getLoadUnloadDataRows()
+      {
+        var table = document.getElementById('car_table');
+        if (!table) return [];
+        return Array.from(table.rows).filter(function(row, index) {
+          return index > 0;
+        });
+      }
+
+      function isLoadUnloadRowVisible(row)
+      {
+        return row.style.display !== 'none';
+      }
+
+      function syncLoadUnloadHiddenRows()
+      {
+        getLoadUnloadDataRows().forEach(function(row) {
+          var checkbox = row.querySelector('input[type="checkbox"][name^="check"]');
+          if (!checkbox) return;
+          if (!isLoadUnloadRowVisible(row)) {
+            checkbox.checked = false;
+            checkbox.disabled = true;
+          } else {
+            checkbox.disabled = false;
+          }
+        });
+        updateLoadUnloadCheckAllState();
+      }
+
+      function updateLoadUnloadCheckAllState()
+      {
+        var checkAll = document.getElementById('check_all');
+        if (!checkAll) return;
+        var visibleChecks = getLoadUnloadDataRows()
+          .filter(isLoadUnloadRowVisible)
+          .map(function(row) { return row.querySelector('input[type="checkbox"][name^="check"]'); })
+          .filter(function(checkbox) { return checkbox && !checkbox.disabled; });
+        checkAll.checked = visibleChecks.length > 0 && visibleChecks.every(function(checkbox) { return checkbox.checked; });
+      }
+
+      function prepareLoadUnloadSubmit()
+      {
+        syncLoadUnloadHiddenRows();
+        return true;
+      }
+
       // this javascript function is triggered by the user changing the "All" checkbox
       function checkall()
       {
-        var row_count = document.getElementById('car_table').rows.length-1;
-        if (document.getElementById('check_all').checked == true)
-        {
-          for (var i=0; i < row_count; i++)
-          {
-            var checkbox_name = "check" + i.toString();
-            document.getElementById(checkbox_name).checked = true;
+        var checked = document.getElementById('check_all').checked;
+        getLoadUnloadDataRows().forEach(function(row) {
+          if (!isLoadUnloadRowVisible(row)) return;
+          var checkbox = row.querySelector('input[type="checkbox"][name^="check"]');
+          if (checkbox && !checkbox.disabled) {
+            checkbox.checked = checked;
           }
-        }
-        else
-        {
-          for (var i=0; i < row_count; i++)
-          {
-            var checkbox_name = "check" + i.toString();
-            document.getElementById(checkbox_name).checked = false;
-          }
-        }
+        });
+        updateLoadUnloadCheckAllState();
       }
     </script>
 
@@ -99,8 +137,11 @@
           <a href="operations.html" class="btn btn-outline-light btn-sm me-2">
             <i class="bi bi-arrow-left"></i> Operations
           </a>
-          <a href="index.html" class="btn btn-outline-light btn-sm">
+          <a href="index.html" class="btn btn-outline-light btn-sm me-2">
             <i class="bi bi-house"></i> Home
+          </a>
+          <a href="index-t.html" class="btn btn-outline-light btn-sm">
+            <i class="bi bi-diagram-3"></i> Site Map
           </a>
         </div>
       </div>
@@ -111,7 +152,7 @@
     The cars shown on this page are in the process of being loaded or unloaded. To complete the loading or unloading process,
     click on the desired car's check box and then click the UPDATE button. Cars are color-coded based on their status.<br /><br />
     </div>
-    <form method="POST" action="load_unload.php">
+    <form method="POST" action="load_unload.php" onsubmit="return prepareLoadUnloadSubmit();">
     <?php
       // this program displays all cars that are in the process of being loaded or unloaded and
       // updates all cars that have been checked off by the user
@@ -146,6 +187,7 @@
                      row.style.display = "none"
                    }
                  }
+                 syncLoadUnloadHiddenRows();
                }
              }
            </script>';
@@ -489,6 +531,13 @@
         var el = document.getElementById(f[0]);
         if (el) { el.addEventListener('change', function() { filter_rows(f[1], this.options[this.selectedIndex].text); this.disabled = true; }); }
       });
+      getLoadUnloadDataRows().forEach(function(row) {
+        var checkbox = row.querySelector('input[type="checkbox"][name^="check"]');
+        if (checkbox) {
+          checkbox.addEventListener('change', updateLoadUnloadCheckAllState);
+        }
+      });
+      updateLoadUnloadCheckAllState();
     });
   </script>
   </body>

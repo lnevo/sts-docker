@@ -81,12 +81,13 @@
             and cars.current_location_id = 0
 
           group by reporting_marks
-          order by position, current_location, reporting_marks';
+          order by pickup_station, pickup_location, position, reporting_marks';
 //print 'SQL: ' . $sql . '<br /><br />';
   $rs = mysqli_query($dbc, $sql);
 
   // build a table and return it as a string
   $row_count = 0;
+  $current_pickup_group = null;
   if (mysqli_num_rows($rs) > 0)
   {
     $data_table = '<div class="table-responsive"><table id="job_table" class="table table-sm table-bordered table-hover">';
@@ -174,8 +175,28 @@
         $final_dest_location_id = $row['unloading_location_id'];
       }
 
+      if (strlen($pickup_filter_station) > 0)
+      {
+        $group_key = $pickup_filter_station . '|' . $row['pickup_location'];
+        $group_label = htmlspecialchars($pickup_filter_station) . ' &mdash; ' . htmlspecialchars($row['pickup_location']);
+      }
+      else
+      {
+        $group_key = '__unknown_pickup__';
+        $group_label = 'Pickup location unknown';
+      }
+
+      if ($group_key !== $current_pickup_group)
+      {
+        $current_pickup_group = $group_key;
+        $data_table .= '<tr class="table-dark setout-group-header" data-group-key="' . htmlspecialchars($group_key, ENT_QUOTES) . '">'
+            . '<td class="text-center"><input class="form-check-input location-group-check" type="checkbox" onchange="toggleSetoutLocationGroup(this);" aria-label="Check all cars at this location"></td>'
+            . '<td colspan="8" class="fw-semibold">' . $group_label . '</td></tr>';
+      }
+
       // generate the table rows
       $data_table .= '<tr class="job-car-row"'
+                  . ' data-location-group="' . htmlspecialchars($group_key, ENT_QUOTES) . '"'
                   . ' data-pickup-station="' . htmlspecialchars($pickup_filter_station, ENT_QUOTES) . '"'
                   . ' data-pickup-location="' . htmlspecialchars($pickup_filter_location, ENT_QUOTES) . '"'
                   . ' data-reporting-marks="' . htmlspecialchars($row['reporting_marks'], ENT_QUOTES) . '"'

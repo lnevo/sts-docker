@@ -2,6 +2,14 @@
 
 All notable changes use semantic versioning (`x.y.z`).
 
+## [0.4.15] - 2026-07-05
+
+- Modernized operations workflow pages (Build Switch Lists, Pick Up, Set Out, Load/Unload) with shared instruction panels, pale-green bulk/filter toolbars, location group checkboxes, and filter-aware bulk actions.
+- Enhanced Fill Car Orders with row selection, bulk expand/collapse/cancel, filtered auto-assign, and checkbox sync when filters change.
+- Improved Generate Car Orders with manual Next Session confirmation modal, session-aware instructions, and select-all for visible shipments.
+- Added operating session line to Operations, Reports, Database, and DB Maintenance menu pages; charcoal home header; restored classic three-column Site Map layout.
+- Added Site Map link to page headers; refined Club Operations card spacing and DB Maintenance header button order.
+
 ## [0.4.14] - 2026-07-04
 
 - Added car source checkboxes and order filters to Fill Car Orders auto-assign, using Pool → Priority → Station → System priority (System unchecked by default).

@@ -4,6 +4,7 @@ require 'operations_stats.php';
 
 $dbc = open_db();
 $stats = operations_get_stats($dbc);
+$session_number = operations_get_session_nbr($dbc);
 mysqli_close($dbc);
 ?>
 <!DOCTYPE html>
@@ -14,6 +15,7 @@ mysqli_close($dbc);
   <title>STS - Operations Menu</title>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="operating_session_line.css" rel="stylesheet">
   <style>
     body { background-color: #f8f9fa; }
     .section-header {
@@ -102,7 +104,7 @@ mysqli_close($dbc);
     }
   </style>
 </head>
-<body>
+<body class="has-operating-session-line">
   <nav class="navbar navbar-dark noprint" style="background-color: #2e7d32;">
     <div class="container-fluid">
       <span class="navbar-brand"><i class="bi bi-train-freight-front"></i> Operations</span>
@@ -113,8 +115,11 @@ mysqli_close($dbc);
         <a href="database.html" class="btn btn-outline-light btn-sm me-2">
           <i class="bi bi-database"></i> Database
         </a>
-        <a href="reports.html" class="btn btn-outline-light btn-sm">
+        <a href="reports.html" class="btn btn-outline-light btn-sm me-2">
           <i class="bi bi-file-text"></i> Reports
+        </a>
+        <a href="index-t.html" class="btn btn-outline-light btn-sm">
+          <i class="bi bi-diagram-3"></i> Site Map
         </a>
       </div>
     </div>
@@ -209,6 +214,8 @@ mysqli_close($dbc);
 
     </div>
   </div>
+
+  <p class="operating-session-line mb-0">Operating Session: <strong><?php echo htmlspecialchars((string)$session_number, ENT_QUOTES, 'UTF-8'); ?></strong></p>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
