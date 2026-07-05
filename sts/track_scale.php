@@ -239,7 +239,7 @@ $config = track_scale_load_config();
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
             <h5 class="mb-1">South Yard Scale</h5>
-            <p class="text-muted small mb-0">Select a car at <strong>SOUTH-YARD-SCALE</strong> or in a train routed to South Yard, then weigh and assign a coke order.</p>
+            <p class="text-muted small mb-0">Select a car at <strong>SOUTH-YARD-SCALE</strong> or in a train routed to South Yard, then weigh and assign a coke order. Cars weighed in train are set out, unloaded, re-assigned, and picked up automatically when you assign an order.</p>
         </div>
         <div class="btn-group" role="group" aria-label="Scale mode">
             <input type="radio" class="btn-check" name="scaleMode" id="modeWeigh" autocomplete="off" checked>
@@ -347,6 +347,7 @@ $config = track_scale_load_config();
                 <span id="routingBadge" class="badge"></span>
             </div>
             <div class="card-body">
+                <div id="inTrainAssignNote" class="alert alert-info py-2 small d-none mb-3"></div>
                 <div class="mb-3">
                     <label for="orderSelect" class="form-label">Open coke orders (pool + load at scale)</label>
                     <select class="form-select" id="orderSelect">
@@ -355,6 +356,12 @@ $config = track_scale_load_config();
                     <div id="orderEmptyMsg" class="form-text text-warning d-none">No matching open orders. Generate one below.</div>
                 </div>
                 <div class="d-flex flex-wrap gap-2 mb-3" id="generateButtons"></div>
+                <div id="trainReassignConfirmWrap" class="form-check mb-3 d-none">
+                    <input class="form-check-input" type="checkbox" id="trainReassignConfirm">
+                    <label class="form-check-label" for="trainReassignConfirm" id="trainReassignConfirmLabel">
+                        Confirm set-out at the scale, unload inbound order, and return to train
+                    </label>
+                </div>
                 <button type="button" class="btn btn-success" id="assignBtn" disabled>
                     <i class="bi bi-check2-circle"></i> Assign to Order
                 </button>
@@ -559,6 +566,61 @@ function hideOrderSection() {
     document.getElementById('orderSection').classList.add('d-none');
     document.getElementById('assignBtn').disabled = true;
     document.getElementById('assignResult').textContent = '';
+    const inTrainNote = document.getElementById('inTrainAssignNote');
+    if (inTrainNote) {
+        inTrainNote.classList.add('d-none');
+        inTrainNote.textContent = '';
+    }
+    const confirmWrap = document.getElementById('trainReassignConfirmWrap');
+    const confirmBox = document.getElementById('trainReassignConfirm');
+    if (confirmWrap) confirmWrap.classList.add('d-none');
+    if (confirmBox) confirmBox.checked = false;
+}
+
+function updateAssignBtnState() {
+    const select = document.getElementById('orderSelect');
+    const assignBtn = document.getElementById('assignBtn');
+    const confirmBox = document.getElementById('trainReassignConfirm');
+    if (!select || !assignBtn) return;
+
+    let enabled = !!select.value;
+    if (currentCar && currentCar.requires_train_reassign_confirm) {
+        enabled = enabled && confirmBox && confirmBox.checked;
+    }
+    assignBtn.disabled = !enabled;
+}
+
+function setupTrainReassignConfirm(car) {
+    const wrap = document.getElementById('trainReassignConfirmWrap');
+    const label = document.getElementById('trainReassignConfirmLabel');
+    const confirmBox = document.getElementById('trainReassignConfirm');
+    if (!wrap || !label || !confirmBox) return;
+
+    if (car && car.requires_train_reassign_confirm) {
+        const waybill = car.active_waybill || 'inbound order';
+        const train = car.train_job || 'the same train';
+        wrap.classList.remove('d-none');
+        label.textContent =
+            `I confirm set-out at the scale, unload of ${waybill}, reassignment to a new coke order, and return to ${train}.`;
+        confirmBox.checked = false;
+    } else {
+        wrap.classList.add('d-none');
+        confirmBox.checked = false;
+    }
+    updateAssignBtnState();
+}
+
+function formatInTrainWorkflowNote(data) {
+    if (!data || !Array.isArray(data.in_train_workflow) || !data.in_train_workflow.length) {
+        return '';
+    }
+    const labels = {
+        set_out: 'Set out at scale',
+        unloaded: 'Unloaded prior order',
+        assigned: 'Assigned new order',
+        returned_to_train: 'Returned to ' + (data.train_job || 'train'),
+    };
+    return data.in_train_workflow.map(step => labels[step] || step).join(' → ');
 }
 
 function setWeightLed(state, label) {
@@ -847,6 +909,7 @@ function renderCar(data) {
     const assignedMsg = assignedOrderMessage(data.car);
     const unloadingAssign = carNeedsAssignment(data.car)
         && (data.car.status || '').toLowerCase() === 'unloading';
+    const inboundTrainAssign = data.car.requires_train_reassign_confirm === true;
     if (!scaleInService) {
         document.getElementById('weighResult').innerHTML =
             `<span class="text-danger">${(data.scale_status && data.scale_status.message) || 'Scale out of service — calibrate before weighing cars.'}</span>`;
@@ -856,7 +919,12 @@ function renderCar(data) {
             : (assignedMsg
                 || (unloadingAssign
                     ? '<span class="text-muted">Unloading — weigh, then assign to a new coke order (prior order closes on assign).</span>'
-                    : 'Ready to weigh.'));
+                    : (inboundTrainAssign
+                        ? `<span class="text-muted">In train on <strong>${data.car.active_waybill || 'inbound order'}</strong> to the scale — weigh, then assign outbound or reload (confirm train workflow on assign).</span>`
+                        : (data.car.weigh_source === 'in_train'
+                            ? '<span class="text-muted">In train — weigh, then assign; set-out, unload, and return to '
+                                + (data.car.train_job || 'the same train') + ' run automatically on assign.</span>'
+                            : 'Ready to weigh.'))));
     }
     document.getElementById('displayGross').textContent = '0.00';
     document.getElementById('displayNet').textContent = '0.00';
@@ -933,6 +1001,28 @@ async function loadOrders(routing) {
     const section = document.getElementById('orderSection');
     section.classList.remove('d-none');
 
+    const inTrainNote = document.getElementById('inTrainAssignNote');
+    if (inTrainNote) {
+        if (currentCar && currentCar.requires_train_reassign_confirm) {
+            inTrainNote.classList.remove('d-none');
+            inTrainNote.innerHTML =
+                '<i class="bi bi-info-circle"></i> This car is loaded in train '
+                + (currentCar.train_job ? `<strong>${currentCar.train_job}</strong> ` : '')
+                + 'on inbound order <strong>' + (currentCar.active_waybill || '—') + '</strong> '
+                + 'to the scale. Assign replaces that order and returns the car to the train.';
+        } else if (currentCar && currentCar.weigh_source === 'in_train') {
+            inTrainNote.classList.remove('d-none');
+            inTrainNote.innerHTML =
+                '<i class="bi bi-info-circle"></i> Assign will set out at the scale, unload the inbound order, fill the selected order, re-assign to '
+                + (currentCar.train_job || 'the same train') + ', and pick the car back up.';
+        } else {
+            inTrainNote.classList.add('d-none');
+            inTrainNote.textContent = '';
+        }
+    }
+
+    setupTrainReassignConfirm(currentCar);
+
     const badge = document.getElementById('routingBadge');
     if (routing === 'reload') {
         badge.className = 'badge bg-danger';
@@ -968,10 +1058,10 @@ async function loadOrders(routing) {
     });
 
     document.getElementById('assignBtn').disabled = true;
-    select.onchange = () => {
-        document.getElementById('assignBtn').disabled = !select.value;
-    };
+    select.onchange = () => updateAssignBtnState();
 }
+
+document.getElementById('trainReassignConfirm')?.addEventListener('change', () => updateAssignBtnState());
 
 async function generateOrder(shipmentCode, routing) {
     if (!currentCar) return;
@@ -986,17 +1076,28 @@ async function generateOrder(shipmentCode, routing) {
     await loadOrders(routing);
     const select = document.getElementById('orderSelect');
     select.value = data.waybill_number;
-    document.getElementById('assignBtn').disabled = false;
+    updateAssignBtnState();
 }
 
 document.getElementById('assignBtn').addEventListener('click', async () => {
     const waybill = document.getElementById('orderSelect').value;
     if (!waybill || !currentCar) return;
 
-    const data = await apiPost('assign', {
+    const payload = {
         waybill_number: waybill,
         car_id: currentCar.id,
-    });
+    };
+    if (currentCar.requires_train_reassign_confirm) {
+        const confirmBox = document.getElementById('trainReassignConfirm');
+        if (!confirmBox || !confirmBox.checked) {
+            document.getElementById('assignResult').innerHTML =
+                '<span class="text-danger">Check the confirmation box before assigning.</span>';
+            return;
+        }
+        payload.confirm_train_reassign = true;
+    }
+
+    const data = await apiPost('assign', payload);
     const resultEl = document.getElementById('assignResult');
     if (!data.success) {
         resultEl.innerHTML = `<span class="text-danger">${data.error || 'Assign failed'}</span>`;
@@ -1005,11 +1106,21 @@ document.getElementById('assignBtn').addEventListener('click', async () => {
     const unloadNote = (data.unloaded_first || data.closed_prior_order)
         ? '<span class="text-muted">Prior order closed · </span>'
         : '';
+    const workflowNote = formatInTrainWorkflowNote(data);
+    const workflowHtml = workflowNote
+        ? `<div class="text-muted mt-1">${workflowNote}</div>`
+        : '';
     resultEl.innerHTML =
-        `<span class="text-success"><i class="bi bi-check-circle"></i> ${unloadNote}${data.message} (${data.car_reporting_marks})</span>`;
+        `<span class="text-success"><i class="bi bi-check-circle"></i> ${unloadNote}${data.message} (${data.car_reporting_marks})</span>`
+        + workflowHtml;
     currentCar.has_active_order = true;
     currentCar.active_waybill = data.waybill_number || waybill;
     currentCar.needs_assignment = false;
+    currentCar.requires_train_reassign_confirm = false;
+    if (data.returned_to_train) {
+        currentCar.weigh_source = 'in_train';
+        currentCar.train_job = data.train_job || currentCar.train_job;
+    }
     hideOrderSection();
     document.getElementById('weighResult').innerHTML = assignedOrderMessage(currentCar);
     if (currentReading) {

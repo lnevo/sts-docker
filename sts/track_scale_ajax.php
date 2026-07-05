@@ -51,7 +51,14 @@ try {
                     'has_load' => track_scale_car_has_load($car),
                     'has_active_order' => $active_order !== null,
                     'needs_assignment' => track_scale_car_needs_assignment($car, $dbc, $config),
+                    'requires_train_reassign_confirm' => track_scale_car_requires_train_reassign_confirm(
+                        $car,
+                        $dbc,
+                        $config
+                    ),
                     'active_waybill' => $active_order['waybill_number'] ?? null,
+                    'active_shipment_code' => $active_order['shipment_code'] ?? null,
+                    'active_unloading_location' => $active_order['unloading_location'] ?? null,
                     'position' => $car['position'],
                     'car_code' => $car['car_code'],
                     'current_location' => $car['current_location'],
@@ -402,6 +409,18 @@ try {
             if ($waybill === '' || $car_id === '') {
                 track_scale_json_error('Missing waybill_number or car_id');
             }
+            $car = track_scale_get_car_by_id($dbc, $car_id);
+            if ($car === null) {
+                track_scale_json_error('Car not found', 404);
+            }
+            if (track_scale_car_requires_train_reassign_confirm($car, $dbc, $config)) {
+                $confirmed = !empty($body['confirm_train_reassign']);
+                if (!$confirmed) {
+                    track_scale_json_error(
+                        'Confirm set-out, unload, and return to train before assigning a new order'
+                    );
+                }
+            }
             $result = track_scale_assign_car($dbc, $waybill, $car_id, $config);
             if (!$result['success']) {
                 track_scale_json_error($result['error'] ?? 'Assign failed', 500);
@@ -415,6 +434,10 @@ try {
                 'unloaded_first' => !empty($result['unloaded_first']),
                 'closed_prior_order' => !empty($result['closed_prior_order']),
                 'previous_status' => $result['previous_status'] ?? null,
+                'returned_to_train' => !empty($result['returned_to_train']),
+                'train_job' => $result['train_job'] ?? null,
+                'in_train_workflow' => $result['in_train_workflow'] ?? [],
+                'partial' => !empty($result['partial']),
             ]);
             break;
 

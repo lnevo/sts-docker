@@ -2171,6 +2171,28 @@ function track_scale_get_car_active_order($dbc, $car_id)
     return mysqli_fetch_assoc($rs);
 }
 
+function track_scale_car_active_order_unloads_at_scale($dbc, $car_id, $config = null)
+{
+    $order = track_scale_get_car_active_order($dbc, $car_id);
+    if ($order === null) {
+        return false;
+    }
+    $scale_code = strtoupper(track_scale_loading_location_code($config));
+    $unload_code = strtoupper(trim((string) ($order['unloading_location'] ?? '')));
+    return $unload_code !== '' && $unload_code === $scale_code;
+}
+
+function track_scale_car_requires_train_reassign_confirm($car, $dbc, $config = null)
+{
+    if ($dbc === null || !is_array($car)) {
+        return false;
+    }
+    if (!track_scale_car_in_south_yard_train($car, $dbc, $config)) {
+        return false;
+    }
+    return track_scale_car_active_order_unloads_at_scale($dbc, $car['id'], $config);
+}
+
 function track_scale_car_needs_assignment($car, $dbc = null, $config = null)
 {
     if (!is_array($car)) {
@@ -2185,6 +2207,9 @@ function track_scale_car_needs_assignment($car, $dbc = null, $config = null)
     if ($status === 'UNLOADING') {
         return true;
     }
+    if ($dbc !== null && track_scale_car_requires_train_reassign_confirm($car, $dbc, $config)) {
+        return true;
+    }
     if ($dbc === null) {
         return false;
     }
@@ -2197,11 +2222,24 @@ function track_scale_build_car_response($car, $config = null, $dbc = null)
     $profile = track_scale_profile_for_marks($car['reporting_marks'], $config);
     $scale_location = track_scale_loading_location_code($config);
     $active_order = ($dbc !== null) ? track_scale_get_car_active_order($dbc, $car['id']) : null;
+    $at_scale = track_scale_car_at_scale($car, $config);
+    $in_train = ($dbc !== null) ? track_scale_car_in_south_yard_train($car, $dbc, $config) : false;
+    $requires_train_reassign = ($dbc !== null)
+        ? track_scale_car_requires_train_reassign_confirm($car, $dbc, $config)
+        : false;
+    $weigh_source = $car['weigh_source'] ?? null;
+    if ($weigh_source === null) {
+        if ($in_train) {
+            $weigh_source = 'in_train';
+        } elseif ($at_scale) {
+            $weigh_source = 'at_scale';
+        }
+    }
 
     return [
         'success' => true,
-        'at_scale' => track_scale_car_at_scale($car, $config),
-        'in_train' => track_scale_car_in_south_yard_train($car, $dbc, $config),
+        'at_scale' => $at_scale,
+        'in_train' => $in_train,
         'weighable' => track_scale_car_weighable($car, $dbc, $config),
         'required_location' => $scale_location,
         'scale_status' => $dbc !== null ? track_scale_build_scale_status($dbc, $config) : null,
@@ -2213,13 +2251,15 @@ function track_scale_build_car_response($car, $config = null, $dbc = null)
             'has_load' => track_scale_car_has_load($car),
             'has_active_order' => $active_order !== null,
             'needs_assignment' => track_scale_car_needs_assignment($car, $dbc, $config),
+            'requires_train_reassign_confirm' => $requires_train_reassign,
+            'inbound_to_scale' => $requires_train_reassign,
             'active_waybill' => $active_order['waybill_number'] ?? null,
             'active_shipment_code' => $active_order['shipment_code'] ?? null,
             'active_unloading_location' => $active_order['unloading_location'] ?? null,
             'position' => $car['position'] ?? null,
             'car_code' => $car['car_code'],
             'current_location' => $car['current_location'],
-            'weigh_source' => $car['weigh_source'] ?? null,
+            'weigh_source' => $weigh_source,
             'train_job' => $car['train_job'] ?? null,
             'image_url' => './ImageStore/DB_Images/RollingStock/' . $car['id'] . '.jpg',
         ],
@@ -2405,6 +2445,305 @@ function track_scale_car_has_active_order($dbc, $car_id)
     return null;
 }
 
+function track_scale_loading_location_id($dbc, $config = null)
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+
+    $config = $config ?? track_scale_load_config();
+    $code = mysqli_real_escape_string($dbc, track_scale_loading_location_code($config));
+    $sql = 'SELECT id FROM locations WHERE code = "' . $code . '" LIMIT 1';
+    $rs = mysqli_query($dbc, $sql);
+    if (!$rs || mysqli_num_rows($rs) < 1) {
+        return null;
+    }
+
+    $row = mysqli_fetch_assoc($rs);
+    $cache = (int) $row['id'];
+    return $cache;
+}
+
+/**
+ * Mirrors set_out.php finish_btn logic for a single car at a chosen location.
+ */
+function track_scale_set_out_car($dbc, $car_id, $location_id)
+{
+    $car_id_esc = mysqli_real_escape_string($dbc, (string) $car_id);
+    $location_id_esc = mysqli_real_escape_string($dbc, (string) $location_id);
+
+    $sql = 'SELECT jobs.name AS job_name
+            FROM jobs, cars
+            WHERE cars.id = "' . $car_id_esc . '"
+              AND jobs.id = cars.handled_by_job_id';
+    $rs = mysqli_query($dbc, $sql);
+    $row = mysqli_fetch_array($rs);
+    $job_name = $row['job_name'] ?? '';
+
+    $sql = 'SELECT setting_value FROM settings WHERE setting_name = "session_nbr"';
+    $rs = mysqli_query($dbc, $sql);
+    $row = mysqli_fetch_array($rs);
+    $current_session = $row[0];
+
+    $sql = 'UPDATE cars
+            SET current_location_id = "' . $location_id_esc . '",
+                handled_by_job_id = 0,
+                position = "0"
+            WHERE id = "' . $car_id_esc . '"';
+    if (!mysqli_query($dbc, $sql)) {
+        return ['success' => false, 'error' => 'Set out update error: ' . mysqli_error($dbc)];
+    }
+
+    $session_nbr = $current_session;
+
+    $sql = 'SELECT current_location_id FROM cars WHERE id = "' . $car_id_esc . '"';
+    $rs = mysqli_query($dbc, $sql);
+    $row = mysqli_fetch_array($rs);
+    $location = $row['current_location_id'];
+
+    $job_name_esc = mysqli_real_escape_string($dbc, (string) $job_name);
+    $sql = 'INSERT INTO history(car_id, session_nbr, event_date, event, location)
+            VALUES ("' . $car_id_esc . '",
+                    "' . mysqli_real_escape_string($dbc, (string) $session_nbr) . '",
+                    "' . date('Y-m-d H:i:s') . '",
+                    "Set out by Job ' . $job_name_esc . '",
+                    "' . mysqli_real_escape_string($dbc, (string) $location) . '")';
+    if (!mysqli_query($dbc, $sql)) {
+        return ['success' => false, 'error' => 'Set out history insert error: ' . mysqli_error($dbc)];
+    }
+
+    $sql = 'UPDATE cars,
+                   car_orders,
+                   shipments
+            SET cars.status = "Loading",
+                cars.last_spotted = "' . mysqli_real_escape_string($dbc, (string) $current_session) . '"
+            WHERE cars.id = "' . $car_id_esc . '"
+              AND cars.status = "Ordered"
+              AND car_orders.car = cars.id
+              AND car_orders.shipment = shipments.id
+              AND cars.current_location_id = shipments.loading_location';
+    if (!mysqli_query($dbc, $sql)) {
+        return ['success' => false, 'error' => 'Set out loading status error: ' . mysqli_error($dbc)];
+    }
+
+    $sql = 'UPDATE cars,
+                   car_orders,
+                   shipments
+            SET cars.status = "Unloading",
+                cars.last_spotted = "' . mysqli_real_escape_string($dbc, (string) $current_session) . '"
+            WHERE cars.id = "' . $car_id_esc . '"
+              AND cars.status = "Loaded"
+              AND car_orders.car = cars.id
+              AND car_orders.shipment = shipments.id
+              AND cars.current_location_id = shipments.unloading_location';
+    if (!mysqli_query($dbc, $sql)) {
+        return ['success' => false, 'error' => 'Set out unloading status error: ' . mysqli_error($dbc)];
+    }
+
+    $sql = 'UPDATE cars,
+                   car_orders
+            SET cars.status = "Empty"
+            WHERE car_orders.car = cars.id
+              AND car_orders.waybill_number LIKE "___-E__"
+              AND cars.status = "Ordered"
+              AND cars.current_location_id = car_orders.shipment
+              AND cars.id = "' . $car_id_esc . '"';
+    if (!mysqli_query($dbc, $sql)) {
+        return ['success' => false, 'error' => 'Set out empty reposition error: ' . mysqli_error($dbc)];
+    }
+    if (mysqli_affected_rows($dbc) > 0) {
+        $sql = 'DELETE FROM car_orders WHERE car = "' . $car_id_esc . '"';
+        if (!mysqli_query($dbc, $sql)) {
+            return ['success' => false, 'error' => 'Set out car order delete error: ' . mysqli_error($dbc)];
+        }
+    }
+
+    $sql = 'SELECT shipments.min_load_time AS min_load_time,
+                   shipments.max_load_time AS max_load_time,
+                   shipments.min_unload_time AS min_unload_time,
+                   shipments.max_unload_time AS max_unload_time,
+                   cars.status AS status
+              FROM shipments, car_orders, cars
+             WHERE car_orders.shipment = shipments.id
+               AND car_orders.car = "' . $car_id_esc . '"
+               AND cars.id = "' . $car_id_esc . '"';
+    $rs = mysqli_query($dbc, $sql);
+    if ($rs && mysqli_num_rows($rs) > 0) {
+        $row = mysqli_fetch_array($rs);
+        $min_load_time = (int) $row['min_load_time'];
+        $max_load_time = (int) $row['max_load_time'];
+        $min_unload_time = (int) $row['min_unload_time'];
+        $max_unload_time = (int) $row['max_unload_time'];
+
+        if (($row['status'] === 'Loading') && (($min_load_time < 0) || ($max_load_time < 0))) {
+            $sql2 = 'UPDATE cars SET status = "Loaded", last_spotted = "0" WHERE id = "' . $car_id_esc . '"';
+            if (!mysqli_query($dbc, $sql2)) {
+                return ['success' => false, 'error' => 'Set out instant load error: ' . mysqli_error($dbc)];
+            }
+        }
+
+        if (($row['status'] === 'Unloading') && (($min_unload_time < 0) || ($max_unload_time < 0))) {
+            $sql2 = 'UPDATE cars SET status = "Empty", last_spotted = "0" WHERE id = "' . $car_id_esc . '"';
+            if (!mysqli_query($dbc, $sql2)) {
+                return ['success' => false, 'error' => 'Set out instant unload error: ' . mysqli_error($dbc)];
+            }
+            $sql2 = 'DELETE FROM car_orders WHERE car = "' . $car_id_esc . '"';
+            if (!mysqli_query($dbc, $sql2)) {
+                return ['success' => false, 'error' => 'Set out instant unload order delete error: ' . mysqli_error($dbc)];
+            }
+        }
+    }
+
+    return [
+        'success' => true,
+        'set_out' => true,
+        'job_name' => $job_name,
+    ];
+}
+
+/**
+ * Mirrors build_switchlists.php build_btn logic for a single car.
+ */
+function track_scale_assign_car_to_job($dbc, $car_id, $job_id)
+{
+    $car_id_esc = mysqli_real_escape_string($dbc, (string) $car_id);
+    $job_id_esc = mysqli_real_escape_string($dbc, (string) $job_id);
+
+    $sql = 'UPDATE cars SET handled_by_job_id = "' . $job_id_esc . '" WHERE id = "' . $car_id_esc . '"';
+    if (!mysqli_query($dbc, $sql)) {
+        return ['success' => false, 'error' => 'Assign to job update error: ' . mysqli_error($dbc)];
+    }
+
+    $sql = 'SELECT setting_value FROM settings WHERE setting_name = "session_nbr"';
+    $rs = mysqli_query($dbc, $sql);
+    $row = mysqli_fetch_array($rs);
+    $session_nbr = $row['setting_value'];
+
+    $sql = 'SELECT current_location_id FROM cars WHERE id = "' . $car_id_esc . '"';
+    $rs = mysqli_query($dbc, $sql);
+    $row = mysqli_fetch_array($rs);
+    $location = $row['current_location_id'];
+
+    $sql = 'SELECT name FROM jobs WHERE id = ' . (int) $job_id;
+    $rs = mysqli_query($dbc, $sql);
+    $row = mysqli_fetch_array($rs);
+    $job_name = $row['name'] ?? '';
+
+    $job_name_esc = mysqli_real_escape_string($dbc, (string) $job_name);
+    $sql = 'INSERT INTO history(car_id, session_nbr, event_date, event, location)
+            VALUES ("' . $car_id_esc . '",
+                    "' . mysqli_real_escape_string($dbc, (string) $session_nbr) . '",
+                    "' . date('Y-m-d H:i:s') . '",
+                    "Assigned to Job ' . $job_name_esc . '",
+                    "' . mysqli_real_escape_string($dbc, (string) $location) . '")';
+    if (!mysqli_query($dbc, $sql)) {
+        return ['success' => false, 'error' => 'Assign to job history insert error: ' . mysqli_error($dbc)];
+    }
+
+    return [
+        'success' => true,
+        'assigned_to_job' => true,
+        'job_id' => (int) $job_id,
+        'job_name' => $job_name,
+    ];
+}
+
+/**
+ * Mirrors pick_up.php finish_btn logic for a single car.
+ */
+function track_scale_pick_up_car($dbc, $car_id)
+{
+    $car_id_esc = mysqli_real_escape_string($dbc, (string) $car_id);
+
+    $sql = 'SELECT current_location_id FROM cars WHERE id = "' . $car_id_esc . '"';
+    $rs = mysqli_query($dbc, $sql);
+    $row = mysqli_fetch_array($rs);
+    $location = $row['current_location_id'];
+
+    $sql = 'UPDATE cars SET current_location_id = "0" WHERE id = "' . $car_id_esc . '"';
+    if (!mysqli_query($dbc, $sql)) {
+        return ['success' => false, 'error' => 'Pick up update error: ' . mysqli_error($dbc)];
+    }
+
+    $sql = 'SELECT setting_value FROM settings WHERE setting_name = "session_nbr"';
+    $rs = mysqli_query($dbc, $sql);
+    $row = mysqli_fetch_array($rs);
+    $session_nbr = $row['setting_value'];
+
+    $sql = 'SELECT jobs.name AS job_name
+              FROM jobs, cars
+             WHERE cars.id = "' . $car_id_esc . '"
+               AND jobs.id = cars.handled_by_job_id';
+    $rs = mysqli_query($dbc, $sql);
+    $row = mysqli_fetch_array($rs);
+    $job_name = $row['job_name'] ?? '';
+
+    $job_name_esc = mysqli_real_escape_string($dbc, (string) $job_name);
+    $sql = 'INSERT INTO history(car_id, session_nbr, event_date, event, location)
+            VALUES ("' . $car_id_esc . '",
+                    "' . mysqli_real_escape_string($dbc, (string) $session_nbr) . '",
+                    "' . date('Y-m-d H:i:s') . '",
+                    "Picked up by Job ' . $job_name_esc . '",
+                    "' . mysqli_real_escape_string($dbc, (string) $location) . '")';
+    if (!mysqli_query($dbc, $sql)) {
+        return ['success' => false, 'error' => 'Pick up history insert error: ' . mysqli_error($dbc)];
+    }
+
+    return [
+        'success' => true,
+        'picked_up' => true,
+        'job_name' => $job_name,
+    ];
+}
+
+function track_scale_stage_in_train_car_at_scale($dbc, $car, $config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    if (!track_scale_car_in_south_yard_train($car, $dbc, $config)) {
+        return ['success' => true, 'skipped' => true];
+    }
+
+    $location_id = track_scale_loading_location_id($dbc, $config);
+    if ($location_id === null) {
+        return ['success' => false, 'error' => 'Scale location not found in database'];
+    }
+
+    $source_job_id = (int) ($car['handled_by_job_id'] ?? 0);
+    $result = track_scale_set_out_car($dbc, $car['id'], $location_id);
+    if (!$result['success']) {
+        return $result;
+    }
+
+    $result['source_job_id'] = $source_job_id;
+    return $result;
+}
+
+function track_scale_return_car_to_train($dbc, $car_id, $job_id)
+{
+    $job_id = (int) $job_id;
+    if ($job_id <= 0) {
+        return ['success' => false, 'error' => 'Missing source job for return to train'];
+    }
+
+    $assign = track_scale_assign_car_to_job($dbc, $car_id, $job_id);
+    if (!$assign['success']) {
+        return $assign;
+    }
+
+    $pickup = track_scale_pick_up_car($dbc, $car_id);
+    if (!$pickup['success']) {
+        return $pickup;
+    }
+
+    return [
+        'success' => true,
+        'returned_to_train' => true,
+        'job_id' => $job_id,
+        'job_name' => $assign['job_name'] !== '' ? $assign['job_name'] : ($pickup['job_name'] ?? ''),
+    ];
+}
+
 function track_scale_complete_wagon_unload($dbc, $car)
 {
     $car_id = (int) ($car['id'] ?? 0);
@@ -2522,15 +2861,39 @@ function track_scale_assign_car($dbc, $waybill_number, $car_id, $config = null)
         return ['success' => false, 'error' => 'Car not found'];
     }
 
+    $source_job_id = 0;
+    $train_job_name = null;
+    $in_train_workflow = [];
+    if (track_scale_car_in_south_yard_train($car, $dbc, $config)) {
+        $source_job_id = (int) ($car['handled_by_job_id'] ?? 0);
+        $train_job_name = trim((string) ($car['train_job'] ?? ''));
+        $stage = track_scale_stage_in_train_car_at_scale($dbc, $car, $config);
+        if (!$stage['success']) {
+            return $stage;
+        }
+        if (empty($stage['skipped'])) {
+            $in_train_workflow[] = 'set_out';
+        }
+        $car = track_scale_get_car_by_id($dbc, $car_id);
+        if ($car === null) {
+            return ['success' => false, 'error' => 'Car not found after set out at scale'];
+        }
+    }
+
     $closed_prior_order = false;
     $previous_status = null;
     $prepare = track_scale_prepare_car_for_assign($dbc, $car, $config);
     if (!$prepare['success']) {
+        if ($in_train_workflow !== []) {
+            $prepare['in_train_workflow'] = $in_train_workflow;
+            $prepare['partial'] = true;
+        }
         return $prepare;
     }
     if (!empty($prepare['closed_prior_order'])) {
         $closed_prior_order = true;
         $previous_status = $prepare['previous_status'] ?? null;
+        $in_train_workflow[] = 'unloaded';
     }
     $car = track_scale_get_car_by_id($dbc, $car_id);
     if ($car === null) {
@@ -2562,13 +2925,37 @@ function track_scale_assign_car($dbc, $waybill_number, $car_id, $config = null)
 
     $result = fill_order_assign_car($dbc, $waybill_number, $car_id);
     if (!$result['success']) {
+        if ($in_train_workflow !== []) {
+            $result['in_train_workflow'] = $in_train_workflow;
+            $result['partial'] = true;
+        }
         return $result;
     }
+    $in_train_workflow[] = 'assigned';
 
     if ($closed_prior_order) {
         $result['closed_prior_order'] = true;
         $result['previous_status'] = $previous_status;
         $result['unloaded_first'] = true;
+    }
+
+    if ($source_job_id > 0) {
+        $return = track_scale_return_car_to_train($dbc, $car_id, $source_job_id);
+        if (!$return['success']) {
+            $return['in_train_workflow'] = $in_train_workflow;
+            $return['partial'] = true;
+            return $return;
+        }
+        $in_train_workflow[] = 'returned_to_train';
+        $result['returned_to_train'] = true;
+        $result['train_job'] = $return['job_name'] !== ''
+            ? $return['job_name']
+            : $train_job_name;
+        $result['source_job_id'] = $source_job_id;
+    }
+
+    if ($in_train_workflow !== []) {
+        $result['in_train_workflow'] = $in_train_workflow;
     }
 
     return $result;
