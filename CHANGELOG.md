@@ -2,6 +2,12 @@
 
 All notable changes use semantic versioning (`x.y.z`).
 
+## [0.4.17] - 2026-07-05
+
+- Reordered Track Scale weigh flow: assign order above car list; car list below weigh buttons.
+- Removed in-train reassignment checkbox; kept info banner above Assign to Order.
+- Auto-select next consist car after a successful order assignment.
+
 ## [0.4.16] - 2026-07-05
 
 - Improved Track Scale car list with train filter, consist-order display, and Next Car workflow for in-train weighing.

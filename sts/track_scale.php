@@ -353,30 +353,30 @@ $config = track_scale_load_config();
         </div>
     </div>
 
-    <!-- Weigh mode: car selection -->
-    <div id="weighCarSection">
-    <div class="card mb-3">
-        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <span><i class="bi bi-list-ul"></i> Cars at Scale / Inbound Train</span>
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-                <select class="form-select form-select-sm" id="trainFilter" style="width: auto; min-width: 10rem;" aria-label="Filter by train">
-                    <option value="">All cars</option>
-                    <option value="scale">At scale only</option>
-                </select>
-                <button type="button" class="btn btn-outline-success btn-sm" id="refreshCarsBtn">
-                    <i class="bi bi-arrow-clockwise"></i> Refresh
-                </button>
+    <!-- Weigh mode -->
+    <div id="weighPanel" class="mode-panel active">
+        <div class="small mb-2 text-danger" id="weighCalibrationMeta">Last calibrated: —</div>
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <div class="scale-display h-100">
+                    <div class="label">Gross weight (3-sensor avg)</div>
+                    <div><span class="value" id="displayGross">0.00</span> <span class="unit">tons</span></div>
+                    <div class="small mt-2" style="color:#6bdc6b;" id="sensorBreakdown"></div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="scale-display h-100 position-relative" id="netDisplayPanel">
+                    <div class="scale-led-wrap">
+                        <div class="scale-led" id="weightLed" data-state="off" title="Tolerance indicator"></div>
+                        <span class="scale-led-label" id="weightLedLabel">—</span>
+                    </div>
+                    <div class="label">Net load</div>
+                    <div><span class="value" id="displayNet">0.00</span> <span class="unit">tons</span></div>
+                </div>
             </div>
         </div>
-        <div class="card-body p-0">
-            <div id="carsListEmpty" class="p-3 text-muted d-none">No cars at the scale or on a South Yard train right now.</div>
-            <div id="carsListError" class="alert alert-danger m-3 d-none" role="alert"></div>
-            <div class="list-group list-group-flush" id="carsList"></div>
-        </div>
-    </div>
 
-    <div id="carPanel" class="d-none">
-        <div class="mb-2 mb-md-3">
+        <div id="carPanel" class="d-none mb-3">
             <div class="car-panel-header">
                 <h4 id="carMarks" class="mb-1"></h4>
                 <p class="text-muted mb-0">
@@ -420,31 +420,6 @@ $config = track_scale_load_config();
                 </div>
             </div>
         </div>
-    </div>
-    </div>
-
-    <!-- Weigh mode -->
-    <div id="weighPanel" class="mode-panel active">
-        <div class="small mb-2 text-danger" id="weighCalibrationMeta">Last calibrated: —</div>
-        <div class="row g-3 mb-3">
-            <div class="col-md-6">
-                <div class="scale-display h-100">
-                    <div class="label">Gross weight (3-sensor avg)</div>
-                    <div><span class="value" id="displayGross">0.00</span> <span class="unit">tons</span></div>
-                    <div class="small mt-2" style="color:#6bdc6b;" id="sensorBreakdown"></div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="scale-display h-100 position-relative" id="netDisplayPanel">
-                    <div class="scale-led-wrap">
-                        <div class="scale-led" id="weightLed" data-state="off" title="Tolerance indicator"></div>
-                        <span class="scale-led-label" id="weightLedLabel">—</span>
-                    </div>
-                    <div class="label">Net load</div>
-                    <div><span class="value" id="displayNet">0.00</span> <span class="unit">tons</span></div>
-                </div>
-            </div>
-        </div>
 
         <div class="card mb-3">
             <div class="card-body d-flex flex-wrap gap-2 align-items-center justify-content-between">
@@ -466,7 +441,6 @@ $config = track_scale_load_config();
                 <span id="routingBadge" class="badge"></span>
             </div>
             <div class="card-body">
-                <div id="inTrainAssignNote" class="alert alert-info py-2 small d-none mb-3"></div>
                 <div class="mb-3">
                     <label for="orderSelect" class="form-label">Open coke orders (pool + load at scale)</label>
                     <select class="form-select" id="orderSelect">
@@ -475,16 +449,31 @@ $config = track_scale_load_config();
                     <div id="orderEmptyMsg" class="form-text text-warning d-none">No matching open orders. Generate one below.</div>
                 </div>
                 <div class="d-flex flex-wrap gap-2 mb-3" id="generateButtons"></div>
-                <div id="trainReassignConfirmWrap" class="form-check mb-3 d-none">
-                    <input class="form-check-input" type="checkbox" id="trainReassignConfirm">
-                    <label class="form-check-label" for="trainReassignConfirm" id="trainReassignConfirmLabel">
-                        Confirm set-out at the scale, unload inbound order, and return to train
-                    </label>
-                </div>
+                <div id="inTrainAssignNote" class="alert alert-info py-2 small d-none mb-2"></div>
                 <button type="button" class="btn btn-success" id="assignBtn" disabled>
                     <i class="bi bi-check2-circle"></i> Assign to Order
                 </button>
                 <div id="assignResult" class="mt-2 small"></div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span><i class="bi bi-list-ul"></i> Cars at Scale / Inbound Train</span>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <select class="form-select form-select-sm" id="trainFilter" style="width: auto; min-width: 10rem;" aria-label="Filter by train">
+                        <option value="">All cars</option>
+                        <option value="scale">At scale only</option>
+                    </select>
+                    <button type="button" class="btn btn-outline-success btn-sm" id="refreshCarsBtn">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div id="carsListEmpty" class="p-3 text-muted d-none">No cars at the scale or on a South Yard train right now.</div>
+                <div id="carsListError" class="alert alert-danger m-3 d-none" role="alert"></div>
+                <div class="list-group list-group-flush" id="carsList"></div>
             </div>
         </div>
     </div>
@@ -754,43 +743,28 @@ function hideOrderSection() {
         inTrainNote.classList.add('d-none');
         inTrainNote.textContent = '';
     }
-    const confirmWrap = document.getElementById('trainReassignConfirmWrap');
-    const confirmBox = document.getElementById('trainReassignConfirm');
-    if (confirmWrap) confirmWrap.classList.add('d-none');
-    if (confirmBox) confirmBox.checked = false;
 }
 
 function updateAssignBtnState() {
     const select = document.getElementById('orderSelect');
     const assignBtn = document.getElementById('assignBtn');
-    const confirmBox = document.getElementById('trainReassignConfirm');
     if (!select || !assignBtn) return;
-
-    let enabled = !!select.value;
-    if (currentCar && currentCar.requires_train_reassign_confirm) {
-        enabled = enabled && confirmBox && confirmBox.checked;
-    }
-    assignBtn.disabled = !enabled;
+    assignBtn.disabled = !select.value;
 }
 
-function setupTrainReassignConfirm(car) {
-    const wrap = document.getElementById('trainReassignConfirmWrap');
-    const label = document.getElementById('trainReassignConfirmLabel');
-    const confirmBox = document.getElementById('trainReassignConfirm');
-    if (!wrap || !label || !confirmBox) return;
-
-    if (car && car.requires_train_reassign_confirm) {
-        const waybill = car.active_waybill || 'inbound order';
-        const train = car.train_job || 'the same train';
-        wrap.classList.remove('d-none');
-        label.textContent =
-            `I confirm set-out at the scale, unload of ${waybill}, reassignment to a new coke order, and return to ${train}.`;
-        confirmBox.checked = false;
-    } else {
-        wrap.classList.add('d-none');
-        confirmBox.checked = false;
+function getNextCarIdInList(currentCarId) {
+    const items = document.querySelectorAll('.car-list-item');
+    let foundCurrent = false;
+    for (const item of items) {
+        if (!foundCurrent) {
+            if (item.dataset.carId === String(currentCarId)) {
+                foundCurrent = true;
+            }
+            continue;
+        }
+        return item.dataset.carId;
     }
-    updateAssignBtnState();
+    return null;
 }
 
 function formatInTrainWorkflowNote(data) {
@@ -1027,7 +1001,6 @@ function hideError() {
 function setMode(mode) {
     document.getElementById('weighPanel').classList.toggle('active', mode === 'weigh');
     document.getElementById('calibratePanel').classList.toggle('active', mode === 'calibrate');
-    document.getElementById('weighCarSection').classList.toggle('d-none', mode !== 'weigh');
     if (mode === 'calibrate') {
         refreshCalibrationState();
     } else {
@@ -1225,8 +1198,6 @@ async function loadOrders(routing) {
         }
     }
 
-    setupTrainReassignConfirm(currentCar);
-
     const badge = document.getElementById('routingBadge');
     if (routing === 'reload') {
         badge.className = 'badge bg-danger';
@@ -1263,9 +1234,8 @@ async function loadOrders(routing) {
 
     document.getElementById('assignBtn').disabled = true;
     select.onchange = () => updateAssignBtnState();
+    updateAssignBtnState();
 }
-
-document.getElementById('trainReassignConfirm')?.addEventListener('change', () => updateAssignBtnState());
 
 async function generateOrder(shipmentCode, routing) {
     if (!currentCar) return;
@@ -1287,17 +1257,12 @@ document.getElementById('assignBtn').addEventListener('click', async () => {
     const waybill = document.getElementById('orderSelect').value;
     if (!waybill || !currentCar) return;
 
+    const nextCarId = pendingNextCar?.id || getNextCarIdInList(currentCar.id);
     const payload = {
         waybill_number: waybill,
         car_id: currentCar.id,
     };
     if (currentCar.requires_train_reassign_confirm) {
-        const confirmBox = document.getElementById('trainReassignConfirm');
-        if (!confirmBox || !confirmBox.checked) {
-            document.getElementById('assignResult').innerHTML =
-                '<span class="text-danger">Check the confirmation box before assigning.</span>';
-            return;
-        }
         payload.confirm_train_reassign = true;
     }
 
@@ -1317,20 +1282,19 @@ document.getElementById('assignBtn').addEventListener('click', async () => {
     resultEl.innerHTML =
         `<span class="text-success"><i class="bi bi-check-circle"></i> ${unloadNote}${data.message} (${data.car_reporting_marks})</span>`
         + workflowHtml;
-    currentCar.has_active_order = true;
-    currentCar.active_waybill = data.waybill_number || waybill;
-    currentCar.needs_assignment = false;
-    currentCar.requires_train_reassign_confirm = false;
-    if (data.returned_to_train) {
-        currentCar.weigh_source = 'in_train';
-        currentCar.train_job = data.train_job || currentCar.train_job;
-    }
     hideOrderSection();
-    document.getElementById('weighResult').innerHTML = assignedOrderMessage(currentCar);
-    if (currentReading) {
-        setWeightLed(currentReading.in_tolerance ? 'ok' : 'fail');
-    }
+    hideNextCarButton();
     await loadCarsAtScale();
+    if (nextCarId && document.querySelector(`.car-list-item[data-car-id="${nextCarId}"]`)) {
+        await selectCar(nextCarId);
+        return;
+    }
+    selectedCarId = null;
+    currentCar = null;
+    document.getElementById('carPanel').classList.add('d-none');
+    document.getElementById('weighBtn').disabled = true;
+    document.getElementById('weighResult').textContent = 'Select a car from the list, then weigh.';
+    setWeightLed('off');
 });
 
 function updateCalTrackCar(position) {

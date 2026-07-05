@@ -428,14 +428,6 @@ try {
             if ($car === null) {
                 track_scale_json_error('Car not found', 404);
             }
-            if (track_scale_car_requires_train_reassign_confirm($car, $dbc, $config)) {
-                $confirmed = !empty($body['confirm_train_reassign']);
-                if (!$confirmed) {
-                    track_scale_json_error(
-                        'Confirm set-out, unload, and return to train before assigning a new order'
-                    );
-                }
-            }
             $result = track_scale_assign_car($dbc, $waybill, $car_id, $config);
             if (!$result['success']) {
                 track_scale_json_error($result['error'] ?? 'Assign failed', 500);
