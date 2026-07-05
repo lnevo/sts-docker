@@ -2,6 +2,11 @@
 
 All notable changes use semantic versioning (`x.y.z`).
 
+## [0.4.20] - 2026-07-05
+
+- Restore Track Scale calibrate tab to a single full-width LED display aligned with the weigh tab.
+- Normalize top display height to 150px on both weigh and calibrate tabs.
+
 ## [0.4.19] - 2026-07-05
 
 - Fix Build Switch Lists car filters by restoring populateStationLocationFilterOptions and matchesStationLocationFilter logic.

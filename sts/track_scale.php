@@ -298,7 +298,28 @@ $config = track_scale_load_config();
             color: #6c757d;
             padding-bottom: 0.5rem;
         }
-        .sensor-average .scale-display .value {
+        :root {
+            --scale-top-row-height: 150px;
+        }
+        .scale-top-row {
+            height: var(--scale-top-row-height);
+            box-sizing: border-box;
+        }
+        #weighPanel > .scale-top-row > [class*="col-"] {
+            display: flex;
+        }
+        #weighPanel > .scale-top-row .scale-display,
+        #calibratePanel > .scale-top-row .scale-display {
+            flex: 1 1 auto;
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+            box-sizing: border-box;
+        }
+        .sensor-average.scale-top-row {
+            display: flex;
+        }
+        #calibratePanel > .scale-top-row .scale-display .value {
             font-size: 2.8rem;
         }
         .car-list-item {
@@ -356,7 +377,7 @@ $config = track_scale_load_config();
     <!-- Weigh mode -->
     <div id="weighPanel" class="mode-panel active">
         <div class="small mb-2 text-danger" id="weighCalibrationMeta">Last calibrated: —</div>
-        <div class="row g-3 mb-3">
+        <div class="row g-3 mb-3 scale-top-row">
             <div class="col-md-6">
                 <div class="scale-display h-100">
                     <div class="label">Gross weight (3-sensor avg)</div>
@@ -481,23 +502,14 @@ $config = track_scale_load_config();
     <!-- Calibrate mode -->
     <div id="calibratePanel" class="mode-panel">
         <div class="small mb-2 text-danger" id="calCalibrationMeta">Last calibrated: —</div>
-        <div class="row g-3 mb-3">
-            <div class="col-md-6">
-                <div class="sensor-average h-100">
-                    <div class="scale-display h-100">
-                        <div class="label">Average of 3 sensors</div>
-                        <div><span class="value" id="calAverageDisplay">—</span> <span class="unit">tons</span></div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="scale-display h-100">
-                    <div class="label">Calibration target</div>
-                    <div><span class="value" id="calExpected">30.00</span> <span class="unit">tons</span></div>
-                    <div class="small mt-2" style="color:#6bdc6b;">
-                        Average adjustment: <span id="calAverageAdjustment">—</span> t
-                        <span class="text-muted" id="calAverageMeta"></span>
-                    </div>
+        <div class="sensor-average mb-3 scale-top-row">
+            <div class="scale-display h-100">
+                <div class="label">Average of 3 sensors</div>
+                <div><span class="value" id="calAverageDisplay">—</span> <span class="unit">tons</span></div>
+                <div class="small mt-2" style="color:#6bdc6b;">
+                    Expected test car: <span id="calExpected">30.00</span> t &nbsp;|&nbsp;
+                    Average adjustment: <span id="calAverageAdjustment">—</span> t
+                    <span class="text-muted" id="calAverageMeta"></span>
                 </div>
             </div>
         </div>
