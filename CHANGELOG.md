@@ -2,6 +2,12 @@
 
 All notable changes use semantic versioning (`x.y.z`).
 
+## [0.4.21] - 2026-07-05
+
+- Fix Reposition Empty Cars filters with ops-style car code, location, and marks filters plus a Not at home toggle.
+- Scope Update and Reposition to Home actions to visible filtered cars only.
+- Restore full Reposition Empty Cars operator instructions and improve Not at home button contrast.
+
 ## [0.4.20] - 2026-07-05
 
 - Restore Track Scale calibrate tab to a single full-width LED display aligned with the weigh tab.
