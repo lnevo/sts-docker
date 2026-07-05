@@ -481,6 +481,27 @@ $config = track_scale_load_config();
     <!-- Calibrate mode -->
     <div id="calibratePanel" class="mode-panel">
         <div class="small mb-2 text-danger" id="calCalibrationMeta">Last calibrated: —</div>
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <div class="sensor-average h-100">
+                    <div class="scale-display h-100">
+                        <div class="label">Average of 3 sensors</div>
+                        <div><span class="value" id="calAverageDisplay">—</span> <span class="unit">tons</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="scale-display h-100">
+                    <div class="label">Calibration target</div>
+                    <div><span class="value" id="calExpected">30.00</span> <span class="unit">tons</span></div>
+                    <div class="small mt-2" style="color:#6bdc6b;">
+                        Average adjustment: <span id="calAverageAdjustment">—</span> t
+                        <span class="text-muted" id="calAverageMeta"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="card mb-3">
             <div class="card-body">
                 <p class="text-muted small mb-3">
@@ -605,18 +626,6 @@ $config = track_scale_load_config();
                             <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-1 cal-adj-reset-btn" data-sensor="right" disabled>
                                 Reset adjustment
                             </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="sensor-average mb-3">
-                    <div class="scale-display">
-                        <div class="label">Average of 3 sensors</div>
-                        <div><span class="value" id="calAverageDisplay">—</span> <span class="unit">tons</span></div>
-                        <div class="small mt-2" style="color:#6bdc6b;">
-                            Expected test car: <span id="calExpected">30.00</span> t &nbsp;|&nbsp;
-                            Average adjustment: <span id="calAverageAdjustment">—</span> t
-                            <span class="text-muted" id="calAverageMeta"></span>
                         </div>
                     </div>
                 </div>

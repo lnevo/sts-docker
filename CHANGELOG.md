@@ -2,6 +2,11 @@
 
 All notable changes use semantic versioning (`x.y.z`).
 
+## [0.4.19] - 2026-07-05
+
+- Fix Build Switch Lists car filters by restoring populateStationLocationFilterOptions and matchesStationLocationFilter logic.
+- Align Track Scale calibrate tab LED display with the weigh tab position above the calibration controls.
+
 ## [0.4.18] - 2026-07-05
 
 - Added separate car filters to Fill Car Orders for manual assignment and auto-assign: car source checkboxes (Pool, Priority, Station, System), current station, current location, and car type, independent of order filters.

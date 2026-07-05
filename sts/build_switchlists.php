@@ -291,7 +291,7 @@
         updateBuildLocationGroupHeaders();
       }
 
-      function matchesStationLocationFilter(row, selectedValue, stationKey, locationKey)
+      function populateStationLocationFilterOptions(selectId, stationKey, locationKey)
       {
         const select = document.getElementById(selectId);
         const rows = Array.from(document.querySelectorAll('#car_table tr.job-car-row'));
@@ -331,6 +331,18 @@
         });
 
         select.value = '';
+      }
+
+      function matchesStationLocationFilter(row, selectedValue, stationKey, locationKey)
+      {
+        if (!selectedValue) return true;
+        if (selectedValue.indexOf('station::') === 0) {
+          return row.dataset[stationKey] === selectedValue.substring(9);
+        }
+        if (selectedValue.indexOf('location::') === 0) {
+          return row.dataset[locationKey] === selectedValue.substring(10);
+        }
+        return true;
       }
 
       function populateStationFilterOptions(selectId, datasetKey)
