@@ -1,0 +1,52 @@
+{
+  "units": "tons",
+  "precision": 2,
+  "reload_tolerance_tons": 1.9,
+  "loading_location_code": "SOUTH-YARD-SCALE",
+  "api_base_url": "/sts/api/index.php",
+  "commodity_code": "COKE",
+  "shipments": {
+    "outbound": ["COKE-001", "COKE-002"],
+    "reload": ["COKE-RELOAD-001"]
+  },
+  "default_profiles": {
+    "50ft_hopper": {
+      "length_ft": 50,
+      "tare_tons": 24.75,
+      "load_limit_tons": 77.75
+    },
+    "45ft_hopper": {
+      "length_ft": 45,
+      "tare_tons": 25.80,
+      "load_limit_tons": 84.20
+    },
+    "40ft_hopper": {
+      "length_ft": 40,
+      "tare_tons": 27.70,
+      "load_limit_tons": 83.95
+    },
+    "fallback": {
+      "tare_tons": 27.00,
+      "load_limit_tons": 80.00
+    }
+  },
+  "simulation": {
+    "in_tolerance_percent": 80,
+    "within_tolerance_spread_tons": 1.9,
+    "off_tolerance_min_tons": 2.0,
+    "off_tolerance_max_tons": 8.0
+  },
+  "calibration": {
+    "adjust_step_tons": 0.10,
+    "fine_adjust_step_tons": 0.01,
+    "zero_offset_random_min_tons": -1.9,
+    "zero_offset_random_max_tons": 1.9,
+    "position_bias_tons": {
+      "left": -0.50,
+      "center": 0.0,
+      "right": 0.50
+    },
+    "test_car_reporting_marks": "COST1",
+    "test_car_tare_tons": 40.0
+  }
+}

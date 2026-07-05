@@ -183,6 +183,13 @@ mysqli_close($dbc);
             </div>
             <?php echo operations_render_stat_columns([['label' => 'Pending', 'value' => $stats['pending_setout']]]); ?>
           </a>
+          <a href="track_scale.php" class="op-btn">
+            <i class="bi bi-speedometer2 op-icon"></i>
+            <div class="op-btn-body">
+              <div class="op-btn-title">Track Scale</div>
+            </div>
+            <?php echo operations_render_stat_columns([['label' => 'To Weigh', 'value' => $stats['scale_to_weigh']]]); ?>
+          </a>
         </div>
       </div>
 

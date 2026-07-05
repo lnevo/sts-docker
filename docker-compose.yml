@@ -19,7 +19,7 @@ services:
     # Uncomment below and change the path you with to store your backups for STS in. format is <Source Path on PC>:<Path on Container>
     # You only want to change the <Source Path on PC> Variable.
     volumes:
-      - ~/sts-backups:/var/www/html/sts/backups
+      - ~/sts/sts-backups:/var/www/html/sts/backups
 
     depends_on:
       db:
@@ -44,7 +44,7 @@ services:
     # Uncomment below and change the path you with to store your backups for STS in. format is <Source Path on PC>:<Path on Container>
     # You only want to change the <Source Path on PC> Variable.
     volumes:
-      - ~/sts-backups:/var/www/html/sts/backups
+      - ~/sts/sts-backups:/var/www/html/sts/backups
 
     depends_on:
       db:
@@ -63,8 +63,8 @@ services:
 
     # If you want to persist your database somewhere outside of the container (you should) uncomment this line,
     # and change the path on the left hand side of the colon.
-    #volumes:
-      #- /volume1/docker/sts/db:/var/lib/mysql
+    volumes:
+      - ~/sts/sts-database/docker/sts/db:/var/lib/mysql
 
     healthcheck:
       interval: 10s

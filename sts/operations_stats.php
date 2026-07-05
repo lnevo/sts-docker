@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/track_scale_helpers.php';
 
 function operations_get_stats($dbc)
 {
@@ -11,6 +12,7 @@ function operations_get_stats($dbc)
         'load_unload_pending' => 0,
         'reposition_off_home' => 0,
         'in_train' => 0,
+        'scale_to_weigh' => 0,
     ];
 
     $queries = [
@@ -67,6 +69,8 @@ function operations_get_stats($dbc)
     if ($rs && ($row = mysqli_fetch_array($rs))) {
         $stats['load_unload_pending'] = (int)$row['cnt'];
     }
+
+    $stats['scale_to_weigh'] = track_scale_count_weighable_cars($dbc);
 
     return $stats;
 }

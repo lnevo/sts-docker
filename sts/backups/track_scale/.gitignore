@@ -1,0 +1,8 @@
+seed.json
+seed.json.tmp
+settings.json
+settings.json.tmp
+session.log
+runtime.json
+runtime.json.tmp
+logs/
