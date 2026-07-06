@@ -40,7 +40,7 @@
   ///////////////////////////////////////////////////////////////////////
 
   // locations
-  function drop_down_locations($list_name, $tab_index, $on_click)
+  function drop_down_locations($list_name, $tab_index, $on_click, $show_car_counts = false)
   {
     // get a database connection
     $dbc = open_db();
@@ -54,6 +54,22 @@
     // retrieve the rows and put them into an array
     $rs = mysqli_query($dbc, $sql);
 
+    $car_counts = [];
+    if ($show_car_counts)
+    {
+      $count_rs = mysqli_query($dbc, 'select current_location_id as location_id, count(*) as cnt
+                                        from cars
+                                       where current_location_id > 0
+                                    group by current_location_id');
+      if ($count_rs)
+      {
+        while ($count_row = mysqli_fetch_array($count_rs))
+        {
+          $car_counts[$count_row['location_id']] = (int)$count_row['cnt'];
+        }
+      }
+    }
+
     $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '" onclick="' . $on_click . '" style="width: 100px;">';
     $select_string .= '<option value=""></option>';
 
@@ -61,7 +77,16 @@
     {
       while ($row = mysqli_fetch_array($rs))
       {
-        $select_string .= '<option value="' . $row['id'] . '">' . $row['station'] . ' - ' . $row['code'] . '</option>';
+        $label = $row['station'] . ' - ' . $row['code'];
+        if ($show_car_counts)
+        {
+          $count = isset($car_counts[$row['id']]) ? $car_counts[$row['id']] : 0;
+          if ($count > 0)
+          {
+            $label .= ' (' . $count . ')';
+          }
+        }
+        $select_string .= '<option value="' . $row['id'] . '">' . $label . '</option>';
       }
     }
 
@@ -179,7 +204,7 @@
   ///////////////////////////////////////////////////////////////////////
 
   // stations
-  function drop_down_stations($list_name, $tab_index, $on_click, $include_all = false)
+  function drop_down_stations($list_name, $tab_index, $on_click, $include_all = false, $show_pending_counts = false)
   {
     // get a database connection
     $dbc = open_db();
@@ -189,6 +214,27 @@
 
     // retrieve the rows and put them into an array
     $rs = mysqli_query($dbc, $sql);
+
+    $pending_counts = [];
+    $all_pending = 0;
+    if ($show_pending_counts)
+    {
+      $count_sql = 'select locations.station as station_id, count(*) as cnt
+                      from cars
+                      join locations on locations.id = cars.current_location_id
+                     where cars.status in ("Ordered", "Loaded")
+                       and cars.handled_by_job_id = 0
+                  group by locations.station';
+      $count_rs = mysqli_query($dbc, $count_sql);
+      if ($count_rs)
+      {
+        while ($count_row = mysqli_fetch_array($count_rs))
+        {
+          $pending_counts[$count_row['station_id']] = (int)$count_row['cnt'];
+          $all_pending += (int)$count_row['cnt'];
+        }
+      }
+    }
 
     if ((isset($on_click) && strlen($on_click) > 0))
     {
@@ -205,14 +251,28 @@
 
     if ($include_all)
     {
-      $select_string .= '<option value="all">All Stations</option>';
+      $all_label = 'All Stations';
+      if ($show_pending_counts && $all_pending > 0)
+      {
+        $all_label .= ' (' . $all_pending . ')';
+      }
+      $select_string .= '<option value="all">' . $all_label . '</option>';
     }
 
     if (mysqli_num_rows($rs) > 0)
     {
       while ($row = mysqli_fetch_array($rs))
       {
-        $select_string .= '<option value="' . $row['id'] . '">' . $row['station'] . '</option>';
+        $label = $row['station'];
+        if ($show_pending_counts)
+        {
+          $count = isset($pending_counts[$row['id']]) ? $pending_counts[$row['id']] : 0;
+          if ($count > 0)
+          {
+            $label .= ' (' . $count . ')';
+          }
+        }
+        $select_string .= '<option value="' . $row['id'] . '">' . $label . '</option>';
       }
     }
 
@@ -322,8 +382,101 @@
 
   ///////////////////////////////////////////////////////////////////////
 
+  function pending_assignment_counts_by_job($dbc)
+  {
+    $counts = [];
+    $jobs_rs = mysqli_query($dbc, 'select id, name from jobs order by name');
+    if (!$jobs_rs)
+    {
+      return $counts;
+    }
+
+    while ($job = mysqli_fetch_array($jobs_rs))
+    {
+      $job_id = $job['id'];
+      $job_name = $job['name'];
+      $counts[$job_id] = 0;
+
+      $stations_rs = mysqli_query($dbc, 'select distinct station from `' . $job_name . '` where pickup = "T"');
+      if (!$stations_rs || mysqli_num_rows($stations_rs) === 0)
+      {
+        continue;
+      }
+
+      $station_ids = [];
+      while ($station_row = mysqli_fetch_array($stations_rs))
+      {
+        $station_ids[] = '"' . $station_row['station'] . '"';
+      }
+
+      $count_sql = 'select count(*) as cnt
+                      from cars
+                      join locations on locations.id = cars.current_location_id
+                     where cars.status in ("Ordered", "Loaded")
+                       and cars.handled_by_job_id = 0
+                       and locations.station in (' . implode(', ', $station_ids) . ')';
+      $count_rs = mysqli_query($dbc, $count_sql);
+      if ($count_rs && ($count_row = mysqli_fetch_array($count_rs)))
+      {
+        $counts[$job_id] = (int)$count_row['cnt'];
+      }
+    }
+
+    return $counts;
+  }
+
+  function pending_counts_by_job($dbc, $mode)
+  {
+    if ($mode === true || $mode === 'assignment')
+    {
+      return pending_assignment_counts_by_job($dbc);
+    }
+
+    $counts = [];
+    if ($mode === 'pickup')
+    {
+      $sql = 'select handled_by_job_id as job_id, count(*) as cnt
+                from cars
+               where handled_by_job_id > 0
+                 and current_location_id > 0
+                 and status != "Unavailable"
+            group by handled_by_job_id';
+    }
+    elseif ($mode === 'setout')
+    {
+      $sql = 'select handled_by_job_id as job_id, count(*) as cnt
+                from cars
+               where handled_by_job_id > 0
+                 and current_location_id = 0
+            group by handled_by_job_id';
+    }
+    elseif ($mode === 'organize')
+    {
+      $sql = 'select handled_by_job_id as job_id, count(*) as cnt
+                from cars
+               where handled_by_job_id > 0
+                 and status != "Unavailable"
+            group by handled_by_job_id';
+    }
+    else
+    {
+      return $counts;
+    }
+
+    $rs = mysqli_query($dbc, $sql);
+    if ($rs)
+    {
+      while ($row = mysqli_fetch_array($rs))
+      {
+        $counts[$row['job_id']] = (int)$row['cnt'];
+      }
+    }
+
+    return $counts;
+  }
+
   // jobs
-  function drop_down_jobs($list_name, $tab_index, $on_click)
+  function drop_down_jobs($list_name, $tab_index, $on_click, $pending_count_mode = false)
   {
     // get a database connection
     $dbc = open_db();
@@ -333,6 +486,12 @@
 
     // retrieve the rows and put them into an array
     $rs = mysqli_query($dbc, $sql);
+
+    $pending_counts = [];
+    if ($pending_count_mode)
+    {
+      $pending_counts = pending_counts_by_job($dbc, $pending_count_mode);
+    }
 
     if ((isset($on_click) && strlen($on_click) > 0))
     {
@@ -349,7 +508,16 @@
     {
       while ($row = mysqli_fetch_array($rs))
       {
-        $select_string .= '<option value="' . $row['id'] . '">' . $row['name'] . '</option>';
+        $label = $row['name'];
+        if ($pending_count_mode)
+        {
+          $count = isset($pending_counts[$row['id']]) ? $pending_counts[$row['id']] : 0;
+          if ($count > 0)
+          {
+            $label .= ' (' . $count . ')';
+          }
+        }
+        $select_string .= '<option value="' . $row['id'] . '">' . $label . '</option>';
       }
     }
 

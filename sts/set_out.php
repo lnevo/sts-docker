@@ -294,7 +294,7 @@
 
       // generate the list of jobs from which the user can choose
       print '<p class="text-muted mb-1">Select a job to do the setouts:</p>';
-      print drop_down_jobs("job_list", '', "get_jobs_and_cars();");
+      print drop_down_jobs("job_list", '', "get_jobs_and_cars();", "setout");
     ?>
       <!-- print button is in the navbar -->
       <div id="instructions" class="ops-workflow noprint d-none">

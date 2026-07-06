@@ -61,7 +61,7 @@
         <div class="card-header fw-semibold"><i class="bi bi-geo-alt"></i> Assign Cars Station-by-Station</div>
         <div class="card-body">
           <p class="card-text text-muted small">Select a station (or All Stations) to assign cars to jobs/trains for pickup.</p>
-          <?php print drop_down_stations('station_list', '', 'get_cars_and_jobs();', true); ?>
+          <?php print drop_down_stations('station_list', '', 'get_cars_and_jobs();', true, true); ?>
         </div>
       </div>
     </div>
@@ -71,7 +71,7 @@
         <div class="card-body">
           <p class="card-text text-muted small">Select a job/train and click AUTO-ASSIGN to automatically assign cars.</p>
           <div class="d-flex gap-2 flex-wrap align-items-center">
-            <?php print drop_down_jobs("auto_assign_job", 2, ""); ?>
+            <?php print drop_down_jobs("auto_assign_job", 2, "", true); ?>
             <button type="button" class="btn btn-success" onclick="go_to_auto_assign();">AUTO-ASSIGN</button>
           </div>
         </div>

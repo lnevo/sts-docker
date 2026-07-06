@@ -359,7 +359,7 @@
       print '      <div class="card-header fw-semibold"><i class="bi bi-train-front"></i> By Job/Train</div>';
       print '      <div class="card-body">';
       print '        <p class="card-text text-muted small">Select a job/train and click <b>VIEW/ORGANIZE</b>.<br />After arranging the cars, click <a href="display_switchlist.php">here</a> to generate an updated switch list.</p>';
-      print        drop_down_jobs('job_list', '3', 'enable_org_job_btn()') . '<br class="mt-2" />';
+      print        drop_down_jobs('job_list', '3', 'enable_org_job_btn()', 'organize') . '<br class="mt-2" />';
       print '        <button id="org_job" name="org_job" onclick="get_cars_in_job();" disabled class="btn btn-success mt-2">';
       print '          VIEW/ORGANIZE';
       print '        </button>';
@@ -372,7 +372,7 @@
       print '      <div class="card-header fw-semibold"><i class="bi bi-geo-alt"></i> By Location</div>';
       print '      <div class="card-body">';
       print '        <p class="card-text text-muted small">Select a location and click <b>VIEW/ORGANIZE</b>.<br />After arranging the cars, click <a href="display_station_report.php">here</a> to generate an updated station car report.</p>';
-      print        drop_down_locations('location_list', '0', 'enable_org_loc_btn()') . '<br class="mt-2" />';
+      print        drop_down_locations('location_list', '0', 'enable_org_loc_btn()', true) . '<br class="mt-2" />';
       print '        <button id="org_loc" name="org_loc" onclick="get_cars_at_location()" disabled class="btn btn-success mt-2">';
       print '          VIEW/ORGANIZE';
       print '        </button>';

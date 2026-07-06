@@ -182,7 +182,7 @@
       }
       print '<div class="noprint">';
       print '<p class="text-muted mb-1">Select a job to do the pickups:</p>';
-      print drop_down_jobs("job_list", '', "get_jobs_and_cars();");
+      print drop_down_jobs("job_list", '', "get_jobs_and_cars();", "pickup");
     ?>
       <div id="instructions" class="ops-workflow noprint d-none">
         <div class="ops-panel">
