@@ -397,7 +397,7 @@ $config = track_scale_load_config();
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
             <h5 class="mb-1">South Yard Scale</h5>
-            <p class="text-muted small mb-0">Select a car at <strong>SOUTH-YARD-SCALE</strong> or in a train routed to South Yard, then weigh and assign a coke order. Cars weighed in train are set out, unloaded, re-assigned, and picked up automatically when you assign an order.</p>
+            <p class="text-muted small mb-0">Pick a coke car at the scale or on a South Yard train, weigh it, and assign the matching order. In-tolerance loads ship outbound; off-tolerance loads reload. Use <strong>Reassign Order</strong> after an in-tolerance weigh to reroute a car already on an outbound order.</p>
         </div>
         <div class="btn-group" role="group" aria-label="Scale mode">
             <input type="radio" class="btn-check" name="scaleMode" id="modeWeigh" autocomplete="off" checked>
@@ -484,6 +484,9 @@ $config = track_scale_load_config();
                     <button type="button" class="btn btn-outline-primary btn-lg d-none" id="nextCarBtn">
                         <i class="bi bi-skip-forward"></i> Next Car
                     </button>
+                    <button type="button" class="btn btn-outline-danger btn-lg d-none" id="reassignBtn">
+                        <i class="bi bi-arrow-left-right"></i> Reassign Order
+                    </button>
                 </div>
                 <div id="weighResult" class="small text-muted">Select a car from the list, then weigh.</div>
             </div>
@@ -495,6 +498,12 @@ $config = track_scale_load_config();
                 <span id="routingBadge" class="badge"></span>
             </div>
             <div class="card-body">
+                <div id="reassignNote" class="alert alert-warning py-2 px-3 small d-none mb-3">
+                    <i class="bi bi-info-circle"></i>
+                    Rerouting this car — the current order
+                    <strong id="reassignPriorWaybill">—</strong>
+                    will close when you assign a new outbound order.
+                </div>
                 <div class="mb-3">
                     <label for="orderSelect" class="form-label">Open coke orders</label>
                     <select class="form-select order-select" id="orderSelect">
@@ -702,7 +711,30 @@ let currentOpenOrders = [];
 let selectedCarId = null;
 let scaleInService = true;
 let pendingNextCar = null;
+let manualReassignMode = false;
 const SENSOR_POSITIONS = ['left', 'center', 'right'];
+
+function hideReassignButton() {
+    manualReassignMode = false;
+    const btn = document.getElementById('reassignBtn');
+    if (!btn) return;
+    btn.classList.add('d-none');
+    btn.disabled = true;
+    const note = document.getElementById('reassignNote');
+    if (note) note.classList.add('d-none');
+}
+
+function showReassignButton() {
+    const btn = document.getElementById('reassignBtn');
+    if (!btn) return;
+    btn.classList.remove('d-none');
+    btn.disabled = false;
+}
+
+function hideWeighActionButtons() {
+    hideNextCarButton();
+    hideReassignButton();
+}
 
 function hideNextCarButton() {
     pendingNextCar = null;
@@ -791,11 +823,39 @@ function carNeedsAssignment(car) {
     return !car.has_active_order;
 }
 
+function carHasFinalUnloadAssignment(car) {
+    if (!car || !car.has_active_order || !car.active_unloading_location) return false;
+    return car.active_unloading_location.toUpperCase() !== 'SOUTH-YARD-SCALE';
+}
+
+function shouldOfferReassignButton(car, reading) {
+    if (!car || !reading || reading.unloaded_weigh || reading.test_car_weigh) return false;
+    if (!reading.in_tolerance) return false;
+    if (car.allows_scale_reassign !== true) return false;
+    if (!car.has_active_order || carNeedsAssignment(car)) return false;
+    if (shouldShowAssignAfterWeigh(car, reading)) return false;
+    return true;
+}
+
+function shouldShowAssignAfterWeigh(car, reading) {
+    if (!car || !reading || reading.unloaded_weigh || reading.test_car_weigh) return false;
+    if (!reading.in_tolerance) {
+        return carNeedsAssignment(car) || car.allows_scale_reassign === true;
+    }
+    if (carHasFinalUnloadAssignment(car)) return false;
+    return carNeedsAssignment(car);
+}
+
 function hideOrderSection() {
+    manualReassignMode = false;
     document.getElementById('orderSection').classList.add('d-none');
     document.getElementById('assignBtn').disabled = true;
     document.getElementById('assignResult').textContent = '';
     currentOpenOrders = [];
+    const reassignNote = document.getElementById('reassignNote');
+    if (reassignNote) {
+        reassignNote.classList.add('d-none');
+    }
     const inTrainNote = document.getElementById('inTrainAssignNote');
     if (inTrainNote) {
         inTrainNote.classList.add('d-none');
@@ -962,7 +1022,7 @@ async function loadCarsAtScale() {
         emptyEl.classList.remove('d-none');
         document.getElementById('carPanel').classList.add('d-none');
         document.getElementById('weighBtn').disabled = true;
-        hideNextCarButton();
+        hideWeighActionButtons();
         selectedCarId = null;
         currentCar = null;
         return;
@@ -1010,13 +1070,13 @@ async function loadCarsAtScale() {
         currentCar = null;
         document.getElementById('carPanel').classList.add('d-none');
         document.getElementById('weighBtn').disabled = true;
-        hideNextCarButton();
+        hideWeighActionButtons();
     }
 }
 
 async function selectCar(carId) {
     selectedCarId = carId;
-    hideNextCarButton();
+    hideWeighActionButtons();
     document.querySelectorAll('.car-list-item').forEach(el => {
         el.classList.toggle('active', el.dataset.carId === String(carId));
     });
@@ -1203,7 +1263,7 @@ function renderCar(data) {
     if (scaleInService) {
         setWeightLed('off');
     }
-    hideOrderSection();
+    hideWeighActionButtons();
 }
 
 document.getElementById('trainFilter').addEventListener('change', () => loadCarsAtScale());
@@ -1212,6 +1272,19 @@ document.getElementById('nextCarBtn').addEventListener('click', () => {
     if (!pendingNextCar || !pendingNextCar.id) return;
     selectCar(pendingNextCar.id);
 });
+document.getElementById('reassignBtn').addEventListener('click', () => {
+    if (!currentCar || !currentReading || !shouldOfferReassignButton(currentCar, currentReading)) return;
+    openManualReassign();
+});
+
+async function openManualReassign() {
+    manualReassignMode = true;
+    await loadOrders('outbound', { forceReassign: true });
+    const section = document.getElementById('orderSection');
+    if (section && !section.classList.contains('d-none')) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
 
 document.getElementById('weighBtn').addEventListener('click', async () => {
     if (!currentCar || document.getElementById('weighBtn').disabled) return;
@@ -1242,7 +1315,7 @@ document.getElementById('weighBtn').addEventListener('click', async () => {
             '<span class="text-muted"><i class="bi bi-info-circle"></i> Scale test car — gross is tare weight only.</span>';
         setWeightLed('off');
         document.getElementById('orderSection').classList.add('d-none');
-        hideNextCarButton();
+        hideWeighActionButtons();
         return;
     }
     if (data.reading.unloaded_weigh) {
@@ -1250,6 +1323,7 @@ document.getElementById('weighBtn').addEventListener('click', async () => {
             '<span class="text-muted"><i class="bi bi-info-circle"></i> Empty car — gross is unloaded (tare) weight only.</span>';
         setWeightLed('off');
         document.getElementById('orderSection').classList.add('d-none');
+        hideReassignButton();
         showNextCarButton(data.next_car);
         return;
     }
@@ -1257,12 +1331,22 @@ document.getElementById('weighBtn').addEventListener('click', async () => {
     const inTol = data.reading.in_tolerance;
     setWeightLed(inTol ? 'ok' : 'fail');
     showNextCarButton(data.next_car);
-    if (!carNeedsAssignment(currentCar)) {
-        resultEl.innerHTML = assignedOrderMessage(currentCar)
-            || '<span class="text-muted">Weigh complete.</span>';
+    if (!shouldShowAssignAfterWeigh(currentCar, data.reading)) {
+        const baseMsg = assignedOrderMessage(currentCar)
+            || '<span class="text-muted">Weigh complete — load within tolerance on assigned order.</span>';
+        const reassignHint = shouldOfferReassignButton(currentCar, data.reading)
+            ? ' <span class="text-muted">Use <strong>Reassign Order</strong> to change destination.</span>'
+            : '';
+        resultEl.innerHTML = baseMsg + reassignHint;
         hideOrderSection();
+        if (shouldOfferReassignButton(currentCar, data.reading)) {
+            showReassignButton();
+        } else {
+            hideReassignButton();
+        }
         return;
     }
+    hideReassignButton();
     resultEl.innerHTML = inTol
         ? `<span class="routing-outbound"><i class="bi bi-check-circle"></i> Within ±${fmt(data.reading.tolerance_tons)} t of target — assign to outbound coke order.</span>`
         : `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Off by ${fmt(data.reading.delta_tons)} t — assign to coke reload.</div>`;
@@ -1270,8 +1354,18 @@ document.getElementById('weighBtn').addEventListener('click', async () => {
     await loadOrders(currentRouting);
 });
 
-async function loadOrders(routing) {
-    if (!currentCar || !carNeedsAssignment(currentCar)) {
+async function loadOrders(routing, options = {}) {
+    const forceReassign = options.forceReassign === true || manualReassignMode;
+    if (!currentCar || !currentReading) {
+        hideOrderSection();
+        return;
+    }
+    if (forceReassign) {
+        if (!manualReassignMode && !shouldOfferReassignButton(currentCar, currentReading)) {
+            hideOrderSection();
+            return;
+        }
+    } else if (!shouldShowAssignAfterWeigh(currentCar, currentReading)) {
         hideOrderSection();
         return;
     }
@@ -1281,14 +1375,29 @@ async function loadOrders(routing) {
     const section = document.getElementById('orderSection');
     section.classList.remove('d-none');
 
+    const reassignNote = document.getElementById('reassignNote');
+    const reassignPriorWaybill = document.getElementById('reassignPriorWaybill');
+    if (reassignNote && reassignPriorWaybill) {
+        if (manualReassignMode) {
+            reassignPriorWaybill.textContent = currentCar.active_waybill || '—';
+            reassignNote.classList.remove('d-none');
+        } else {
+            reassignNote.classList.add('d-none');
+        }
+    }
+
     const badge = document.getElementById('routingBadge');
     if (routing === 'reload') {
         badge.className = 'badge bg-danger';
         badge.textContent = 'Coke Reload';
+    } else if (manualReassignMode) {
+        badge.className = 'badge bg-warning text-dark';
+        badge.textContent = 'Reroute Outbound';
     } else {
         badge.className = 'badge bg-success';
         badge.textContent = 'Outbound Coke';
     }
+    currentRouting = routing;
 
     currentOpenOrders = data.orders || [];
     const select = document.getElementById('orderSelect');
@@ -1333,14 +1442,22 @@ async function generateOrder(shipmentCode, routing) {
     const data = await apiPost('generate_order', {
         shipment_code: shipmentCode,
         car_id: currentCar.id,
+        routing,
     });
     if (!data.success) {
         alert(data.error || 'Generate failed');
         return;
     }
-    await loadOrders(routing);
+    await loadOrders(routing, { forceReassign: manualReassignMode });
     const select = document.getElementById('orderSelect');
-    select.value = data.waybill_number;
+    if (data.waybill_number) {
+        select.value = data.waybill_number;
+    }
+    if ((data.orders_created || 1) > 1) {
+        const resultEl = document.getElementById('assignResult');
+        resultEl.innerHTML =
+            `<span class="text-muted">Created ${data.orders_created} orders for ${data.shipment_code}. Select one to assign this car.</span>`;
+    }
     updateAssignBtnState();
 }
 
@@ -1363,18 +1480,22 @@ document.getElementById('assignBtn').addEventListener('click', async () => {
         resultEl.innerHTML = `<span class="text-danger">${data.error || 'Assign failed'}</span>`;
         return;
     }
-    const unloadNote = (data.unloaded_first || data.closed_prior_order)
-        ? '<span class="text-muted">Prior order closed · </span>'
-        : '';
+    const priorOrderNote = data.closed_prior_order
+        ? (data.preserved_load
+            ? '<span class="text-muted">Prior order closed · car stays loaded · </span>'
+            : '<span class="text-muted">Prior order closed · </span>')
+        : (data.unloaded_first
+            ? '<span class="text-muted">Prior order cleared · </span>'
+            : '');
     const workflowNote = formatInTrainWorkflowNote(data);
     const workflowHtml = workflowNote
         ? `<div class="text-muted mt-1">${workflowNote}</div>`
         : '';
     resultEl.innerHTML =
-        `<span class="text-success"><i class="bi bi-check-circle"></i> ${unloadNote}${data.message} (${data.car_reporting_marks})</span>`
+        `<span class="text-success"><i class="bi bi-check-circle"></i> ${priorOrderNote}${data.message} (${data.car_reporting_marks})</span>`
         + workflowHtml;
     hideOrderSection();
-    hideNextCarButton();
+    hideWeighActionButtons();
     await loadCarsAtScale();
     if (nextCarId && document.querySelector(`.car-list-item[data-car-id="${nextCarId}"]`)) {
         await selectCar(nextCarId);

@@ -52,6 +52,7 @@ try {
                     'has_load' => track_scale_car_has_load($car),
                     'has_active_order' => $active_order !== null,
                     'needs_assignment' => track_scale_car_needs_assignment($car, $dbc, $config),
+                    'allows_scale_reassign' => track_scale_car_allows_scale_reassign($car, $dbc, $config),
                     'requires_train_reassign_confirm' => track_scale_car_requires_train_reassign_confirm(
                         $car,
                         $dbc,
@@ -403,10 +404,14 @@ try {
             $body = track_scale_read_json_body();
             $shipment_code = trim($body['shipment_code'] ?? '');
             $car_id = $body['car_id'] ?? null;
+            $routing = $body['routing'] ?? 'outbound';
             if ($shipment_code === '') {
                 track_scale_json_error('Missing shipment_code');
             }
-            $result = track_scale_generate_order($dbc, $shipment_code, $car_id, $config);
+            if (!in_array($routing, ['outbound', 'reload'], true)) {
+                track_scale_json_error('Invalid routing');
+            }
+            $result = track_scale_generate_order($dbc, $shipment_code, $car_id, $config, $routing);
             if (!$result['success']) {
                 track_scale_json_error($result['error'], 500);
             }
@@ -436,6 +441,7 @@ try {
                 'car_code' => $result['car_code'] ?? '',
                 'unloaded_first' => !empty($result['unloaded_first']),
                 'closed_prior_order' => !empty($result['closed_prior_order']),
+                'preserved_load' => !empty($result['preserved_load']),
                 'previous_status' => $result['previous_status'] ?? null,
                 'returned_to_train' => !empty($result['returned_to_train']),
                 'train_job' => $result['train_job'] ?? null,

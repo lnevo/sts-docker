@@ -37,10 +37,12 @@ function track_scale_default_config()
         'precision' => 2,
         'routing_tolerance_tons' => 5.0,
         'loading_location_code' => 'SOUTH-YARD-SCALE',
+        'outbound_loading_location_code' => 'EAST-YARD',
+        'reload_loading_location_code' => 'SOUTH-YARD-SCALE',
         'api_base_url' => '/sts/api/index.php',
         'commodity_code' => 'COKE',
         'shipments' => [
-            'outbound' => ['COKE-001', 'COKE-002'],
+            'outbound' => ['COKE-USS', 'COKE-CLEV', 'COKE-USS-BULK', 'COKE-CLEV-BULK'],
             'reload' => ['COKE-RELOAD-001'],
         ],
         'default_profiles' => [
@@ -2301,15 +2303,14 @@ function track_scale_counts_toward_weigh_stat($car, $dbc, $config = null)
     if (!track_scale_car_weighable($car, $dbc, $config)) {
         return false;
     }
-    if (!track_scale_car_needs_assignment($car, $dbc, $config)) {
-        return false;
-    }
     // Match the weigh UI: empty/tare-only weighs do not offer order assignment.
     if (track_scale_car_weighs_unloaded($car)) {
         return false;
     }
-
-    return true;
+    if (track_scale_car_needs_assignment($car, $dbc, $config)) {
+        return true;
+    }
+    return track_scale_car_allows_scale_reassign($car, $dbc, $config);
 }
 
 function track_scale_get_south_yard_train_jobs($dbc, $config = null)
@@ -2524,6 +2525,44 @@ function track_scale_car_requires_train_reassign_confirm($car, $dbc, $config = n
     return track_scale_car_active_order_unloads_at_scale($dbc, $car['id'], $config);
 }
 
+function track_scale_car_in_coke_fleet($dbc, $car_id, $config = null)
+{
+    if ($dbc === null) {
+        return false;
+    }
+    $config = $config ?? track_scale_load_config();
+    $car_id = mysqli_real_escape_string($dbc, (string) $car_id);
+    $commodity_code = mysqli_real_escape_string($dbc, $config['commodity_code'] ?? 'COKE');
+
+    $sql = 'SELECT COUNT(*) AS cnt
+            FROM pool
+            INNER JOIN shipments ON shipments.id = pool.shipment_id
+            INNER JOIN commodities ON commodities.id = shipments.consignment
+            WHERE pool.car_id = "' . $car_id . '"
+              AND commodities.code = "' . $commodity_code . '"';
+    $rs = mysqli_query($dbc, $sql);
+    if (!$rs) {
+        return false;
+    }
+    $row = mysqli_fetch_assoc($rs);
+    return ((int) ($row['cnt'] ?? 0)) > 0;
+}
+
+function track_scale_car_allows_scale_reassign($car, $dbc = null, $config = null)
+{
+    if ($dbc === null || !is_array($car)) {
+        return false;
+    }
+    $config = $config ?? track_scale_load_config();
+    if (!track_scale_car_weighable($car, $dbc, $config)) {
+        return false;
+    }
+    if (!track_scale_car_has_load($car)) {
+        return false;
+    }
+    return track_scale_car_in_coke_fleet($dbc, $car['id'], $config);
+}
+
 function track_scale_car_needs_assignment($car, $dbc = null, $config = null)
 {
     if (!is_array($car)) {
@@ -2558,6 +2597,9 @@ function track_scale_build_car_response($car, $config = null, $dbc = null)
     $requires_train_reassign = ($dbc !== null)
         ? track_scale_car_requires_train_reassign_confirm($car, $dbc, $config)
         : false;
+    $allows_scale_reassign = ($dbc !== null)
+        ? track_scale_car_allows_scale_reassign($car, $dbc, $config)
+        : false;
     $weigh_source = $car['weigh_source'] ?? null;
     if ($weigh_source === null) {
         if ($in_train) {
@@ -2582,6 +2624,7 @@ function track_scale_build_car_response($car, $config = null, $dbc = null)
             'has_load' => track_scale_car_has_load($car),
             'has_active_order' => $active_order !== null,
             'needs_assignment' => track_scale_car_needs_assignment($car, $dbc, $config),
+            'allows_scale_reassign' => $allows_scale_reassign,
             'requires_train_reassign_confirm' => $requires_train_reassign,
             'inbound_to_scale' => $requires_train_reassign,
             'active_waybill' => $active_order['waybill_number'] ?? null,
@@ -2605,14 +2648,42 @@ function track_scale_shipment_codes_for_routing($routing, $config = null)
     if ($routing === 'reload') {
         return $shipments['reload'] ?? ['COKE-RELOAD-001'];
     }
-    return $shipments['outbound'] ?? ['COKE-001', 'COKE-002'];
+    return $shipments['outbound'] ?? ['COKE-USS', 'COKE-CLEV', 'COKE-USS-BULK', 'COKE-CLEV-BULK'];
+}
+
+function track_scale_loading_location_for_routing($routing, $config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    if ($routing === 'reload') {
+        return $config['reload_loading_location_code']
+            ?? $config['loading_location_code']
+            ?? 'SOUTH-YARD-SCALE';
+    }
+    return $config['outbound_loading_location_code'] ?? 'EAST-YARD';
+}
+
+function track_scale_orders_to_create($min_amount, $max_amount)
+{
+    $min_amount = max(0, (int) $min_amount);
+    $max_amount = max(0, (int) $max_amount);
+    if ($max_amount < $min_amount) {
+        $max_amount = $min_amount;
+    }
+    if ($min_amount === $max_amount) {
+        return max(1, $min_amount);
+    }
+
+    return max(1, (int) round(mt_rand($min_amount * 100, $max_amount * 100) / 100));
 }
 
 function track_scale_get_open_orders($dbc, $car_id, $routing, $config = null)
 {
     $config = $config ?? track_scale_load_config();
     $car_id = mysqli_real_escape_string($dbc, $car_id);
-    $loading_code = mysqli_real_escape_string($dbc, $config['loading_location_code'] ?? 'SOUTH-YARD-SCALE');
+    $loading_code = mysqli_real_escape_string(
+        $dbc,
+        track_scale_loading_location_for_routing($routing, $config)
+    );
     $commodity_code = mysqli_real_escape_string($dbc, $config['commodity_code'] ?? 'COKE');
     $shipment_codes = track_scale_shipment_codes_for_routing($routing, $config);
 
@@ -2710,11 +2781,12 @@ function track_scale_next_manual_waybill($dbc, $session_number)
     return str_pad($session_number, 3, '0', STR_PAD_LEFT) . '-M' . str_pad($counter, 2, '0', STR_PAD_LEFT);
 }
 
-function track_scale_generate_order($dbc, $shipment_code, $car_id = null, $config = null)
+function track_scale_generate_order($dbc, $shipment_code, $car_id = null, $config = null, $routing = 'outbound')
 {
     $config = $config ?? track_scale_load_config();
     $shipment_code = trim((string) $shipment_code);
     $shipment_esc = mysqli_real_escape_string($dbc, $shipment_code);
+    $routing = in_array($routing, ['outbound', 'reload'], true) ? $routing : 'outbound';
 
     if ($car_id !== null && !track_scale_car_in_pool_for_shipment($dbc, $car_id, $shipment_code, $config)) {
         return ['success' => false, 'error' => 'Car is not in the pool for shipment ' . $shipment_code];
@@ -2733,15 +2805,18 @@ function track_scale_generate_order($dbc, $shipment_code, $car_id = null, $confi
     $shipment = mysqli_fetch_assoc($rs);
     $shipment_id = $shipment['id'];
 
-    $loading_code = mysqli_real_escape_string($dbc, $config['loading_location_code'] ?? 'SOUTH-YARD-SCALE');
+    $expected_loading_code = mysqli_real_escape_string(
+        $dbc,
+        track_scale_loading_location_for_routing($routing, $config)
+    );
     $sql = 'SELECT shipments.id
             FROM shipments
             INNER JOIN locations ON locations.id = shipments.loading_location
             WHERE shipments.id = "' . mysqli_real_escape_string($dbc, $shipment_id) . '"
-              AND locations.code = "' . $loading_code . '"';
+              AND locations.code = "' . $expected_loading_code . '"';
     $rs = mysqli_query($dbc, $sql);
     if (!$rs || mysqli_num_rows($rs) < 1) {
-        return ['success' => false, 'error' => 'Shipment does not load from the scale location'];
+        return ['success' => false, 'error' => 'Shipment does not load from ' . track_scale_loading_location_for_routing($routing, $config)];
     }
 
     $sql = 'UPDATE shipments SET last_ship_date = ' . (int) $session_number . ' WHERE id = "' . mysqli_real_escape_string($dbc, $shipment_id) . '"';
@@ -2749,18 +2824,25 @@ function track_scale_generate_order($dbc, $shipment_code, $car_id = null, $confi
         return ['success' => false, 'error' => 'Update error: ' . mysqli_error($dbc)];
     }
 
-    $waybill_number = track_scale_next_manual_waybill($dbc, $session_number);
-    $sql = 'INSERT INTO car_orders (waybill_number, shipment, car)
-            VALUES ("' . mysqli_real_escape_string($dbc, $waybill_number) . '",
-                    "' . mysqli_real_escape_string($dbc, $shipment_id) . '",
-                    "0")';
-    if (!mysqli_query($dbc, $sql)) {
-        return ['success' => false, 'error' => 'Insert error: ' . mysqli_error($dbc)];
+    $num_cars = track_scale_orders_to_create($shipment['min_amount'], $shipment['max_amount']);
+    $waybill_numbers = [];
+    for ($i = 0; $i < $num_cars; $i++) {
+        $waybill_number = track_scale_next_manual_waybill($dbc, $session_number);
+        $sql = 'INSERT INTO car_orders (waybill_number, shipment, car)
+                VALUES ("' . mysqli_real_escape_string($dbc, $waybill_number) . '",
+                        "' . mysqli_real_escape_string($dbc, $shipment_id) . '",
+                        "0")';
+        if (!mysqli_query($dbc, $sql)) {
+            return ['success' => false, 'error' => 'Insert error: ' . mysqli_error($dbc)];
+        }
+        $waybill_numbers[] = $waybill_number;
     }
 
     return [
         'success' => true,
-        'waybill_number' => $waybill_number,
+        'waybill_number' => $waybill_numbers[0],
+        'waybill_numbers' => $waybill_numbers,
+        'orders_created' => count($waybill_numbers),
         'shipment_code' => $shipment['code'],
     ];
 }
@@ -3120,7 +3202,7 @@ function track_scale_complete_wagon_unload($dbc, $car)
     ];
 }
 
-function track_scale_clear_active_car_orders($dbc, $car_id)
+function track_scale_clear_active_car_orders($dbc, $car_id, $preserve_loaded = false)
 {
     $car_id_esc = mysqli_real_escape_string($dbc, (string) $car_id);
     $del = 'DELETE FROM car_orders WHERE car = "' . $car_id_esc . '"';
@@ -3128,16 +3210,19 @@ function track_scale_clear_active_car_orders($dbc, $car_id)
         return ['success' => false, 'error' => 'Failed to delete car orders: ' . mysqli_error($dbc)];
     }
 
-    $upd = 'UPDATE cars SET status = "Empty", last_spotted = 0 WHERE id = "' . $car_id_esc . '"';
+    $new_status = $preserve_loaded ? 'Loaded' : 'Empty';
+    $upd = 'UPDATE cars SET status = "' . mysqli_real_escape_string($dbc, $new_status) . '",
+            last_spotted = 0
+            WHERE id = "' . $car_id_esc . '"';
     if (!mysqli_query($dbc, $upd)) {
         return ['success' => false, 'error' => 'Failed to update car status: ' . mysqli_error($dbc)];
     }
 
     return [
         'success' => true,
-        'unloaded' => true,
-        'message' => 'Prior car order cleared',
-        'new_status' => 'Empty',
+        'unloaded' => !$preserve_loaded,
+        'message' => $preserve_loaded ? 'Prior car order cleared (load retained)' : 'Prior car order cleared',
+        'new_status' => $new_status,
     ];
 }
 
@@ -3163,11 +3248,13 @@ function track_scale_prepare_car_for_assign($dbc, $car, $config = null)
     }
 
     if ($active_order !== null) {
-        $result = track_scale_clear_active_car_orders($dbc, $car_id);
+        $preserve_loaded = track_scale_car_has_load($car);
+        $result = track_scale_clear_active_car_orders($dbc, $car_id, $preserve_loaded);
         if (!$result['success']) {
             return $result;
         }
         $result['closed_prior_order'] = true;
+        $result['preserved_load'] = $preserve_loaded;
         $result['previous_status'] = $previous_status;
         return $result;
     }
@@ -3213,6 +3300,8 @@ function track_scale_assign_car($dbc, $waybill_number, $car_id, $config = null)
 
     $closed_prior_order = false;
     $previous_status = null;
+    $preserved_load = false;
+    $had_load_before_assign = track_scale_car_has_load($car);
     $prepare = track_scale_prepare_car_for_assign($dbc, $car, $config);
     if (!$prepare['success']) {
         if ($in_train_workflow !== []) {
@@ -3224,7 +3313,10 @@ function track_scale_assign_car($dbc, $waybill_number, $car_id, $config = null)
     if (!empty($prepare['closed_prior_order'])) {
         $closed_prior_order = true;
         $previous_status = $prepare['previous_status'] ?? null;
-        $in_train_workflow[] = 'unloaded';
+        $preserved_load = !empty($prepare['preserved_load']);
+        if (!$preserved_load) {
+            $in_train_workflow[] = 'unloaded';
+        }
     }
     $car = track_scale_get_car_by_id($dbc, $car_id);
     if ($car === null) {
@@ -3262,12 +3354,23 @@ function track_scale_assign_car($dbc, $waybill_number, $car_id, $config = null)
         }
         return $result;
     }
+
+    if ($had_load_before_assign) {
+        $car_id_esc = mysqli_real_escape_string($dbc, $car_id);
+        $upd = 'UPDATE cars SET status = "Loaded" WHERE id = "' . $car_id_esc . '"';
+        if (!mysqli_query($dbc, $upd)) {
+            return ['success' => false, 'error' => 'Failed to retain loaded status after reassignment'];
+        }
+    }
     $in_train_workflow[] = 'assigned';
 
     if ($closed_prior_order) {
         $result['closed_prior_order'] = true;
         $result['previous_status'] = $previous_status;
-        $result['unloaded_first'] = true;
+        $result['preserved_load'] = $preserved_load || $had_load_before_assign;
+        if (!$result['preserved_load']) {
+            $result['unloaded_first'] = true;
+        }
     }
 
     if ($source_job_id > 0) {
