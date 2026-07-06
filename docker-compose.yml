@@ -20,7 +20,7 @@ services:
     # You only want to change the <Source Path on PC> Variable.
     volumes:
       - ~/sts/sts-backups:/var/www/html/sts/backups
-
+      - ~/sts/sts-images:/var/www/html/sts/ImageStore/DB_Images/RollingStock/ 
     depends_on:
       db:
         condition: service_healthy

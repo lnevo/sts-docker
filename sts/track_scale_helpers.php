@@ -65,9 +65,10 @@ function track_scale_default_config()
             ],
         ],
         'simulation' => [
-            'in_tolerance_percent' => 75,
+            'in_tolerance_percent' => 86,
+            'in_tolerance_percent_before_oos' => 25,
             'within_tolerance_spread_tons' => 3.0,
-            'off_tolerance_min_tons' => 5.5,
+            'off_tolerance_min_tons' => 6.0,
             'off_tolerance_max_tons' => 10.0,
         ],
         'calibration' => [
@@ -530,6 +531,25 @@ function track_scale_drift_range_for_sessions($sessions_since, $config = null)
     }
 
     return null;
+}
+
+function track_scale_in_tolerance_percent_for_sessions($sessions_since, $config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    $sim = $config['simulation'] ?? [];
+    $base = (float) ($sim['in_tolerance_percent'] ?? 86.0);
+    $floor = (float) ($sim['in_tolerance_percent_before_oos'] ?? 25.0);
+    $threshold = track_scale_out_of_service_session_threshold($config);
+
+    if ($sessions_since <= 0 || $threshold <= 0) {
+        return $base;
+    }
+    if ($sessions_since >= $threshold) {
+        return $floor;
+    }
+
+    $t = $sessions_since / $threshold;
+    return $base + ($floor - $base) * $t;
 }
 
 function track_scale_out_of_service_session_threshold($config = null)
@@ -1790,14 +1810,14 @@ function track_scale_routing_tolerance_tons($config = null)
     return 5.0;
 }
 
-function track_scale_simulate_net_tons($target_net, $config = null, $seed_key = '')
+function track_scale_simulate_net_tons($target_net, $config = null, $seed_key = '', $sessions_since = 0)
 {
     $config = $config ?? track_scale_load_config();
     $sim = $config['simulation'] ?? [];
     $target = (float) $target_net;
     $tolerance = track_scale_routing_tolerance_tons($config);
 
-    $in_tolerance_pct = (float) ($sim['in_tolerance_percent'] ?? 75.0);
+    $in_tolerance_pct = track_scale_in_tolerance_percent_for_sessions((int) $sessions_since, $config);
     $within_spread = (float) ($sim['within_tolerance_spread_tons'] ?? min(4.5, $tolerance));
     $off_min = (float) ($sim['off_tolerance_min_tons'] ?? ($tolerance + 0.5));
     $off_max = (float) ($sim['off_tolerance_max_tons'] ?? ($tolerance + 9.0));
@@ -1842,7 +1862,8 @@ function track_scale_get_car_true_net($dbc, $reporting_marks, $target_net, $conf
     }
 
     $seed_key = $session_number . '|' . $marks . '|' . $seed_created_at;
-    $net = track_scale_simulate_net_tons($target_net, $config, $seed_key);
+    $sessions_since = track_scale_sessions_since_calibration($dbc);
+    $net = track_scale_simulate_net_tons($target_net, $config, $seed_key, $sessions_since);
 
     $seed['car_weights'][$marks] = $net;
     track_scale_save_seed_state($seed);

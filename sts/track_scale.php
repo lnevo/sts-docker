@@ -229,7 +229,40 @@ $config = track_scale_load_config();
                 font-size: 0.85rem;
             }
         }
-        .routing-reload { color: #dc3545; }
+        .routing-reload {
+            display: block;
+            flex: 1 1 100%;
+            width: 100%;
+            background-color: #dc3545;
+            color: #fff;
+            font-weight: 600;
+            padding: 0.65rem 0.85rem;
+            border-radius: 0.375rem;
+            border: 2px solid #a71d2a;
+        }
+        .routing-reload .bi {
+            color: #fff;
+        }
+        .order-select {
+            width: auto;
+            min-width: 16rem;
+            max-width: 100%;
+        }
+        .order-empty-msg {
+            display: inline-block;
+            width: auto;
+            margin-top: 0.375rem;
+            font-size: 0.75rem;
+            background-color: #ffc107;
+            color: #212529;
+            font-weight: 600;
+            padding: 0.375rem 0.5625rem;
+            border-radius: 0.28rem;
+            border: 1px solid #e0a800;
+        }
+        .order-empty-msg .bi {
+            color: #212529;
+        }
         .routing-outbound { color: #198754; }
         .mode-panel { display: none; }
         .mode-panel.active { display: block; }
@@ -463,17 +496,19 @@ $config = track_scale_load_config();
             </div>
             <div class="card-body">
                 <div class="mb-3">
-                    <label for="orderSelect" class="form-label">Open coke orders (pool + load at scale)</label>
-                    <select class="form-select" id="orderSelect">
-                        <option value="">— Select an order —</option>
+                    <label for="orderSelect" class="form-label">Open coke orders</label>
+                    <select class="form-select order-select" id="orderSelect">
+                        <option value="">— No orders available —</option>
                     </select>
-                    <div id="orderEmptyMsg" class="form-text text-warning d-none">No matching open orders. Generate one below.</div>
+                    <div id="orderEmptyMsg" class="order-empty-msg d-none"><i class="bi bi-exclamation-circle"></i> No matching open orders. Generate one below.</div>
                 </div>
                 <div class="d-flex flex-wrap gap-2 mb-3" id="generateButtons"></div>
-                <div id="inTrainAssignNote" class="alert alert-info py-2 small d-none mb-2"></div>
-                <button type="button" class="btn btn-success" id="assignBtn" disabled>
-                    <i class="bi bi-check2-circle"></i> Assign to Order
-                </button>
+                <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
+                    <button type="button" class="btn btn-success" id="assignBtn" disabled>
+                        <i class="bi bi-check2-circle"></i> Assign to Order
+                    </button>
+                    <div id="inTrainAssignNote" class="alert alert-info py-2 px-3 small d-none mb-0 flex-grow-1"></div>
+                </div>
                 <div id="assignResult" class="mt-2 small"></div>
             </div>
         </div>
@@ -663,6 +698,7 @@ let currentCar = null;
 let currentProfile = null;
 let currentReading = null;
 let currentRouting = null;
+let currentOpenOrders = [];
 let selectedCarId = null;
 let scaleInService = true;
 let pendingNextCar = null;
@@ -759,6 +795,7 @@ function hideOrderSection() {
     document.getElementById('orderSection').classList.add('d-none');
     document.getElementById('assignBtn').disabled = true;
     document.getElementById('assignResult').textContent = '';
+    currentOpenOrders = [];
     const inTrainNote = document.getElementById('inTrainAssignNote');
     if (inTrainNote) {
         inTrainNote.classList.add('d-none');
@@ -766,11 +803,56 @@ function hideOrderSection() {
     }
 }
 
+function getSelectedOpenOrder() {
+    const select = document.getElementById('orderSelect');
+    if (!select || !select.value) {
+        return null;
+    }
+    return currentOpenOrders.find(order => order.waybill_number === select.value) || null;
+}
+
+function updateInTrainAssignNote() {
+    const inTrainNote = document.getElementById('inTrainAssignNote');
+    const select = document.getElementById('orderSelect');
+    if (!inTrainNote || !currentCar || !select) {
+        return;
+    }
+
+    const inTrainCar = currentCar.requires_train_reassign_confirm === true
+        || currentCar.weigh_source === 'in_train';
+    const order = getSelectedOpenOrder();
+    if (!inTrainCar || !order) {
+        inTrainNote.classList.add('d-none');
+        inTrainNote.textContent = '';
+        return;
+    }
+
+    const waybill = order.waybill_number;
+
+    let leadIn;
+    if (currentCar.requires_train_reassign_confirm) {
+        leadIn = 'This car is loaded in train '
+            + (currentCar.train_job ? `<strong>${currentCar.train_job}</strong> ` : '')
+            + 'on inbound order <strong>' + (currentCar.active_waybill || '—') + '</strong> to the scale.';
+    } else {
+        leadIn = 'This car is in train '
+            + (currentCar.train_job ? `<strong>${currentCar.train_job}</strong> ` : '')
+            + 'at the scale.';
+    }
+
+    inTrainNote.classList.remove('d-none');
+    inTrainNote.innerHTML =
+        '<i class="bi bi-info-circle"></i> '
+        + leadIn
+        + ' Reassign to order <strong>' + waybill + '</strong>.';
+}
+
 function updateAssignBtnState() {
     const select = document.getElementById('orderSelect');
     const assignBtn = document.getElementById('assignBtn');
     if (!select || !assignBtn) return;
     assignBtn.disabled = !select.value;
+    updateInTrainAssignNote();
 }
 
 function getNextCarIdInList(currentCarId) {
@@ -1183,7 +1265,7 @@ document.getElementById('weighBtn').addEventListener('click', async () => {
     }
     resultEl.innerHTML = inTol
         ? `<span class="routing-outbound"><i class="bi bi-check-circle"></i> Within ±${fmt(data.reading.tolerance_tons)} t of target — assign to outbound coke order.</span>`
-        : `<span class="routing-reload"><i class="bi bi-exclamation-triangle"></i> Off by ${fmt(data.reading.delta_tons)} t — assign to coke reload.</span>`;
+        : `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Off by ${fmt(data.reading.delta_tons)} t — assign to coke reload.</div>`;
 
     await loadOrders(currentRouting);
 });
@@ -1199,26 +1281,6 @@ async function loadOrders(routing) {
     const section = document.getElementById('orderSection');
     section.classList.remove('d-none');
 
-    const inTrainNote = document.getElementById('inTrainAssignNote');
-    if (inTrainNote) {
-        if (currentCar && currentCar.requires_train_reassign_confirm) {
-            inTrainNote.classList.remove('d-none');
-            inTrainNote.innerHTML =
-                '<i class="bi bi-info-circle"></i> This car is loaded in train '
-                + (currentCar.train_job ? `<strong>${currentCar.train_job}</strong> ` : '')
-                + 'on inbound order <strong>' + (currentCar.active_waybill || '—') + '</strong> '
-                + 'to the scale. Assign replaces that order and returns the car to the train.';
-        } else if (currentCar && currentCar.weigh_source === 'in_train') {
-            inTrainNote.classList.remove('d-none');
-            inTrainNote.innerHTML =
-                '<i class="bi bi-info-circle"></i> Assign will set out at the scale, unload the inbound order, fill the selected order, re-assign to '
-                + (currentCar.train_job || 'the same train') + ', and pick the car back up.';
-        } else {
-            inTrainNote.classList.add('d-none');
-            inTrainNote.textContent = '';
-        }
-    }
-
     const badge = document.getElementById('routingBadge');
     if (routing === 'reload') {
         badge.className = 'badge bg-danger';
@@ -1228,19 +1290,28 @@ async function loadOrders(routing) {
         badge.textContent = 'Outbound Coke';
     }
 
+    currentOpenOrders = data.orders || [];
     const select = document.getElementById('orderSelect');
-    select.innerHTML = '<option value="">— Select an order —</option>';
-    data.orders.forEach(order => {
-        const opt = document.createElement('option');
-        opt.value = order.waybill_number;
-        opt.textContent = `${order.waybill_number} · ${order.shipment_code} → ${order.unloading_location}`;
-        if (order.special_instructions) {
-            opt.textContent += ` (${order.special_instructions})`;
-        }
-        select.appendChild(opt);
-    });
+    select.innerHTML = '';
+    if (currentOpenOrders.length === 0) {
+        const emptyOpt = document.createElement('option');
+        emptyOpt.value = '';
+        emptyOpt.textContent = '— No orders available —';
+        select.appendChild(emptyOpt);
+    } else {
+        currentOpenOrders.forEach(order => {
+            const opt = document.createElement('option');
+            opt.value = order.waybill_number;
+            opt.textContent = `${order.waybill_number} · ${order.shipment_code} → ${order.unloading_location}`;
+            if (order.special_instructions) {
+                opt.textContent += ` (${order.special_instructions})`;
+            }
+            select.appendChild(opt);
+        });
+        select.value = currentOpenOrders[0].waybill_number;
+    }
 
-    document.getElementById('orderEmptyMsg').classList.toggle('d-none', data.orders.length > 0);
+    document.getElementById('orderEmptyMsg').classList.toggle('d-none', currentOpenOrders.length > 0);
 
     const genWrap = document.getElementById('generateButtons');
     genWrap.innerHTML = '';
@@ -1253,7 +1324,6 @@ async function loadOrders(routing) {
         genWrap.appendChild(btn);
     });
 
-    document.getElementById('assignBtn').disabled = true;
     select.onchange = () => updateAssignBtnState();
     updateAssignBtnState();
 }
