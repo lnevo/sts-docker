@@ -35,7 +35,7 @@ function track_scale_default_config()
     return [
         'units' => 'tons',
         'precision' => 2,
-        'reload_tolerance_tons' => 1.9,
+        'routing_tolerance_tons' => 5.0,
         'loading_location_code' => 'SOUTH-YARD-SCALE',
         'api_base_url' => '/sts/api/index.php',
         'commodity_code' => 'COKE',
@@ -65,10 +65,10 @@ function track_scale_default_config()
             ],
         ],
         'simulation' => [
-            'in_tolerance_percent' => 80,
-            'within_tolerance_spread_tons' => 1.9,
-            'off_tolerance_min_tons' => 2.0,
-            'off_tolerance_max_tons' => 8.0,
+            'in_tolerance_percent' => 75,
+            'within_tolerance_spread_tons' => 3.0,
+            'off_tolerance_min_tons' => 5.5,
+            'off_tolerance_max_tons' => 10.0,
         ],
         'calibration' => [
             'adjust_step_tons' => 0.10,
@@ -723,6 +723,36 @@ function track_scale_save_seed_state(array $seed)
         is_array($seed['calibration'] ?? null) ? $seed['calibration'] : []
     );
     return track_scale_write_json_file(track_scale_seed_path(), $seed);
+}
+
+function track_scale_reset_cached_weights($dbc = null, $preserve_calibration = true)
+{
+    track_scale_ensure_data_dir();
+
+    $session_number = 1;
+    if ($dbc !== null) {
+        $session_number = track_scale_get_session_number($dbc);
+    }
+
+    $calibration = null;
+    $path = track_scale_seed_path();
+    if (is_readable($path)) {
+        $existing = track_scale_read_json_file($path, []);
+        if ((int) ($existing['session_number'] ?? 0) > 0 && $dbc === null) {
+            $session_number = (int) $existing['session_number'];
+        }
+        if ($preserve_calibration && !empty($existing['calibration']['locked'])) {
+            $calibration = $existing['calibration'];
+        }
+    }
+
+    $seed = track_scale_default_seed_state($session_number);
+    if ($calibration !== null) {
+        $seed['calibration'] = $calibration;
+    }
+
+    track_scale_write_json_file($path, $seed);
+    return $seed;
 }
 
 function track_scale_is_calibration_locked($dbc, array $seed = null)
@@ -1747,12 +1777,25 @@ function track_scale_normalize_position($position)
     return $position;
 }
 
+function track_scale_routing_tolerance_tons($config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    if (isset($config['routing_tolerance_tons'])) {
+        return (float) $config['routing_tolerance_tons'];
+    }
+    // Legacy key before routing/calibration tolerances were split.
+    if (isset($config['reload_tolerance_tons'])) {
+        return (float) $config['reload_tolerance_tons'];
+    }
+    return 5.0;
+}
+
 function track_scale_simulate_net_tons($target_net, $config = null, $seed_key = '')
 {
     $config = $config ?? track_scale_load_config();
     $sim = $config['simulation'] ?? [];
     $target = (float) $target_net;
-    $tolerance = (float) ($config['reload_tolerance_tons'] ?? 5.0);
+    $tolerance = track_scale_routing_tolerance_tons($config);
 
     $in_tolerance_pct = (float) ($sim['in_tolerance_percent'] ?? 75.0);
     $within_spread = (float) ($sim['within_tolerance_spread_tons'] ?? min(4.5, $tolerance));
@@ -2089,7 +2132,7 @@ function track_scale_car_weighs_unloaded($car)
 function track_scale_classify_net($net_tons, $target_net, $config = null)
 {
     $config = $config ?? track_scale_load_config();
-    $tolerance = (float) ($config['reload_tolerance_tons'] ?? 5.0);
+    $tolerance = track_scale_routing_tolerance_tons($config);
     $delta = abs((float) $net_tons - (float) $target_net);
     $in_tolerance = $delta <= $tolerance;
 
