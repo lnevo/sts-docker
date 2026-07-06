@@ -366,11 +366,7 @@ try {
             break;
 
         case 'calibrate_reset':
-            $lock_error = track_scale_require_calibration_unlocked($dbc);
-            if ($lock_error !== null) {
-                track_scale_json_error($lock_error);
-            }
-            track_scale_reset_calibration();
+            track_scale_clear_saved_calibration_lock($dbc);
             echo json_encode([
                 'success' => true,
                 'message' => 'Calibration reset',

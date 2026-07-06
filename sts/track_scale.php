@@ -1477,7 +1477,7 @@ function renderCalibration(cal) {
         }
     });
 
-    document.getElementById('calResetBtn').disabled = calibrationLocked;
+    document.getElementById('calResetBtn').disabled = false;
     const saveBtn = document.getElementById('calSaveBtn');
     if (saveBtn) {
         saveBtn.disabled = calibrationLocked || !cal.all_calibrated;
@@ -1503,8 +1503,8 @@ function renderCalibration(cal) {
     if (calibrationLocked) {
         const savedAt = cal.calibration_saved_at ? ` (${fmtTimestamp(cal.calibration_saved_at)})` : '';
         statusEl.innerHTML =
-            '<span class="text-success"><i class="bi bi-lock-fill"></i> Calibration saved and locked for this session'
-            + savedAt + '.</span>';
+            '<span class="text-success"><i class="bi bi-lock-fill"></i> Calibration saved for this session'
+            + savedAt + '. Use <strong>Reset calibration</strong> to adjust again.</span>';
     } else if (sessionsSince > 0 && lastCal.session_number != null) {
         statusEl.innerHTML =
             `<span class="text-warning"><i class="bi bi-exclamation-triangle"></i> `
@@ -1608,13 +1608,18 @@ document.querySelectorAll('.cal-fine-toggle').forEach(toggle => {
 });
 
 async function saveCalibration() {
+    const saveBtn = document.getElementById('calSaveBtn');
+    if (!saveBtn || saveBtn.disabled) return;
+    saveBtn.disabled = true;
     const data = await apiPost('calibrate_save');
     if (!data.success) {
         document.getElementById('calStatus').innerHTML =
             `<span class="text-danger">${data.error || 'Could not save calibration'}</span>`;
+        saveBtn.disabled = false;
         return;
     }
     renderCalibration(data.calibration);
+    refreshCalibrationMeta();
 }
 
 document.getElementById('calSaveBtn').addEventListener('click', saveCalibration);
@@ -1627,14 +1632,18 @@ async function refreshCalibrationState() {
 }
 
 document.getElementById('calResetBtn').addEventListener('click', async () => {
+    const resetBtn = document.getElementById('calResetBtn');
+    if (resetBtn) resetBtn.disabled = true;
     const data = await apiPost('calibrate_reset');
     if (!data.success) {
         document.getElementById('calStatus').innerHTML =
             `<span class="text-danger">${data.error || 'Could not reset calibration'}</span>`;
+        if (resetBtn) resetBtn.disabled = false;
         return;
     }
     if (data.calibration) {
         renderCalibration(data.calibration);
+        refreshCalibrationMeta();
         return;
     }
     await refreshCalibrationState();

@@ -194,9 +194,15 @@ function track_scale_default_settings()
     ];
 }
 
-function track_scale_load_settings()
+function &track_scale_settings_ref()
 {
     static $settings = null;
+    return $settings;
+}
+
+function track_scale_load_settings()
+{
+    $settings = &track_scale_settings_ref();
     if ($settings !== null) {
         return $settings;
     }
@@ -213,9 +219,18 @@ function track_scale_save_settings(array $settings)
 {
     $settings['version'] = (int) ($settings['version'] ?? 1);
     if (track_scale_write_json_file(track_scale_settings_path(), $settings)) {
+        $cache = &track_scale_settings_ref();
+        $cache = $settings;
         return $settings;
     }
     return null;
+}
+
+function track_scale_clear_last_calibration()
+{
+    $settings = track_scale_load_settings();
+    unset($settings['last_calibration']);
+    return track_scale_save_settings($settings);
 }
 
 function track_scale_default_seed_state($session_number)
@@ -879,6 +894,7 @@ function track_scale_sync_session_calibration($dbc)
         $_SESSION['track_scale']['out_of_service'] = track_scale_is_out_of_service($dbc);
         $_SESSION['track_scale']['calibration_history_valid'] = false;
         $_SESSION['track_scale']['drift_applied_sessions'] = -1;
+        $_SESSION['track_scale']['synced_session_number'] = $session_number;
         return;
     }
 
@@ -972,6 +988,7 @@ function track_scale_sync_session_calibration($dbc)
             }
             $_SESSION['track_scale']['drift_applied_sessions'] = $sessions_since;
         }
+        $_SESSION['track_scale']['synced_session_number'] = $session_number;
         return;
     }
 
@@ -1067,7 +1084,7 @@ function track_scale_save_calibration($dbc, $config = null)
     }
 
     $calibration = track_scale_build_calibration_readings($config, $dbc);
-    if (empty($calibration['all_calibrated'])) {
+    if (!track_scale_calibration_ready_to_save($config)) {
         return ['success' => false, 'error' => 'All three sensors must read zero error before saving calibration'];
     }
 
@@ -1496,6 +1513,47 @@ function track_scale_reset_calibration()
         'center' => false,
         'right' => false,
     ];
+}
+
+function track_scale_clear_saved_calibration_lock($dbc)
+{
+    $seed = track_scale_load_seed_state($dbc);
+    $seed = track_scale_unlock_seed_calibration($seed);
+    track_scale_save_seed_state($seed);
+    track_scale_clear_last_calibration();
+    track_scale_reset_calibration();
+    track_scale_session_init();
+
+    $session_number = (int) ($seed['session_number'] ?? track_scale_get_session_number($dbc));
+    $_SESSION['track_scale']['calibration_locked'] = false;
+    $_SESSION['track_scale']['calibration_history_valid'] = false;
+    $_SESSION['track_scale']['sessions_since_calibration'] = track_scale_sessions_since_calibration($dbc);
+    $_SESSION['track_scale']['out_of_service'] = true;
+    $_SESSION['track_scale']['drift_session_key'] = $session_number;
+    $_SESSION['track_scale']['drift_applied_sessions'] = -1;
+    $_SESSION['track_scale']['synced_session_number'] = $session_number;
+    unset($_SESSION['track_scale']['calibration_init_reset_for']);
+}
+
+function track_scale_calibration_ready_to_save($config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    track_scale_session_init();
+
+    foreach (track_scale_sensor_positions() as $position) {
+        if (!track_scale_sensor_has_reading($position)) {
+            return false;
+        }
+
+        $error = track_scale_get_sensor_error($position, $config);
+        $adjustment = track_scale_get_sensor_adjustment($position);
+        $residual = track_scale_round($error + $adjustment, $config);
+        if (abs($residual) >= 0.005) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 function track_scale_get_scale_car_position()
