@@ -109,9 +109,10 @@
         $dest_station_update = 'dest_station_id = ' . $_GET['dest_station_id'] . ', ';
       }
       
-      // assemble the sql statement and add a final column setting the row id to itself
-      // this is so we don't have to worry about a trailing comma from one of the columns causing a syntax error
-      $sql .= $status_update . $commodity_update . $car_code_update . $dest_station_update . 'pu_criteria.id = pu_criteria.id';
+      // assemble the sql statement; scope update to the selected pickup row only
+      $sql .= $status_update . $commodity_update . $car_code_update . $dest_station_update;
+      $sql = rtrim($sql, ', ');
+      $sql .= ' where id = ' . intval($_GET['pickup_id']);
 //print 'SQL: ' . $sql . '<br /><br />';
       if(!mysqli_query($dbc, $sql))
       {
