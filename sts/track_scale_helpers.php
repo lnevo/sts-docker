@@ -43,7 +43,7 @@ function track_scale_default_config()
         'commodity_code' => 'COKE',
         'shipments' => [
             'outbound' => ['COKE-USS', 'COKE-CLEV', 'COKE-USS-BULK', 'COKE-CLEV-BULK'],
-            'reload' => ['COKE-RELOAD-NORTH'],
+            'reload' => ['COKE-RELOAD-SHEN'],
         ],
         'default_profiles' => [
             '50ft_hopper' => [
@@ -2646,7 +2646,7 @@ function track_scale_shipment_codes_for_routing($routing, $config = null)
     $config = $config ?? track_scale_load_config();
     $shipments = $config['shipments'] ?? [];
     if ($routing === 'reload') {
-        return $shipments['reload'] ?? ['COKE-RELOAD-NORTH'];
+        return $shipments['reload'] ?? ['COKE-RELOAD-SHEN'];
     }
     return $shipments['outbound'] ?? ['COKE-USS', 'COKE-CLEV', 'COKE-USS-BULK', 'COKE-CLEV-BULK'];
 }
