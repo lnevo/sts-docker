@@ -825,7 +825,7 @@ function carNeedsAssignment(car) {
 
 function carHasFinalUnloadAssignment(car) {
     if (!car || !car.has_active_order || !car.active_unloading_location) return false;
-    return car.active_unloading_location.toUpperCase() !== 'SOUTH-YARD-SCALE';
+    return car.active_unloading_location.toUpperCase() !== 'SOUTH-SCALE';
 }
 
 function shouldOfferReassignButton(car, reading) {
@@ -1547,7 +1547,7 @@ function renderCalibration(cal) {
     }
 
     const testCarAtScale = cal.test_car_at_scale !== false;
-    const scaleLocation = cal.scale_location || 'SOUTH-YARD-SCALE';
+    const scaleLocation = cal.scale_location || 'SOUTH-SCALE';
 
     if (testCarAtScale) {
         updateCalTrackCar(cal.scale_car_position || 'left');

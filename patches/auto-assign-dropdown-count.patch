@@ -1,0 +1,147 @@
+diff --git a/sts/drop_down_list_functions.php b/sts/drop_down_list_functions.php
+index c4ff928..8ea4ae5 100644
+--- a/sts/drop_down_list_functions.php
++++ b/sts/drop_down_list_functions.php
+@@ -382,46 +382,118 @@
+ 
+   ///////////////////////////////////////////////////////////////////////
+ 
+-  function pending_assignment_counts_by_job($dbc)
++  /**
++   * Car IDs eligible for auto-assign on a job (same rules as auto_assign.php).
++   * Returns unique car ids matching any pu_criteria row for the job.
++   */
++  function auto_assign_eligible_car_ids_for_job($dbc, $job_name, $unassigned_only = true)
+   {
+-    $counts = [];
+-    $jobs_rs = mysqli_query($dbc, 'select id, name from jobs order by name');
+-    if (!$jobs_rs)
++    $car_ids = [];
++    $job_name_esc = mysqli_real_escape_string($dbc, $job_name);
++
++    $crit_rs = mysqli_query(
++      $dbc,
++      'SELECT step_nbr, dest_station_id, car_status
++         FROM pu_criteria
++        WHERE job_id = "' . $job_name_esc . '"'
++    );
++    if (!$crit_rs)
+     {
+-      return $counts;
++      return $car_ids;
+     }
+ 
+-    while ($job = mysqli_fetch_array($jobs_rs))
++    while ($crit = mysqli_fetch_array($crit_rs))
+     {
+-      $job_id = $job['id'];
+-      $job_name = $job['name'];
+-      $counts[$job_id] = 0;
+-
+-      $stations_rs = mysqli_query($dbc, 'select distinct station from `' . $job_name . '` where pickup = "T"');
+-      if (!$stations_rs || mysqli_num_rows($stations_rs) === 0)
++      $step_nbr = (int) $crit['step_nbr'];
++      $dest_station_id = (int) $crit['dest_station_id'];
++
++      $step_rs = mysqli_query(
++        $dbc,
++        'SELECT station FROM `' . $job_name . '` WHERE step_number = ' . $step_nbr
++      );
++      if (!$step_rs || mysqli_num_rows($step_rs) === 0)
+       {
+         continue;
+       }
++      $step_row = mysqli_fetch_array($step_rs);
++      $pickup_station_id = (int) $step_row['station'];
++
++      $pickup_location_ids = [];
++      $pickup_rs = mysqli_query(
++        $dbc,
++        'SELECT id FROM locations WHERE station = ' . $pickup_station_id
++      );
++      while ($pickup_row = mysqli_fetch_array($pickup_rs))
++      {
++        $pickup_location_ids[] = (int) $pickup_row['id'];
++      }
+ 
+-      $station_ids = [];
+-      while ($station_row = mysqli_fetch_array($stations_rs))
++      $dest_location_ids = [];
++      $dest_rs = mysqli_query(
++        $dbc,
++        'SELECT id FROM locations WHERE station = ' . $dest_station_id
++      );
++      while ($dest_row = mysqli_fetch_array($dest_rs))
+       {
+-        $station_ids[] = '"' . $station_row['station'] . '"';
++        $dest_location_ids[] = (int) $dest_row['id'];
+       }
+ 
+-      $count_sql = 'select count(*) as cnt
+-                      from cars
+-                      join locations on locations.id = cars.current_location_id
+-                     where cars.status in ("Ordered", "Loaded")
+-                       and cars.handled_by_job_id = 0
+-                       and locations.station in (' . implode(', ', $station_ids) . ')';
+-      $count_rs = mysqli_query($dbc, $count_sql);
+-      if ($count_rs && ($count_row = mysqli_fetch_array($count_rs)))
++      if (count($pickup_location_ids) === 0 || count($dest_location_ids) === 0)
++      {
++        continue;
++      }
++
++      $pickup_location_string = implode(', ', $pickup_location_ids);
++      $dest_location_string = implode(', ', $dest_location_ids);
++      $unassigned_clause = $unassigned_only ? ' AND cars.handled_by_job_id = 0' : '';
++
++      $sql = 'SELECT DISTINCT cars.id
++                FROM cars
++                INNER JOIN car_orders ON cars.id = car_orders.car
++                INNER JOIN shipments ON shipments.id = car_orders.shipment
++               WHERE cars.current_location_id IN (' . $pickup_location_string . ')' . $unassigned_clause . '
++                 AND (
++                       (cars.status = "Ordered"
++                        AND NOT (car_orders.waybill_number LIKE "%E%")
++                        AND shipments.loading_location IN (' . $dest_location_string . '))
++                    OR (cars.status = "Loaded"
++                        AND shipments.unloading_location IN (' . $dest_location_string . '))
++                    OR (cars.status = "Ordered"
++                        AND car_orders.waybill_number LIKE "%E%"
++                        AND car_orders.shipment IN (' . $dest_location_string . '))
++                 )';
++
++      $car_rs = mysqli_query($dbc, $sql);
++      if (!$car_rs)
+       {
+-        $counts[$job_id] = (int)$count_row['cnt'];
++        continue;
++      }
++      while ($car_row = mysqli_fetch_array($car_rs))
++      {
++        $car_ids[(int) $car_row['id']] = true;
+       }
+     }
+ 
++    return $car_ids;
++  }
++
++  function pending_assignment_counts_by_job($dbc)
++  {
++    $counts = [];
++    $jobs_rs = mysqli_query($dbc, 'select id, name from jobs order by name');
++    if (!$jobs_rs)
++    {
++      return $counts;
++    }
++
++    while ($job = mysqli_fetch_array($jobs_rs))
++    {
++      $job_id = (int) $job['id'];
++      $job_name = $job['name'];
++      $eligible = auto_assign_eligible_car_ids_for_job($dbc, $job_name, true);
++      $counts[$job_id] = count($eligible);
++    }
++
+     return $counts;
+   }
+ 

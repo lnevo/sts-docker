@@ -36,14 +36,14 @@ function track_scale_default_config()
         'units' => 'tons',
         'precision' => 2,
         'routing_tolerance_tons' => 5.0,
-        'loading_location_code' => 'SOUTH-YARD-SCALE',
-        'outbound_loading_location_code' => 'EAST-YARD',
-        'reload_loading_location_code' => 'SOUTH-YARD-SCALE',
+        'loading_location_code' => 'SOUTH-SCALE',
+        'outbound_loading_location_code' => 'NORTH',
+        'reload_loading_location_code' => 'SOUTH-SCALE',
         'api_base_url' => '/sts/api/index.php',
         'commodity_code' => 'COKE',
         'shipments' => [
             'outbound' => ['COKE-USS', 'COKE-CLEV', 'COKE-USS-BULK', 'COKE-CLEV-BULK'],
-            'reload' => ['COKE-RELOAD-EAST'],
+            'reload' => ['COKE-RELOAD-NORTH'],
         ],
         'default_profiles' => [
             '50ft_hopper' => [
@@ -2010,7 +2010,7 @@ function track_scale_record_weigh_log($dbc, $reporting_marks, array $reading, $c
 function track_scale_loading_location_code($config = null)
 {
     $config = $config ?? track_scale_load_config();
-    return (string) ($config['loading_location_code'] ?? 'SOUTH-YARD-SCALE');
+    return (string) ($config['loading_location_code'] ?? 'SOUTH-SCALE');
 }
 
 function track_scale_south_yard_routing_id($dbc, $config = null)
@@ -2646,7 +2646,7 @@ function track_scale_shipment_codes_for_routing($routing, $config = null)
     $config = $config ?? track_scale_load_config();
     $shipments = $config['shipments'] ?? [];
     if ($routing === 'reload') {
-        return $shipments['reload'] ?? ['COKE-RELOAD-EAST'];
+        return $shipments['reload'] ?? ['COKE-RELOAD-NORTH'];
     }
     return $shipments['outbound'] ?? ['COKE-USS', 'COKE-CLEV', 'COKE-USS-BULK', 'COKE-CLEV-BULK'];
 }
@@ -2657,9 +2657,9 @@ function track_scale_loading_location_for_routing($routing, $config = null)
     if ($routing === 'reload') {
         return $config['reload_loading_location_code']
             ?? $config['loading_location_code']
-            ?? 'SOUTH-YARD-SCALE';
+            ?? 'SOUTH-SCALE';
     }
-    return $config['outbound_loading_location_code'] ?? 'EAST-YARD';
+    return $config['outbound_loading_location_code'] ?? 'NORTH';
 }
 
 function track_scale_orders_to_create($min_amount, $max_amount)
