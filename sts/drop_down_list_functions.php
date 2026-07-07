@@ -447,30 +447,43 @@
       $dest_location_string = implode(', ', $dest_location_ids);
       $unassigned_clause = $unassigned_only ? ' AND cars.handled_by_job_id = 0' : '';
 
-      $sql = 'SELECT DISTINCT cars.id
-                FROM cars
-                INNER JOIN car_orders ON cars.id = car_orders.car
-                INNER JOIN shipments ON shipments.id = car_orders.shipment
-               WHERE cars.current_location_id IN (' . $pickup_location_string . ')' . $unassigned_clause . '
-                 AND (
-                       (cars.status = "Ordered"
-                        AND NOT (car_orders.waybill_number LIKE "%E%")
-                        AND shipments.loading_location IN (' . $dest_location_string . '))
-                    OR (cars.status = "Loaded"
-                        AND shipments.unloading_location IN (' . $dest_location_string . '))
-                    OR (cars.status = "Ordered"
-                        AND car_orders.waybill_number LIKE "%E%"
-                        AND car_orders.shipment IN (' . $dest_location_string . '))
-                 )';
+      $sql_revenue = 'SELECT DISTINCT cars.id
+                        FROM cars
+                        INNER JOIN car_orders ON cars.id = car_orders.car
+                        INNER JOIN shipments ON shipments.id = car_orders.shipment
+                       WHERE cars.current_location_id IN (' . $pickup_location_string . ')' . $unassigned_clause . '
+                         AND (
+                               (cars.status = "Ordered"
+                                AND car_orders.waybill_number NOT LIKE "%E%"
+                                AND shipments.loading_location IN (' . $dest_location_string . '))
+                            OR (cars.status = "Loaded"
+                                AND shipments.unloading_location IN (' . $dest_location_string . '))
+                         )';
 
-      $car_rs = mysqli_query($dbc, $sql);
-      if (!$car_rs)
+      $car_rs = mysqli_query($dbc, $sql_revenue);
+      if ($car_rs)
       {
-        continue;
+        while ($car_row = mysqli_fetch_array($car_rs))
+        {
+          $car_ids[(int) $car_row['id']] = true;
+        }
       }
-      while ($car_row = mysqli_fetch_array($car_rs))
+
+      $sql_reposition = 'SELECT DISTINCT cars.id
+                           FROM cars
+                           INNER JOIN car_orders ON cars.id = car_orders.car
+                          WHERE cars.current_location_id IN (' . $pickup_location_string . ')' . $unassigned_clause . '
+                            AND cars.status = "Ordered"
+                            AND car_orders.waybill_number LIKE "%E%"
+                            AND car_orders.shipment IN (' . $dest_location_string . ')';
+
+      $car_rs = mysqli_query($dbc, $sql_reposition);
+      if ($car_rs)
       {
-        $car_ids[(int) $car_row['id']] = true;
+        while ($car_row = mysqli_fetch_array($car_rs))
+        {
+          $car_ids[(int) $car_row['id']] = true;
+        }
       }
     }
 

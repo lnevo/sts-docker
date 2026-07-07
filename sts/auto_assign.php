@@ -34,6 +34,42 @@
   // bring in the utility files
   require 'open_db.php';
 
+  function append_auto_assign_pickup_rows($dbc, $row2, $rs3, &$pickup_list, &$pickup_list_counter)
+  {
+    while ($row3 = mysqli_fetch_array($rs3))
+    {
+      $pickup_list[$pickup_list_counter] = $row2['station'];
+      $pickup_list[$pickup_list_counter] .= ', ' . $row3['reporting_marks'];
+      $pickup_list[$pickup_list_counter] .= ', ' . $row3['car_code'];
+      $pickup_list[$pickup_list_counter] .= ', ' . $row3['status'];
+      $pickup_list[$pickup_list_counter] .= ', ' . $row3['waybill_number'];
+      if (($row3['status'] == 'Ordered') && (strpos($row3['waybill_number'], 'E') === false))
+      {
+        $pickup_list[$pickup_list_counter] .= ', ' . $row3['commodity'];
+        $pickup_list[$pickup_list_counter] .= ', ' . $row3['loading_station'];
+        $pickup_list[$pickup_list_counter] .= ', ' . $row3['loading_location'];
+      }
+      else if ($row3['status'] == 'Loaded')
+      {
+        $pickup_list[$pickup_list_counter] .= ', ' . $row3['commodity'];
+        $pickup_list[$pickup_list_counter] .= ', ' . $row3['unloading_station'];
+        $pickup_list[$pickup_list_counter] .= ', ' . $row3['unloading_location'];
+      }
+      else if (($row3['status'] == 'Ordered') && (strpos($row3['waybill_number'], 'E') !== false))
+      {
+        $sql6 = 'select routing.station, locations.code from routing, locations
+                 where locations.id = ' . $row3['shipment'] . ' and routing.id = locations.station';
+        $rs6 = mysqli_query($dbc, $sql6);
+        $row6 = mysqli_fetch_array($rs6);
+        $pickup_list[$pickup_list_counter] .= ', REPOSITIONING EMPTY';
+        $pickup_list[$pickup_list_counter] .= ', ' . $row6['station'];
+        $pickup_list[$pickup_list_counter] .= ', ' . $row6['code'];
+      }
+      $pickup_list[$pickup_list_counter] .= ', ' . $row3['id'];
+      $pickup_list_counter++;
+    }
+  }
+
   // get a database connection
   $dbc = open_db();
 
@@ -169,81 +205,60 @@
           $dest_search_string .= $row5['id'] . ', ';
         }
         $dest_search_string = rtrim($dest_search_string, ', ');
-  //print 'dest_search_string: ' . $dest_search_string . '<br /><br />';     
-        // build the query depending on the three types of status: billed/loaded/empty
-        $sql3 = 'select cars.id,
-                        cars.reporting_marks as reporting_marks,
-                        car_codes.code as car_code,
-                        cars.status as status,
-                        car_orders.waybill_number as waybill_number,
-                        car_orders.shipment as shipment,
-                        commodities.code as commodity,
-                        r1.station as unloading_station,
-                        r2.station as loading_station,
-                        loc1.code as unloading_location,
-                        loc2.code as loading_location
-                   from cars
-                   inner join car_orders on cars.id = car_orders.car
-                   inner join shipments on shipments.id = car_orders.shipment
-                   inner join commodities on commodities.id = shipments.consignment
-                   inner join car_codes on cars.car_code_id = car_codes.Id
-                   inner join locations loc1 on shipments.unloading_location = loc1.id
-                   inner join locations loc2 on shipments.loading_location = loc2.id
-                   inner join routing r1 on loc1.station = r1.id
-                   inner join routing r2 on loc2.station = r2.id
-                   where cars.current_location_id in (' . $current_location_string . ')
-                     and ((cars.status =  "Ordered"
-                           and not (car_orders.waybill_number like "%E%")
-                           and shipments.loading_location in (' . $dest_search_string . '))
-                          or
-                          (cars.status = "Loaded"
-                           and shipments.unloading_location in (' . $dest_search_string . '))
-                          or
-                          (cars.status = "Ordered"
-                           and car_orders.waybill_number like "%E%"
-                           and car_orders.shipment in (' . $dest_search_string . '))
-                         )';
-  //print 'SQL3: ' . $sql3 . '<br /><br />';
-        // store the pickup list information for future use
-        $rs3 = mysqli_query($dbc, $sql3);
-        while ($row3 = mysqli_fetch_array($rs3))
+  //print 'dest_search_string: ' . $dest_search_string . '<br /><br />';
+        if (strlen($current_location_string) > 0 && strlen($dest_search_string) > 0)
         {
-          $pickup_list[$pickup_list_counter] = $row2['station']; // pickup station
-          $pickup_list[$pickup_list_counter] .= ', ' . $row3['reporting_marks'];
-          $pickup_list[$pickup_list_counter] .= ', ' . $row3['car_code'];
-          $pickup_list[$pickup_list_counter] .= ', ' . $row3['status'];
-          $pickup_list[$pickup_list_counter] .= ', ' . $row3['waybill_number'];
-          if (($row3['status'] == 'Ordered') && (!strpos($row3['waybill_number'], 'E')))
-          {
-            // an ordered car with no "E" in the waybill number has been ordered for loading
-            $pickup_list[$pickup_list_counter] .= ', ' . $row3['commodity'];
-            $pickup_list[$pickup_list_counter] .= ', ' . $row3['loading_station'];
-            $pickup_list[$pickup_list_counter] .= ', ' . $row3['loading_location'];
-          }
-          else if ($row3['status'] == 'Loaded')
-          {
-            $pickup_list[$pickup_list_counter] .= ', ' . $row3['commodity'];
-            $pickup_list[$pickup_list_counter] .= ', ' . $row3['unloading_station'];
-            $pickup_list[$pickup_list_counter] .= ', ' . $row3['unloading_location'];
-          }
-          else if (($row3['status'] == 'Ordered') && (strpos($row3['waybill_number'], 'E')))
-          {
-            // an ordered car with an "E" in the waybill number has been ordered for repositioning
-            // get the actual destination which is stored in the shipment field of the car order
-            $sql6 = 'select routing.station, locations.code from routing, locations
-                     where locations.id = ' . $row3['shipment'] . ' and routing.id = locations.station';
-            $rs6 = mysqli_query($dbc, $sql6);
-            $row6 = mysqli_fetch_array($rs6);
-            $pickup_list[$pickup_list_counter] .= ', REPOSITIONING EMPTY';
-            $pickup_list[$pickup_list_counter] .= ', ' . $row6['station'];
-            $pickup_list[$pickup_list_counter] .= ', ' . $row6['code'];
-          }
-          // send the car id along so we can use it to assign the car to the designated job/train
-          $pickup_list[$pickup_list_counter] .= ', ' . $row3['id'];
-          
-          // bump the counter
-          $pickup_list_counter++;
-        }        
+          // Revenue moves: car_orders.shipment links to shipments.id
+          $sql3_revenue = 'select cars.id,
+                                  cars.reporting_marks as reporting_marks,
+                                  car_codes.code as car_code,
+                                  cars.status as status,
+                                  car_orders.waybill_number as waybill_number,
+                                  car_orders.shipment as shipment,
+                                  commodities.code as commodity,
+                                  r1.station as unloading_station,
+                                  r2.station as loading_station,
+                                  loc1.code as unloading_location,
+                                  loc2.code as loading_location
+                             from cars
+                             inner join car_orders on cars.id = car_orders.car
+                             inner join shipments on shipments.id = car_orders.shipment
+                             inner join commodities on commodities.id = shipments.consignment
+                             inner join car_codes on cars.car_code_id = car_codes.Id
+                             inner join locations loc1 on shipments.unloading_location = loc1.id
+                             inner join locations loc2 on shipments.loading_location = loc2.id
+                             inner join routing r1 on loc1.station = r1.id
+                             inner join routing r2 on loc2.station = r2.id
+                            where cars.current_location_id in (' . $current_location_string . ')
+                              and ((cars.status = "Ordered"
+                                    and car_orders.waybill_number not like "%E%"
+                                    and shipments.loading_location in (' . $dest_search_string . '))
+                                   or
+                                   (cars.status = "Loaded"
+                                    and shipments.unloading_location in (' . $dest_search_string . ')))';
+          append_auto_assign_pickup_rows($dbc, $row2, mysqli_query($dbc, $sql3_revenue), $pickup_list, $pickup_list_counter);
+
+          // Non-revenue repositions: car_orders.shipment holds destination location id
+          $sql3_reposition = 'select cars.id,
+                                     cars.reporting_marks as reporting_marks,
+                                     car_codes.code as car_code,
+                                     cars.status as status,
+                                     car_orders.waybill_number as waybill_number,
+                                     car_orders.shipment as shipment,
+                                     "" as commodity,
+                                     "" as unloading_station,
+                                     "" as loading_station,
+                                     "" as unloading_location,
+                                     "" as loading_location
+                                from cars
+                                inner join car_orders on cars.id = car_orders.car
+                                inner join car_codes on cars.car_code_id = car_codes.Id
+                               where cars.current_location_id in (' . $current_location_string . ')
+                                 and cars.status = "Ordered"
+                                 and car_orders.waybill_number like "%E%"
+                                 and car_orders.shipment in (' . $dest_search_string . ')';
+          append_auto_assign_pickup_rows($dbc, $row2, mysqli_query($dbc, $sql3_reposition), $pickup_list, $pickup_list_counter);
+        }
       }
       print '</table>';
       

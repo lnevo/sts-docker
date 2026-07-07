@@ -7,7 +7,7 @@ Notes for work done on **`track-scale`** (or main HART layout branch) that must 
 ## 1. Auto-assign dropdown counts (Build Switch Lists)
 
 **Date:** 2026-07-06  
-**Status:** Applied on `track-scale` — **not yet on `ui-improvements`**
+**Status:** Applied on `track-scale` and `ui-improvements` (includes E-waybill reposition fix)
 
 ### Problem
 On **Build Switch Lists → Auto-Assign**, the job dropdown shows a count in parentheses (e.g. `CK1 (6)`). That number did **not** match the cars listed on `auto_assign.php` (e.g. 4).
@@ -27,7 +27,9 @@ Example: CK1 counted 2 extra **Ordered** cars at North Yard that were not coke /
 1. Add `auto_assign_eligible_car_ids_for_job()` — same matching rules as `auto_assign.php` (unique car IDs per job).
 2. Change `pending_assignment_counts_by_job()` to use that helper instead of the broad station-only `COUNT(*)`.
 
-Non-revenue waybills (`waybill_number LIKE '%E%'`) are **included** in auto-assign and in the new count logic.
+**Also fixed in `auto_assign.php`:** split revenue and E-waybill reposition into two queries (reposition rows cannot join `shipments`).
+
+Non-revenue waybills (`waybill_number LIKE '%E%'`) are **included** in auto-assign and in the new count logic. E-waybill repositions store the destination in `car_orders.shipment` as a **location id** (not `shipments.id`), so they use a separate query without joining `shipments`.
 
 ### Apply on `ui-improvements`
 
