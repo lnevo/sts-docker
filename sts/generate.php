@@ -131,6 +131,7 @@
       $dbc = open_db();
       $orders_generated = false;
       $generated_order_count = 0;
+      $orders_generated_alert_html = '';
 
       // bring in and display the current operating session number
       $sql = 'select setting_value from settings where setting_name = "session_nbr"';
@@ -330,10 +331,10 @@
 
       if ($orders_generated)
       {
-        print '<div class="alert alert-success noprint d-flex align-items-center justify-content-between gap-3 flex-wrap">';
-        print '<span>' . $generated_order_count . ' car order(s) ready for filling.</span>';
-        print '<a class="btn btn-success" href="fill_orders.php">Go to Fill Car Orders</a>';
-        print '</div>';
+        $orders_generated_alert_html = '<div class="alert alert-success noprint d-flex align-items-center justify-content-between gap-3 flex-wrap mb-3">'
+            . '<span>' . htmlspecialchars((string)$generated_order_count) . ' car order(s) ready for filling.</span>'
+            . '<a class="btn btn-success" href="fill_orders.php">Go to Fill Car Orders</a>'
+            . '</div>';
       }
 
       $next_session_number = (int)$session_number + 1;
@@ -358,6 +359,11 @@
                    </div>
                  </div>
                </div>';
+
+      if ($orders_generated_alert_html !== '')
+      {
+        print $orders_generated_alert_html;
+      }
 
 //-------------------------------------------- automatic generation -------------------------------------------
 

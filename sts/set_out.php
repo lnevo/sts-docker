@@ -69,7 +69,7 @@
         </div>
       </div>
     </nav>
-    <div class="px-4">
+    <div class="px-4 py-3">
     <h5 class="mb-3">Set Out Cars</h5>
     <form action="set_out.php" method="get">
     <?php
@@ -79,6 +79,7 @@
 
       // get a database connection
       $dbc = open_db();
+      $workflow_alert_html = '';
 
       // get the current session number
       $sql = 'select setting_value from settings where setting_name = "session_nbr"';
@@ -283,18 +284,25 @@
             }
           }
         }
-        print '<div class="alert alert-success noprint ops-workflow-alert">';
-        print '<span>' . $num_cars_set_out . ' car(s) set out.</span>';
-        print '<a class="btn btn-success" href="build_switchlists.php">Return to Build Switch Lists</a>';
-        print '</div>';
+        $workflow_alert_html = '<div class="alert alert-success noprint ops-workflow-alert mb-4">'
+            . '<span>' . htmlspecialchars((string)$num_cars_set_out) . ' car(s) set out.</span>'
+            . '<a class="btn btn-success" href="build_switchlists.php">Return to Build Switch Lists</a>'
+            . '</div>';
       }
-      print '<div class="noprint">';
-      // choose to display all set out location possibilities for the selected job or only the default locations
-      print '<div class="form-check mb-2"><input type="checkbox" class="form-check-input" name="default_loc" id="default_loc" onchange="reset_job();"><label class="form-check-label" for="default_loc">Show default set-out locations only</label></div>';
-
-      // generate the list of jobs from which the user can choose
-      print '<p class="text-muted mb-1">Select a job to do the setouts:</p>';
+      print '<div class="row g-3 mb-4 noprint">';
+      print '<div class="col-md-6">';
+      print '<div class="card h-100">';
+      print '<div class="card-header fw-semibold"><i class="bi bi-train-front"></i> Select Job / Train</div>';
+      print '<div class="card-body">';
+      print '<p class="card-text text-muted small mb-2">Choose the job or train doing the setouts.</p>';
+      print '<div class="form-check mb-3"><input type="checkbox" class="form-check-input" name="default_loc" id="default_loc" onchange="reset_job();"><label class="form-check-label" for="default_loc">Show default set-out locations only</label></div>';
       print drop_down_jobs("job_list", '', "get_jobs_and_cars();", "setout");
+      print '</div></div></div></div>';
+
+      if ($workflow_alert_html !== '')
+      {
+        print $workflow_alert_html;
+      }
     ?>
       <!-- print button is in the navbar -->
       <div id="instructions" class="ops-workflow noprint d-none">
@@ -326,7 +334,6 @@
           </div>
         </div>
       </div>
-    </div>
     <div id="job_table_div">
       <!-- the guts of the table are filled in by the HttpRequest call-back function -->
     </div>

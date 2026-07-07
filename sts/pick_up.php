@@ -86,7 +86,7 @@
         </div>
       </div>
     </nav>
-    <div class="px-4">
+    <div class="px-4 py-3">
     <h5 class="mb-3">Pick Up Cars</h5>
     <form action="pick_up.php" method="get">
     <?php
@@ -96,6 +96,7 @@
 
       // get a database connection
       $dbc = open_db();
+      $workflow_alert_html = '';
 
       // was the Finish button clicked?
       if (isset($_GET['finish_btn']))
@@ -175,14 +176,24 @@
             }
           }
         }
-        print '<div class="alert alert-success noprint ops-workflow-alert">';
-        print '<span>' . $num_cars_picked_up . ' car(s) picked up.</span>';
-        print '<a class="btn btn-success" href="set_out.php">Go to Set Out Cars</a>';
-        print '</div>';
+        $workflow_alert_html = '<div class="alert alert-success noprint ops-workflow-alert mb-4">'
+            . '<span>' . htmlspecialchars((string)$num_cars_picked_up) . ' car(s) picked up.</span>'
+            . '<a class="btn btn-success" href="set_out.php">Go to Set Out Cars</a>'
+            . '</div>';
       }
-      print '<div class="noprint">';
-      print '<p class="text-muted mb-1">Select a job to do the pickups:</p>';
+      print '<div class="row g-3 mb-4 noprint">';
+      print '<div class="col-md-6">';
+      print '<div class="card h-100">';
+      print '<div class="card-header fw-semibold"><i class="bi bi-train-front"></i> Select Job / Train</div>';
+      print '<div class="card-body">';
+      print '<p class="card-text text-muted small mb-2">Choose the job or train doing the pickups.</p>';
       print drop_down_jobs("job_list", '', "get_jobs_and_cars();", "pickup");
+      print '</div></div></div></div>';
+
+      if ($workflow_alert_html !== '')
+      {
+        print $workflow_alert_html;
+      }
     ?>
       <div id="instructions" class="ops-workflow noprint d-none">
         <div class="ops-panel">
@@ -210,7 +221,6 @@
           </div>
         </div>
       </div>
-    </div>
     <div id="job_table_div">
       <!-- the guts of the table are filled in by the HttpRequest call-back function -->
     </div>
