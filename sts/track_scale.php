@@ -397,7 +397,7 @@ $config = track_scale_load_config();
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
             <h5 class="mb-1">South Yard Scale</h5>
-            <p class="text-muted small mb-0">Pick a coke car at the scale or on a South Yard train, weigh it, and assign the matching order. In-tolerance loads ship outbound; off-tolerance loads reload. Use <strong>Reassign Order</strong> after an in-tolerance weigh to reroute a car already on an outbound order.</p>
+            <p class="text-muted small mb-0">Pick a coke car at the scale or on a South Yard train, weigh it, and assign the matching order. Balanced loads ship outbound; improperly balanced loads reload. Use <strong>Reassign Order</strong> after a balanced weigh to reroute a car already on an outbound order.</p>
         </div>
         <div class="btn-group" role="group" aria-label="Scale mode">
             <input type="radio" class="btn-check" name="scaleMode" id="modeWeigh" autocomplete="off" checked>
@@ -1333,7 +1333,7 @@ document.getElementById('weighBtn').addEventListener('click', async () => {
     showNextCarButton(data.next_car);
     if (!shouldShowAssignAfterWeigh(currentCar, data.reading)) {
         const baseMsg = assignedOrderMessage(currentCar)
-            || '<span class="text-muted">Weigh complete — load within tolerance on assigned order.</span>';
+            || '<span class="text-muted">Weigh complete — load balanced on assigned order.</span>';
         const reassignHint = shouldOfferReassignButton(currentCar, data.reading)
             ? ' <span class="text-muted">Use <strong>Reassign Order</strong> to change destination.</span>'
             : '';
@@ -1348,8 +1348,8 @@ document.getElementById('weighBtn').addEventListener('click', async () => {
     }
     hideReassignButton();
     resultEl.innerHTML = inTol
-        ? `<span class="routing-outbound"><i class="bi bi-check-circle"></i> Within ±${fmt(data.reading.tolerance_tons)} t of target — assign to outbound coke order.</span>`
-        : `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Off by ${fmt(data.reading.delta_tons)} t — assign to coke reload.</div>`;
+        ? `<span class="routing-outbound"><i class="bi bi-check-circle"></i> Left/right sensors within ±${fmt(data.reading.tolerance_tons)} t — assign to outbound coke order.</span>`
+        : `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Improperly balanced — left/right differ by ${fmt(data.reading.delta_tons)} t — assign to coke reload.</div>`;
 
     await loadOrders(currentRouting);
 });

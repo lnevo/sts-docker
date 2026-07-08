@@ -67,9 +67,13 @@ function track_scale_default_config()
             ],
         ],
         'simulation' => [
+            // AAR GIB No. 5 / Circular 42 grain balance rules applied to coke loads.
+            // Failures are cross-side imbalance (left vs right sensors), not underweight net.
             'in_tolerance_percent' => 86,
             'in_tolerance_percent_before_oos' => 25,
+            // Max left-right gross spread for a balanced load.
             'within_tolerance_spread_tons' => 3.0,
+            // Left-right gross spread range for imbalanced loads routed to reload.
             'off_tolerance_min_tons' => 6.0,
             'off_tolerance_max_tons' => 10.0,
         ],
@@ -1870,23 +1874,38 @@ function track_scale_routing_tolerance_tons($config = null)
     return 5.0;
 }
 
-function track_scale_simulate_net_tons($target_net, $config = null, $seed_key = '', $sessions_since = 0)
+function track_scale_normalize_car_load_entry($entry)
+{
+    if (is_array($entry)) {
+        return [
+            'true_net_tons' => (float) ($entry['true_net_tons'] ?? $entry['net_tons'] ?? 0.0),
+            'balance_shift_tons' => (float) ($entry['balance_shift_tons'] ?? 0.0),
+        ];
+    }
+
+    return [
+        'true_net_tons' => (float) $entry,
+        'balance_shift_tons' => 0.0,
+    ];
+}
+
+function track_scale_simulate_car_load($target_net, $config = null, $seed_key = '', $sessions_since = 0)
 {
     $config = $config ?? track_scale_load_config();
     $sim = $config['simulation'] ?? [];
     $target = (float) $target_net;
-    $tolerance = track_scale_routing_tolerance_tons($config);
+    $balance_tolerance = track_scale_routing_tolerance_tons($config);
 
     $in_tolerance_pct = track_scale_in_tolerance_percent_for_sessions((int) $sessions_since, $config);
-    $within_spread = (float) ($sim['within_tolerance_spread_tons'] ?? min(4.5, $tolerance));
-    $off_min = (float) ($sim['off_tolerance_min_tons'] ?? ($tolerance + 0.5));
-    $off_max = (float) ($sim['off_tolerance_max_tons'] ?? ($tolerance + 9.0));
+    $within_spread = (float) ($sim['within_tolerance_spread_tons'] ?? min(4.5, $balance_tolerance));
+    $off_min = (float) ($sim['off_tolerance_min_tons'] ?? ($balance_tolerance + 0.5));
+    $off_max = (float) ($sim['off_tolerance_max_tons'] ?? ($balance_tolerance + 9.0));
 
-    if ($within_spread > $tolerance) {
-        $within_spread = $tolerance;
+    if ($within_spread > $balance_tolerance) {
+        $within_spread = $balance_tolerance;
     }
-    if ($off_min <= $tolerance) {
-        $off_min = $tolerance + 0.1;
+    if ($off_min <= $balance_tolerance) {
+        $off_min = $balance_tolerance + 0.1;
     }
     if ($off_max < $off_min) {
         $off_max = $off_min;
@@ -1896,20 +1915,32 @@ function track_scale_simulate_net_tons($target_net, $config = null, $seed_key = 
         $seed_key = '0';
     }
 
+    // Net stays near target; reload routing is driven by cross-side balance only.
+    $net_jitter = track_scale_deterministic_unit($seed_key, 4) * 2.0 - 1.0;
+    $true_net = max(0.0, min($target, $target + $net_jitter));
+
     $roll = track_scale_deterministic_unit($seed_key, 0) * 100.0;
     if ($roll < $in_tolerance_pct) {
-        $delta = track_scale_deterministic_unit($seed_key, 1) * (2 * $within_spread) - $within_spread;
-        $net = $target + $delta;
+        $lr_spread = track_scale_deterministic_unit($seed_key, 1) * $within_spread;
     } else {
-        $magnitude = $off_min + track_scale_deterministic_unit($seed_key, 2) * ($off_max - $off_min);
-        $sign = track_scale_deterministic_unit($seed_key, 3) >= 0.5 ? 1 : -1;
-        $net = $target + ($sign * $magnitude);
+        $lr_spread = $off_min + track_scale_deterministic_unit($seed_key, 2) * ($off_max - $off_min);
     }
+    $sign = track_scale_deterministic_unit($seed_key, 3) >= 0.5 ? 1 : -1;
+    $balance_shift = $sign * ($lr_spread / 2.0);
 
-    return track_scale_round(max(0.0, $net), $config);
+    return [
+        'true_net_tons' => track_scale_round($true_net, $config),
+        'balance_shift_tons' => track_scale_round($balance_shift, $config),
+    ];
 }
 
-function track_scale_get_car_true_net($dbc, $reporting_marks, $target_net, $config = null)
+function track_scale_simulate_net_tons($target_net, $config = null, $seed_key = '', $sessions_since = 0)
+{
+    $load = track_scale_simulate_car_load($target_net, $config, $seed_key, $sessions_since);
+    return (float) $load['true_net_tons'];
+}
+
+function track_scale_get_car_load_state($dbc, $reporting_marks, $target_net, $config = null)
 {
     $config = $config ?? track_scale_load_config();
     $seed = track_scale_load_seed_state($dbc);
@@ -1918,16 +1949,38 @@ function track_scale_get_car_true_net($dbc, $reporting_marks, $target_net, $conf
     $seed_created_at = track_scale_seed_created_at($seed);
 
     if (array_key_exists($marks, $seed['car_weights'])) {
-        return (float) $seed['car_weights'][$marks];
+        return track_scale_normalize_car_load_entry($seed['car_weights'][$marks]);
     }
 
     $seed_key = $session_number . '|' . $marks . '|' . $seed_created_at;
     $sessions_since = track_scale_sessions_since_calibration($dbc);
-    $net = track_scale_simulate_net_tons($target_net, $config, $seed_key, $sessions_since);
+    $load = track_scale_simulate_car_load($target_net, $config, $seed_key, $sessions_since);
 
-    $seed['car_weights'][$marks] = $net;
+    $seed['car_weights'][$marks] = [
+        'true_net_tons' => $load['true_net_tons'],
+        'balance_shift_tons' => $load['balance_shift_tons'],
+    ];
     track_scale_save_seed_state($seed);
-    return $net;
+
+    return $load;
+}
+
+function track_scale_get_car_true_net($dbc, $reporting_marks, $target_net, $config = null)
+{
+    $load = track_scale_get_car_load_state($dbc, $reporting_marks, $target_net, $config);
+    return (float) $load['true_net_tons'];
+}
+
+function track_scale_sensor_true_gross_values($tare, $true_net, $balance_shift)
+{
+    $base = (float) $tare + (float) $true_net;
+    $shift = (float) $balance_shift;
+
+    return [
+        'left' => $base + $shift,
+        'center' => $base,
+        'right' => $base - $shift,
+    ];
 }
 
 function track_scale_build_sensor_readings($true_gross, $config = null)
@@ -1943,15 +1996,67 @@ function track_scale_build_sensor_readings($true_gross, $config = null)
     return $readings;
 }
 
-function track_scale_build_display_weighing($true_net, $tare, $target_net, $config = null)
+function track_scale_build_sensor_readings_for_load($tare, $true_net, $balance_shift, $config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    $gross_by_position = track_scale_sensor_true_gross_values($tare, $true_net, $balance_shift);
+    $readings = [];
+    foreach (track_scale_sensor_positions() as $position) {
+        $readings[] = [
+            'position' => $position,
+            'display_tons' => track_scale_sensor_display_tons(
+                $position,
+                $gross_by_position[$position],
+                $config
+            ),
+        ];
+    }
+    return $readings;
+}
+
+function track_scale_classify_load_balance(array $sensor_readings, $config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    $tolerance = track_scale_routing_tolerance_tons($config);
+    $left = 0.0;
+    $right = 0.0;
+
+    foreach ($sensor_readings as $reading) {
+        $position = strtolower(trim((string) ($reading['position'] ?? '')));
+        if ($position === 'left') {
+            $left = (float) ($reading['display_tons'] ?? 0.0);
+        } elseif ($position === 'right') {
+            $right = (float) ($reading['display_tons'] ?? 0.0);
+        }
+    }
+
+    $delta = abs($left - $right);
+    $in_tolerance = $delta <= $tolerance;
+
+    return [
+        'in_tolerance' => $in_tolerance,
+        'balance_delta_tons' => track_scale_round($delta, $config),
+        'tolerance_tons' => track_scale_round($tolerance, $config),
+        'routing' => $in_tolerance ? 'outbound' : 'reload',
+        'failure_reason' => $in_tolerance ? null : 'imbalanced',
+    ];
+}
+
+function track_scale_build_display_weighing($true_net, $tare, $target_net, $config = null, $balance_shift = 0.0)
 {
     $config = $config ?? track_scale_load_config();
     $true_net = (float) $true_net;
     $tare = (float) $tare;
+    $balance_shift = (float) $balance_shift;
     $true_gross = $true_net + $tare;
-    $display_gross = track_scale_average_sensor_display_tons($true_gross, $config);
+    $sensor_readings = track_scale_build_sensor_readings_for_load($tare, $true_net, $balance_shift, $config);
+    $display_values = array_column($sensor_readings, 'display_tons');
+    $display_gross = track_scale_round(
+        count($display_values) > 0 ? array_sum($display_values) / count($display_values) : $true_gross,
+        $config
+    );
     $display_net = track_scale_round($display_gross - $tare, $config);
-    $classification = track_scale_classify_net($display_net, $target_net, $config);
+    $classification = track_scale_classify_load_balance($sensor_readings, $config);
 
     return [
         'true_net_tons' => track_scale_round($true_net, $config),
@@ -1960,11 +2065,14 @@ function track_scale_build_display_weighing($true_net, $tare, $target_net, $conf
         'net_tons' => $display_net,
         'tare_tons' => track_scale_round($tare, $config),
         'target_net_tons' => track_scale_round($target_net, $config),
-        'delta_tons' => $classification['delta_tons'],
+        'delta_tons' => $classification['balance_delta_tons'],
+        'net_delta_tons' => track_scale_round(abs($display_net - (float) $target_net), $config),
+        'balance_shift_tons' => track_scale_round($balance_shift, $config),
         'tolerance_tons' => $classification['tolerance_tons'],
         'in_tolerance' => $classification['in_tolerance'],
         'routing' => $classification['routing'],
-        'sensor_readings' => track_scale_build_sensor_readings($true_gross, $config),
+        'failure_reason' => $classification['failure_reason'],
+        'sensor_readings' => $sensor_readings,
     ];
 }
 
@@ -2222,6 +2330,7 @@ function track_scale_classify_net($net_tons, $target_net, $config = null)
         'delta_tons' => track_scale_round($delta, $config),
         'tolerance_tons' => track_scale_round($tolerance, $config),
         'routing' => $in_tolerance ? 'outbound' : 'reload',
+        'failure_reason' => $in_tolerance ? null : 'underweight',
     ];
 }
 
