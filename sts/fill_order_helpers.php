@@ -446,10 +446,43 @@ function fill_order_get_unfilled_waybills($dbc)
             ORDER BY waybill_number';
     $rs = mysqli_query($dbc, $sql);
     $waybills = [];
+    if (!$rs) {
+        return $waybills;
+    }
     while ($row = mysqli_fetch_array($rs)) {
         $waybills[] = $row['waybill_number'];
     }
     return $waybills;
+}
+
+function fill_order_count_unique_available_cars($dbc)
+{
+    if (!($dbc instanceof mysqli)) {
+        return 0;
+    }
+
+    $unique_car_ids = [];
+    $waybills = fill_order_get_unfilled_waybills($dbc);
+
+    foreach ($waybills as $waybill_number) {
+        $order_row = fill_order_get_details($dbc, $waybill_number);
+        if ($order_row === null) {
+            continue;
+        }
+
+        $cars = fill_order_get_available_cars($dbc, $order_row);
+        if (!is_array($cars)) {
+            continue;
+        }
+        foreach ($cars as $car) {
+            $car_id = (int) ($car['car_id'] ?? 0);
+            if ($car_id > 0) {
+                $unique_car_ids[$car_id] = true;
+            }
+        }
+    }
+
+    return count($unique_car_ids);
 }
 
 function fill_order_is_unfilled($car_value)

@@ -4,6 +4,15 @@
 
   function open_db()
   {
+    static $dbc = null;
+
+    if ($dbc instanceof mysqli) {
+      if (@mysqli_ping($dbc)) {
+        return $dbc;
+      }
+      $dbc = null;
+    }
+
     // bring in the credentials
     require 'credentials.php';
 
@@ -88,11 +97,14 @@
     $block_col_found = false;
     $sql = 'describe cars';
     $rs = mysqli_query($dbc, $sql);
-    while($row = mysqli_fetch_array($rs))
+    if ($rs)
     {
-      if ($row[0] == 'block_id')
+      while($row = mysqli_fetch_array($rs))
       {
-        $block_col_found = true;
+        if ($row[0] == 'block_id')
+        {
+          $block_col_found = true;
+        }
       }
     }
     // if the column wasn't found, add it
@@ -125,11 +137,14 @@
     $sql = 'describe cars';
     $rs = mysqli_query($dbc, $sql);
 
-    while($row = mysqli_fetch_array($rs))
+    if ($rs)
     {
-      if ($row[0] == 'last_spotted')
+      while($row = mysqli_fetch_array($rs))
       {
-        $last_spotted_found = true;
+        if ($row[0] == 'last_spotted')
+        {
+          $last_spotted_found = true;
+        }
       }
     }
     
