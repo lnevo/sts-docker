@@ -81,18 +81,25 @@ foreach ($marks_list as $reporting_marks) {
 
     $target_net = (float) $profile['target_net_tons'];
     $tare = (float) $profile['tare_tons'];
-    $true_net = track_scale_get_car_true_net($dbc, $reporting_marks, $target_net, $config);
-    $reading = track_scale_build_display_weighing($true_net, $tare, $target_net, $config);
+    $load = track_scale_get_car_load_state($dbc, $reporting_marks, $target_net, $config);
+    $reading = track_scale_build_display_weighing(
+        (float) $load['true_net_tons'],
+        $tare,
+        $target_net,
+        $config,
+        (float) ($load['balance_shift_tons'] ?? 0.0)
+    );
     $reading['unloaded_weigh'] = false;
     track_scale_record_weigh_log($dbc, $reporting_marks, $reading, $config);
 
     fwrite(STDOUT, sprintf(
-        "%s: true=%.2f display=%.2f target=%.2f delta=%.2f routing=%s\n",
+        "%s: true=%.2f display=%.2f target=%.2f balance_delta=%.2f shift=%.2f routing=%s\n",
         $reporting_marks,
         $reading['true_net_tons'],
         $reading['net_tons'],
         $reading['target_net_tons'],
         $reading['delta_tons'],
+        $reading['balance_shift_tons'] ?? 0.0,
         $reading['routing']
     ));
     $weighed++;
