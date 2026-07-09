@@ -349,6 +349,8 @@
 
       // open a database connection
       $dbc = open_db();
+      $organize_job_total = organize_total_cars_by_job($dbc);
+      $organize_location_total = organize_total_cars_at_locations($dbc);
 
       // set up a Bootstrap card row with two cards: one for jobs, one for locations
       print '<p class="text-muted">Use these functions to view cars in selected trains or on selected tracks and also to organize them in the database so it knows their physical arrangement.</p>';
@@ -356,7 +358,7 @@
       // job card
       print '  <div class="col-md-6">';
       print '    <div class="card h-100">';
-      print '      <div class="card-header fw-semibold"><i class="bi bi-train-front"></i> By Job/Train</div>';
+      print '      <div class="card-header fw-semibold"><i class="bi bi-train-front"></i> By Job/Train - ' . (int) $organize_job_total . '</div>';
       print '      <div class="card-body">';
       print '        <p class="card-text text-muted small">Select a job/train and click <b>VIEW/ORGANIZE</b>.<br />After arranging the cars, click <a href="display_switchlist.php">here</a> to generate an updated switch list.</p>';
       print        drop_down_jobs('job_list', '3', 'enable_org_job_btn()', 'organize') . '<br class="mt-2" />';
@@ -369,7 +371,7 @@
       // location card
       print '  <div class="col-md-6">';
       print '    <div class="card h-100">';
-      print '      <div class="card-header fw-semibold"><i class="bi bi-geo-alt"></i> By Location</div>';
+      print '      <div class="card-header fw-semibold"><i class="bi bi-geo-alt"></i> By Location - ' . (int) $organize_location_total . '</div>';
       print '      <div class="card-body">';
       print '        <p class="card-text text-muted small">Select a location and click <b>VIEW/ORGANIZE</b>.<br />After arranging the cars, click <a href="display_station_report.php">here</a> to generate an updated station car report.</p>';
       print        drop_down_locations('location_list', '0', 'enable_org_loc_btn()', true) . '<br class="mt-2" />';

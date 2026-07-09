@@ -6,6 +6,9 @@ FROM php:8.0-apache-buster
 EXPOSE 80
 
 # Update sources and install all dependencies in a single RUN statement to reduce layers and image size
+# Base is EOL php:8.0-apache-buster served from archive.debian.org; versions there are frozen
+# and pinning specific ones would just make future archive changes brittle.
+# hadolint ignore=DL3008
 RUN sed -i 's|http://deb.debian.org/debian|http://archive.debian.org/debian|g' /etc/apt/sources.list && \
     sed -i '/security.debian.org/d' /etc/apt/sources.list && \
     apt-get update && \
@@ -30,16 +33,21 @@ RUN find /var/www/html -type f -exec chmod 644 {} \; && \
 # Edit permissions for directories and create folder structure
 RUN mkdir -p /var/www/html/sts/temp \
     /var/www/html/sts/ImageStore/DB_Images/barcodes \
-    /var/www/html/sts/ImageStore/DB_Images/qrcodes && \
-    chmod -R 757 /var/www/html/sts/backups \
-    /var/www/html/sts/ImageStore \
-    /var/www/html/sts/temp \
-    /var/www/html/sts/uploads && \
-    chmod 757 /var/www/html/sts/cargo_list.txt && \
+    /var/www/html/sts/ImageStore/DB_Images/qrcodes \
+    /var/www/html/sts/ImageStore/DB_Images/RollingStock \
+    /var/www/html/sts/ImageStore/DB_Images/uploads && \
     chown -R www-data:www-data \
     /var/www/html/sts/backups \
     /var/www/html/sts/temp \
-    /var/www/html/sts/uploads
+    /var/www/html/sts/uploads \
+    /var/www/html/sts/ImageStore \
+    /var/www/html/sts/cargo_list.txt && \
+    chmod -R u=rwX,g=rX,o=rX \
+    /var/www/html/sts/backups \
+    /var/www/html/sts/temp \
+    /var/www/html/sts/uploads \
+    /var/www/html/sts/ImageStore \
+    /var/www/html/sts/cargo_list.txt
 
 # Copy start script
 COPY start.sh /usr/local/bin/

@@ -1,0 +1,11 @@
+---
+description: Shared knowledge base pointer
+alwaysApply: true
+---
+
+Shared context for this repo lives in `llm-wiki/INDEX.md`. Read the index
+first, then load only the page whose `load_when` trigger matches the task.
+Don't bulk-load everything.
+
+Project instructions (architecture, commands) are in `CLAUDE.md` at the repo
+root — read it too, it's tool-agnostic despite the name.

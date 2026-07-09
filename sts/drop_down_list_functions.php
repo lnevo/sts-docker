@@ -490,9 +490,102 @@
     return $car_ids;
   }
 
+  function locations_by_station_map($dbc)
+  {
+    $map = [];
+    $rs = mysqli_query($dbc, 'SELECT id, station FROM locations');
+    if (!$rs)
+    {
+      return $map;
+    }
+
+    while ($row = mysqli_fetch_array($rs))
+    {
+      $station_id = (int) $row['station'];
+      if (!isset($map[$station_id]))
+      {
+        $map[$station_id] = [];
+      }
+      $map[$station_id][] = (int) $row['id'];
+    }
+
+    return $map;
+  }
+
+  function pending_assignment_car_pool($dbc)
+  {
+    $cars = [];
+    $sql = 'SELECT cars.id,
+                   cars.current_location_id,
+                   cars.status,
+                   car_orders.waybill_number,
+                   car_orders.shipment,
+                   shipments.loading_location,
+                   shipments.unloading_location
+              FROM cars
+         LEFT JOIN car_orders ON cars.id = car_orders.car
+         LEFT JOIN shipments ON shipments.id = car_orders.shipment
+             WHERE cars.handled_by_job_id = 0';
+
+    $rs = mysqli_query($dbc, $sql);
+    if (!$rs)
+    {
+      return $cars;
+    }
+
+    while ($row = mysqli_fetch_array($rs))
+    {
+      $cars[(int) $row['id']] = $row;
+    }
+
+    return $cars;
+  }
+
+  function pending_assignment_car_matches_criterion($car, $pickup_location_ids, $dest_location_ids)
+  {
+    if (!in_array((int) $car['current_location_id'], $pickup_location_ids, true))
+    {
+      return false;
+    }
+
+    $waybill_number = $car['waybill_number'] ?? '';
+    $is_reposition = strpos($waybill_number, 'E') !== false;
+
+    if ($is_reposition)
+    {
+      return $car['status'] === 'Ordered'
+        && in_array((int) $car['shipment'], $dest_location_ids, true);
+    }
+
+    if ($car['status'] === 'Ordered')
+    {
+      return in_array((int) $car['loading_location'], $dest_location_ids, true);
+    }
+
+    if ($car['status'] === 'Loaded')
+    {
+      return in_array((int) $car['unloading_location'], $dest_location_ids, true);
+    }
+
+    return false;
+  }
+
   function pending_assignment_counts_by_job($dbc)
   {
     $counts = [];
+    $locations_by_station = locations_by_station_map($dbc);
+    $car_pool = pending_assignment_car_pool($dbc);
+
+    $criteria_by_job = [];
+    $crit_rs = mysqli_query($dbc, 'SELECT job_id, step_nbr, dest_station_id FROM pu_criteria');
+    if ($crit_rs)
+    {
+      while ($crit = mysqli_fetch_array($crit_rs))
+      {
+        $criteria_by_job[$crit['job_id']][] = $crit;
+      }
+    }
+
     $jobs_rs = mysqli_query($dbc, 'select id, name from jobs order by name');
     if (!$jobs_rs)
     {
@@ -503,8 +596,45 @@
     {
       $job_id = (int) $job['id'];
       $job_name = $job['name'];
-      $eligible = auto_assign_eligible_car_ids_for_job($dbc, $job_name, true);
-      $counts[$job_id] = count($eligible);
+      $eligible_ids = [];
+      $criteria = $criteria_by_job[$job_name] ?? [];
+
+      $step_map = [];
+      $step_rs = mysqli_query($dbc, 'SELECT step_number, station FROM `' . $job_name . '`');
+      if ($step_rs)
+      {
+        while ($step_row = mysqli_fetch_array($step_rs))
+        {
+          $step_map[(int) $step_row['step_number']] = (int) $step_row['station'];
+        }
+      }
+
+      foreach ($criteria as $crit)
+      {
+        $step_nbr = (int) $crit['step_nbr'];
+        $pickup_station_id = $step_map[$step_nbr] ?? null;
+        if ($pickup_station_id === null)
+        {
+          continue;
+        }
+
+        $pickup_location_ids = $locations_by_station[$pickup_station_id] ?? [];
+        $dest_location_ids = $locations_by_station[(int) $crit['dest_station_id']] ?? [];
+        if (count($pickup_location_ids) === 0 || count($dest_location_ids) === 0)
+        {
+          continue;
+        }
+
+        foreach ($car_pool as $car_id => $car)
+        {
+          if (pending_assignment_car_matches_criterion($car, $pickup_location_ids, $dest_location_ids))
+          {
+            $eligible_ids[$car_id] = true;
+          }
+        }
+      }
+
+      $counts[$job_id] = count($eligible_ids);
     }
 
     return $counts;
@@ -558,6 +688,44 @@
     }
 
     return $counts;
+  }
+
+  function organize_total_cars_by_job($dbc)
+  {
+    return array_sum(pending_counts_by_job($dbc, 'organize'));
+  }
+
+  function organize_total_cars_at_locations($dbc)
+  {
+    $rs = mysqli_query(
+      $dbc,
+      'SELECT COUNT(*) AS cnt
+         FROM cars
+        WHERE current_location_id > 0'
+    );
+    if ($rs && ($row = mysqli_fetch_array($rs)))
+    {
+      return (int) $row['cnt'];
+    }
+
+    return 0;
+  }
+
+  function organize_total_unique_cars($dbc)
+  {
+    $rs = mysqli_query(
+      $dbc,
+      'SELECT COUNT(*) AS cnt
+         FROM cars
+        WHERE (handled_by_job_id > 0 AND status != "Unavailable")
+           OR current_location_id > 0'
+    );
+    if ($rs && ($row = mysqli_fetch_array($rs)))
+    {
+      return (int) $row['cnt'];
+    }
+
+    return 0;
   }
 
   // jobs

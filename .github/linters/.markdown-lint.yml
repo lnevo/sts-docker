@@ -1,0 +1,20 @@
+# Providing this file overrides (not merges with) super-linter's bundled
+# TEMPLATES/.markdown-lint.yml, so it's reproduced here in full, plus one
+# addition: our docs pair YAML frontmatter (title:, purpose:, ...) with a
+# visible H1 for GitHub rendering, and MD025 otherwise treats the
+# frontmatter title as an implicit top-level heading, flagging the real H1
+# as a duplicate.
+MD004: false # Unordered list style
+MD007:
+  indent: 2 # Unordered list indentation
+MD013:
+  line_length: 400 # Line length 80 is far too short
+MD025:
+  front_matter_title: ""
+MD026:
+  punctuation: ".,;:!。，；:" # List of not allowed
+MD029: false # Ordered list item prefix
+MD033: false # Allow inline HTML
+MD036: false # Emphasis used instead of a heading
+
+blank_lines: false # Error on blank lines

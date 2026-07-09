@@ -71,6 +71,30 @@ mysqli_close($dbc);
       min-width: 5.25rem;
       max-width: 5.25rem;
     }
+    .op-btn-stat-cols-multi {
+      gap: 0;
+      padding-left: 8px;
+      overflow: hidden;
+    }
+    .op-btn-stat-cols-multi .op-stat-col {
+      flex: 1 1 0;
+      min-width: 0;
+      width: auto;
+    }
+    .op-btn-stat-cols-multi .op-stat-label {
+      font-size: 0.55rem;
+    }
+    .op-btn-stat-cols-multi .op-stat-value {
+      font-size: 0.9rem;
+    }
+    .op-stat-sep {
+      color: #ccc;
+      font-size: 0.7rem;
+      line-height: 1;
+      padding: 0 1px;
+      align-self: center;
+      flex-shrink: 0;
+    }
     .op-stat-col {
       text-align: center;
       width: 100%;
@@ -179,7 +203,7 @@ mysqli_close($dbc);
             <div class="op-btn-body">
               <div class="op-btn-title">Organize Cars</div>
             </div>
-            <?php echo operations_render_stat_columns([['label' => 'In Train', 'value' => $stats['in_train']]]); ?>
+            <?php echo operations_render_stat_columns([['label' => 'Cars', 'value' => $stats['organize_unique']]]); ?>
           </a>
           <a href="set_out.php" class="op-btn">
             <i class="bi bi-arrow-down-circle op-icon"></i>

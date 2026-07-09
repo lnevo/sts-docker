@@ -167,7 +167,7 @@ function fill_order_get_available_cars($dbc, $order_row)
         $system_cars[] = array_merge($row, ['category' => 'system']);
     }
 
-    return array_merge($pool_cars, $priority_cars, $station_cars, $system_cars);
+    return array_merge($pool_cars, $station_cars, $priority_cars, $system_cars);
 }
 
 function fill_order_valid_categories()
@@ -344,8 +344,8 @@ function fill_order_pick_car_for_categories($available_cars, $categories, $car_f
 
     $tier_order = [
         ['tier' => 'pool', 'key' => 'pool'],
-        ['tier' => 'priority', 'key' => 'priority'],
         ['tier' => 'station', 'key' => 'station'],
+        ['tier' => 'priority', 'key' => 'priority'],
         ['tier' => 'system', 'key' => 'system'],
     ];
 

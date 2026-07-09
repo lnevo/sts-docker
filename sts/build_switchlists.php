@@ -98,7 +98,7 @@
           $car_name = 'car' . $i;
 
           // does the drop-down list have a job name in it?
-          if (strlen($_POST[$list_name]) > 0)
+          if (isset($_POST[$list_name]) && strlen($_POST[$list_name]) > 0)
           {
             // build a query to update the car's "handled_by" field
             $sql = 'update cars set handled_by_job_id = "' . $_POST[$list_name];

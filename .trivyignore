@@ -1,0 +1,5 @@
+# AVD-DS-0002: no non-root USER. Apache needs root to bind port 80 on this
+# EOL php:8.0-apache-buster base; switching to non-root is a real runtime
+# change (port/setcap rework), not something to do incidentally in a CI PR.
+# Mirrors the existing checkov skip on the same tradeoff in the Dockerfile.
+AVD-DS-0002

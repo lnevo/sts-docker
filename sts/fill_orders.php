@@ -969,7 +969,7 @@ sort($car_filter_location_options, SORT_NATURAL | SORT_FLAG_CASE);
             if (categories.length === 0) {
                 autoAssignStatus.className = 'alert alert-danger mb-3';
                 autoAssignStatus.classList.remove('d-none');
-                autoAssignStatus.innerHTML = 'Select at least one car source in Car filters: Pool, Priority, Station, or System.';
+                autoAssignStatus.innerHTML = 'Select at least one car source in Car filters: Pool, Station, Priority, or System.';
                 return;
             }
 
