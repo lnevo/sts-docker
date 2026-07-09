@@ -1,3 +1,10 @@
+<?php
+  $tbl_name = isset($_POST['tbl_name']) ? $_POST['tbl_name'] : (isset($_GET['tbl_name']) ? $_GET['tbl_name'] : '');
+  if ($tbl_name === 'cars') {
+    require 'list_cars.php';
+    exit;
+  }
+?>
 <html>
   <head>
     <title>STS - Database Management</title>

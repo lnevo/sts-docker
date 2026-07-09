@@ -1,14 +1,3 @@
-<!-- Bootstrap CSS -->
-<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
-<!-- Bootstrap Icons -->
-<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
-<!-- jQuery -->
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<!-- Bootstrap JS -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
-<!-- include the HTML table sort scripts -->
-<script src="sorttable.js"></script>
-
 <?php
   // list_cars.php
   // adds a new car to the cars table if the Update button was clicked
@@ -23,8 +12,7 @@
 
   print '
   <style>
-    /* ── Override parent db_list.php styles ─────────── */
-    body { font: normal 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important; }
+    /* ── Cars page layout ───────────────────────────── */
     #toolbar-card, #toolbar-card *, .d-flex, .d-flex *, .table-responsive, .cell-editor-overlay, .cell-editor-panel { font-family: inherit; }
     #toolbar-card select { font-size: 13px; min-height: 31px; padding: 2px 8px; border: 1px solid #ced4da; border-radius: 4px; width: 100%; background-color: #fff; }
     #instructions { display: none; }
@@ -165,7 +153,11 @@
     }
 
     // Pre-load dropdowns on page load
-    $(function(){ loadDropdownOptions(); });
+    $(function(){
+      loadDropdownOptions();
+      var tooltipList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+      tooltipList.map(function(el) { return new bootstrap.Tooltip(el); });
+    });
 
     /* ── Modal-style editor (works on desktop + touch) ─ */
     function makeEditable(cell, carId, field, fieldType, currentValue) {
@@ -423,7 +415,12 @@
          </script>';
 
   // get a database connection
-  $dbc = open_db();
+  global $dbc;
+  if (!($dbc instanceof mysqli)) {
+    $dbc = open_db();
+  }
+  require_once 'db_cars_stats.php';
+  $car_stats = db_cars_get_stats($dbc);
 
   // has the submit button been clicked?
   if (isset($_POST['update_btn']))
@@ -448,6 +445,8 @@
       }
     }
   }
+
+  print db_cars_render_stats_panel($car_stats);
 
   /* ── Toolbar: Add Car / Filters ───────────────────────────────────── */
   print '
