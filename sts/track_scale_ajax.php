@@ -1,5 +1,5 @@
 <?php
-// track_scale_ajax.php — AJAX API for South Yard track scale
+// track_scale_ajax.php — AJAX API for track scale
 
 require 'open_db.php';
 require 'track_scale_helpers.php';

@@ -1,9 +1,9 @@
 #!/usr/bin/env php
 <?php
 /**
- * Run a catalog test workflow recipe through session_run_recipe (simulation dispatch).
+ * Run a catalog test workflow CSV through session_run_recipe (simulation dispatch).
  *
- * Usage: php run_catalog_workflow.php [recipe.json]
+ * Usage: php run_catalog_workflow.php [workflow.csv]
  */
 if (PHP_SAPI !== 'cli') {
     fwrite(STDERR, "CLI only\n");
@@ -15,22 +15,20 @@ require_once __DIR__ . '/open_db.php';
 require_once __DIR__ . '/session_helpers.php';
 require_once __DIR__ . '/operational_steps_catalog.php';
 
-$defaultRecipe = __DIR__ . '/backups/session_editor/WORKFLOW_TEST_ALL_TYPES.recipe.json';
-$recipePath = $argv[1] ?? $defaultRecipe;
+$defaultCsv = __DIR__ . '/backups/session_editor/WORKFLOW_TEST_ALL_TYPES.csv';
+$csvPath = $argv[1] ?? $defaultCsv;
 
-if (!is_file($recipePath)) {
-    fwrite(STDERR, "Recipe not found: {$recipePath}\n");
-    fwrite(STDERR, "Usage: php run_catalog_workflow.php [recipe.json]\n");
+if (!is_file($csvPath)) {
+    fwrite(STDERR, "Workflow CSV not found: {$csvPath}\n");
+    fwrite(STDERR, "Usage: php run_catalog_workflow.php [workflow.csv]\n");
     exit(1);
 }
 
-$raw = json_decode((string) file_get_contents($recipePath), true);
-if (!is_array($raw)) {
-    fwrite(STDERR, "Invalid recipe JSON: {$recipePath}\n");
-    exit(1);
-}
+$recipe = operational_steps_normalize_recipe(
+    operational_steps_default_recipe_from_csv_file($csvPath)
+);
+$recipe['source_csv'] = basename($csvPath);
 
-$recipe = operational_steps_normalize_recipe($raw);
 $dbc = open_db();
 $result = session_run_recipe($dbc, $recipe, ['format' => 'phased']);
 
@@ -65,7 +63,7 @@ foreach ($result['log'] ?? [] as $entry) {
 }
 
 echo "Catalog workflow run\n";
-echo "  Recipe:   {$recipePath}\n";
+echo "  CSV:      {$csvPath}\n";
 echo "  Session:  " . ($result['session'] ?? '?') . "\n";
 echo "  Steps:    " . count($recipe['steps'] ?? []) . "\n";
 echo "  Phases:   " . ($result['phases'] ?? 0) . "\n";

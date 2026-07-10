@@ -2,6 +2,11 @@
 require 'track_scale_helpers.php';
 track_scale_session_init();
 $config = track_scale_load_config();
+$track_scale_ui = [
+    'siteLabel' => track_scale_site_label($config),
+    'routedTrainsLabel' => track_scale_routed_trains_label($config),
+    'scaleLocation' => track_scale_loading_location_code($config),
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -384,7 +389,7 @@ $config = track_scale_load_config();
 <body>
 <nav class="navbar navbar-dark bg-success mb-4">
     <div class="container-fluid">
-        <span class="navbar-brand"><i class="bi bi-speedometer2"></i> Track Scale — South Yard</span>
+        <span class="navbar-brand"><i class="bi bi-speedometer2"></i> Track Scale — <?= htmlspecialchars($track_scale_ui['siteLabel']) ?></span>
         <div class="d-flex gap-2">
             <a href="operations.php" class="btn btn-outline-light btn-sm">
                 <i class="bi bi-arrow-left"></i> Operations
@@ -396,8 +401,8 @@ $config = track_scale_load_config();
 <div class="container" style="max-width: 960px;">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
-            <h5 class="mb-1">South Yard Scale</h5>
-            <p class="text-muted small mb-0">Pick a coke car at the scale or on a South Yard train, weigh it, and assign the matching order. Balanced loads ship outbound; improperly balanced loads reload. Use <strong>Reassign Order</strong> after a balanced weigh to reroute a car already on an outbound order.</p>
+            <h5 class="mb-1"><?= htmlspecialchars($track_scale_ui['siteLabel']) ?></h5>
+            <p class="text-muted small mb-0">Pick a car at the scale or on a <?= htmlspecialchars(strtolower($track_scale_ui['routedTrainsLabel'])) ?> train, weigh it, and assign the matching order. Balanced loads ship outbound; improperly balanced loads reload. Use <strong>Reassign Order</strong> after a balanced weigh to reroute a car already on an outbound order.</p>
         </div>
         <div class="btn-group" role="group" aria-label="Scale mode">
             <input type="radio" class="btn-check" name="scaleMode" id="modeWeigh" autocomplete="off" checked>
@@ -536,7 +541,7 @@ $config = track_scale_load_config();
                 </div>
             </div>
             <div class="card-body p-0">
-                <div id="carsListEmpty" class="p-3 text-muted d-none">No cars at the scale or on a South Yard train right now.</div>
+                <div id="carsListEmpty" class="p-3 text-muted d-none">No cars at the scale or on a <?= htmlspecialchars(strtolower($track_scale_ui['routedTrainsLabel'])) ?> train right now.</div>
                 <div id="carsListError" class="alert alert-danger m-3 d-none" role="alert"></div>
                 <div class="list-group list-group-flush" id="carsList"></div>
             </div>
@@ -701,6 +706,7 @@ $config = track_scale_load_config();
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 <script>
 const CONFIG = <?php echo json_encode($config, JSON_UNESCAPED_SLASHES); ?>;
+const TRACK_SCALE_UI = <?php echo json_encode($track_scale_ui, JSON_UNESCAPED_SLASHES); ?>;
 const PRECISION = CONFIG.precision ?? 2;
 
 let currentCar = null;
@@ -825,7 +831,7 @@ function carNeedsAssignment(car) {
 
 function carHasFinalUnloadAssignment(car) {
     if (!car || !car.has_active_order || !car.active_unloading_location) return false;
-    return car.active_unloading_location.toUpperCase() !== 'SOUTH-SCALE';
+    return car.active_unloading_location.toUpperCase() !== (TRACK_SCALE_UI.scaleLocation || '').toUpperCase();
 }
 
 function shouldOfferReassignButton(car, reading) {
@@ -1233,7 +1239,7 @@ function renderCar(data) {
     img.src = data.car.image_url + '?' + Date.now();
 
     const locationLabel = data.car.weigh_source === 'in_train'
-        ? ('In train · ' + (data.car.train_job || 'South Yard job'))
+        ? ('In train · ' + (data.car.train_job || TRACK_SCALE_UI.routedTrainsLabel + ' job'))
         : (data.car.current_location || '—');
     document.getElementById('statLocation').textContent = locationLabel;
     document.getElementById('statLocation').className = 'stat-value text-success';
@@ -1547,7 +1553,7 @@ function renderCalibration(cal) {
     }
 
     const testCarAtScale = cal.test_car_at_scale !== false;
-    const scaleLocation = cal.scale_location || 'SOUTH-SCALE';
+    const scaleLocation = cal.scale_location || TRACK_SCALE_UI.scaleLocation || '';
 
     if (testCarAtScale) {
         updateCalTrackCar(cal.scale_car_position || 'left');

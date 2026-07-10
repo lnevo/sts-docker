@@ -46,6 +46,24 @@ files per `CLAUDE.md`.
 CSV generation) belong in the parent **`sts-docker-helpers/`** repo, not under
 `sts-docker/sts/`.
 
-## REST API (wagons / scanning)
+### Session runtime (branches)
+
+| Branch | Contents |
+|--------|----------|
+| `workflow-editor` | Session editor UI/API, catalog, switch-list helpers — **no** `warm_start_helpers.php` or track-scale CLI |
+| `track-scale` | Warm-start simulation, CK1 scale, `warm_start_helpers.php` |
+| `active` | `track-scale` + session editor layered for local full-stack runs |
+
+Bootstrap: `sts/session_runtime.php` loads `warm_start_helpers.php` when present,
+then `sts/session_simulator_ops.php` (filtered fill/reposition/load-unload and
+play-session composites). Recipe editing works on `workflow-editor`; simulator
+dispatch needs `active` or a merge with `track-scale`.
+
+**Data model:** The workflow CSV is the only persisted recipe. Rows are compiled
+from the catalog (`GET ?action=catalog`); jobs, locations, and stations come from
+the DB via `dynamic_options`, not hardcoded PHP lists. Switch-list phases replay
+the CSV steps in a dry-run transaction and capture at each `build_switchlists_sts`
+step for the requested job.
+
 
 Separate from operational steps: `sts/api/` — documented in `sts/api/README.md`.

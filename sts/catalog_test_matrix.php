@@ -28,12 +28,45 @@ function catalog_test_matrix_disabled_adder_commands()
 }
 
 /**
- * Explicit test steps grouped by section. Variants cover multiple param shapes per command.
+ * Explicit test steps grouped by section. When $dbc is provided, job/station samples come from the DB.
  *
  * @return list<array{label: string, steps: list<array{function: string, params: array, description: string}>}>
  */
-function catalog_test_matrix_sections()
+function catalog_test_matrix_sections($dbc = null)
 {
+    $job_a = 'JOB_A';
+    $job_b = 'JOB_B';
+    $station_a = 'Yard';
+    $station_b = 'Offline';
+    $jobs_csv = 'JOB_A,JOB_B';
+    $commodity = '';
+    if ($dbc !== null) {
+        require_once __DIR__ . '/session_helpers.php';
+        $jobs = session_list_switchlist_job_names($dbc);
+        if (count($jobs) > 0) {
+            $job_a = $jobs[0];
+        }
+        if (count($jobs) > 1) {
+            $job_b = $jobs[1];
+        }
+        $jobs_csv = implode(',', array_slice($jobs, 0, 3));
+        $rs = mysqli_query($dbc, 'SELECT routing.station FROM routing ORDER BY routing.station LIMIT 2');
+        $stations = [];
+        while ($rs && ($row = mysqli_fetch_array($rs))) {
+            $stations[] = (string) $row['station'];
+        }
+        if (!empty($stations[0])) {
+            $station_a = $stations[0];
+        }
+        if (!empty($stations[1])) {
+            $station_b = $stations[1];
+        }
+        $rs = mysqli_query($dbc, 'SELECT code FROM commodities ORDER BY code LIMIT 1');
+        if ($rs && ($row = mysqli_fetch_array($rs))) {
+            $commodity = (string) ($row['code'] ?? '');
+        }
+    }
+
     return [
         [
             'label' => '[Catalog test — setup]',
@@ -83,18 +116,18 @@ function catalog_test_matrix_sections()
             'steps' => [
                 [
                     'function' => 'build_switchlists_sts',
-                    'params' => ['station' => 'Demmler', 'job' => 'D749'],
-                    'description' => 'Test: Build Switch Lists (Demmler D749)',
+                    'params' => ['station' => $station_a, 'job' => $job_a],
+                    'description' => 'Test: Build Switch Lists (' . $station_a . ' ' . $job_a . ')',
                 ],
                 [
                     'function' => 'build_switchlists_sts',
-                    'params' => ['station' => 'Scully', 'job' => 'NVL'],
-                    'description' => 'Test: Build Switch Lists (Scully NVL)',
+                    'params' => ['station' => $station_b, 'job' => $job_b],
+                    'description' => 'Test: Build Switch Lists (' . $station_b . ' ' . $job_b . ')',
                 ],
                 [
                     'function' => 'auto_assign_locals',
-                    'params' => ['jobs' => 'D749,NVL,CK1'],
-                    'description' => 'Test: Auto-Assign Cars (explicit jobs)',
+                    'params' => ['jobs' => $jobs_csv, 'station' => $station_a],
+                    'description' => 'Test: Auto-Assign Cars (jobs + station filter)',
                 ],
                 [
                     'function' => 'auto_assign_locals',
@@ -103,8 +136,8 @@ function catalog_test_matrix_sections()
                 ],
                 [
                     'function' => 'pick_up_cars',
-                    'params' => ['job' => 'D749', 'location' => 'Demmler'],
-                    'description' => 'Test: Pick Up Cars (D749 Demmler)',
+                    'params' => ['job' => $job_a, 'location' => $station_a],
+                    'description' => 'Test: Pick Up Cars (' . $job_a . ' ' . $station_a . ')',
                 ],
                 [
                     'function' => 'pick_up_cars',
@@ -113,8 +146,8 @@ function catalog_test_matrix_sections()
                 ],
                 [
                     'function' => 'set_out_cars',
-                    'params' => ['job' => 'D749', 'location' => 'South-Yard'],
-                    'description' => 'Test: Set Out Cars (D749 South-Yard)',
+                    'params' => ['job' => $job_a, 'location' => $station_b],
+                    'description' => 'Test: Set Out Cars (' . $job_a . ' ' . $station_b . ')',
                 ],
                 [
                     'function' => 'set_out_cars',
@@ -122,14 +155,12 @@ function catalog_test_matrix_sections()
                     'description' => 'Test: Set Out Cars (all locals)',
                 ],
                 [
-                    'function' => 'run_job_criterion',
-                    'params' => ['job' => 'NVL', 'steps' => '10,15,20'],
-                    'description' => 'Test: Run Job Criterion Steps',
-                ],
-                [
                     'function' => 'track_scale',
-                    'params' => ['job' => 'CK1'],
-                    'description' => 'Test: Track Scale (CK1)',
+                    'params' => array_filter([
+                        'job' => $job_a,
+                        'commodity' => $commodity,
+                    ]),
+                    'description' => 'Test: Track Scale (' . $job_a . ($commodity !== '' ? ' ' . $commodity : '') . ')',
                 ],
             ],
         ],
@@ -140,36 +171,11 @@ function catalog_test_matrix_sections()
                     'function' => 'load_unload',
                     'params' => [
                         'filters' => [
-                            'current_location' => 'Scully',
+                            'current_location' => $station_b,
                             'status' => 'Loading',
                         ],
                     ],
                     'description' => 'Test: Load / Unload Cars',
-                ],
-            ],
-        ],
-        [
-            'label' => '[Session]',
-            'steps' => [
-                [
-                    'function' => 'increment_session',
-                    'params' => [],
-                    'description' => 'Test: Increment Session Number',
-                ],
-            ],
-        ],
-        [
-            'label' => '[Switch Lists]',
-            'steps' => [
-                [
-                    'function' => 'generate_switchlists',
-                    'params' => ['jobs' => 'all'],
-                    'description' => 'Test: Generate Switch Lists',
-                ],
-                [
-                    'function' => 'generate_waybills',
-                    'params' => [],
-                    'description' => 'Test: Generate Waybill List',
                 ],
             ],
         ],
@@ -185,6 +191,11 @@ function catalog_test_matrix_sections()
                     'function' => 'validate_database',
                     'params' => [],
                     'description' => 'Test: Validate Database',
+                ],
+                [
+                    'function' => 'increment_session',
+                    'params' => [],
+                    'description' => 'Test: Increment Session Number',
                 ],
                 [
                     'function' => 'import_data',
@@ -232,10 +243,10 @@ function catalog_test_matrix_sections()
 }
 
 /** Commands covered by catalog_test_matrix_sections() (one entry per function id). */
-function catalog_test_matrix_covered_command_ids()
+function catalog_test_matrix_covered_command_ids($dbc = null)
 {
     $ids = [];
-    foreach (catalog_test_matrix_sections() as $section) {
+    foreach (catalog_test_matrix_sections($dbc) as $section) {
         foreach ($section['steps'] as $step) {
             $ids[$step['function']] = true;
         }
@@ -254,6 +265,7 @@ function catalog_test_matrix_round_trip_skip()
         'goto',
         'text_instruction',
         'track_scale',
+        'auto_assign_locals',
     ];
 }
 

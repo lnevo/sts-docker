@@ -4,7 +4,8 @@
  * Dry-runs session ops inside a transaction and rolls back so live state is unchanged.
  */
 
-require_once __DIR__ . '/warm_start_helpers.php';
+require_once __DIR__ . '/session_runtime.php';
+session_runtime_bootstrap();
 
 function master_sw_job_meta($dbc, $job_name)
 {
@@ -170,11 +171,6 @@ function master_sw_add_section(array &$sections, $label, array $cars, array $opt
     ], $options);
 }
 
-function master_sw_island_station_id()
-{
-    return 3;
-}
-
 function master_sw_car_id_by_marks($dbc, $marks)
 {
     $marks_esc = mysqli_real_escape_string($dbc, $marks);
@@ -183,33 +179,6 @@ function master_sw_car_id_by_marks($dbc, $marks)
         return 0;
     }
     return (int) mysqli_fetch_row($rs)[0];
-}
-
-function master_sw_car_is_neville_handoff($dbc, $car_id)
-{
-    $car_id = (int) $car_id;
-    $island = master_sw_island_station_id();
-    if (warm_start_car_order_targets_station($dbc, $car_id, $island)) {
-        return true;
-    }
-
-    $rs = mysqli_query(
-        $dbc,
-        'SELECT cars.status,
-                unload_loc.station AS unload_station
-         FROM cars
-         INNER JOIN car_orders ON car_orders.car = cars.id
-         LEFT JOIN shipments ON shipments.id = car_orders.shipment
-         LEFT JOIN locations unload_loc ON unload_loc.id = shipments.unloading_location
-         WHERE cars.id = "' . $car_id . '"
-         LIMIT 1'
-    );
-    $row = $rs ? mysqli_fetch_array($rs) : null;
-    if ($row && $row['status'] === 'Ordered' && (int) $row['unload_station'] === $island) {
-        return true;
-    }
-
-    return false;
 }
 
 function master_sw_car_destinations($dbc, $car_id)
@@ -265,710 +234,6 @@ function master_sw_enrich_rows_destinations($dbc, array $rows)
     }
     return $enriched;
 }
-function master_sw_filter_rows_neville_handoff($dbc, array $rows)
-{
-    $filtered = [];
-    foreach ($rows as $row) {
-        $car_id = master_sw_car_id_by_marks($dbc, $row['reporting_marks'] ?? '');
-        if ($car_id > 0 && master_sw_car_is_neville_handoff($dbc, $car_id)) {
-            $filtered[] = $row;
-        }
-    }
-    return $filtered;
-}
-
-function master_sw_fetch_car_rows_for_ids($dbc, $job_id, $table_name, array $car_ids)
-{
-    if (count($car_ids) === 0) {
-        return [];
-    }
-    $car_ids = array_map('intval', $car_ids);
-    $marks = [];
-    $rs = mysqli_query(
-        $dbc,
-        'SELECT reporting_marks FROM cars WHERE id IN (' . implode(', ', $car_ids) . ')'
-    );
-    while ($rs && ($row = mysqli_fetch_array($rs))) {
-        $marks[$row['reporting_marks']] = true;
-    }
-    if (count($marks) === 0) {
-        return [];
-    }
-    $all = master_sw_fetch_car_rows($dbc, $job_id, $table_name);
-    $rows = [];
-    foreach ($all as $row) {
-        if (isset($marks[$row['reporting_marks'] ?? ''])) {
-            $rows[] = $row;
-        }
-    }
-    return $rows;
-}
-
-function master_sw_d749_island_handoff_ids($dbc)
-{
-    $d749_id = warm_start_job_id($dbc, 'D749');
-    if ($d749_id <= 0) {
-        return [];
-    }
-    $ids = [];
-    $rs = mysqli_query(
-        $dbc,
-        'SELECT id FROM cars WHERE handled_by_job_id = "' . (int) $d749_id . '"'
-    );
-    while ($rs && ($row = mysqli_fetch_array($rs))) {
-        $car_id = (int) $row['id'];
-        if (master_sw_car_is_neville_handoff($dbc, $car_id)) {
-            $ids[] = $car_id;
-        }
-    }
-    return $ids;
-}
-
-function master_sw_car_ids_on_job($dbc, $job_id, $on_train_only = true)
-{
-    $ids = [];
-    $sql = 'SELECT id FROM cars WHERE handled_by_job_id = "' . (int) $job_id . '"';
-    if ($on_train_only) {
-        $sql .= ' AND current_location_id = 0';
-    }
-    $rs = mysqli_query($dbc, $sql);
-    while ($rs && ($row = mysqli_fetch_array($rs))) {
-        $ids[] = (int) $row['id'];
-    }
-    return $ids;
-}
-
-function master_sw_car_ids_on_job_for_destinations($dbc, $job_id, array $dest_stations)
-{
-    $ids = [];
-    foreach (master_sw_car_ids_on_job($dbc, $job_id, false) as $car_id) {
-        if (warm_start_car_targets_any_station($dbc, $car_id, $dest_stations)) {
-            $ids[] = $car_id;
-        }
-    }
-    return $ids;
-}
-
-function master_sw_car_ids_at_south_for_island($dbc)
-{
-    $south_station = 8;
-    $ids = [];
-    $rs = mysqli_query(
-        $dbc,
-        'SELECT cars.id AS car_id
-         FROM cars
-         INNER JOIN locations loc ON loc.id = cars.current_location_id
-         WHERE loc.station = "' . $south_station . '"
-           AND cars.current_location_id > 0
-           AND cars.handled_by_job_id = 0'
-    );
-    while ($rs && ($row = mysqli_fetch_array($rs))) {
-        $car_id = (int) $row['car_id'];
-        if (master_sw_car_is_neville_handoff($dbc, $car_id)) {
-            $ids[] = $car_id;
-        }
-    }
-    return $ids;
-}
-
-function master_sw_car_ids_at_station_for_destinations($dbc, $station_id, array $dest_stations)
-{
-    $station_id = (int) $station_id;
-    $ids = [];
-    $rs = mysqli_query(
-        $dbc,
-        'SELECT cars.id AS car_id
-         FROM cars
-         INNER JOIN locations loc ON loc.id = cars.current_location_id
-         WHERE loc.station = "' . $station_id . '"
-           AND cars.current_location_id > 0
-           AND cars.handled_by_job_id = 0'
-    );
-    while ($rs && ($row = mysqli_fetch_array($rs))) {
-        $car_id = (int) $row['car_id'];
-        if (warm_start_car_targets_any_station($dbc, $car_id, $dest_stations)) {
-            $ids[] = $car_id;
-        }
-    }
-    return $ids;
-}
-
-function master_sw_car_ids_for_job_pickup_steps($dbc, $job_name, array $step_numbers)
-{
-    $ids = [];
-    foreach ($step_numbers as $step_nbr) {
-        foreach (array_keys(warm_start_eligible_car_ids_for_criterion($dbc, $job_name, (int) $step_nbr)) as $car_id) {
-            $ids[(int) $car_id] = true;
-        }
-    }
-    return array_map('intval', array_keys($ids));
-}
-
-function master_sw_car_ids_at_station_loaded_coke($dbc, $station_id)
-{
-    $station_id = (int) $station_id;
-    $ids = [];
-    $rs = mysqli_query(
-        $dbc,
-        'SELECT cars.id AS car_id
-         FROM cars
-         INNER JOIN locations loc ON loc.id = cars.current_location_id
-         INNER JOIN car_orders ON car_orders.car = cars.id
-         INNER JOIN shipments ON shipments.id = car_orders.shipment
-         INNER JOIN commodities ON commodities.id = shipments.consignment
-         WHERE loc.station = "' . $station_id . '"
-           AND cars.current_location_id > 0
-           AND cars.handled_by_job_id = 0
-           AND cars.status = "Loaded"
-           AND commodities.code = "COKE"'
-    );
-    while ($rs && ($row = mysqli_fetch_array($rs))) {
-        $ids[] = (int) $row['car_id'];
-    }
-    return $ids;
-}
-
-function master_sw_release_ck1_train_to_spotting($dbc)
-{
-    $ck1_id = warm_start_job_id($dbc, 'CK1');
-    $shenango_id = warm_start_location_id_by_code($dbc, 'NIL-SHEN-COKE');
-    if ($ck1_id <= 0 || $shenango_id <= 0) {
-        return;
-    }
-
-    $rs = mysqli_query(
-        $dbc,
-        'SELECT id FROM cars WHERE handled_by_job_id = "' . (int) $ck1_id . '"'
-    );
-    while ($rs && ($row = mysqli_fetch_array($rs))) {
-        mysqli_query(
-            $dbc,
-            'UPDATE cars SET handled_by_job_id = 0,
-                             current_location_id = "' . (int) $shenango_id . '",
-                             position = 0
-             WHERE id = "' . (int) $row['id'] . '"'
-        );
-    }
-}
-
-function master_sw_rows_spotted_at_location_code($dbc, array $rows, $location_code)
-{
-    $loc_id = warm_start_location_id_by_code($dbc, $location_code);
-    if ($loc_id <= 0) {
-        return $rows;
-    }
-
-    $meta_rs = mysqli_query(
-        $dbc,
-        'SELECT routing.station AS station_name, locations.code AS location_code
-         FROM locations
-         LEFT JOIN routing ON routing.id = locations.station
-         WHERE locations.id = "' . (int) $loc_id . '"
-         LIMIT 1'
-    );
-    $meta = $meta_rs ? mysqli_fetch_array($meta_rs) : null;
-    $station_name = (string) ($meta['station_name'] ?? '');
-    $code = (string) ($meta['location_code'] ?? $location_code);
-
-    $spotted = [];
-    foreach ($rows as $row) {
-        $row['current_location_id'] = (string) (int) $loc_id;
-        $row['current_station'] = $station_name;
-        $row['current_location'] = $code;
-        $spotted[] = $row;
-    }
-    return $spotted;
-}
-
-function master_sw_build_spotted_rows($dbc, array $car_ids, $location_code)
-{
-    if (count($car_ids) === 0) {
-        return [];
-    }
-
-    return master_sw_rows_spotted_at_location_code(
-        $dbc,
-        master_sw_enrich_rows_destinations(
-            $dbc,
-            master_sw_fetch_spotted_car_rows_by_ids($dbc, $car_ids)
-        ),
-        $location_code
-    );
-}
-
-function master_sw_fetch_ck1_south_to_shenango_rows($dbc)
-{
-    $shenango_station = 12;
-    $car_ids = array_values(array_unique(array_merge(
-        master_sw_car_ids_for_job_pickup_steps($dbc, 'CK1', [110, 130]),
-        master_sw_car_ids_at_station_for_destinations($dbc, 8, [$shenango_station])
-    )));
-
-    return master_sw_build_spotted_rows($dbc, $car_ids, 'SOUTH');
-}
-
-function master_sw_fetch_ck1_shenango_to_scale_rows($dbc)
-{
-    $south_station = 8;
-    $shenango_station = 12;
-    $car_ids = array_values(array_unique(array_merge(
-        master_sw_car_ids_for_job_pickup_steps($dbc, 'CK1', [90]),
-        master_sw_car_ids_at_station_for_destinations($dbc, $shenango_station, [$south_station]),
-        master_sw_car_ids_at_station_loaded_coke($dbc, $shenango_station)
-    )));
-
-    return master_sw_build_spotted_rows($dbc, $car_ids, 'NIL-SHEN-COKE');
-}
-
-function master_sw_fetch_ck1_south_setout_rows($dbc)
-{
-    $south_station = 8;
-    $car_ids = [];
-    $rs = mysqli_query(
-        $dbc,
-        'SELECT cars.id AS car_id, cars.status
-         FROM cars
-         INNER JOIN locations loc ON loc.id = cars.current_location_id
-         WHERE loc.station = "' . $south_station . '"
-           AND cars.current_location_id > 0
-           AND cars.handled_by_job_id = 0'
-    );
-    while ($rs && ($row = mysqli_fetch_array($rs))) {
-        if (($row['status'] ?? '') === 'Unavailable') {
-            continue;
-        }
-        $car_ids[] = (int) $row['car_id'];
-    }
-
-    return master_sw_build_spotted_rows($dbc, $car_ids, 'SOUTH');
-}
-
-function master_sw_car_ids_at_south_for_destinations($dbc, array $dest_stations)
-{
-    return master_sw_car_ids_at_station_for_destinations($dbc, 8, $dest_stations);
-}
-
-function master_sw_fetch_spotted_car_rows_by_ids($dbc, array $car_ids)
-{
-    if (count($car_ids) === 0) {
-        return [];
-    }
-    $car_ids = array_map('intval', $car_ids);
-    $rs = mysqli_query(
-        $dbc,
-        'SELECT cars.reporting_marks AS reporting_marks,
-                car_codes.code AS car_code,
-                cars.status AS status,
-                commodities.code AS consignment,
-                shipments.consignment AS consignment_id,
-                shipments.special_instructions AS special_instructions,
-                routing.station AS current_station,
-                locations.code AS current_location,
-                loading_sta.station AS loading_station,
-                loading_loc.code AS loading_location,
-                unloading_sta.station AS unloading_station,
-                unloading_loc.code AS unloading_location,
-                cars.current_location_id,
-                cars.position AS position
-         FROM cars
-         LEFT JOIN locations ON locations.id = cars.current_location_id
-         LEFT JOIN routing ON routing.id = locations.station
-         INNER JOIN car_orders ON car_orders.car = cars.id
-         INNER JOIN car_codes ON car_codes.id = cars.car_code_id
-         INNER JOIN shipments ON shipments.id = car_orders.shipment
-         INNER JOIN commodities ON commodities.id = shipments.consignment
-         INNER JOIN locations loading_loc ON loading_loc.id = shipments.loading_location
-         INNER JOIN routing loading_sta ON loading_sta.id = loading_loc.station
-         INNER JOIN locations unloading_loc ON unloading_loc.id = shipments.unloading_location
-         INNER JOIN routing unloading_sta ON unloading_sta.id = unloading_loc.station
-         WHERE cars.id IN (' . implode(', ', $car_ids) . ')
-           AND (NOT INSTR(car_orders.waybill_number, "E"))
-         GROUP BY cars.reporting_marks
-         ORDER BY reporting_marks'
-    );
-    $rows = [];
-    while ($rs && ($row = mysqli_fetch_array($rs))) {
-        $rows[] = $row;
-    }
-    return $rows;
-}
-
-function master_sw_stage_south_demmler_handoffs_for_d749($dbc, array $config = [])
-{
-    $demmler_dests = [10, 14];
-    $south_id = warm_start_location_id_by_code($dbc, 'SOUTH');
-    if ($south_id <= 0) {
-        return;
-    }
-
-    $nvl_id = warm_start_job_id($dbc, 'NVL');
-    if ($nvl_id > 0) {
-        warm_start_assign_all_ordered_cars_at_station($dbc, 'NVL', 9);
-        master_sw_run_job_pickup_only($dbc, 'NVL', 10);
-        $nvl_demmler_ids = master_sw_car_ids_on_job_for_destinations($dbc, $nvl_id, $demmler_dests);
-        if (count($nvl_demmler_ids) > 0) {
-            warm_start_pickup_job($dbc, 'NVL');
-            master_sw_setout_job_train_at_location_for_destinations($dbc, 'NVL', $south_id, $demmler_dests);
-        }
-    }
-
-    if (count(master_sw_car_ids_at_south_for_destinations($dbc, $demmler_dests)) > 0) {
-        return;
-    }
-
-    warm_start_auto_assign_job_at_station($dbc, 'CK1', 12, 1.0);
-    warm_start_pickup_job_at_station($dbc, 'CK1', 12);
-    warm_start_maybe_calibrate_scale($dbc, $config);
-    warm_start_run_ck1_scale_ops($dbc);
-    warm_start_pickup_job($dbc, 'CK1');
-    master_sw_setout_job_train_at_location_for_destinations($dbc, 'CK1', $south_id, $demmler_dests);
-}
-
-function master_sw_filter_rows_by_unload_station_names(array $rows, array $station_names)
-{
-    $allowed = array_flip($station_names);
-    $filtered = [];
-    foreach ($rows as $row) {
-        $unload = (string) ($row['unloading_station'] ?? '');
-        if (isset($allowed[$unload])) {
-            $filtered[] = $row;
-        }
-    }
-    return $filtered;
-}
-
-function master_sw_setout_job_train_at_location_for_destinations($dbc, $job_name, $location_id, array $dest_stations)
-{
-    $job_id = warm_start_job_id($dbc, $job_name);
-    $location_id = (int) $location_id;
-    if ($job_id <= 0 || $location_id <= 0) {
-        return 0;
-    }
-
-    $set_out = 0;
-    $rs = mysqli_query(
-        $dbc,
-        'SELECT cars.id AS car_id
-         FROM cars
-         WHERE cars.handled_by_job_id = "' . (int) $job_id . '"
-           AND cars.current_location_id = 0'
-    );
-    while ($rs && ($row = mysqli_fetch_array($rs))) {
-        $car_id = (int) $row['car_id'];
-        if (!warm_start_car_targets_any_station($dbc, $car_id, $dest_stations)) {
-            continue;
-        }
-        if (warm_start_setout_single_car($dbc, $car_id, $job_name, $location_id)) {
-            $set_out++;
-        }
-    }
-    return $set_out;
-}
-
-function master_sw_car_ids_at_demmler_for_unload_stations($dbc, array $unload_station_ids)
-{
-    $demmler_stations = [10, 14];
-    $ids = [];
-    $unload_station_ids = array_map('intval', $unload_station_ids);
-    if (count($unload_station_ids) === 0) {
-        return $ids;
-    }
-
-    $rs = mysqli_query(
-        $dbc,
-        'SELECT cars.id AS car_id
-         FROM cars
-         INNER JOIN locations loc ON loc.id = cars.current_location_id
-         INNER JOIN car_orders ON car_orders.car = cars.id
-         INNER JOIN shipments ON shipments.id = car_orders.shipment
-         INNER JOIN locations unload_loc ON unload_loc.id = shipments.unloading_location
-         WHERE loc.station IN (' . implode(', ', $demmler_stations) . ')
-           AND cars.current_location_id > 0
-           AND cars.handled_by_job_id = 0
-           AND cars.status = "Loaded"
-           AND unload_loc.station IN (' . implode(', ', $unload_station_ids) . ')'
-    );
-    while ($rs && ($row = mysqli_fetch_array($rs))) {
-        $ids[] = (int) $row['car_id'];
-    }
-    return $ids;
-}
-
-function master_sw_d749_pickup_return_loads_at_demmler($dbc, array $exclude_marks = [])
-{
-    $exclude_marks = array_flip($exclude_marks);
-    $return_unload_stations = [3, 9, 15];
-    $car_ids = array_values(array_filter(
-        master_sw_car_ids_at_demmler_for_unload_stations($dbc, $return_unload_stations),
-        function ($car_id) use ($dbc, $exclude_marks) {
-            $rs = mysqli_query($dbc, 'SELECT reporting_marks FROM cars WHERE id = "' . (int) $car_id . '" LIMIT 1');
-            $row = $rs ? mysqli_fetch_array($rs) : null;
-            if (!$row) {
-                return false;
-            }
-            return !isset($exclude_marks[(string) $row['reporting_marks']]);
-        }
-    ));
-
-    if (count($car_ids) === 0) {
-        return ['assigned' => 0, 'picked_up' => 0];
-    }
-
-    $assigned = warm_start_assign_cars_to_job($dbc, 'D749', $car_ids);
-    $picked_up = warm_start_pickup_job($dbc, 'D749');
-    return compact('assigned', 'picked_up');
-}
-
-function master_sw_d749_setout_island_handoff_at_south($dbc)
-{
-    $south_id = warm_start_location_id_by_code($dbc, 'SOUTH');
-    if ($south_id <= 0) {
-        return 0;
-    }
-    $set_out = 0;
-    foreach (master_sw_d749_island_handoff_ids($dbc) as $car_id) {
-        $rs = mysqli_query(
-            $dbc,
-            'SELECT current_location_id FROM cars WHERE id = "' . (int) $car_id . '" LIMIT 1'
-        );
-        $row = mysqli_fetch_array($rs);
-        if (!$row || (int) $row['current_location_id'] === 0) {
-            if (warm_start_setout_single_car($dbc, $car_id, 'D749', $south_id)) {
-                $set_out++;
-            }
-            continue;
-        }
-        if (warm_start_setout_single_car($dbc, $car_id, 'D749', $south_id)) {
-            $set_out++;
-        }
-    }
-    return $set_out;
-}
-
-function master_sw_clone_section_rows(array $rows)
-{
-    return array_map(function ($row) {
-        return $row;
-    }, $rows);
-}
-
-function master_sw_filter_rows_excluding_neville_handoff($dbc, array $rows)
-{
-    $filtered = [];
-    foreach ($rows as $row) {
-        $car_id = master_sw_car_id_by_marks($dbc, $row['reporting_marks'] ?? '');
-        if ($car_id > 0 && master_sw_car_is_neville_handoff($dbc, $car_id)) {
-            continue;
-        }
-        $filtered[] = $row;
-    }
-    return $filtered;
-}
-
-function master_sw_assign_rows_to_job_train($dbc, $job_name, array $rows)
-{
-    $job_id = warm_start_job_id($dbc, $job_name);
-    if ($job_id <= 0) {
-        return 0;
-    }
-    $count = 0;
-    foreach ($rows as $row) {
-        $car_id = master_sw_car_id_by_marks($dbc, $row['reporting_marks'] ?? '');
-        if ($car_id <= 0) {
-            continue;
-        }
-        if (mysqli_query(
-            $dbc,
-            'UPDATE cars SET handled_by_job_id = "' . (int) $job_id . '",
-                             current_location_id = 0,
-                             position = 0
-             WHERE id = "' . (int) $car_id . '"'
-        )) {
-            $count++;
-        }
-    }
-    return $count;
-}
-
-function master_sw_rows_spotted_at_south($dbc, array $rows)
-{
-    $south_id = warm_start_location_id_by_code($dbc, 'SOUTH');
-    $spotted = [];
-    foreach ($rows as $row) {
-        $row['current_location_id'] = (string) (int) $south_id;
-        $row['current_station'] = 'South Yard';
-        $row['current_location'] = 'SOUTH';
-        $spotted[] = $row;
-    }
-    return $spotted;
-}
-
-function master_sw_build_d749_leg2_rows($dbc, array $leg1_rows, array $config = [])
-{
-    $demmler_dests = [10, 14];
-    $exclude_marks = [];
-    foreach ($leg1_rows as $row) {
-        $marks = (string) ($row['reporting_marks'] ?? '');
-        if ($marks !== '') {
-            $exclude_marks[$marks] = true;
-        }
-    }
-
-    master_sw_stage_south_demmler_handoffs_for_d749($dbc, $config);
-
-    $car_ids = master_sw_car_ids_at_south_for_destinations($dbc, $demmler_dests);
-    $car_ids = array_values(array_filter($car_ids, function ($car_id) use ($dbc, $exclude_marks) {
-        $rs = mysqli_query($dbc, 'SELECT reporting_marks FROM cars WHERE id = "' . (int) $car_id . '" LIMIT 1');
-        $row = $rs ? mysqli_fetch_array($rs) : null;
-        if (!$row) {
-            return false;
-        }
-        return !isset($exclude_marks[(string) $row['reporting_marks']]);
-    }));
-
-    if (count($car_ids) === 0) {
-        return [];
-    }
-
-    return master_sw_rows_spotted_at_south(
-        $dbc,
-        master_sw_enrich_rows_destinations(
-            $dbc,
-            master_sw_fetch_spotted_car_rows_by_ids($dbc, $car_ids)
-        )
-    );
-}
-
-function master_sw_fetch_d749_leg3_return_rows($dbc, array $exclude_marks = [])
-{
-    $meta = master_sw_job_meta($dbc, 'D749');
-    if ($meta === null) {
-        return [];
-    }
-
-    $train = master_sw_fetch_car_rows($dbc, (int) $meta['id'], $meta['table_name']);
-    $return_names = ['Neville Island', 'Scully Yard', 'McKees Rock, PA'];
-    $rows = master_sw_filter_rows_by_unload_station_names($train, $return_names);
-    if (count($exclude_marks) === 0) {
-        return master_sw_enrich_rows_destinations($dbc, $rows);
-    }
-
-    $exclude = array_flip($exclude_marks);
-    $rows = array_values(array_filter($rows, function ($row) use ($exclude) {
-        return !isset($exclude[(string) ($row['reporting_marks'] ?? '')]);
-    }));
-    return master_sw_enrich_rows_destinations($dbc, $rows);
-}
-
-function master_sw_simulate_d749_south_interchange($dbc)
-{
-    $south_id = warm_start_location_id_by_code($dbc, 'SOUTH');
-    warm_start_setout_job_at_location($dbc, 'D749', $south_id);
-    foreach ([10, 15] as $step_nbr) {
-        warm_start_run_job_criterion($dbc, 'D749', $step_nbr);
-    }
-}
-
-function master_sw_simulate_d749_session_start_at_south($dbc)
-{
-    warm_start_assign_all_ordered_cars_at_station($dbc, 'D749', 10);
-    warm_start_pickup_job($dbc, 'D749');
-    master_sw_d749_setout_island_handoff_at_south($dbc);
-    master_sw_simulate_d749_south_interchange($dbc);
-}
-
-function master_sw_simulate_d749_demmler_round_trip($dbc, array $config = [], array $exclude_marks = [])
-{
-    foreach ([30, 35, 40, 50, 60] as $step_nbr) {
-        warm_start_run_job_criterion($dbc, 'D749', $step_nbr);
-    }
-
-    warm_start_complete_staging_jobs($dbc, ['STG-DEMMLER'], $config, 1.0);
-    master_sw_d749_pickup_return_loads_at_demmler($dbc, $exclude_marks);
-}
-
-function master_sw_simulate_d749_through_demmler_return($dbc, array $config = [])
-{
-    master_sw_simulate_d749_session_start_at_south($dbc);
-    master_sw_simulate_d749_demmler_round_trip($dbc, $config);
-}
-
-function master_sw_section_destination($dbc, array $row, array $section)
-{
-    $is_empty = ($row['status'] === 'Empty') || ($row['status'] === 'Ordered');
-    if (!empty($section['show_island_destination'])) {
-        $unload_station = (string) ($row['unloading_station'] ?? '');
-        $unload_location = (string) ($row['unloading_location'] ?? '');
-        if (stripos($unload_station, 'Neville') !== false
-            || stripos($unload_station, 'Shenango') !== false
-            || strncmp($unload_location, 'NIL-', 4) === 0) {
-            return [
-                $unload_station,
-                $unload_location,
-                master_sw_row_destination_style($dbc, array_merge($row, ['unloading_location' => $unload_location])),
-            ];
-        }
-        return [
-            (string) ($row['loading_station'] ?? ''),
-            (string) ($row['loading_location'] ?? ''),
-            master_sw_row_destination_style($dbc, $row),
-        ];
-    }
-    if (!empty($section['show_scully_destination'])) {
-        $load_station = (string) ($row['loading_station'] ?? '');
-        $load_location = (string) ($row['loading_location'] ?? '');
-        if (stripos($load_station, 'Scully') !== false || strncmp($load_location, 'SCL-', 4) === 0) {
-            return [
-                $load_station,
-                $load_location,
-                master_sw_row_destination_style($dbc, array_merge($row, ['loading_location' => $load_location])),
-            ];
-        }
-        return [
-            (string) ($row['unloading_station'] ?? ''),
-            (string) ($row['unloading_location'] ?? ''),
-            master_sw_row_destination_style($dbc, $row),
-        ];
-    }
-    if ($is_empty) {
-        if ((int) ($row['consignment_id'] ?? 0) <= 0) {
-            return [
-                (string) ($row['unloading_station'] ?? ''),
-                (string) ($row['unloading_location'] ?? ''),
-                master_sw_row_destination_style($dbc, $row),
-            ];
-        }
-        return [
-            (string) ($row['loading_station'] ?? ''),
-            (string) ($row['loading_location'] ?? ''),
-            master_sw_row_destination_style($dbc, $row),
-        ];
-    }
-    if ($row['status'] === 'Loaded') {
-        return [
-            (string) ($row['unloading_station'] ?? ''),
-            (string) ($row['unloading_location'] ?? ''),
-            master_sw_row_destination_style($dbc, $row),
-        ];
-    }
-    return ['', '', ''];
-}
-
-function master_sw_section_left_at(array $section)
-{
-    if (!empty($section['blank_worksheet'])) {
-        return '';
-    }
-    return (string) ($section['left_at_default'] ?? '');
-}
-
-function master_sw_section_pickup_mark(array $row, array $section)
-{
-    if (!empty($section['blank_worksheet'])) {
-        return '';
-    }
-    return ((int) $row['current_location_id'] === 0) ? 'X' : '';
-}
 
 function master_sw_begin_dry_run($dbc)
 {
@@ -987,9 +252,10 @@ function master_sw_run_job_pickup_only($dbc, $job_name, $step_nbr)
     $assigned = warm_start_assign_cars_to_job($dbc, $job_name, $eligible);
 
     $pickup_station = 0;
+    $table_name = preg_replace('/[^A-Za-z0-9_-]/', '', $job_name);
     $step_rs = mysqli_query(
         $dbc,
-        'SELECT station FROM `' . preg_replace('/[^A-Za-z0-9_-]/', '', $job_name) . '` WHERE step_number = ' . $step_nbr
+        'SELECT station FROM `' . $table_name . '` WHERE step_number = ' . $step_nbr
     );
     if ($step_rs && mysqli_num_rows($step_rs) > 0) {
         $pickup_station = (int) mysqli_fetch_array($step_rs)['station'];
@@ -1016,9 +282,10 @@ function master_sw_run_job_setout_only($dbc, $job_name, $step_nbr)
         $dest_stations[] = (int) $crit['dest_station_id'];
     }
 
+    $table_name = preg_replace('/[^A-Za-z0-9_-]/', '', $job_name);
     $step_rs = mysqli_query(
         $dbc,
-        'SELECT setout FROM `' . preg_replace('/[^A-Za-z0-9_-]/', '', $job_name) . '` WHERE step_number = ' . $step_nbr
+        'SELECT setout FROM `' . $table_name . '` WHERE step_number = ' . $step_nbr
     );
     $has_setout = $step_rs && mysqli_fetch_array($step_rs)['setout'] === 'T';
 
@@ -1031,315 +298,79 @@ function master_sw_run_job_setout_only($dbc, $job_name, $step_nbr)
     return warm_start_setout_all_job_train($dbc, $job_name);
 }
 
-function master_sw_run_steps_pickup($dbc, $job_name, array $step_numbers)
+function master_sw_replay_recipe_for_job($dbc, $job_name, array $recipe, $through_step, array &$sections, array $config = [])
 {
-    $stats = ['assigned' => 0, 'picked_up' => 0];
-    foreach ($step_numbers as $step_nbr) {
-        $move = master_sw_run_job_pickup_only($dbc, $job_name, $step_nbr);
-        $stats['assigned'] += (int) $move['assigned'];
-        $stats['picked_up'] += (int) $move['picked_up'];
-    }
-    return $stats;
-}
-
-function master_sw_run_steps_setout($dbc, $job_name, array $step_numbers)
-{
-    $set_out = 0;
-    foreach ($step_numbers as $step_nbr) {
-        $set_out += master_sw_run_job_setout_only($dbc, $job_name, $step_nbr);
-    }
-    return $set_out;
-}
-
-function master_sw_simulate_d749_phases($dbc, array &$sections, array $config = [])
-{
-    $meta = master_sw_job_meta($dbc, 'D749');
-    if ($meta === null) {
+    require_once __DIR__ . '/operational_steps_catalog.php';
+    $steps = $recipe['steps'] ?? [];
+    $through_step = max(0, (int) $through_step);
+    if ($through_step < 1 || count($steps) === 0) {
+        master_sw_capture($dbc, $job_name, '1 — Current assignment', $sections);
         return;
     }
 
-    $sheet_opts = ['blank_worksheet' => true];
+    $pc = 0;
+    $iterations = 0;
+    $max_iterations = max(500, $through_step * 20);
 
-    master_sw_capture($dbc, 'D749', '1 — Demmler → South Yard', $sections, $sheet_opts);
-    $leg1_rows = count($sections) > 0
-        ? master_sw_clone_section_rows($sections[count($sections) - 1]['cars'] ?? [])
-        : [];
-    $leg1_marks = array_values(array_filter(array_map(function ($row) {
-        return (string) ($row['reporting_marks'] ?? '');
-    }, $leg1_rows)));
-
-    $leg2_rows = master_sw_build_d749_leg2_rows($dbc, $leg1_rows, $config);
-    master_sw_add_section($sections, '2 — South Yard → Demmler', $leg2_rows, $sheet_opts);
-
-    $south_id = warm_start_location_id_by_code($dbc, 'SOUTH');
-    if ($south_id > 0) {
-        warm_start_setout_job_at_location($dbc, 'D749', $south_id);
-        master_sw_d749_setout_island_handoff_at_south($dbc);
-    }
-
-    if (count($leg2_rows) > 0) {
-        master_sw_assign_rows_to_job_train($dbc, 'D749', $leg2_rows);
-        warm_start_pickup_job($dbc, 'D749');
-    }
-
-    master_sw_simulate_d749_demmler_round_trip($dbc, $config, $leg1_marks);
-
-    $leg3_rows = master_sw_fetch_d749_leg3_return_rows($dbc, $leg1_marks);
-    master_sw_add_section($sections, '3 — Demmler → South Yard', $leg3_rows, $sheet_opts);
-}
-
-function master_sw_nvl_dest_stations()
-{
-    return [
-        'scully' => [9, 15],
-        'island_shen' => [3, 12],
-        'demmler' => [10, 14],
-        'south' => 8,
-        'scully_yard' => 9,
-    ];
-}
-
-function master_sw_nvl_prepare_session_open($dbc, array $config = [])
-{
-    warm_start_begin_operating_session($dbc, [
-        'config' => $config,
-        'run_stg_scully' => true,
-        'increment' => false,
-        'generate' => false,
-    ]);
-
-    foreach ([10, 20, 30, 35, 40] as $step_nbr) {
-        master_sw_run_job_pickup_only($dbc, 'NVL', $step_nbr);
-    }
-    warm_start_pickup_job_at_station($dbc, 'NVL', master_sw_nvl_dest_stations()['scully_yard']);
-}
-
-function master_sw_stage_south_island_handoffs_for_nvl($dbc)
-{
-    $south_id = warm_start_location_id_by_code($dbc, 'SOUTH');
-    if ($south_id <= 0) {
-        return;
-    }
-    if (count(master_sw_car_ids_at_south_for_island($dbc)) > 0) {
-        return;
-    }
-
-    if (master_sw_d749_setout_island_handoff_at_south($dbc) > 0) {
-        return;
-    }
-
-    foreach (master_sw_d749_island_handoff_ids($dbc) as $car_id) {
-        mysqli_query(
-            $dbc,
-            'UPDATE cars
-             SET current_location_id = "' . (int) $south_id . '",
-                 handled_by_job_id = 0,
-                 position = 0
-             WHERE id = "' . (int) $car_id . '"'
-        );
-    }
-}
-
-function master_sw_stage_south_scully_handoffs_for_nvl($dbc, array $config = [])
-{
-    $scully_dests = master_sw_nvl_dest_stations()['scully'];
-    $south_id = warm_start_location_id_by_code($dbc, 'SOUTH');
-    if ($south_id <= 0) {
-        return;
-    }
-    if (count(master_sw_car_ids_at_south_for_destinations($dbc, $scully_dests)) > 0) {
-        return;
-    }
-
-    $d749_id = warm_start_job_id($dbc, 'D749');
-    if ($d749_id > 0) {
-        $d749_scully = master_sw_car_ids_on_job_for_destinations($dbc, $d749_id, $scully_dests);
-        if (count($d749_scully) > 0) {
-            master_sw_setout_job_train_at_location_for_destinations($dbc, 'D749', $south_id, $scully_dests);
+    while ($pc < $through_step && $iterations++ < $max_iterations) {
+        $step = $steps[$pc] ?? null;
+        if (!is_array($step)) {
+            $pc++;
+            continue;
         }
-    }
+        $n = $pc + 1;
+        $fid = $step['function'] ?? '';
 
-    if (count(master_sw_car_ids_at_south_for_destinations($dbc, $scully_dests)) > 0) {
-        return;
-    }
-
-    warm_start_auto_assign_job_at_station($dbc, 'CK1', 12, 1.0);
-    warm_start_pickup_job_at_station($dbc, 'CK1', 12);
-    warm_start_maybe_calibrate_scale($dbc, $config);
-    warm_start_run_ck1_scale_ops($dbc);
-    warm_start_pickup_job($dbc, 'CK1');
-    master_sw_setout_job_train_at_location_for_destinations($dbc, 'CK1', $south_id, $scully_dests);
-}
-
-function master_sw_nvl_fetch_on_train_rows($dbc, $nvl_id, $nvl_table, array $dest_stations = null)
-{
-    $car_ids = master_sw_car_ids_on_job($dbc, $nvl_id, true);
-    if ($dest_stations !== null && count($dest_stations) > 0) {
-        $car_ids = array_values(array_filter($car_ids, function ($car_id) use ($dbc, $dest_stations) {
-            return warm_start_car_targets_any_station($dbc, $car_id, $dest_stations);
-        }));
-    }
-    if (count($car_ids) === 0) {
-        return [];
-    }
-    return master_sw_enrich_rows_destinations(
-        $dbc,
-        master_sw_fetch_car_rows_for_ids($dbc, $nvl_id, $nvl_table, $car_ids)
-    );
-}
-
-function master_sw_nvl_setout_demmler_at_south($dbc)
-{
-    $south_id = warm_start_location_id_by_code($dbc, 'SOUTH');
-    if ($south_id <= 0) {
-        return 0;
-    }
-    return master_sw_setout_job_train_at_location_for_destinations(
-        $dbc,
-        'NVL',
-        $south_id,
-        master_sw_nvl_dest_stations()['demmler']
-    );
-}
-
-function master_sw_nvl_pickup_south_for_island_shen($dbc)
-{
-    $dest = master_sw_nvl_dest_stations();
-    master_sw_d749_setout_island_handoff_at_south($dbc);
-
-    $assigned = warm_start_assign_cars_at_station_for_destinations(
-        $dbc,
-        'NVL',
-        $dest['south'],
-        $dest['island_shen']
-    );
-    $picked_up = warm_start_pickup_job_at_station($dbc, 'NVL', $dest['south']);
-    return compact('assigned', 'picked_up');
-}
-
-function master_sw_nvl_pickup_south_scully_handoffs($dbc)
-{
-    $dest = master_sw_nvl_dest_stations();
-    $scully_dests = $dest['scully'];
-    $south_station = $dest['south'];
-    $ck1_id = warm_start_job_id($dbc, 'CK1');
-    $d749_id = warm_start_job_id($dbc, 'D749');
-
-    $rs = mysqli_query(
-        $dbc,
-        'SELECT cars.id AS car_id
-         FROM cars
-         INNER JOIN locations loc ON loc.id = cars.current_location_id
-         WHERE loc.station = "' . (int) $south_station . '"
-           AND cars.current_location_id > 0
-           AND (cars.handled_by_job_id = 0'
-        . ($ck1_id > 0 ? ' OR cars.handled_by_job_id = "' . (int) $ck1_id . '"' : '')
-        . ($d749_id > 0 ? ' OR cars.handled_by_job_id = "' . (int) $d749_id . '"' : '')
-        . ')'
-    );
-
-    $car_ids = [];
-    while ($rs && ($row = mysqli_fetch_array($rs))) {
-        $car_id = (int) $row['car_id'];
-        if (warm_start_car_targets_any_station($dbc, $car_id, $scully_dests)) {
-            $car_ids[] = $car_id;
+        if ($fid === 'goto') {
+            $target = operational_steps_goto_resolve_step($recipe, $step['params'] ?? []);
+            if ($target > 0 && $target <= $through_step && $target > $n) {
+                $pc = $target - 1;
+            } else {
+                $pc++;
+            }
+            continue;
         }
+        if ($fid === 'if_then') {
+            $pc += 2;
+            continue;
+        }
+        if (in_array($fid, ['section_label', 'text_instruction', 'marker', 'stop'], true)) {
+            $pc++;
+            continue;
+        }
+        if ($fid === 'generate_switchlists') {
+            break;
+        }
+        if ($fid === 'build_switchlists_sts') {
+            $step_job = trim($step['params']['job'] ?? '');
+            operational_steps_dispatch_step($dbc, $step, $config);
+            if ($step_job !== '' && strcasecmp($step_job, $job_name) === 0) {
+                $compiled = operational_steps_compile_recipe(['steps' => [$step]]);
+                $label = $compiled[0]['instruction'] ?? ('Phase ' . (count($sections) + 1));
+                master_sw_capture($dbc, $job_name, $label, $sections);
+            }
+            $pc++;
+            continue;
+        }
+
+        operational_steps_dispatch_step($dbc, $step, $config);
+        $pc++;
     }
 
-    $assigned = warm_start_assign_cars_to_job($dbc, 'NVL', $car_ids);
-    foreach ([90, 95] as $step_nbr) {
-        master_sw_run_job_pickup_only($dbc, 'NVL', $step_nbr);
+    if (count($sections) === 0) {
+        master_sw_capture($dbc, $job_name, '1 — Current assignment', $sections);
     }
-    $picked_up = warm_start_pickup_job_at_station($dbc, 'NVL', $south_station);
-    return compact('assigned', 'picked_up');
 }
 
-function master_sw_simulate_nvl_phases($dbc, array &$sections, array $config = [])
-{
-    $nvl_meta = master_sw_job_meta($dbc, 'NVL');
-    if ($nvl_meta === null) {
-        return;
-    }
-    $nvl_id = (int) $nvl_meta['id'];
-    $nvl_table = $nvl_meta['table_name'];
-    $dest = master_sw_nvl_dest_stations();
-
-    master_sw_nvl_prepare_session_open($dbc, $config);
-    $phase1_rows = master_sw_nvl_fetch_on_train_rows($dbc, $nvl_id, $nvl_table);
-    master_sw_add_section(
-        $sections,
-        '1 — Scully → South Yard',
-        $phase1_rows,
-        ['left_at_default' => 'South Yard (set out Demmler-bound cars)']
-    );
-
-    master_sw_nvl_setout_demmler_at_south($dbc);
-
-    master_sw_stage_south_island_handoffs_for_nvl($dbc);
-    master_sw_nvl_pickup_south_for_island_shen($dbc);
-    $phase2_rows = master_sw_nvl_fetch_on_train_rows($dbc, $nvl_id, $nvl_table, $dest['island_shen']);
-    master_sw_add_section(
-        $sections,
-        '2 — Neville Island Industries',
-        $phase2_rows,
-        ['show_island_destination' => true]
-    );
-
-    master_sw_run_steps_pickup($dbc, 'NVL', [50, 60, 70, 75, 80, 85]);
-    master_sw_run_steps_setout($dbc, 'NVL', [65, 70]);
-
-    master_sw_stage_south_scully_handoffs_for_nvl($dbc, $config);
-    master_sw_nvl_pickup_south_scully_handoffs($dbc);
-    $phase3_rows = master_sw_nvl_fetch_on_train_rows($dbc, $nvl_id, $nvl_table, $dest['scully']);
-    master_sw_add_section(
-        $sections,
-        '3 — South Yard → Scully',
-        $phase3_rows,
-        ['left_at_default' => 'Scully Yard', 'show_scully_destination' => true]
-    );
-
-    warm_start_setout_job_cars_for_destinations($dbc, 'NVL', $dest['scully']);
-}
-
-function master_sw_simulate_ck1_phases($dbc, array &$sections, array $config = [])
-{
-    $sheet_opts = ['blank_worksheet' => true];
-
-    master_sw_release_ck1_train_to_spotting($dbc);
-
-    $sections[] = array_merge([
-        'label' => '1 — South Yard → Shenango Coke Works',
-        'cars' => master_sw_fetch_ck1_south_to_shenango_rows($dbc),
-    ], $sheet_opts);
-
-    master_sw_add_section(
-        $sections,
-        '2 — Shenango Coke Works → South Yard Scale',
-        master_sw_fetch_ck1_shenango_to_scale_rows($dbc),
-        $sheet_opts
-    );
-
-    warm_start_run_ck1_session_ops($dbc, $config);
-
-    master_sw_add_section(
-        $sections,
-        '3 — South Yard setouts (after weigh & reload assignments)',
-        master_sw_fetch_ck1_south_setout_rows($dbc),
-        $sheet_opts
-    );
-}
-
-function master_sw_build_sections($dbc, $job_name, array $config = [])
+function master_sw_build_sections($dbc, $job_name, array $config = [], array $options = [])
 {
     $sections = [];
     master_sw_begin_dry_run($dbc);
 
-    if ($job_name === 'D749') {
-        master_sw_simulate_d749_phases($dbc, $sections, $config);
-    } elseif ($job_name === 'NVL') {
-        master_sw_simulate_nvl_phases($dbc, $sections, $config);
-    } elseif ($job_name === 'CK1') {
-        master_sw_simulate_ck1_phases($dbc, $sections, $config);
+    $recipe = $options['recipe'] ?? null;
+    $through_step = (int) ($options['through_step'] ?? 0);
+    if (is_array($recipe) && $through_step > 0) {
+        master_sw_replay_recipe_for_job($dbc, $job_name, $recipe, $through_step, $sections, $config);
     } else {
         master_sw_capture($dbc, $job_name, '1 — Current assignment', $sections);
     }
@@ -2071,12 +1102,12 @@ function master_sw_render_switchlists_root_index($output_root, $max_session = nu
         $nbr = (int) $session['number'];
         $cards .= '<div class="card">
       <h2>Session ' . $nbr . '</h2>
-      <p>Phased switch lists for D749, NVL, and CK1.</p>
+      <p>Phased switch lists generated from the workflow recipe.</p>
       <a class="button" href="session_' . $nbr . '/index.html">Open session ' . $nbr . ' switch lists</a>
     </div>';
     }
     if ($cards === '') {
-        $cards = '<div class="card"><p>No session switch lists found yet. Run <code>begin_session.sh --switchlists</code> after session prep.</p></div>';
+        $cards = '<div class="card"><p>No session switch lists found yet. Run <strong>Generate Switch Lists</strong> from the workflow editor after operating steps complete.</p></div>';
     }
 
     $tools_card = '<div class="card">
@@ -2692,7 +1723,10 @@ function master_sw_generate_for_jobs($dbc, array $job_names, $output_dir, array 
                 continue;
             }
         } else {
-            $sections = master_sw_build_sections($dbc, $job_name, $config);
+            $sections = master_sw_build_sections($dbc, $job_name, $config, [
+                'recipe' => $options['recipe'] ?? null,
+                'through_step' => (int) ($options['through_step'] ?? 0),
+            ]);
             if (count($sections) === 0) {
                 if (master_sw_is_phased_format($format)) {
                     $job_dir = master_sw_job_output_dir($output_dir, $job_name);

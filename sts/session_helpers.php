@@ -3,7 +3,76 @@
  * Session output (/sts/), phase manifest, waybills, recipe control flow.
  */
 
-require_once __DIR__ . '/warm_start_helpers.php';
+require_once __DIR__ . '/session_runtime.php';
+session_runtime_bootstrap();
+
+function session_merge_runtime_config(array $config = [])
+{
+    if (function_exists('warm_start_merge_config')) {
+        return warm_start_merge_config($config);
+    }
+    return $config;
+}
+
+function session_job_id($dbc, $job_name)
+{
+    if (function_exists('warm_start_job_id')) {
+        return (int) warm_start_job_id($dbc, $job_name);
+    }
+    $job_name = trim((string) $job_name);
+    if ($job_name === '') {
+        return 0;
+    }
+    $rs = mysqli_query(
+        $dbc,
+        'SELECT id FROM jobs WHERE name = "' . mysqli_real_escape_string($dbc, $job_name) . '" LIMIT 1'
+    );
+    if (!$rs || mysqli_num_rows($rs) === 0) {
+        return 0;
+    }
+    return (int) mysqli_fetch_array($rs)['id'];
+}
+
+function session_location_id_by_code($dbc, $code)
+{
+    if (function_exists('operational_steps_location_id_by_code')) {
+        return operational_steps_location_id_by_code($dbc, $code);
+    }
+    if (function_exists('warm_start_location_id_by_code')) {
+        return (int) warm_start_location_id_by_code($dbc, $code);
+    }
+    $code = strtoupper(trim((string) $code));
+    if ($code === '') {
+        return 0;
+    }
+    $rs = mysqli_query(
+        $dbc,
+        'SELECT id FROM locations WHERE code = "' . mysqli_real_escape_string($dbc, $code) . '" LIMIT 1'
+    );
+    if (!$rs || mysqli_num_rows($rs) === 0) {
+        return 0;
+    }
+    return (int) mysqli_fetch_array($rs)['id'];
+}
+
+function session_staging_job_names($dbc, array $config = [])
+{
+    if (function_exists('operational_steps_staging_job_names')) {
+        return operational_steps_staging_job_names($dbc, $config);
+    }
+    if (function_exists('warm_start_staging_job_names')) {
+        return warm_start_staging_job_names($dbc, $config);
+    }
+    $jobs = [];
+    $rs = mysqli_query($dbc, 'SELECT name FROM jobs WHERE name LIKE "STG-%" ORDER BY name');
+    while ($rs && ($row = mysqli_fetch_array($rs))) {
+        $name = (string) ($row['name'] ?? '');
+        if ($name !== '') {
+            $jobs[] = $name;
+        }
+    }
+    return $jobs;
+}
 
 function session_web_root()
 {
@@ -267,8 +336,8 @@ function session_condition_variables()
     return [
         ['key' => 'session_nbr', 'label' => 'Session number'],
         ['key' => 'unfilled_count', 'label' => 'Unfilled order count'],
-        ['key' => 'stg_backlog_eligible', 'label' => 'STG backlog eligible at Scully'],
-        ['key' => 'stg_backlog_on_jobs', 'label' => 'STG backlog on staging jobs'],
+        ['key' => 'stg_backlog_eligible', 'label' => 'Staging backlog eligible'],
+        ['key' => 'stg_backlog_on_jobs', 'label' => 'Staging backlog on jobs'],
         ['key' => 'cars_on_job', 'label' => 'Cars on job (param: job name)'],
         ['key' => 'cars_at_location', 'label' => 'Cars at location (param: location code)'],
         ['key' => 'awaiting_assignment', 'label' => 'Cars awaiting assignment'],
@@ -282,15 +351,33 @@ function session_condition_operators()
 
 function session_evaluate_context($dbc, array $config = [])
 {
+    if (!function_exists('warm_start_get_session')) {
+        return [
+            'session_nbr' => session_get_db_session($dbc),
+            'unfilled_count' => 0,
+            'stg_backlog_eligible' => 0,
+            'stg_backlog_on_jobs' => 0,
+            'awaiting_assignment' => 0,
+            '_dbc' => $dbc,
+            '_config' => $config,
+            '_runtime_limited' => true,
+        ];
+    }
+
     $session = warm_start_get_session($dbc);
-    $staging = warm_start_staging_job_names($dbc, $config);
-    $scully = warm_start_staging_backlog_for_job($dbc, 'STG-SCULLY', $config);
+    $staging_jobs = function_exists('warm_start_staging_job_names')
+        ? warm_start_staging_job_names($dbc, $config)
+        : [];
+    $primary_staging = $staging_jobs[0] ?? '';
+    $staging_backlog = ($primary_staging !== '' && function_exists('warm_start_staging_backlog_for_job'))
+        ? warm_start_staging_backlog_for_job($dbc, $primary_staging, $config)
+        : ['eligible' => 0, 'on_jobs' => 0];
     $summary = warm_start_summarize($dbc);
     return [
         'session_nbr' => (int) $session,
         'unfilled_count' => warm_start_count_unfilled($dbc),
-        'stg_backlog_eligible' => (int) ($scully['eligible'] ?? 0),
-        'stg_backlog_on_jobs' => (int) ($scully['on_jobs'] ?? 0),
+        'stg_backlog_eligible' => (int) ($staging_backlog['eligible'] ?? 0),
+        'stg_backlog_on_jobs' => (int) ($staging_backlog['on_jobs'] ?? 0),
         'awaiting_assignment' => (int) ($summary['awaiting_assignment'] ?? 0),
         '_dbc' => $dbc,
         '_config' => $config,
@@ -311,7 +398,7 @@ function session_evaluate_condition(array $ctx, $variable, $operator, $value, ar
         case 'cars_on_job':
             $job = trim($extra['job'] ?? $value);
             $dbc = $ctx['_dbc'];
-            $jid = warm_start_job_id($dbc, $job);
+            $jid = session_job_id($dbc, $job);
             if ($jid <= 0) {
                 $left = 0;
             } else {
@@ -322,7 +409,7 @@ function session_evaluate_condition(array $ctx, $variable, $operator, $value, ar
         case 'cars_at_location':
             $loc = trim($extra['location'] ?? $value);
             $dbc = $ctx['_dbc'];
-            $lid = warm_start_location_id_by_code($dbc, strtoupper($loc));
+            $lid = session_location_id_by_code($dbc, strtoupper($loc));
             if ($lid <= 0) {
                 $left = 0;
             } else {
@@ -347,7 +434,9 @@ function session_evaluate_condition(array $ctx, $variable, $operator, $value, ar
 
 function session_manual_generate_shipment($dbc, $shipment_code)
 {
-    $session = warm_start_get_session($dbc);
+    $session = function_exists('warm_start_get_session')
+        ? warm_start_get_session($dbc)
+        : session_get_db_session($dbc);
     $code_esc = mysqli_real_escape_string($dbc, $shipment_code);
     $rs = mysqli_query($dbc, 'SELECT id, min_amount, max_amount FROM shipments WHERE code = "' . $code_esc . '" LIMIT 1');
     if (!$rs || mysqli_num_rows($rs) === 0) {
@@ -377,13 +466,32 @@ function session_manual_generate_shipment($dbc, $shipment_code)
     return ['generated' => $generated, 'shipment' => $shipment_code, 'session' => $session];
 }
 
-function session_resolve_jobs_param($jobs_param)
+function session_resolve_jobs_param($jobs_param, $dbc = null)
 {
     $jobs_param = trim((string) $jobs_param);
     if ($jobs_param === '' || strtolower($jobs_param) === 'all') {
-        return ['D749', 'NVL', 'CK1'];
+        if ($dbc === null) {
+            return [];
+        }
+        return session_list_switchlist_job_names($dbc);
     }
     return array_values(array_filter(array_map('trim', explode(',', $jobs_param))));
+}
+
+function session_list_switchlist_job_names($dbc)
+{
+    $staging = session_staging_job_names($dbc, session_merge_runtime_config([]));
+    $staging_set = array_flip($staging);
+    $jobs = [];
+    $rs = mysqli_query($dbc, 'SELECT name FROM jobs ORDER BY name');
+    while ($rs && ($row = mysqli_fetch_array($rs))) {
+        $name = (string) ($row['name'] ?? '');
+        if ($name === '' || isset($staging_set[$name])) {
+            continue;
+        }
+        $jobs[] = $name;
+    }
+    return $jobs;
 }
 
 function session_phase_output_dir($session_nbr, $phase_num, $root = null)
@@ -506,12 +614,14 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
 {
     require_once __DIR__ . '/operational_steps_catalog.php';
     require_once __DIR__ . '/master_switchlist_helpers.php';
-    $config = warm_start_merge_config($options['config'] ?? []);
+    $config = session_merge_runtime_config($options['config'] ?? []);
     $format = $options['format'] ?? 'phased';
     $root = $options['session_root'] ?? session_web_root();
     $from_step = max(1, (int) ($options['from_step'] ?? 1));
     $to_step = min(count($recipe['steps'] ?? []), (int) ($options['to_step'] ?? count($recipe['steps'] ?? [])));
-    $session_nbr = warm_start_get_session($dbc);
+    $session_nbr = function_exists('warm_start_get_session')
+        ? warm_start_get_session($dbc)
+        : session_get_db_session($dbc);
     $manifest = session_load_manifest($session_nbr, $root);
     $phase_num = count($manifest['phases'] ?? []);
     $ctx = session_evaluate_context($dbc, $config);
@@ -584,10 +694,14 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
 
         if ($fid === 'generate_switchlists') {
             $phase_num++;
-            $jobs = session_resolve_jobs_param($step['params']['jobs'] ?? 'all');
+            $jobs = session_resolve_jobs_param($step['params']['jobs'] ?? 'all', $dbc);
             $phase_dir = session_phase_output_dir($session_nbr, $phase_num, $root);
             $fmt = master_sw_normalize_switchlist_format($step['params']['format'] ?? $format);
-            $written = master_sw_generate_for_jobs($dbc, $jobs, $phase_dir, $config, ['format' => $fmt]);
+            $written = master_sw_generate_for_jobs($dbc, $jobs, $phase_dir, $config, [
+                'format' => $fmt,
+                'recipe' => $recipe,
+                'through_step' => $n - 1,
+            ]);
             session_register_phase($manifest, $phase_num, [
                 'step' => $n,
                 'jobs' => $jobs,
@@ -626,7 +740,12 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
             continue;
         }
 
-        $dispatch_opts = array_merge($config, ['session_root' => $root, 'phase' => $phase_num]);
+        $dispatch_opts = array_merge($config, [
+            'session_root' => $root,
+            'phase' => $phase_num,
+            'recipe' => $recipe,
+            'through_step' => $n - 1,
+        ]);
         $result = operational_steps_dispatch_step($dbc, $step, $dispatch_opts);
         $log[] = array_merge(['step' => $n], $result);
         $ctx = session_evaluate_context($dbc, $config);

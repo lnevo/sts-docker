@@ -18,28 +18,11 @@ components:
           before: Before Operations
           during: During Operations
           after: After Operations
-          session: Session
-          switchlists: Switch Lists
-          waybills: Waybills
           reports: Reports
           database: Database
           workflow: Notes
-        jobs:
-          - D749
-          - NVL
-          - CK1
-          - STG-SCULLY
-          - STG-DEMMLER
-        locations:
-          - Demmler
-          - South-Yard
-          - Scully
-          - Scully-Offline
-          - Shenango
-          - South-Scale
-          - Island
         dynamic_options:
-          note: "Populated at runtime from DB (backups, car codes, shipments, etc.)"
+          note: "Populated at runtime from DB (jobs, locations, backups, car codes, shipments, etc.)"
         functions:
           -
             id: restore_database
@@ -183,67 +166,6 @@ components:
             gui_path: /sts/wipe.php
             params: []
           -
-            id: warm_start_tracked
-            category: session
-            label: Warm Start (tracked)
-            gui_template: Warm Start tracked simulation
-            description: "Simulate prior operating days until STG-SCULLY backlog is ready. CLI: apply_warm_start.sh."
-            runnable: true
-            dispatch: warm_start_tracked
-            params:
-              -
-                key: min_sessions
-                label: Min sessions
-                type: number
-                default: 3
-                min: 1
-                max: 30
-              -
-                key: max_sessions
-                label: Max sessions
-                type: number
-                default: 12
-                min: 1
-                max: 30
-          -
-            id: begin_operating_session
-            category: session
-            adder: false
-            label: Begin Operating Session (composite)
-            gui_template: Begin Operating Session
-            description: "STG-SCULLY (optional), load/unload, increment session, fill, reposition, auto-assign."
-            runnable: true
-            dispatch: begin_operating_session
-            params:
-              -
-                key: run_stg_scully
-                label: Run STG-SCULLY
-                type: select
-                options:
-                  - yes
-                  - no
-                default: yes
-          -
-            id: play_operating_session
-            category: session
-            adder: false
-            label: Play Operating Session (composite)
-            gui_template: Play Operating Session
-            description: "Run dispatch through session end; defer STG-SCULLY for next begin. CLI: play_operating_session.sh."
-            runnable: true
-            dispatch: play_operating_session
-            params: []
-          -
-            id: evaluate_session_prep
-            category: session
-            adder: false
-            label: Evaluate Session Prep
-            gui_template: Evaluate Session Prep
-            description: "Report unfilled orders, empties, staging backlog, and per-job assign eligibility."
-            runnable: true
-            dispatch: evaluate_session_prep
-            params: []
-          -
             id: section_label
             category: workflow
             adder: true
@@ -372,35 +294,6 @@ components:
                 default: ""
                 required: true
           -
-            id: run_stg_scully
-            category: operations
-            adder: false
-            label: Run STG-SCULLY
-            gui_template: "Run STG-SCULLY {context}"
-            description: "Assign, pick up, set out at Scully offline. Clears staging backlog."
-            runnable: true
-            dispatch: staging_job
-            params:
-              -
-                key: context
-                label: Context
-                type: select
-                options:
-                  - pending backlog
-                  - Scully
-                  - Scully-Offline
-                default: Scully-Offline
-          -
-            id: run_stg_demmler
-            category: operations
-            label: Run STG-DEMMLER
-            gui_template: Run STG-DEMMLER
-            description: Session-end Demmler offline staging swap.
-            runnable: true
-            dispatch: staging_job
-            dispatch_job: STG-DEMMLER
-            params: []
-          -
             id: generate_orders
             category: operations
             adder: true
@@ -442,14 +335,15 @@ components:
                 visible_label: true
           -
             id: increment_session
-            category: session
+            category: database
             adder: true
-            adder_group: session
+            adder_group: database
             label: Increment Session Number
             gui_template: Increment Session Number
-            description: Settings → advance session number by 1.
+            description: "Advance session number by 1. GUI: generate.php (Next Session)."
             runnable: true
             dispatch: increment_session
+            gui_path: /sts/generate.php
             params: []
           -
             id: fill_orders
@@ -641,10 +535,11 @@ components:
             adder: true
             adder_group: during
             label: Auto-Assign Cars
-            gui_template: "Auto-Assign Cars {jobs}"
-            description: Auto-assign eligible cars to one or more jobs (Ctrl/Cmd+click to select multiple).
+            gui_template: "Auto-Assign Cars {jobs} {station}"
+            description: Auto-assign eligible cars to job(s)/train(s). Optional station filter limits picks to one yard.
             runnable: true
             dispatch: auto_assign_locals
+            gui_path: /sts/auto_assign.php
             params:
               -
                 key: jobs
@@ -654,6 +549,14 @@ components:
                 required: false
                 default: ""
                 visible_label: true
+              -
+                key: station
+                label: Station filter
+                type: station
+                options_from: stations
+                allow_custom: true
+                required: false
+                default: all
           -
             id: pick_up_cars
             category: operations
@@ -779,8 +682,8 @@ components:
             adder: true
             adder_group: during
             label: Track Scale
-            gui_template: "Weigh Cars {job}"
-            description: Run track scale / weigh operations for a job (job-specific logic if configured).
+            gui_template: "Weigh Cars {job}{commodity_suffix}"
+            description: Weigh loaded cars on a job train (or at the scale) for the selected commodity. Uses track scale config when commodity is blank.
             runnable: true
             dispatch: track_scale
             params:
@@ -792,158 +695,23 @@ components:
                 allow_custom: true
                 required: false
                 default: ""
-          -
-            id: weigh_ck1
-            category: operations
-            adder: false
-            label: Weigh Cars CK1
-            gui_template: Weigh Cars CK1
-            description: "Track scale weigh, reloads, outbound assignments."
-            runnable: true
-            dispatch: weigh_ck1
-            params: []
-          -
-            id: assign_ck1_reload
-            category: operations
-            adder: false
-            label: Assign CK1 reload/outbound
-            gui_template: Assign Cars CK1 reload/outbound
-            description: Assign reload and outbound coke after weigh.
-            runnable: true
-            dispatch: assign_ck1_reload
-            params: []
-          -
-            id: run_job_criterion
-            category: operations
-            adder: true
-            adder_group: during
-            label: Run Job Criterion Steps
-            gui_template: "Set Out Cars {job} criterion {steps}"
-            description: Run numbered criterion steps defined on a job.
-            runnable: true
-            dispatch: run_job_criterion
-            params:
               -
-                key: job
-                label: Job
-                type: job
-                options_from: jobs
+                key: commodity
+                label: Commodity
+                type: commodity
+                options_from: commodities
                 allow_custom: true
-                required: true
+                required: false
                 default: ""
-              -
-                key: steps
-                label: "Criterion step #s"
-                type: text
-                default: "10,15,20"
-                required: true
-                placeholder: Comma-separated
-          -
-            id: run_staging_job
-            category: operations
-            adder: false
-            label: Run Staging Job
-            gui_template: "Run {job}"
-            description: "Complete a staging job cycle (assign, pick up, set out)."
-            runnable: true
-            dispatch: staging_job
-            params:
-              -
-                key: job
-                label: Staging job
-                type: job
-                options_from: jobs
-                allow_custom: true
-                required: true
-                default: ""
-          -
-            id: composite_nvl_pre_ck1
-            category: operations
-            adder: false
-            label: NVL pre-CK1 (composite)
-            gui_template: NVL pre-CK1 block
-            description: "Assign/pick Scully, set out Demmler on NVL."
-            runnable: true
-            dispatch: composite_nvl_pre_ck1
-            params: []
-          -
-            id: composite_ck1_session
-            category: operations
-            adder: false
-            label: CK1 session (composite)
-            gui_template: CK1 session block
-            description: Full CK1 weigh cycle (Shenango → scale → setouts).
-            runnable: true
-            dispatch: composite_ck1_session
-            params: []
-          -
-            id: composite_nvl_post_ck1
-            category: operations
-            adder: false
-            label: NVL post-CK1 (composite)
-            gui_template: NVL post-CK1 block
-            description: "CK1 handoff, island/Shenango/Demmler/Scully setouts."
-            runnable: true
-            dispatch: composite_nvl_post_ck1
-            params: []
-          -
-            id: composite_d749_session_start
-            category: operations
-            adder: false
-            label: D749 session start (composite)
-            gui_template: D749 session start Demmler→South
-            description: "Assign Demmler, pick up, set out South Yard."
-            runnable: true
-            dispatch: composite_d749_session_start
-            params: []
-          -
-            id: composite_d749_phased
-            category: operations
-            adder: false
-            label: D749 phased ops (composite)
-            gui_template: D749 phased remainder
-            description: "South/Demmler setouts, island→Demmler, clear train."
-            runnable: true
-            dispatch: composite_d749_phased
-            params: []
-          -
-            id: finish_local_jobs
-            category: operations
-            adder: false
-            label: Finish Open Jobs
-            gui_template: Finish open local jobs
-            description: Mop up non-staging jobs still holding cars.
-            runnable: true
-            dispatch: finish_local_jobs
-            params: []
-          -
-            id: secure_d749_demmler
-            category: session
-            adder: false
-            label: Secure D749 at Demmler
-            gui_template: Assign/Pick Up Cars D749 Demmler
-            description: "Bookend: D749 on train with Demmler block."
-            runnable: true
-            dispatch: secure_d749_demmler
-            params: []
-          -
-            id: secure_nvl_scully
-            category: session
-            adder: false
-            label: Secure NVL at Scully
-            gui_template: Assign/Pick Up/Set Out Cars NVL Scully
-            description: "Bookend: NVL secured at Scully yard."
-            runnable: true
-            dispatch: secure_nvl_scully
-            params: []
           -
             id: generate_switchlists
-            category: switchlists
+            category: reports
             adder: true
-            adder_group: switchlists
+            adder_group: reports
+            disabled: true
             label: Generate Switch Lists
             gui_template: "Generate Switch Lists {jobs} ({format})"
-            description: "Dry-run session ops and write switch list HTML for one job/train or all (D749, NVL, CK1). Choose phased (per-leg index + mobile/half sheet), master half sheet, or master mobile."
+            description: Replay the workflow recipe and write switch list HTML for selected job(s) or all. (Coming soon.)
             runnable: true
             dispatch: generate_switchlists
             params:
@@ -973,12 +741,13 @@ components:
                 default: phased
           -
             id: generate_waybills
-            category: switchlists
+            category: reports
             adder: true
-            adder_group: switchlists
+            adder_group: reports
+            disabled: true
             label: Generate Waybill List
             gui_template: Generate Waybill List
-            description: Render printable waybill HTML (same layout as STS printable_waybill.php) for every open waybill in the current session.
+            description: Render printable waybill HTML for open waybills in the current session. (Coming soon.)
             runnable: true
             dispatch: generate_waybills
             params: []
@@ -1013,8 +782,8 @@ components:
               -
                 key: jobs
                 label: Jobs
-                type: text
-                default: "D749,NVL,CK1"
+                type: job_or_all
+                default: all
                 required: false
               -
                 key: session
@@ -1034,8 +803,8 @@ components:
               -
                 key: jobs
                 label: Jobs
-                type: text
-                default: "D749,NVL,CK1"
+                type: job_or_all
+                default: all
                 required: false
           -
             id: rebuild_switchlists_index
@@ -1054,7 +823,7 @@ components:
             adder_group: during
             label: Build Switch Lists
             gui_template: "Build Switch Lists {station} {job}"
-            description: Assign eligible/ordered cars at a station to a job (STS Build Switch Lists).
+            description: Assign ordered cars at a station to a job/train (by-station switch list build).
             runnable: true
             dispatch: build_switchlists_sts
             gui_path: /sts/build_switchlists.php
@@ -1098,7 +867,7 @@ components:
           -
             id: report_station_car
             category: reports
-            adder: true
+            adder: false
             adder_group: reports
             label: Station Car Report
             gui_template: Station Car Report
@@ -1109,7 +878,7 @@ components:
           -
             id: report_wheel
             category: reports
-            adder: true
+            adder: false
             adder_group: reports
             label: Wheel Report
             gui_template: Wheel Report
@@ -1120,8 +889,8 @@ components:
           -
             id: report_waybill_list
             category: reports
-            adder: true
-            adder_group: waybills
+            adder: false
+            adder_group: reports
             disabled: true
             label: Waybill List
             gui_template: Waybill List
@@ -1132,8 +901,8 @@ components:
           -
             id: report_waybill_cars_print
             category: reports
-            adder: true
-            adder_group: waybills
+            adder: false
+            adder_group: reports
             disabled: true
             label: Waybill Sheets for Cars
             gui_template: Waybill Sheets for Cars
@@ -1144,8 +913,8 @@ components:
           -
             id: report_waybill_shipments_print
             category: reports
-            adder: true
-            adder_group: waybills
+            adder: false
+            adder_group: reports
             disabled: true
             label: Waybill Sheets for Shipments
             gui_template: Waybill Sheets for Shipments
@@ -1156,7 +925,7 @@ components:
           -
             id: report_fleet
             category: reports
-            adder: true
+            adder: false
             adder_group: reports
             label: Car Fleet Report
             gui_template: Car Fleet Report
@@ -1176,7 +945,7 @@ components:
           -
             id: report_shipment_forecast
             category: reports
-            adder: true
+            adder: false
             adder_group: reports
             label: Shipment Forecast
             gui_template: Shipment Forecast
@@ -1187,7 +956,7 @@ components:
           -
             id: report_car_forecast
             category: reports
-            adder: true
+            adder: false
             adder_group: reports
             label: Car Forecast
             gui_template: Car Forecast
@@ -1198,7 +967,7 @@ components:
           -
             id: report_car_qr
             category: reports
-            adder: true
+            adder: false
             adder_group: reports
             label: Car QR Codes
             gui_template: Car QR Codes
@@ -1218,7 +987,7 @@ components:
           -
             id: report_location_qr
             category: reports
-            adder: true
+            adder: false
             adder_group: reports
             label: Location QR Codes
             gui_template: Location QR Codes
@@ -1476,7 +1245,7 @@ components:
             adder_group: during
             label: Build Switch Lists
             gui_template: "Build Switch Lists {station} {job}"
-            description: Assign eligible/ordered cars at a station to a job (STS Build Switch Lists).
+            description: Assign ordered cars at a station to a job/train (by-station switch list build).
             runnable: true
             dispatch: build_switchlists_sts
             gui_path: /sts/build_switchlists.php
@@ -1503,10 +1272,11 @@ components:
             adder: true
             adder_group: during
             label: Auto-Assign Cars
-            gui_template: "Auto-Assign Cars {jobs}"
-            description: Auto-assign eligible cars to one or more jobs (Ctrl/Cmd+click to select multiple).
+            gui_template: "Auto-Assign Cars {jobs} {station}"
+            description: Auto-assign eligible cars to job(s)/train(s). Optional station filter limits picks to one yard.
             runnable: true
             dispatch: auto_assign_locals
+            gui_path: /sts/auto_assign.php
             params:
               -
                 key: jobs
@@ -1516,6 +1286,14 @@ components:
                 required: false
                 default: ""
                 visible_label: true
+              -
+                key: station
+                label: Station filter
+                type: station
+                options_from: stations
+                allow_custom: true
+                required: false
+                default: all
           -
             id: pick_up_cars
             category: operations
@@ -1571,39 +1349,13 @@ components:
                 required: false
                 default: ""
           -
-            id: run_job_criterion
-            category: operations
-            adder: true
-            adder_group: during
-            label: Run Job Criterion Steps
-            gui_template: "Set Out Cars {job} criterion {steps}"
-            description: Run numbered criterion steps defined on a job.
-            runnable: true
-            dispatch: run_job_criterion
-            params:
-              -
-                key: job
-                label: Job
-                type: job
-                options_from: jobs
-                allow_custom: true
-                required: true
-                default: ""
-              -
-                key: steps
-                label: "Criterion step #s"
-                type: text
-                default: "10,15,20"
-                required: true
-                placeholder: Comma-separated
-          -
             id: track_scale
             category: operations
             adder: true
             adder_group: during
             label: Track Scale
-            gui_template: "Weigh Cars {job}"
-            description: Run track scale / weigh operations for a job (job-specific logic if configured).
+            gui_template: "Weigh Cars {job}{commodity_suffix}"
+            description: Weigh loaded cars on a job train (or at the scale) for the selected commodity. Uses track scale config when commodity is blank.
             runnable: true
             dispatch: track_scale
             params:
@@ -1612,6 +1364,14 @@ components:
                 label: Job
                 type: job
                 options_from: jobs
+                allow_custom: true
+                required: false
+                default: ""
+              -
+                key: commodity
+                label: Commodity
+                type: commodity
+                options_from: commodities
                 allow_custom: true
                 required: false
                 default: ""
@@ -1681,24 +1441,14 @@ components:
                     default: ""
                     group: locations
           -
-            id: increment_session
-            category: session
-            adder: true
-            adder_group: session
-            label: Increment Session Number
-            gui_template: Increment Session Number
-            description: Settings → advance session number by 1.
-            runnable: true
-            dispatch: increment_session
-            params: []
-          -
             id: generate_switchlists
-            category: switchlists
+            category: reports
             adder: true
-            adder_group: switchlists
+            adder_group: reports
+            disabled: true
             label: Generate Switch Lists
             gui_template: "Generate Switch Lists {jobs} ({format})"
-            description: "Dry-run session ops and write switch list HTML for one job/train or all (D749, NVL, CK1). Choose phased (per-leg index + mobile/half sheet), master half sheet, or master mobile."
+            description: Replay the workflow recipe and write switch list HTML for selected job(s) or all. (Coming soon.)
             runnable: true
             dispatch: generate_switchlists
             params:
@@ -1728,135 +1478,16 @@ components:
                 default: phased
           -
             id: generate_waybills
-            category: switchlists
+            category: reports
             adder: true
-            adder_group: switchlists
+            adder_group: reports
+            disabled: true
             label: Generate Waybill List
             gui_template: Generate Waybill List
-            description: Render printable waybill HTML (same layout as STS printable_waybill.php) for every open waybill in the current session.
+            description: Render printable waybill HTML for open waybills in the current session. (Coming soon.)
             runnable: true
             dispatch: generate_waybills
             params: []
-          -
-            id: report_waybill_list
-            category: reports
-            adder: true
-            adder_group: waybills
-            disabled: true
-            label: Waybill List
-            gui_template: Waybill List
-            description: Waybills and fulfillment status.
-            runnable: false
-            gui_path: /sts/display_waybill.php
-            params: []
-          -
-            id: report_waybill_cars_print
-            category: reports
-            adder: true
-            adder_group: waybills
-            disabled: true
-            label: Waybill Sheets for Cars
-            gui_template: Waybill Sheets for Cars
-            description: Printable car-card waybill sheets.
-            runnable: false
-            gui_path: /sts/printable_ccwaybill2.php
-            params: []
-          -
-            id: report_waybill_shipments_print
-            category: reports
-            adder: true
-            adder_group: waybills
-            disabled: true
-            label: Waybill Sheets for Shipments
-            gui_template: Waybill Sheets for Shipments
-            description: Printable shipment waybill sheets.
-            runnable: false
-            gui_path: /sts/printable_ccwaybill.php
-            params: []
-          -
-            id: report_station_car
-            category: reports
-            adder: true
-            adder_group: reports
-            label: Station Car Report
-            gui_template: Station Car Report
-            description: Cars currently at each station.
-            runnable: false
-            gui_path: /sts/display_station_report.php
-            params: []
-            disabled: true
-          -
-            id: report_wheel
-            category: reports
-            adder: true
-            adder_group: reports
-            label: Wheel Report
-            gui_template: Wheel Report
-            description: Car cycle and movement status.
-            runnable: false
-            gui_path: /sts/wheel_report.php
-            params: []
-            disabled: true
-          -
-            id: report_fleet
-            category: reports
-            adder: true
-            adder_group: reports
-            label: Car Fleet Report
-            gui_template: Car Fleet Report
-            description: Summarize the active car fleet.
-            runnable: false
-            gui_path: /sts/display_fleet_report.php
-            params: []
-            disabled: true
-          -
-            id: report_shipment_forecast
-            category: reports
-            adder: true
-            adder_group: reports
-            label: Shipment Forecast
-            gui_template: Shipment Forecast
-            description: Forecast upcoming shipment demand.
-            runnable: false
-            gui_path: /sts/shipment_forecast.php
-            params: []
-            disabled: true
-          -
-            id: report_car_forecast
-            category: reports
-            adder: true
-            adder_group: reports
-            label: Car Forecast
-            gui_template: Car Forecast
-            description: Forecast car requirements and availability.
-            runnable: false
-            gui_path: /sts/car_forecast.php
-            params: []
-            disabled: true
-          -
-            id: report_car_qr
-            category: reports
-            adder: true
-            adder_group: reports
-            label: Car QR Codes
-            gui_template: Car QR Codes
-            description: Printable QR sheets for cars.
-            runnable: false
-            gui_path: /sts/display_car_qr_report.php
-            params: []
-            disabled: true
-          -
-            id: report_location_qr
-            category: reports
-            adder: true
-            adder_group: reports
-            label: Location QR Codes
-            gui_template: Location QR Codes
-            description: Printable QR sheets for stations and locations.
-            runnable: false
-            gui_path: /sts/display_station_qr_code_report.php
-            params: []
-            disabled: true
           -
             id: restore_database
             category: database
@@ -1907,6 +1538,18 @@ components:
             description: "Check STS for broken links and data integrity. GUI: validate_db.php."
             runnable: false
             gui_path: /sts/validate_db.php
+            params: []
+          -
+            id: increment_session
+            category: database
+            adder: true
+            adder_group: database
+            label: Increment Session Number
+            gui_template: Increment Session Number
+            description: "Advance session number by 1. GUI: generate.php (Next Session)."
+            runnable: true
+            dispatch: increment_session
+            gui_path: /sts/generate.php
             params: []
           -
             id: restart_session
@@ -2393,148 +2036,6 @@ components:
               items:
                 $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
               example: []
-        warm_start_tracked:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [warm_start_tracked]
-            label:
-              type: string
-              example: Warm Start (tracked)
-            category:
-              type: string
-              example: session
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: warm_start_tracked
-            gui_template:
-              type: string
-              example: Warm Start tracked simulation
-            description:
-              type: string
-              example: "Simulate prior operating days until STG-SCULLY backlog is ready. CLI: apply_warm_start.sh."
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example:
-                -
-                  key: min_sessions
-                  label: Min sessions
-                  type: number
-                  default: 3
-                  min: 1
-                  max: 30
-                -
-                  key: max_sessions
-                  label: Max sessions
-                  type: number
-                  default: 12
-                  min: 1
-                  max: 30
-        begin_operating_session:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [begin_operating_session]
-            label:
-              type: string
-              example: Begin Operating Session (composite)
-            category:
-              type: string
-              example: session
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: begin_operating_session
-            gui_template:
-              type: string
-              example: Begin Operating Session
-            description:
-              type: string
-              example: "STG-SCULLY (optional), load/unload, increment session, fill, reposition, auto-assign."
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example:
-                -
-                  key: run_stg_scully
-                  label: Run STG-SCULLY
-                  type: select
-                  options:
-                    - yes
-                    - no
-                  default: yes
-        play_operating_session:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [play_operating_session]
-            label:
-              type: string
-              example: Play Operating Session (composite)
-            category:
-              type: string
-              example: session
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: play_operating_session
-            gui_template:
-              type: string
-              example: Play Operating Session
-            description:
-              type: string
-              example: "Run dispatch through session end; defer STG-SCULLY for next begin. CLI: play_operating_session.sh."
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example: []
-        evaluate_session_prep:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [evaluate_session_prep]
-            label:
-              type: string
-              example: Evaluate Session Prep
-            category:
-              type: string
-              example: session
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: evaluate_session_prep
-            gui_template:
-              type: string
-              example: Evaluate Session Prep
-            description:
-              type: string
-              example: "Report unfilled orders, empties, staging backlog, and per-job assign eligibility."
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example: []
         section_label:
           type: object
           required: [id, label, params]
@@ -2772,75 +2273,6 @@ components:
                   type: text
                   default: ""
                   required: true
-        run_stg_scully:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [run_stg_scully]
-            label:
-              type: string
-              example: Run STG-SCULLY
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: staging_job
-            gui_template:
-              type: string
-              example: "Run STG-SCULLY {context}"
-            description:
-              type: string
-              example: "Assign, pick up, set out at Scully offline. Clears staging backlog."
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example:
-                -
-                  key: context
-                  label: Context
-                  type: select
-                  options:
-                    - pending backlog
-                    - Scully
-                    - Scully-Offline
-                  default: Scully-Offline
-        run_stg_demmler:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [run_stg_demmler]
-            label:
-              type: string
-              example: Run STG-DEMMLER
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: staging_job
-            gui_template:
-              type: string
-              example: Run STG-DEMMLER
-            description:
-              type: string
-              example: Session-end Demmler offline staging swap.
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example: []
         generate_orders:
           type: object
           required: [id, label, params]
@@ -2912,7 +2344,7 @@ components:
               example: Increment Session Number
             category:
               type: string
-              example: session
+              example: database
             runnable:
               type: boolean
               example: true
@@ -2924,7 +2356,7 @@ components:
               example: Increment Session Number
             description:
               type: string
-              example: Settings → advance session number by 1.
+              example: "Advance session number by 1. GUI: generate.php (Next Session)."
             params:
               type: array
               items:
@@ -3172,10 +2604,10 @@ components:
               example: auto_assign_locals
             gui_template:
               type: string
-              example: "Auto-Assign Cars {jobs}"
+              example: "Auto-Assign Cars {jobs} {station}"
             description:
               type: string
-              example: Auto-assign eligible cars to one or more jobs (Ctrl/Cmd+click to select multiple).
+              example: Auto-assign eligible cars to job(s)/train(s). Optional station filter limits picks to one yard.
             params:
               type: array
               items:
@@ -3189,6 +2621,14 @@ components:
                   required: false
                   default: ""
                   visible_label: true
+                -
+                  key: station
+                  label: Station filter
+                  type: station
+                  options_from: stations
+                  allow_custom: true
+                  required: false
+                  default: all
         pick_up_cars:
           type: object
           required: [id, label, params]
@@ -3385,10 +2825,10 @@ components:
               example: track_scale
             gui_template:
               type: string
-              example: "Weigh Cars {job}"
+              example: "Weigh Cars {job}{commodity_suffix}"
             description:
               type: string
-              example: Run track scale / weigh operations for a job (job-specific logic if configured).
+              example: Weigh loaded cars on a job train (or at the scale) for the selected commodity. Uses track scale config when commodity is blank.
             params:
               type: array
               items:
@@ -3402,389 +2842,14 @@ components:
                   allow_custom: true
                   required: false
                   default: ""
-        weigh_ck1:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [weigh_ck1]
-            label:
-              type: string
-              example: Weigh Cars CK1
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: weigh_ck1
-            gui_template:
-              type: string
-              example: Weigh Cars CK1
-            description:
-              type: string
-              example: "Track scale weigh, reloads, outbound assignments."
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example: []
-        assign_ck1_reload:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [assign_ck1_reload]
-            label:
-              type: string
-              example: Assign CK1 reload/outbound
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: assign_ck1_reload
-            gui_template:
-              type: string
-              example: Assign Cars CK1 reload/outbound
-            description:
-              type: string
-              example: Assign reload and outbound coke after weigh.
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example: []
-        run_job_criterion:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [run_job_criterion]
-            label:
-              type: string
-              example: Run Job Criterion Steps
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: run_job_criterion
-            gui_template:
-              type: string
-              example: "Set Out Cars {job} criterion {steps}"
-            description:
-              type: string
-              example: Run numbered criterion steps defined on a job.
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example:
                 -
-                  key: job
-                  label: Job
-                  type: job
-                  options_from: jobs
+                  key: commodity
+                  label: Commodity
+                  type: commodity
+                  options_from: commodities
                   allow_custom: true
-                  required: true
+                  required: false
                   default: ""
-                -
-                  key: steps
-                  label: "Criterion step #s"
-                  type: text
-                  default: "10,15,20"
-                  required: true
-                  placeholder: Comma-separated
-        run_staging_job:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [run_staging_job]
-            label:
-              type: string
-              example: Run Staging Job
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: staging_job
-            gui_template:
-              type: string
-              example: "Run {job}"
-            description:
-              type: string
-              example: "Complete a staging job cycle (assign, pick up, set out)."
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example:
-                -
-                  key: job
-                  label: Staging job
-                  type: job
-                  options_from: jobs
-                  allow_custom: true
-                  required: true
-                  default: ""
-        composite_nvl_pre_ck1:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [composite_nvl_pre_ck1]
-            label:
-              type: string
-              example: NVL pre-CK1 (composite)
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: composite_nvl_pre_ck1
-            gui_template:
-              type: string
-              example: NVL pre-CK1 block
-            description:
-              type: string
-              example: "Assign/pick Scully, set out Demmler on NVL."
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example: []
-        composite_ck1_session:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [composite_ck1_session]
-            label:
-              type: string
-              example: CK1 session (composite)
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: composite_ck1_session
-            gui_template:
-              type: string
-              example: CK1 session block
-            description:
-              type: string
-              example: Full CK1 weigh cycle (Shenango → scale → setouts).
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example: []
-        composite_nvl_post_ck1:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [composite_nvl_post_ck1]
-            label:
-              type: string
-              example: NVL post-CK1 (composite)
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: composite_nvl_post_ck1
-            gui_template:
-              type: string
-              example: NVL post-CK1 block
-            description:
-              type: string
-              example: "CK1 handoff, island/Shenango/Demmler/Scully setouts."
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example: []
-        composite_d749_session_start:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [composite_d749_session_start]
-            label:
-              type: string
-              example: D749 session start (composite)
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: composite_d749_session_start
-            gui_template:
-              type: string
-              example: D749 session start Demmler→South
-            description:
-              type: string
-              example: "Assign Demmler, pick up, set out South Yard."
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example: []
-        composite_d749_phased:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [composite_d749_phased]
-            label:
-              type: string
-              example: D749 phased ops (composite)
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: composite_d749_phased
-            gui_template:
-              type: string
-              example: D749 phased remainder
-            description:
-              type: string
-              example: "South/Demmler setouts, island→Demmler, clear train."
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example: []
-        finish_local_jobs:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [finish_local_jobs]
-            label:
-              type: string
-              example: Finish Open Jobs
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: finish_local_jobs
-            gui_template:
-              type: string
-              example: Finish open local jobs
-            description:
-              type: string
-              example: Mop up non-staging jobs still holding cars.
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example: []
-        secure_d749_demmler:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [secure_d749_demmler]
-            label:
-              type: string
-              example: Secure D749 at Demmler
-            category:
-              type: string
-              example: session
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: secure_d749_demmler
-            gui_template:
-              type: string
-              example: Assign/Pick Up Cars D749 Demmler
-            description:
-              type: string
-              example: "Bookend: D749 on train with Demmler block."
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example: []
-        secure_nvl_scully:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [secure_nvl_scully]
-            label:
-              type: string
-              example: Secure NVL at Scully
-            category:
-              type: string
-              example: session
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: secure_nvl_scully
-            gui_template:
-              type: string
-              example: Assign/Pick Up/Set Out Cars NVL Scully
-            description:
-              type: string
-              example: "Bookend: NVL secured at Scully yard."
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example: []
         generate_switchlists:
           type: object
           required: [id, label, params]
@@ -3797,7 +2862,7 @@ components:
               example: Generate Switch Lists
             category:
               type: string
-              example: switchlists
+              example: reports
             runnable:
               type: boolean
               example: true
@@ -3809,7 +2874,7 @@ components:
               example: "Generate Switch Lists {jobs} ({format})"
             description:
               type: string
-              example: "Dry-run session ops and write switch list HTML for one job/train or all (D749, NVL, CK1). Choose phased (per-leg index + mobile/half sheet), master half sheet, or master mobile."
+              example: Replay the workflow recipe and write switch list HTML for selected job(s) or all. (Coming soon.)
             params:
               type: array
               items:
@@ -3851,7 +2916,7 @@ components:
               example: Generate Waybill List
             category:
               type: string
-              example: switchlists
+              example: reports
             runnable:
               type: boolean
               example: true
@@ -3863,7 +2928,7 @@ components:
               example: Generate Waybill List
             description:
               type: string
-              example: Render printable waybill HTML (same layout as STS printable_waybill.php) for every open waybill in the current session.
+              example: Render printable waybill HTML for open waybills in the current session. (Coming soon.)
             params:
               type: array
               items:
@@ -3920,8 +2985,8 @@ components:
                 -
                   key: jobs
                   label: Jobs
-                  type: text
-                  default: "D749,NVL,CK1"
+                  type: job_or_all
+                  default: all
                   required: false
                 -
                   key: session
@@ -3962,8 +3027,8 @@ components:
                 -
                   key: jobs
                   label: Jobs
-                  type: text
-                  default: "D749,NVL,CK1"
+                  type: job_or_all
+                  default: all
                   required: false
         rebuild_switchlists_index:
           type: object
@@ -4019,7 +3084,7 @@ components:
               example: "Build Switch Lists {station} {job}"
             description:
               type: string
-              example: Assign eligible/ordered cars at a station to a job (STS Build Switch Lists).
+              example: Assign ordered cars at a station to a job/train (by-station switch list build).
             params:
               type: array
               items:

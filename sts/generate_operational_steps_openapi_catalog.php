@@ -21,10 +21,8 @@ $catalog_payload = [
     'ok' => true,
     'categories' => operational_steps_catalog_categories(),
     'adder_categories' => operational_steps_catalog_adder_categories(),
-    'jobs' => operational_steps_catalog_jobs(),
-    'locations' => array_keys(operational_steps_catalog_locations()),
     'dynamic_options' => [
-        'note' => 'Populated at runtime from DB (backups, car codes, shipments, etc.)',
+        'note' => 'Populated at runtime from DB (jobs, locations, backups, car codes, shipments, etc.)',
     ],
     'functions' => operational_steps_catalog_definitions(),
     'adder_functions' => operational_steps_catalog_adder_definitions(),

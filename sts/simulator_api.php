@@ -73,7 +73,6 @@ try {
                 'format' => $body['format'] ?? 'phased',
                 'min_sessions' => (int) ($body['min_sessions'] ?? 3),
                 'max_sessions' => (int) ($body['max_sessions'] ?? 12),
-                'run_stg_scully' => $body['run_stg_scully'] ?? 'yes',
                 'config' => is_array($body['config'] ?? null) ? $body['config'] : [],
             ]);
             mysqli_close($dbc);

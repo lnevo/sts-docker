@@ -7,7 +7,7 @@ require_once $sts_dir . '/open_db.php';
 require_once $sts_dir . '/session_helpers.php';
 
 $dbc = open_db();
-$current = (int) warm_start_get_session($dbc);
+$current = session_get_db_session($dbc);
 mysqli_close($dbc);
 
 $root = session_web_root();

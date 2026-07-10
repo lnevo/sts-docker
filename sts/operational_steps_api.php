@@ -57,8 +57,6 @@ try {
                 'ok' => true,
                 'categories' => operational_steps_catalog_categories(),
                 'adder_categories' => operational_steps_catalog_adder_categories(),
-                'jobs' => operational_steps_catalog_jobs(),
-                'locations' => operational_steps_catalog_locations(),
                 'dynamic_options' => $dynamic,
                 'functions' => operational_steps_catalog_definitions(),
                 'adder_functions' => operational_steps_catalog_adder_definitions(),
@@ -70,7 +68,7 @@ try {
             $compiled = operational_steps_compile_recipe($recipe);
             $indices = operational_steps_recipe_indices($recipe);
             $dbc = open_db();
-            $current_session = warm_start_get_session($dbc);
+            $current_session = session_get_db_session($dbc);
             mysqli_close($dbc);
             $existing = operational_steps_discover_switchlist_sessions($session_dir);
             operational_steps_api_json([
@@ -147,7 +145,7 @@ try {
             }
             $body = operational_steps_api_body();
             $format = $body['format'] ?? 'phased';
-            $jobs = isset($body['jobs']) ? array_values(array_filter(array_map('trim', explode(',', $body['jobs'])))) : ['D749', 'NVL', 'CK1'];
+            $jobs = isset($body['jobs']) ? array_values(array_filter(array_map('trim', explode(',', $body['jobs'])))) : [];
             if (isset($body['recipe']) && is_array($body['recipe'])) {
                 operational_steps_save_recipe($session_dir, $body['recipe']);
             }
@@ -290,9 +288,18 @@ try {
             if ($csv_file === '') {
                 operational_steps_api_json(['ok' => false, 'error' => 'Choose a CSV file'], 400);
             }
-            $paths = operational_steps_recipe_paths_for_csv($session_dir, $csv_file);
             $kind = strtolower((string) ($_GET['kind'] ?? 'csv'));
-            $path = ($kind === 'recipe' || $kind === 'json') ? $paths['recipe'] : $paths['csv'];
+            if ($kind === 'recipe' || $kind === 'json') {
+                $recipe = operational_steps_load_recipe($session_dir, $csv_file);
+                $json = json_encode($recipe, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+                header('Content-Type: application/json; charset=utf-8');
+                header('Content-Disposition: attachment; filename="' . preg_replace('/\.csv$/i', '.workflow.json', $csv_file) . '"');
+                header('Content-Length: ' . strlen($json));
+                echo $json;
+                exit;
+            }
+            $paths = operational_steps_recipe_paths_for_csv($session_dir, $csv_file);
+            $path = $paths['csv'];
             if (!is_file($path)) {
                 operational_steps_api_json(['ok' => false, 'error' => 'File not found'], 404);
             }

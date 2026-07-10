@@ -159,6 +159,7 @@
       const cats = this.catalog.adder_categories || {};
       const byGroup = {};
       adder.forEach((f) => {
+        if (f.disabled) return;
         const g = f.adder_group || 'during';
         (byGroup[g] = byGroup[g] || []).push(f);
       });
@@ -173,13 +174,10 @@
       order.forEach((g) => {
         const items = byGroup[g] || [];
         if (!items.length) return;
-        const groupDisabled = g === 'reports';
-        html += '<optgroup label="' + this.escapeHtml(cats[g] || g) + '"' + (groupDisabled ? ' disabled' : '') + '>';
+        html += '<optgroup label="' + this.escapeHtml(cats[g] || g) + '">';
         items.forEach((f) => {
-          const dis = groupDisabled || f.disabled;
           html += '<option value="' + f.id + '"' +
-            (f.id === displayId ? ' selected' : '') +
-            (dis ? ' disabled' : '') + '>' +
+            (f.id === displayId ? ' selected' : '') + '>' +
             this.escapeHtml(f.label || f.id) + '</option>';
         });
         html += '</optgroup>';
@@ -189,7 +187,7 @@
     },
 
     nonStagingJobNames() {
-      const staging = new Set((this.dynamicOptions.staging_jobs || ['STG-SCULLY', 'STG-DEMMLER']).map(String));
+      const staging = new Set((this.dynamicOptions.staging_jobs || []).map(String));
       return (this.dynamicOptions.jobs || [])
         .map((j) => j.name)
         .filter((name) => name && !staging.has(name));
@@ -233,9 +231,7 @@
       if (from === 'scopes') return d.scopes || [];
       if (from === 'backups') return (d.backups || []).map((b) => ({ value: b, label: b }));
       if (from === 'switchlist_trains' || from === 'job_or_all' || p.type === 'job_or_all') {
-        const preferred = ['D749', 'NVL', 'CK1'];
         const names = new Set(['all']);
-        preferred.forEach((n) => names.add(n));
         (d.jobs || []).forEach((j) => {
           if (j.name) names.add(j.name);
         });
@@ -1474,9 +1470,7 @@
       }
       if (json) {
         json.href = 'operational_steps_api.php?action=download&kind=recipe&csv_file=' + q;
-        json.download = name === 'STS_OPERATIONAL_STEPS.csv'
-          ? 'STS_OPERATIONAL_RECIPE.json'
-          : name.replace(/\.csv$/i, '.recipe.json');
+        json.download = name.replace(/\.csv$/i, '.workflow.json');
         json.classList.remove('disabled');
       }
     },

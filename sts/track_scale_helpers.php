@@ -1,5 +1,5 @@
 <?php
-// track_scale_helpers.php — South Yard track scale (self-contained helpers)
+// track_scale_helpers.php — Track scale helpers (config under sts/backups/track_scale)
 // Config, roster, seed, settings, and session.log live under sts-backups/track_scale.
 // In Docker that directory is bind-mounted at sts/backups/track_scale.
 
@@ -37,6 +37,8 @@ function track_scale_default_config()
         'precision' => 2,
         'routing_tolerance_tons' => 5.0,
         'loading_location_code' => 'SOUTH-SCALE',
+        'site_label' => '',
+        'routed_trains_label' => 'Scale-area trains',
         'outbound_loading_location_code' => 'NORTH',
         'reload_loading_location_code' => 'SOUTH-SCALE',
         'api_base_url' => '/sts/api/index.php',
@@ -2115,6 +2117,23 @@ function track_scale_record_weigh_log($dbc, $reporting_marks, array $reading, $c
     return true;
 }
 
+function track_scale_site_label($config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    $label = trim((string) ($config['site_label'] ?? ''));
+    if ($label !== '') {
+        return $label;
+    }
+    return 'Track Scale';
+}
+
+function track_scale_routed_trains_label($config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    $label = trim((string) ($config['routed_trains_label'] ?? ''));
+    return $label !== '' ? $label : 'Scale-area trains';
+}
+
 function track_scale_loading_location_code($config = null)
 {
     $config = $config ?? track_scale_load_config();
@@ -2286,7 +2305,7 @@ function track_scale_weighable_car_error($car, $config = null)
     }
 
     return 'Car must be at ' . $scale_location
-        . ' or in a train routed to South Yard to weigh (currently at ' . $current . ')';
+        . ' or on a train routed to the scale area to weigh (currently at ' . $current . ')';
 }
 
 function track_scale_car_at_scale($car, $config = null)
@@ -3502,6 +3521,200 @@ function track_scale_assign_car($dbc, $waybill_number, $car_id, $config = null)
     }
 
     return $result;
+}
+
+function track_scale_job_id($dbc, $job_name)
+{
+    $job_name = trim((string) $job_name);
+    if ($job_name === '') {
+        return 0;
+    }
+    $rs = mysqli_query(
+        $dbc,
+        'SELECT id FROM jobs WHERE name = "' . mysqli_real_escape_string($dbc, $job_name) . '" LIMIT 1'
+    );
+    if (!$rs || mysqli_num_rows($rs) === 0) {
+        return 0;
+    }
+    return (int) mysqli_fetch_array($rs)['id'];
+}
+
+function track_scale_car_has_routing_order($dbc, $car_id, $routing, $config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    $active = track_scale_get_car_active_order($dbc, $car_id);
+    if ($active === null) {
+        return false;
+    }
+    $codes = track_scale_shipment_codes_for_routing($routing, $config);
+    return in_array($active['shipment_code'], $codes, true);
+}
+
+function track_scale_pick_waybill($dbc, $car_id, $routing, $config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    $orders = track_scale_get_open_orders($dbc, $car_id, $routing, $config);
+    if (count($orders) > 0) {
+        return $orders[0]['waybill_number'];
+    }
+
+    $codes = track_scale_shipment_codes_for_routing($routing, $config);
+    shuffle($codes);
+    foreach ($codes as $code) {
+        if (!track_scale_car_in_pool_for_shipment($dbc, $car_id, $code, $config)) {
+            continue;
+        }
+        $generated = track_scale_generate_order($dbc, $code, $car_id, $config, $routing);
+        if (!empty($generated['success'])) {
+            return $generated['waybill_number'];
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Weigh eligible commodity cars on a job train or at the scale location.
+ *
+ * @return array{weighed: int, reloads: int, outbound_assignments: int, candidates: int, errors: list<string>, success: bool, job: string, commodity_code: string}
+ */
+function track_scale_run_job_weigh($dbc, $job_name, $config = null)
+{
+    $fail = function (array $stats, string $error) {
+        $stats['success'] = false;
+        $stats['errors'][] = $error;
+        return $stats;
+    };
+
+    $config = $config ?? track_scale_load_config();
+    $job_name = strtoupper(trim((string) $job_name));
+    $stats = [
+        'weighed' => 0,
+        'reloads' => 0,
+        'outbound_assignments' => 0,
+        'candidates' => 0,
+        'errors' => [],
+        'success' => true,
+        'job' => $job_name,
+        'commodity_code' => (string) ($config['commodity_code'] ?? ''),
+    ];
+
+    $job_id = track_scale_job_id($dbc, $job_name);
+    if ($job_id <= 0) {
+        return $fail($stats, 'Job not found: ' . $job_name);
+    }
+
+    track_scale_sync_session_calibration($dbc);
+    if (track_scale_is_out_of_service($dbc, $config) && !track_scale_is_calibration_locked($dbc)) {
+        return $fail($stats, 'track scale out of service');
+    }
+
+    $scale_loc_id = track_scale_loading_location_id($dbc, $config);
+    $rs = mysqli_query(
+        $dbc,
+        'SELECT cars.id AS car_id
+         FROM cars
+         WHERE cars.status IN ("Loaded", "Loading", "Ordered")
+           AND (
+             (cars.handled_by_job_id = "' . (int) $job_id . '" AND cars.current_location_id = 0)
+             OR cars.current_location_id = "' . (int) $scale_loc_id . '"
+           )
+         ORDER BY cars.id'
+    );
+    $candidates = [];
+    while ($rs && ($row = mysqli_fetch_array($rs))) {
+        $car_id = (int) $row['car_id'];
+        if (!track_scale_car_in_coke_fleet($dbc, $car_id, $config)) {
+            continue;
+        }
+        $car = track_scale_get_car_by_id($dbc, $car_id);
+        if ($car === null) {
+            continue;
+        }
+        if ($car['status'] === 'Loading') {
+            mysqli_query($dbc, 'UPDATE cars SET status = "Loaded" WHERE id = "' . $car_id . '"');
+            $car['status'] = 'Loaded';
+        }
+        if (strcasecmp((string) ($car['status'] ?? ''), 'Ordered') === 0) {
+            mysqli_query($dbc, 'UPDATE cars SET status = "Loaded" WHERE id = "' . $car_id . '"');
+            $car['status'] = 'Loaded';
+        }
+        if (!track_scale_car_has_load($car)) {
+            continue;
+        }
+        $candidates[] = $car_id;
+    }
+    $stats['candidates'] = count($candidates);
+
+    foreach ($candidates as $car_id) {
+        $car = track_scale_get_car_by_id($dbc, $car_id);
+        if ($car === null) {
+            continue;
+        }
+        $on_train = (int) ($car['handled_by_job_id'] ?? 0) === $job_id
+            && (int) ($car['current_location_id'] ?? 0) === 0;
+        $at_scale = (int) ($car['current_location_id'] ?? 0) === (int) $scale_loc_id;
+        if (!$on_train && !$at_scale) {
+            continue;
+        }
+
+        $marks = $car['reporting_marks'] ?? '';
+        $profile = track_scale_profile_for_marks($marks, $config);
+        if (!empty($profile['tare_only'])) {
+            continue;
+        }
+
+        if (!track_scale_car_weighable($car, $dbc, $config)) {
+            $stats = $fail($stats, track_scale_weighable_car_error($car, $config));
+            continue;
+        }
+
+        $target_net = (float) ($profile['target_net_tons'] ?? $profile['load_limit_tons'] ?? 80.0);
+        $tare = (float) ($profile['tare_tons'] ?? 27.0);
+        $true_net = track_scale_get_car_true_net($dbc, $marks, $target_net, $config);
+        $weighing = track_scale_build_display_weighing($true_net, $tare, $target_net, $config);
+        track_scale_record_weigh_log($dbc, $marks, $weighing, $config);
+
+        $routing = $weighing['routing'] ?? 'outbound';
+        if (track_scale_car_has_routing_order($dbc, $car_id, $routing, $config)) {
+            $stats['weighed']++;
+            if ($routing === 'reload') {
+                $stats['reloads']++;
+            } else {
+                $stats['outbound_assignments']++;
+            }
+            continue;
+        }
+
+        $waybill = track_scale_pick_waybill($dbc, $car_id, $routing, $config);
+        if ($waybill === null) {
+            $stats = $fail($stats, "No waybill for {$marks} (routing={$routing})");
+            continue;
+        }
+
+        $assign = track_scale_assign_car($dbc, $waybill, (string) $car_id, $config);
+        if (empty($assign['success'])) {
+            $message = $assign['message'] ?? ($assign['error'] ?? 'assign failed');
+            $stats = $fail($stats, "Assign failed for {$marks}: {$message}");
+            continue;
+        }
+
+        $stats['weighed']++;
+        if ($routing === 'reload') {
+            $stats['reloads']++;
+        } else {
+            $stats['outbound_assignments']++;
+        }
+    }
+
+    if ($stats['candidates'] > 0 && $stats['weighed'] === 0 && $stats['success']) {
+        $stats = $fail(
+            $stats,
+            $stats['candidates'] . ' car(s) on ' . $job_name . ' but none weighed/assigned'
+        );
+    }
+
+    return $stats;
 }
 
 ?>

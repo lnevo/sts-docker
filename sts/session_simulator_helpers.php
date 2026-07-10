@@ -43,20 +43,31 @@ function session_simulator_maybe_save_recipe($session_dir, array $body)
     );
 }
 
+function session_simulator_merge_config(array $config = [])
+{
+    if (function_exists('warm_start_merge_config')) {
+        return warm_start_merge_config($config);
+    }
+    return $config;
+}
+
 function session_simulator_run_options($dbc, $session_dir, array $recipe)
 {
     $compiled = operational_steps_compile_recipe($recipe);
     $indices = operational_steps_recipe_indices($recipe);
     $sections = operational_steps_workflow_sections($recipe);
-    $current_session = warm_start_get_session($dbc);
+    $current_session = session_get_db_session($dbc);
     $existing = session_discover_sessions(session_web_root());
+    $runtime_ok = session_runtime_available();
 
-    $ctx = session_evaluate_context($dbc, warm_start_merge_config([]));
+    $ctx = session_evaluate_context($dbc, session_simulator_merge_config([]));
     $condition_context = $ctx;
-    unset($condition_context['_dbc'], $condition_context['_config']);
+    unset($condition_context['_dbc'], $condition_context['_config'], $condition_context['_runtime_limited']);
 
     return [
         'ok' => true,
+        'runtime_available' => $runtime_ok,
+        'runtime_notice' => $runtime_ok ? null : session_runtime_notice(),
         'current_session' => $current_session,
         'existing_sessions' => $existing,
         'indices' => $indices,
@@ -66,150 +77,54 @@ function session_simulator_run_options($dbc, $session_dir, array $recipe)
         'breakpoints' => $indices['breakpoints'],
         'compiled' => $compiled,
         'condition_context' => $condition_context,
-        'composites' => [
-            ['id' => 'warm_start_tracked', 'label' => 'Warm start (tracked composite)'],
-            ['id' => 'begin_operating_session', 'label' => 'Begin operating session'],
-            ['id' => 'play_operating_session', 'label' => 'Play operating session'],
-        ],
     ];
 }
 
 function session_simulator_status($dbc, array $config = [])
 {
-    $config = warm_start_merge_config($config);
-    $evaluation = warm_start_evaluate_session_prep($dbc, $config);
-    $ctx = session_evaluate_context($dbc, $config);
-    $scully = $evaluation['stg_scully_backlog'] ?? ['eligible' => 0, 'on_jobs' => 0, 'ready' => false];
-
-    return [
+    $runtime_ok = session_runtime_available();
+    $payload = [
         'ok' => true,
-        'session' => warm_start_get_session($dbc),
-        'evaluation' => $evaluation,
-        'context' => [
-            'session_nbr' => (int) ($ctx['session_nbr'] ?? 0),
-            'unfilled_count' => (int) ($ctx['unfilled_count'] ?? 0),
-            'stg_backlog_eligible' => (int) ($ctx['stg_backlog_eligible'] ?? 0),
-            'stg_backlog_on_jobs' => (int) ($ctx['stg_backlog_on_jobs'] ?? 0),
-            'awaiting_assignment' => (int) ($ctx['awaiting_assignment'] ?? 0),
-        ],
-        'stg_scully_backlog_ready' => !empty($scully['ready']),
-        'summary' => warm_start_summarize($dbc),
+        'runtime_available' => $runtime_ok,
+        'session' => session_get_db_session($dbc),
     ];
-}
-
-function session_simulator_is_loop_section($label)
-{
-    $label = trim((string) $label);
-    return stripos($label, 'repeat steps') !== false
-        && (stripos($label, 'warm start') !== false || stripos($label, 'STG-SCULLY') !== false);
-}
-
-function session_simulator_parse_repeat_range($label, array $section, $total_steps)
-{
-    if (preg_match('/repeat steps\s+(\d+)\s*[-–]\s*(\d+)/i', $label, $m)) {
-        return [
-            'from' => max(1, (int) $m[1]),
-            'to' => min($total_steps, (int) $m[2]),
-        ];
+    if (!$runtime_ok) {
+        return array_merge($payload, ['runtime_notice' => session_runtime_notice()]);
     }
-    $from = (int) $section['start'] + 1;
-    $to = (int) $section['stop'];
-    if ($to > $from && ($section['stop'] ?? 0) < $total_steps) {
-        $to--;
+
+    $config = session_simulator_merge_config($config);
+    $ctx = session_evaluate_context($dbc, $config);
+    unset($ctx['_dbc'], $ctx['_config'], $ctx['_runtime_limited']);
+    $payload['context'] = $ctx;
+    if (function_exists('warm_start_summarize')) {
+        $payload['summary'] = warm_start_summarize($dbc);
     }
-    return ['from' => $from, 'to' => max($from, $to)];
+    return $payload;
 }
 
 function session_simulator_run_recipe_range($dbc, array $recipe, $from_step, $to_step, array $options = [])
 {
-    $config = warm_start_merge_config($options['config'] ?? []);
     return session_run_recipe($dbc, $recipe, [
         'from_step' => (int) $from_step,
         'to_step' => (int) $to_step,
         'format' => $options['format'] ?? 'phased',
-        'config' => $config,
+        'config' => array_merge(session_simulator_merge_config($options['config'] ?? []), [
+            'recipe' => $recipe,
+        ]),
         'session_root' => $options['session_root'] ?? session_web_root(),
     ]);
-}
-
-function session_simulator_run_composite($dbc, $composite_id, array $options = [])
-{
-    $config = warm_start_merge_config($options['config'] ?? []);
-    $step = ['function' => $composite_id, 'params' => $options['params'] ?? []];
-    $dispatch_opts = array_merge($config, [
-        'session_root' => $options['session_root'] ?? session_web_root(),
-    ]);
-
-    switch ($composite_id) {
-        case 'warm_start_tracked':
-            $step['params'] = array_merge([
-                'min_sessions' => (int) ($options['min_sessions'] ?? 3),
-                'max_sessions' => (int) ($options['max_sessions'] ?? 12),
-            ], $step['params']);
-            break;
-        case 'begin_operating_session':
-            $step['params'] = array_merge([
-                'run_stg_scully' => ($options['run_stg_scully'] ?? 'yes') !== 'no' ? 'yes' : 'no',
-            ], $step['params']);
-            break;
-        default:
-            break;
-    }
-
-    $result = operational_steps_dispatch_step($dbc, $step, $dispatch_opts);
-    return [
-        'composite' => $composite_id,
-        'session' => (string) warm_start_get_session($dbc),
-        'result' => $result,
-        'log' => [['composite' => $composite_id, 'result' => $result]],
-    ];
-}
-
-function session_simulator_run_warm_start_loop($dbc, array $recipe, array $section, array $options = [])
-{
-    $config = warm_start_merge_config($options['config'] ?? []);
-    $total = count($recipe['steps'] ?? []);
-    $range = session_simulator_parse_repeat_range($section['label'] ?? '', $section, $total);
-    $min_sessions = max(1, (int) ($options['min_sessions'] ?? 3));
-    $max_iterations = max(1, (int) ($options['max_sessions'] ?? 12));
-    $iterations = [];
-    $warnings = [];
-
-    for ($i = 0; $i < $max_iterations; $i++) {
-        $run = session_simulator_run_recipe_range($dbc, $recipe, $range['from'], $range['to'], $options);
-        $eval = warm_start_evaluate_session_prep($dbc, $config);
-        $session = warm_start_get_session($dbc);
-        $ready = !empty($eval['stg_scully_backlog']['ready']);
-        $iterations[] = [
-            'iteration' => $i + 1,
-            'session' => (string) $session,
-            'range' => $range,
-            'stg_scully_backlog_ready' => $ready,
-            'phases' => $run['phases'] ?? 0,
-            'log' => $run['log'] ?? [],
-            'stopped' => $run['stopped'] ?? false,
-        ];
-        if ($ready && $session >= $min_sessions) {
-            break;
-        }
-        if ($i === $max_iterations - 1) {
-            $warnings[] = 'Warm start loop reached max iterations (' . $max_iterations . ') before backlog ready at min session ' . $min_sessions . '.';
-        }
-    }
-
-    $last = end($iterations) ?: [];
-    return [
-        'mode' => 'warm_start_loop',
-        'section' => $section,
-        'iterations' => $iterations,
-        'session' => $last['session'] ?? (string) warm_start_get_session($dbc),
-        'warnings' => $warnings,
-        'cycles' => $iterations,
-    ];
 }
 
 function session_simulator_run($dbc, array $recipe, array $options = [])
 {
+    if (!session_runtime_available()) {
+        return [
+            'ok' => false,
+            'error' => session_runtime_notice(),
+            'runtime_available' => false,
+        ];
+    }
+
     $total = count($recipe['steps'] ?? []);
     $start = max(1, (int) ($options['start_step'] ?? 1));
     $stop = max($start, min((int) ($options['stop_step'] ?? $total), $total));
@@ -227,7 +142,7 @@ function session_simulator_run($dbc, array $recipe, array $options = [])
         }
         $cycles[] = [
             'cycle' => $cycle + 1,
-            'session' => $run['session'] ?? (string) warm_start_get_session($dbc),
+            'session' => $run['session'] ?? (string) session_get_db_session($dbc),
             'start_step' => $start,
             'stop_step' => $stop,
             'phases' => $run['phases'] ?? 0,
@@ -258,17 +173,19 @@ function session_simulator_run($dbc, array $recipe, array $options = [])
 
 function session_simulator_run_section($dbc, array $recipe, $section_id, array $options = [])
 {
-    if (preg_match('/^composite:(.+)$/', (string) $section_id, $m)) {
-        $result = session_simulator_run_composite($dbc, $m[1], $options);
-        $result['ok'] = true;
-        $result['mode'] = 'composite';
-        $result['summary'] = ['Composite: ' . $m[1], 'Session ' . ($result['session'] ?? '')];
-        $result['cycles'] = [['cycle' => 1, 'session' => $result['session'] ?? '', 'log' => $result['log'] ?? []]];
-        $result['index_url'] = '/sts/session.php';
-        $result['session_url'] = !empty($result['session'])
-            ? '/sts/session_' . $result['session'] . '/index.php'
-            : '/sts/session.php';
-        return $result;
+    if (!session_runtime_available()) {
+        return [
+            'ok' => false,
+            'error' => session_runtime_notice(),
+            'runtime_available' => false,
+        ];
+    }
+
+    if (preg_match('/^composite:(.+)$/', (string) $section_id)) {
+        return [
+            'ok' => false,
+            'error' => 'Composite session commands are no longer supported. Use workflow steps instead.',
+        ];
     }
 
     $section = operational_steps_find_workflow_section($recipe, (string) $section_id);

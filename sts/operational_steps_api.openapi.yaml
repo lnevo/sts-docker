@@ -121,7 +121,7 @@ paths:
                 value:
                   action: run_switchlists
                   format: phased
-                  jobs: D749,NVL,CK1
+                  jobs: JOB_A,JOB_B
                   start_step: 1
                   stop_step: 10
                   mode: current
@@ -514,7 +514,7 @@ components:
           default: phased
         jobs:
           type: string
-          description: Comma-separated job names, e.g. D749,NVL,CK1
+          description: Comma-separated job names from the layout database, e.g. JOB_A,JOB_B
         mode:
           type: string
           description: current, rerender, etc.
