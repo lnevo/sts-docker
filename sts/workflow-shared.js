@@ -214,7 +214,15 @@
       context = context || {};
       const from = p.options_from || p.type;
       const d = this.dynamicOptions;
-      if (p.type === 'select' && p.options) return p.options.map((o) => ({ value: o, label: o }));
+      if (p.type === 'select' && p.options) {
+        return p.options.map((o) => {
+          if (o && typeof o === 'object') {
+            const value = o.value != null ? o.value : o.label;
+            return { value, label: o.label != null ? o.label : String(value) };
+          }
+          return { value: o, label: o === '' ? 'Any' : o };
+        });
+      }
       if (from === 'jobs') return (d.jobs || []).map((j) => ({ value: j.name, label: j.name }));
       if (from === 'shipments') return (d.shipments || []).map((s) => ({ value: s.code, label: s.label }));
       if (from === 'car_codes') return (d.car_codes || []).map((c) => ({ value: c.code, label: c.label }));
@@ -701,6 +709,10 @@
       };
     },
 
+    freshEditorRecipe() {
+      return { version: 1, name: 'workflow', steps: [this.blankStep()] };
+    },
+
     readInsertFromDom() {
       const mode = this.el('insert-mode')?.value || 'before';
       const num = parseInt(this.el('insert-step-num')?.value, 10) || 1;
@@ -911,7 +923,8 @@
       if (step.function === 'generate_switchlists') {
         const p = step.params || {};
         const jobs = String(p.jobs || 'all').trim() || 'all';
-        return ('Generate Switch Lists ' + jobs).replace(/\s+/g, ' ').trim();
+        const fmt = String(p.format || 'phased').trim() || 'phased';
+        return ('Generate Switch Lists ' + jobs + ' (' + fmt + ')').replace(/\s+/g, ' ').trim();
       }
       if (def) {
         let t = def.gui_template || def.label || '';
@@ -1567,11 +1580,12 @@
           return;
         }
       }
-      this.recipe = { version: 1, name: 'workflow', steps: [] };
+      this.recipe = this.freshEditorRecipe();
       this.compiledSteps = [];
       this.markDirty();
-      this.renderSteps({ skipSync: true });
-      this.setStatus('Editor reset — import or add steps, then Save to write to disk', 'ok');
+      this.renderSteps({ skipSync: true, scrollToIndex: 0 });
+      this.setStatus('Editor reset — step 1 is blank; add commands or Save to write to disk', 'ok');
+      this.el('steps-list')?.querySelector('[data-fn-select]')?.focus();
     },
 
     async loadCatalog() {

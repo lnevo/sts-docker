@@ -124,6 +124,44 @@ function operational_steps_catalog_job_or_all_param($key = 'jobs', $label = 'Job
     ];
 }
 
+function operational_steps_catalog_switchlist_format_options()
+{
+    return [
+        ['value' => 'phased', 'label' => 'Phased (mobile + half sheet)'],
+        ['value' => 'phased-mobile', 'label' => 'Phased (mobile only)'],
+        ['value' => 'halfsheet', 'label' => 'Master half sheet'],
+        ['value' => 'mobile', 'label' => 'Master mobile'],
+    ];
+}
+
+function operational_steps_catalog_switchlist_format_param()
+{
+    return [
+        'key' => 'format',
+        'label' => 'Format',
+        'type' => 'select',
+        'options' => operational_steps_catalog_switchlist_format_options(),
+        'default' => 'phased',
+    ];
+}
+
+function operational_steps_switchlist_format_values()
+{
+    return array_map(static function ($opt) {
+        return $opt['value'];
+    }, operational_steps_catalog_switchlist_format_options());
+}
+
+function operational_steps_normalize_switchlist_format($format, $default = 'phased')
+{
+    $format = trim((string) $format);
+    if ($format === 'phased_mobile') {
+        $format = 'phased-mobile';
+    }
+
+    return in_array($format, operational_steps_switchlist_format_values(), true) ? $format : $default;
+}
+
 function operational_steps_catalog_backup_param($required = true, $default = '')
 {
     return [
@@ -1667,12 +1705,13 @@ function operational_steps_catalog_definitions()
             'adder' => true,
             'adder_group' => 'switchlists',
             'label' => 'Generate Switch Lists',
-            'gui_template' => 'Generate Switch Lists {jobs}',
-            'description' => 'Dry-run and write switch list HTML for one job/train or all (D749, NVL, CK1). Format: phased.',
+            'gui_template' => 'Generate Switch Lists {jobs} ({format})',
+            'description' => 'Dry-run session ops and write switch list HTML for one job/train or all (D749, NVL, CK1). Choose phased (per-leg index + mobile/half sheet), master half sheet, or master mobile.',
             'runnable' => true,
             'dispatch' => 'generate_switchlists',
             'params' => [
                 operational_steps_catalog_job_or_all_param('jobs', 'Job / train'),
+                operational_steps_catalog_switchlist_format_param(),
             ],
         ],
         [
@@ -1697,7 +1736,7 @@ function operational_steps_catalog_definitions()
             'runnable' => true,
             'dispatch' => 'render_switchlists',
             'params' => [
-                ['key' => 'format', 'label' => 'Format', 'type' => 'select', 'options' => ['phased', 'halfsheet', 'mobile'], 'default' => 'phased'],
+                operational_steps_catalog_switchlist_format_param(),
                 ['key' => 'jobs', 'label' => 'Jobs', 'type' => 'text', 'default' => 'D749,NVL,CK1', 'required' => false],
                 ['key' => 'session', 'label' => 'Session # (optional)', 'type' => 'text', 'default' => '', 'required' => false],
             ],
@@ -1792,6 +1831,7 @@ function operational_steps_catalog_definitions()
             'category' => 'reports',
             'adder' => true,
             'adder_group' => 'waybills',
+            'disabled' => true,
             'label' => 'Waybill List',
             'gui_template' => 'Waybill List',
             'description' => 'Waybills and fulfillment status.',
@@ -2194,6 +2234,7 @@ function operational_steps_compile_gui(array $def, array $params)
             $jobs = 'all';
         }
         $merged['jobs'] = $jobs;
+        $merged['format'] = operational_steps_normalize_switchlist_format($params['format'] ?? 'phased');
     }
     if (($def['id'] ?? '') === 'run_staging_job') {
         $merged['job'] = $params['job'] ?? '';
@@ -2601,9 +2642,15 @@ function operational_steps_guess_params($instruction)
         }
     }
     if (preg_match('/^Generate Switch Lists(?:\s+(.+))?$/i', $s, $m)) {
-        $job = trim($m[1] ?? '');
-        if ($job !== '') {
-            $params['jobs'] = $job;
+        $rest = trim($m[1] ?? '');
+        if ($rest !== '') {
+            if (preg_match('/\((phased-mobile|phased|halfsheet|mobile)\)\s*$/i', $rest, $fm)) {
+                $params['format'] = strtolower(str_replace('_', '-', $fm[1]));
+                $rest = trim(preg_replace('/\s*\([^)]+\)\s*$/', '', $rest));
+            }
+            if ($rest !== '') {
+                $params['jobs'] = $rest;
+            }
         }
     }
     if (preg_match('/^Run (\S+(?:-\S+)?)/i', $s, $m)) {
@@ -2866,6 +2913,11 @@ function operational_steps_normalize_step(array $step)
     }
     if ($fid === 'auto_assign_locals') {
         $params['jobs'] = operational_steps_normalize_auto_assign_jobs($params);
+    }
+    if ($fid === 'generate_switchlists') {
+        $params['format'] = operational_steps_normalize_switchlist_format($params['format'] ?? 'phased');
+        $jobs = trim((string) ($params['jobs'] ?? 'all'));
+        $params['jobs'] = $jobs !== '' ? $jobs : 'all';
     }
 
     if (isset($catalog[$fid])) {
@@ -3300,7 +3352,7 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
         case 'generate_switchlists':
             require_once __DIR__ . '/session_helpers.php';
             require_once __DIR__ . '/master_switchlist_helpers.php';
-            $format = $params['format'] ?? 'phased';
+            $format = operational_steps_normalize_switchlist_format($params['format'] ?? 'phased');
             $jobs = session_resolve_jobs_param($params['jobs'] ?? 'all');
             $session = master_sw_get_setting($dbc, 'session_nbr');
             $root = $config['session_root'] ?? session_web_root();
@@ -3336,7 +3388,7 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
         case 'render_switchlists':
             require_once __DIR__ . '/session_helpers.php';
             require_once __DIR__ . '/master_switchlist_helpers.php';
-            $format = $params['format'] ?? 'phased';
+            $format = operational_steps_normalize_switchlist_format($params['format'] ?? 'phased');
             $jobs = array_values(array_filter(array_map('trim', explode(',', $params['jobs'] ?? 'D749,NVL,CK1'))));
             $session = trim($params['session'] ?? '') !== ''
                 ? trim($params['session'])

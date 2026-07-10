@@ -4,14 +4,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>STS Session Editor</title>
-  <link rel="stylesheet" href="workflow-ui.css?v=32">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="session-nav.css">
+  <link rel="stylesheet" href="workflow-ui.css?v=41">
 </head>
 <body>
-  <nav class="nav-bar">
-    <a href="session.php">← Sessions</a>
-    <a href="/sts/">STS</a>
-    <a id="csv-download" href="STS_OPERATIONAL_STEPS.csv" download>CSV</a>
-    <a id="json-download" href="STS_OPERATIONAL_RECIPE.json" download>JSON</a>
+  <nav class="navbar navbar-dark noprint" style="background-color: #343a40;">
+    <div class="container-fluid">
+      <div class="d-flex flex-wrap align-items-center gap-2 w-100">
+        <a href="/sts/index.html" class="btn btn-outline-light btn-sm"><i class="bi bi-house"></i> STS Main Menu</a>
+        <a href="/sts/session.php" class="btn btn-outline-light btn-sm"><i class="bi bi-collection"></i> Sessions</a>
+        <a href="operational_steps_api-docs.html" class="btn btn-outline-light btn-sm"><i class="bi bi-braces"></i> API</a>
+        <a id="csv-download" href="STS_OPERATIONAL_STEPS.csv" download class="btn btn-outline-light btn-sm"><i class="bi bi-filetype-csv"></i> CSV</a>
+        <a id="json-download" href="STS_OPERATIONAL_RECIPE.json" download class="btn btn-outline-light btn-sm"><i class="bi bi-filetype-json"></i> JSON</a>
+        <span class="navbar-text ms-auto text-white-50 small">Session Editor</span>
+      </div>
+    </div>
   </nav>
   <div class="page page-wide">
     <h1>Session Editor</h1>
@@ -36,12 +45,12 @@
           <input type="text" id="csv-save-as" class="field-input" spellcheck="false" autocomplete="off">
         </label>
         <div class="wf-actions">
-          <button type="button" class="secondary" id="btn-reset">Reset</button>
-          <div class="btn-group">
-            <button type="button" class="secondary" id="btn-load-csv">Load</button>
-            <button type="button" class="primary" id="btn-save">Save</button>
+          <button type="button" class="btn btn-outline-dark btn-sm" id="btn-reset">Reset</button>
+          <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-outline-dark btn-sm" id="btn-load-csv">Load</button>
+            <button type="button" class="btn btn-outline-dark btn-sm" id="btn-save">Save</button>
           </div>
-          <button type="button" class="secondary" id="btn-import">Import CSV…</button>
+          <button type="button" class="btn btn-outline-dark btn-sm" id="btn-import">Import CSV…</button>
         </div>
       </div>
       <input type="file" id="csv-import-file" accept=".csv,text/csv" hidden>
@@ -54,7 +63,7 @@
         Use <strong>Goto section</strong> to skip forward over steps (e.g. skip setup on repeat sessions).
         Use simulator <strong>Repeat</strong> to run a section multiple times. Switch-list format is set on each
         <em>Generate Switch Lists</em> step. DB session: <strong id="run-db-session">—</strong>.
-        View output in <a href="session.php">Sessions</a> after a run.
+        View output in <a href="/sts/session.php">Sessions</a> after a run.
       </p>
       <div class="run-bar">
         <label class="run-field run-field-wide">
@@ -69,13 +78,20 @@
           <span class="inline-lbl">Stop step</span>
           <input type="number" id="run-stop" class="field-input" min="1" value="1">
         </label>
-        <button type="button" class="primary" id="btn-run">Run</button>
-        <label class="run-repeat-control chk">
-          <input type="checkbox" id="run-repeat-enabled">
-          <span>Repeat</span>
-          <input type="number" id="run-repeat" class="field-input" min="2" max="30" value="2" disabled>
-          <span class="run-repeat-suffix">times</span>
-        </label>
+        <button type="button" class="btn btn-outline-dark btn-sm" id="btn-run">Run</button>
+        <div class="run-repeat-group">
+          <label class="run-repeat-check chk">
+            <input type="checkbox" id="run-repeat-enabled">
+            <span>Repeat</span>
+          </label>
+          <label class="run-field run-repeat-count">
+            <span class="inline-lbl" aria-hidden="true">&nbsp;</span>
+            <span class="run-repeat-input-row">
+              <input type="number" id="run-repeat" class="field-input" min="2" max="30" value="2" disabled>
+              <span class="run-repeat-suffix">times</span>
+            </span>
+          </label>
+        </div>
       </div>
       <pre class="log" id="log">Run output appears here.</pre>
     </div>
@@ -91,7 +107,7 @@
                 <option value="">—</option>
               </select>
             </label>
-            <button type="button" class="secondary" id="btn-goto-section" disabled>Goto</button>
+            <button type="button" class="btn btn-outline-dark btn-sm" id="btn-goto-section" disabled>Goto</button>
             <label class="section-jump-filter chk">
               <input type="checkbox" id="hide-non-execute">
               <span>Execute only</span>
@@ -113,8 +129,8 @@
               <input type="number" id="insert-step-num" class="field-input" min="1" value="1">
             </label>
           </div>
-          <button type="button" class="primary" id="btn-add">+ Add step</button>
-          <button type="button" class="ghost" id="btn-reload">Reload</button>
+          <button type="button" class="btn btn-outline-dark btn-sm" id="btn-add">+ Add step</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-reload">Reload</button>
         </div>
       </div>
       <div id="steps-scroll" class="steps-scroll">
@@ -122,7 +138,7 @@
       </div>
     </div>
   </div>
-  <script src="workflow-shared.js?v=46"></script>
+  <script src="workflow-shared.js?v=49"></script>
   <script>
 (function () {
   const W = WorkflowUI;
@@ -184,7 +200,7 @@
       if (W.autoLoadCsv && W.activeCsv) {
         await W.loadRecipe();
       } else {
-        W.recipe = { version: 1, name: 'workflow', steps: [] };
+        W.recipe = W.freshEditorRecipe();
         W.compiledSteps = [];
         W.clearDirty();
       }

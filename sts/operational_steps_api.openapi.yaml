@@ -1,0 +1,663 @@
+# STS Operational Steps HTTP API (hand-written OpenAPI)
+#
+# AGENT BREADCRUMB — keep in sync with operational_steps_api.php:
+# When you add/remove/rename an action, change POST body fields, or alter response
+# shapes, update THIS FILE and the file header comment in operational_steps_api.php.
+# Catalog command params: generated into operational_steps_catalog.openapi.generated.yaml
+#   php sts/generate_operational_steps_openapi_catalog.php
+#   (also run via sts-docker-helpers/bin/run_catalog_tests.sh)
+# Swagger UI: /sts/operational_steps_api-docs.html
+# Maintainer notes: sts-docker/AGENTS.md § Operational Steps API
+#
+openapi: 3.0.3
+info:
+  title: STS Operational Steps API
+  description: |
+    JSON RPC-style API for the session workflow editor (recipe CSV/JSON, simulator, switch lists).
+
+    **Command catalog:** `GET ?action=catalog` returns live `functions`, `adder_functions`, and
+    `dynamic_options`. Per-command **params** are documented in Swagger under
+    **CatalogCommandsById** (generated from `operational_steps_catalog.php`).
+    Regenerate: `php sts/generate_operational_steps_openapi_catalog.php`.
+
+    **Swagger UI:** [/sts/operational_steps_api-docs.html](/sts/operational_steps_api-docs.html)
+
+    Action may be passed as query `?action=`, form field, or JSON body field `action`.
+  version: "1.0.0"
+  contact:
+    name: STS legacy app
+servers:
+  - url: http://localhost:8980
+    description: Local Docker (default compose port)
+paths:
+  /sts/operational_steps_api.php:
+    get:
+      operationId: operationalStepsGet
+      summary: GET actions
+      description: |
+        | action | Description |
+        |--------|-------------|
+        | `catalog` | Full command catalog + dynamic dropdown options |
+        | `list_csv` | Workflow CSV files in editor directory |
+        | `recipe` | Load recipe + compiled steps for active CSV |
+        | `run_options` | Simulator breakpoints, session, compiled recipe |
+        | `compile` | Compile recipe from body or disk (POST body optional on GET) |
+        | `download` | File download (`kind=csv` or `recipe`/`json`) — not JSON |
+      tags: [Operational Steps]
+      parameters:
+        - $ref: "#/components/parameters/actionGet"
+        - name: csv_file
+          in: query
+          schema:
+            type: string
+          description: Optional workflow CSV filename (recipe, list_csv, run_options, download)
+        - name: kind
+          in: query
+          schema:
+            type: string
+            enum: [csv, recipe, json]
+            default: csv
+          description: For `download` only
+      responses:
+        "200":
+          description: JSON response (except download)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/CatalogResponse"
+                  - $ref: "#/components/schemas/RecipeResponse"
+                  - $ref: "#/components/schemas/CompileResponse"
+                  - $ref: "#/components/schemas/ListCsvResponse"
+                  - $ref: "#/components/schemas/RunOptionsResponse"
+                  - $ref: "#/components/schemas/ApiOk"
+              examples:
+                catalog:
+                  $ref: "./operational_steps_catalog.openapi.generated.yaml#/components/examples/CatalogFullResponse"
+        "400":
+          $ref: "#/components/responses/ApiError"
+    post:
+      operationId: operationalStepsPost
+      summary: POST actions
+      description: |
+        | action | Required body | Description |
+        |--------|---------------|-------------|
+        | `save` | `recipe` | Normalize and write CSV + JSON recipe |
+        | `run_switchlists` | optional `recipe` | Run workflow simulator / generator |
+        | `import_csv` | `csv` or `use_file` | Parse CSV into recipe (editor only) |
+        | `normalize_recipe` | `recipe` or `use_file` | Normalize step functions/params |
+        | `set_active_csv` | `csv_file` | Set active workflow file |
+        | `compile` | optional `recipe` | Compile steps to instructions + CSV text |
+      tags: [Operational Steps]
+      parameters:
+        - $ref: "#/components/parameters/actionPost"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/SaveRequest"
+                - $ref: "#/components/schemas/RunSwitchlistsRequest"
+                - $ref: "#/components/schemas/ImportCsvRequest"
+                - $ref: "#/components/schemas/NormalizeRecipeRequest"
+                - $ref: "#/components/schemas/SetActiveCsvRequest"
+                - $ref: "#/components/schemas/CompileRequest"
+            examples:
+              save:
+                summary: save
+                value:
+                  action: save
+                  csv_file: STS_OPERATIONAL_STEPS.csv
+                  recipe:
+                    version: 1
+                    name: workflow
+                    steps:
+                      - function: section_label
+                        params:
+                          label: "[Setup]"
+              run_switchlists:
+                summary: run_switchlists (simulator)
+                value:
+                  action: run_switchlists
+                  format: phased
+                  jobs: D749,NVL,CK1
+                  start_step: 1
+                  stop_step: 10
+                  mode: current
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/SaveResponse"
+                  - $ref: "#/components/schemas/RunSwitchlistsResponse"
+                  - $ref: "#/components/schemas/ImportCsvResponse"
+                  - $ref: "#/components/schemas/NormalizeRecipeResponse"
+                  - $ref: "#/components/schemas/SetActiveCsvResponse"
+                  - $ref: "#/components/schemas/CompileResponse"
+        "400":
+          $ref: "#/components/responses/ApiError"
+        "405":
+          $ref: "#/components/responses/ApiError"
+        "500":
+          $ref: "#/components/responses/ApiError"
+
+components:
+  parameters:
+    actionGet:
+      name: action
+      in: query
+      required: true
+      schema:
+        type: string
+        enum:
+          - catalog
+          - list_csv
+          - recipe
+          - run_options
+          - compile
+          - download
+    actionPost:
+      name: action
+      in: query
+      required: false
+      description: Prefer query or JSON body field `action`
+      schema:
+        type: string
+        enum:
+          - save
+          - run_switchlists
+          - import_csv
+          - normalize_recipe
+          - set_active_csv
+          - compile
+
+  responses:
+    ApiError:
+      description: Error response
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+  schemas:
+    ApiOk:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+
+    ApiError:
+      type: object
+      required: [ok, error]
+      properties:
+        ok:
+          type: boolean
+          example: false
+        error:
+          type: string
+        actions:
+          type: array
+          items:
+            type: string
+          description: Present on unknown action
+
+    Recipe:
+      type: object
+      properties:
+        version:
+          type: integer
+          example: 1
+        name:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecipeStep"
+
+    RecipeStep:
+      type: object
+      properties:
+        function:
+          type: string
+          description: Catalog command id — see GET catalog
+        params:
+          type: object
+          additionalProperties: true
+        instruction:
+          type: string
+        description:
+          type: string
+
+    CompiledStep:
+      type: object
+      properties:
+        step:
+          type: integer
+        function:
+          type: string
+        instruction:
+          type: string
+        runnable:
+          type: boolean
+
+    CatalogParam:
+      type: object
+      description: One step parameter definition from the command catalog
+      required: [key, label, type]
+      properties:
+        key:
+          type: string
+          description: Recipe step params object key
+        label:
+          type: string
+          description: Editor field label
+        type:
+          type: string
+          description: Editor control type
+          enum:
+            - text
+            - number
+            - percent
+            - select
+            - job
+            - location
+            - station
+            - job_or_all
+            - backup
+            - scope
+            - jobs_multiselect
+            - car_code
+            - commodity
+            - shipment
+            - fill_sources
+            - setout_location
+            - filter_group
+            - workflow_section
+        default:
+          description: Default value (string, number, or empty)
+          oneOf:
+            - type: string
+            - type: number
+            - type: boolean
+        required:
+          type: boolean
+        placeholder:
+          type: string
+        allow_custom:
+          type: boolean
+          description: User may enter a value not in options
+        options_from:
+          type: string
+          description: Dynamic dropdown source (jobs, locations, backups, car_codes, …)
+          enum:
+            - jobs
+            - locations
+            - stations
+            - backups
+            - scopes
+            - car_codes
+            - commodities
+            - shipments
+            - fill_sources
+        options:
+          type: array
+          description: Static select options (strings or value/label objects)
+          items:
+            oneOf:
+              - type: string
+              - $ref: "#/components/schemas/CatalogParamOption"
+        min:
+          type: number
+        max:
+          type: number
+        step:
+          type: number
+        visible_label:
+          type: boolean
+        fields:
+          type: array
+          description: Nested fields (filter_group)
+          items:
+            $ref: "#/components/schemas/CatalogParam"
+
+    CatalogParamOption:
+      type: object
+      properties:
+        value:
+          type: string
+        label:
+          type: string
+
+    CatalogFunction:
+      type: object
+      description: One entry from catalog.functions or adder_functions
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        category:
+          type: string
+        adder:
+          type: boolean
+        adder_group:
+          type: string
+        description:
+          type: string
+        runnable:
+          type: boolean
+        dispatch:
+          type: string
+        gui_template:
+          type: string
+        gui_path:
+          type: string
+        disabled:
+          type: boolean
+        params:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogParam"
+
+    CatalogCommandsById:
+      $ref: "./operational_steps_catalog.openapi.generated.yaml#/components/schemas/CatalogCommandsById"
+
+    CatalogResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiOk"
+        - type: object
+          properties:
+            categories:
+              type: object
+              additionalProperties:
+                type: string
+            adder_categories:
+              type: object
+              additionalProperties:
+                type: string
+            jobs:
+              type: array
+              items:
+                type: string
+            locations:
+              type: array
+              items:
+                type: string
+            dynamic_options:
+              type: object
+              additionalProperties: true
+            functions:
+              type: array
+              items:
+                $ref: "#/components/schemas/CatalogFunction"
+            adder_functions:
+              type: array
+              items:
+                $ref: "#/components/schemas/CatalogFunction"
+
+    ListCsvResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiOk"
+        - type: object
+          properties:
+            files:
+              type: array
+              items:
+                type: string
+            active_csv:
+              type: string
+            auto_load:
+              type: boolean
+
+    RecipeResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiOk"
+        - type: object
+          properties:
+            recipe:
+              $ref: "#/components/schemas/Recipe"
+            csv_file:
+              type: string
+            compiled:
+              type: array
+              items:
+                $ref: "#/components/schemas/CompiledStep"
+
+    CompileResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiOk"
+        - type: object
+          properties:
+            compiled:
+              type: array
+              items:
+                $ref: "#/components/schemas/CompiledStep"
+            csv:
+              type: string
+              description: Recipe as CSV text
+
+    RunOptionsResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiOk"
+        - type: object
+          properties:
+            current_session:
+              type: integer
+            existing_sessions:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            indices:
+              type: object
+              additionalProperties: true
+            breakpoints:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            compiled:
+              type: array
+              items:
+                $ref: "#/components/schemas/CompiledStep"
+
+    SaveRequest:
+      type: object
+      required: [recipe]
+      properties:
+        action:
+          type: string
+          enum: [save]
+        recipe:
+          $ref: "#/components/schemas/Recipe"
+        csv_file:
+          type: string
+
+    SaveResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiOk"
+        - type: object
+          properties:
+            written:
+              type: array
+              items:
+                type: string
+            warnings:
+              type: array
+              items:
+                type: string
+            compiled:
+              type: array
+              items:
+                $ref: "#/components/schemas/CompiledStep"
+            rows:
+              type: integer
+            csv_file:
+              type: string
+
+    RunSwitchlistsRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [run_switchlists]
+        recipe:
+          $ref: "#/components/schemas/Recipe"
+        format:
+          type: string
+          enum: [phased, phased-mobile, halfsheet, mobile]
+          default: phased
+        jobs:
+          type: string
+          description: Comma-separated job names, e.g. D749,NVL,CK1
+        mode:
+          type: string
+          description: current, rerender, etc.
+        start_step:
+          type: integer
+        stop_step:
+          type: integer
+        breakpoint_step:
+          type: integer
+        session_count:
+          type: integer
+        run_prep:
+          type: boolean
+        play_after:
+          type: boolean
+        render_sessions:
+          type: array
+          items:
+            type: integer
+
+    RunSwitchlistsResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiOk"
+        - type: object
+          properties:
+            mode:
+              type: string
+            format:
+              type: string
+            jobs:
+              type: array
+              items:
+                type: string
+            session:
+              type: string
+            sessions:
+              type: array
+              items:
+                type: string
+            summary:
+              type: array
+              items:
+                type: string
+            warnings:
+              type: array
+              items:
+                type: string
+            cycles:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            index_url:
+              type: string
+            session_url:
+              type: string
+
+    ImportCsvRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [import_csv]
+        csv:
+          type: string
+          description: Raw CSV text
+        use_file:
+          type: boolean
+        csv_file:
+          type: string
+
+    ImportCsvResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiOk"
+        - type: object
+          properties:
+            recipe:
+              $ref: "#/components/schemas/Recipe"
+            csv_file:
+              type: string
+            compiled:
+              type: array
+              items:
+                $ref: "#/components/schemas/CompiledStep"
+
+    NormalizeRecipeRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [normalize_recipe]
+        recipe:
+          $ref: "#/components/schemas/Recipe"
+        use_file:
+          type: boolean
+        csv_file:
+          type: string
+
+    NormalizeRecipeResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiOk"
+        - type: object
+          properties:
+            recipe:
+              $ref: "#/components/schemas/Recipe"
+            compiled:
+              type: array
+              items:
+                $ref: "#/components/schemas/CompiledStep"
+            rows:
+              type: integer
+
+    SetActiveCsvRequest:
+      type: object
+      required: [csv_file]
+      properties:
+        action:
+          type: string
+          enum: [set_active_csv]
+        csv_file:
+          type: string
+
+    SetActiveCsvResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiOk"
+        - type: object
+          properties:
+            active_csv:
+              type: string
+
+    CompileRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [compile]
+        recipe:
+          $ref: "#/components/schemas/Recipe"
+
+tags:
+  - name: Operational Steps
+    description: Session workflow editor and simulator API
+  - name: Catalog reference
+    description: |
+      Per-command params are under **Schemas → CatalogCommandsById** (generated from
+      `operational_steps_catalog.php`). Use **GET ?action=catalog** for live dynamic_options.

@@ -8,33 +8,41 @@ if (!is_dir($sts_dir)) {
 require_once $sts_dir . '/session_helpers.php';
 $root = session_web_root();
 $manifest = session_load_manifest($session, $root);
+session_ensure_output_stubs($session, $manifest, $root);
 $phases = $manifest['phases'] ?? [];
 $jobs = $manifest['jobs'] ?? [];
 $session_waybills = session_dir_for($session, $root) . '/waybills';
-$has_session_waybills = is_file($session_waybills . '/print_all.html');
+$has_session_waybills = is_file($session_waybills . '/index.html');
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Session <?php echo (int) $session; ?></title>
-  <style>
-    body { font-family: sans-serif; max-width: 960px; margin: 0 auto; padding: 16px; }
-    .card { border: 1px solid #ccc; border-radius: 8px; padding: 12px; margin: 12px 0; }
-    a { color: #1f4d2e; }
-  </style>
+  <?php echo session_static_head_assets(); ?>
 </head>
 <body>
-  <nav><a href="../session.php">← All sessions</a> · <a href="../editor.html">Session Editor</a></nav>
+<?php
+session_render_nav_bar([
+    ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+    ['href' => '/sts/session.php', 'label' => 'All Sessions', 'icon' => 'collection'],
+    ['href' => '/sts/editor.html', 'label' => 'Session Editor', 'icon' => 'pencil-square'],
+], 'Session ' . (int) $session);
+?>
+  <main>
   <h1>Session <?php echo (int) $session; ?></h1>
-  <?php if ($has_session_waybills): ?>
-    <div class="card" style="border-color:#1f4d2e;background:#f8fbf9;">
-      <h2 style="margin:0 0 8px;">Layout owner — print waybills</h2>
+  <div class="card card-highlight">
+    <h2 style="margin:0 0 8px;">Waybills</h2>
+    <?php if ($has_session_waybills && is_file($session_waybills . '/print_all.html') && filesize($session_waybills . '/print_all.html') > 800): ?>
       <p>Print every freight waybill generated for this operating session.</p>
       <p><a href="waybills/print_all.html"><strong>Print all session waybills</strong></a>
         · <a href="waybills/index.html">Browse waybill list</a></p>
-    </div>
-  <?php endif; ?>
+    <?php else: ?>
+      <p>No waybill files yet. Run <em>Generate Waybill List</em> in the workflow after switch lists.</p>
+      <p><a href="waybills/index.html">Waybill index</a></p>
+    <?php endif; ?>
+  </div>
   <?php foreach ($phases as $phase): ?>
     <div class="card">
       <h2 style="margin:0 0 8px;">Phase <?php echo (int) ($phase['phase'] ?? 0); ?></h2>
@@ -48,7 +56,7 @@ $has_session_waybills = is_file($session_waybills . '/print_all.html');
         <?php
           $phase_wb = session_dir_for($session, $root) . '/phase_'
             . str_pad((int) ($phase['phase'] ?? 1), 2, '0', STR_PAD_LEFT) . '/waybills/print_all.html';
-          if (is_file($phase_wb)):
+          if (is_file($phase_wb) && filesize($phase_wb) > 800):
         ?>
           · <a href="phase_<?php echo str_pad((int) ($phase['phase'] ?? 1), 2, '0', STR_PAD_LEFT); ?>/waybills/print_all.html">Print all (phase)</a>
         <?php endif; ?>
@@ -56,7 +64,7 @@ $has_session_waybills = is_file($session_waybills . '/print_all.html');
     </div>
   <?php endforeach; ?>
   <?php if (!count($phases)): ?>
-    <p>No phases yet. Run the workflow generator from the editor.</p>
+    <p class="muted">No switch-list phases yet. Run the workflow generator from the editor.</p>
   <?php endif; ?>
   <?php if (count($jobs)): ?>
     <h2>Trains</h2>
@@ -66,5 +74,6 @@ $has_session_waybills = is_file($session_waybills . '/print_all.html');
       <?php endforeach; ?>
     </ul>
   <?php endif; ?>
+  </main>
 </body>
 </html>

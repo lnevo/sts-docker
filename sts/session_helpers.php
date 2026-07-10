@@ -51,8 +51,99 @@ function session_save_manifest($session_nbr, array $manifest, $root = null)
     session_write_session_index($session_nbr, $root);
 }
 
+function session_nav_stylesheet_path()
+{
+    return '/sts/session-nav.css';
+}
+
+function session_bootstrap_head_links()
+{
+    return '<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">'
+        . '<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">';
+}
+
+function session_nav_stylesheet_link($href = null)
+{
+    $href = $href ?? session_nav_stylesheet_path();
+
+    return '<link rel="stylesheet" href="' . htmlspecialchars((string) $href) . '">';
+}
+
+function session_static_head_assets($css_href = null)
+{
+    return session_bootstrap_head_links() . session_nav_stylesheet_link($css_href);
+}
+
+function session_nav_icon_for_label($label)
+{
+    $key = strtolower(trim((string) $label));
+    static $map = [
+        'sts main menu' => 'house',
+        'session editor' => 'pencil-square',
+        'all sessions' => 'collection',
+        'sessions' => 'collection',
+        'prev' => 'chevron-left',
+        'next' => 'chevron-right',
+        'mobile' => 'phone',
+        'half sheet' => 'file-earmark',
+        'waybills' => 'file-text',
+        'waybill list' => 'file-text',
+        'csv' => 'filetype-csv',
+        'json' => 'filetype-json',
+    ];
+    if (preg_match('/^session \d+$/', $key)) {
+        return 'calendar-event';
+    }
+    if (str_contains($key, ' index') || str_contains($key, 'print all')) {
+        return 'list-ul';
+    }
+
+    return $map[$key] ?? '';
+}
+
+/** @param list<array{href: string, label: string, icon?: string, active?: bool}> $links */
+function session_nav_bar_html(array $links, $trail = '', $extra_class = 'noprint')
+{
+    $class = 'navbar navbar-dark';
+    if ($extra_class !== '') {
+        $class .= ' ' . $extra_class;
+    }
+    $html = '<nav class="' . $class . '" style="background-color: #343a40;">';
+    $html .= '<div class="container-fluid"><div class="d-flex flex-wrap align-items-center gap-2 w-100">';
+    foreach ($links as $link) {
+        $href = trim((string) ($link['href'] ?? ''));
+        $label = trim((string) ($link['label'] ?? ''));
+        if ($href === '' || $label === '') {
+            continue;
+        }
+        $icon = trim((string) ($link['icon'] ?? session_nav_icon_for_label($label)));
+        $btn_class = 'btn btn-outline-light btn-sm';
+        if (!empty($link['active'])) {
+            $btn_class .= ' active';
+        }
+        $html .= '<a href="' . htmlspecialchars($href) . '" class="' . $btn_class . '">';
+        if ($icon !== '') {
+            $html .= '<i class="bi bi-' . htmlspecialchars($icon) . '"></i> ';
+        }
+        $html .= htmlspecialchars($label) . '</a>';
+    }
+    if ($trail !== '') {
+        $html .= '<span class="navbar-text ms-auto text-white-50 small">' . htmlspecialchars($trail) . '</span>';
+    }
+    $html .= '</div></div></nav>';
+
+    return $html;
+}
+
+/** @param list<array{href: string, label: string, icon?: string, active?: bool}> $links */
+function session_render_nav_bar(array $links, $trail = '')
+{
+    echo session_nav_bar_html($links, $trail);
+}
+
 function session_write_session_index($session_nbr, $root = null)
 {
+    $root = $root ?? session_web_root();
     $dir = session_dir_for($session_nbr, $root);
     if (!is_dir($dir)) {
         mkdir($dir, 0755, true);
@@ -60,6 +151,114 @@ function session_write_session_index($session_nbr, $root = null)
     $template = __DIR__ . '/session_index_template.php';
     if (is_readable($template)) {
         copy($template, $dir . '/index.php');
+    }
+    $manifest = session_load_manifest($session_nbr, $root);
+    session_ensure_output_stubs($session_nbr, $manifest, $root);
+}
+
+function session_write_empty_waybill_index($out_dir, array $options = [])
+{
+    if (is_file(rtrim($out_dir, '/') . '/index.html')) {
+        return ['path' => rtrim($out_dir, '/') . '/index.html', 'count' => 0, 'skipped' => true];
+    }
+    if (!is_dir($out_dir)) {
+        mkdir($out_dir, 0755, true);
+    }
+    $title = $options['title'] ?? 'Waybills';
+    $back = $options['back_href'] ?? '../session.php';
+    $back_label = $options['back_label'] ?? 'All Sessions';
+    $message = $options['message'] ?? 'No waybills available yet. Run Generate Waybill List in the workflow after switch lists.';
+    $index_html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        . '<title>' . htmlspecialchars($title) . '</title>'
+        . session_static_head_assets()
+        . '</head><body>';
+    $index_html .= session_nav_bar_html([
+        ['href' => $back, 'label' => $back_label],
+    ], $title);
+    $index_html .= '<main><h1>' . htmlspecialchars($title) . '</h1>'
+        . '<div class="card"><p>' . htmlspecialchars($message) . '</p>'
+        . '<ul><li>No waybills available.</li></ul></div></main></body></html>';
+    file_put_contents($out_dir . '/index.html', $index_html);
+    $print_all = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        . '<title>' . htmlspecialchars($title) . ' — print all</title>'
+        . session_static_head_assets()
+        . '</head><body>';
+    $print_all .= session_nav_bar_html([
+        ['href' => 'index.html', 'label' => 'Waybill list', 'icon' => 'file-text'],
+    ], 'Print all');
+    $print_all .= '<main><h1>' . htmlspecialchars($title) . '</h1>'
+        . '<div class="card"><p>No waybills to print.</p></div></main></body></html>';
+    file_put_contents($out_dir . '/print_all.html', $print_all);
+    return [
+        'path' => $out_dir . '/index.html',
+        'print_all' => $out_dir . '/print_all.html',
+        'count' => 0,
+    ];
+}
+
+function session_ensure_output_stubs($session_nbr, array $manifest, $root = null)
+{
+    require_once __DIR__ . '/master_switchlist_helpers.php';
+    $root = $root ?? session_web_root();
+    $session_dir = session_dir_for($session_nbr, $root);
+    if (!is_dir($session_dir)) {
+        mkdir($session_dir, 0755, true);
+    }
+
+    session_write_empty_waybill_index(session_waybill_dir_for($session_nbr, null, $root), [
+        'title' => 'Waybills — session ' . (int) $session_nbr,
+        'back_href' => '../session.php',
+    ]);
+
+    foreach ($manifest['phases'] ?? [] as $phase) {
+        $phase_num = (int) ($phase['phase'] ?? 0);
+        if ($phase_num < 1) {
+            continue;
+        }
+        $phase_dir = session_phase_output_dir($session_nbr, $phase_num, $root);
+        if (!is_dir($phase_dir)) {
+            mkdir($phase_dir, 0755, true);
+        }
+        session_write_empty_waybill_index(session_waybill_dir_for($session_nbr, $phase_num, $root), [
+            'title' => 'Waybills — session ' . (int) $session_nbr . ', phase ' . $phase_num,
+            'back_href' => '../../index.php',
+        ]);
+        foreach ($phase['jobs'] ?? [] as $job) {
+            $job = trim((string) $job);
+            if ($job === '') {
+                continue;
+            }
+            $job_dir = master_sw_job_output_dir($phase_dir, $job);
+            if (!is_file(master_sw_job_index_path($job_dir))) {
+                master_sw_render_empty_job_index(
+                    null,
+                    $job,
+                    $job_dir,
+                    (string) $session_nbr,
+                    'No switch list files found for this train and phase. Run Generate Switch Lists in the workflow.'
+                );
+            }
+        }
+    }
+
+    foreach (array_keys($manifest['jobs'] ?? []) as $job) {
+        $job = trim((string) $job);
+        if ($job === '') {
+            continue;
+        }
+        foreach ($manifest['jobs'][$job]['phases'] ?? [] as $phase_num) {
+            $phase_dir = session_phase_output_dir($session_nbr, (int) $phase_num, $root);
+            $job_dir = master_sw_job_output_dir($phase_dir, $job);
+            if (!is_file(master_sw_job_index_path($job_dir))) {
+                master_sw_render_empty_job_index(
+                    null,
+                    $job,
+                    $job_dir,
+                    (string) $session_nbr,
+                    'No switch list files found for this train and phase. Run Generate Switch Lists in the workflow.'
+                );
+            }
+        }
     }
 }
 
@@ -245,16 +444,19 @@ function session_write_waybill_bundle($dbc, $out_dir, array $waybill_numbers, ar
 
     $title = $options['title'] ?? 'Waybills';
     $back = $options['back_href'] ?? '../session.php';
-    $index_html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>' . htmlspecialchars($title) . '</title>'
-        . '<style>body{font-family:sans-serif;max-width:960px;margin:0 auto;padding:16px}'
-        . 'a{color:#1f4d2e}.card{border:1px solid #d8dee4;border-radius:10px;padding:14px;margin:12px 0}'
-        . 'ul{line-height:1.8}</style></head><body>'
-        . '<nav><a href="' . htmlspecialchars($back) . '">← Back</a></nav>'
-        . '<h1>' . htmlspecialchars($title) . '</h1>'
+    $back_label = $options['back_label'] ?? 'All Sessions';
+    $index_html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        . '<title>' . htmlspecialchars($title) . '</title>'
+        . session_static_head_assets()
+        . '</head><body>';
+    $index_html .= session_nav_bar_html([
+        ['href' => $back, 'label' => $back_label],
+    ], $title);
+    $index_html .= '<main><h1>' . htmlspecialchars($title) . '</h1>'
         . '<div class="card"><p>' . count($written) . ' printable waybill(s) generated from the current database.</p>'
         . ($written ? '<p><a href="print_all.html"><strong>Print all waybills</strong></a></p>' : '')
         . '<ul>' . ($list_items !== '' ? $list_items : '<li>No waybills available.</li>') . '</ul></div>'
-        . '</body></html>';
+        . '</main></body></html>';
     file_put_contents($out_dir . '/index.html', $index_html);
 
     $print_all = waybill_print_render_bundle_page(
@@ -384,7 +586,7 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
             $phase_num++;
             $jobs = session_resolve_jobs_param($step['params']['jobs'] ?? 'all');
             $phase_dir = session_phase_output_dir($session_nbr, $phase_num, $root);
-            $fmt = $step['params']['format'] ?? $format;
+            $fmt = master_sw_normalize_switchlist_format($step['params']['format'] ?? $format);
             $written = master_sw_generate_for_jobs($dbc, $jobs, $phase_dir, $config, ['format' => $fmt]);
             session_register_phase($manifest, $phase_num, [
                 'step' => $n,

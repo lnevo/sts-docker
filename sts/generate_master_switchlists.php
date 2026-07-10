@@ -53,6 +53,20 @@ $written = master_sw_generate_for_jobs($dbc, $job_names, $session_output_dir, $c
 
 $mode = isset($options['render-only']) ? 'render' : (isset($options['save-cache-only']) ? 'cache' : 'generate');
 fwrite(STDOUT, "=== Master switch lists ({$mode}, {$format}) — session {$session_nbr} ===" . PHP_EOL);
+
+if (master_sw_is_phased_format($format) && count($written) === 0) {
+    master_sw_render_empty_session_index(
+        $dbc,
+        $session_output_dir,
+        $session_nbr,
+        'No switch list files were generated for this session.'
+    );
+    master_sw_render_switchlists_root_index($output_dir, $session_nbr);
+    fwrite(STDERR, "No switch lists generated (empty session index written).\n");
+    mysqli_close($dbc);
+    exit(0);
+}
+
 if (count($written) === 0) {
     fwrite(STDERR, "No switch lists generated.\n");
     mysqli_close($dbc);
