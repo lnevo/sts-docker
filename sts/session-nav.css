@@ -1,0 +1,237 @@
+/* Shared session page chrome — charcoal header via Bootstrap navbar (#343a40) */
+:root {
+  --sts-charcoal: #343a40;
+  --sts-charcoal-hover: #2b3035;
+  --sts-charcoal-light: #f5f6f7;
+  --sts-session-text: #1a1a1a;
+  --sts-session-muted: #555;
+  --sts-session-page-bg: #f8f9fa;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  margin: 0;
+  background: var(--sts-session-page-bg);
+  color: var(--sts-session-text);
+}
+
+.navbar .btn.btn-outline-light {
+  color: #f8f9fa;
+  border-color: #f8f9fa;
+}
+.navbar .btn.btn-outline-light:hover,
+.navbar .btn.btn-outline-light:focus {
+  color: var(--sts-charcoal);
+  background-color: #f8f9fa;
+  border-color: #f8f9fa;
+}
+.navbar .btn.btn-outline-light.active,
+.navbar .btn.btn-outline-light:active {
+  color: var(--sts-charcoal);
+  background-color: #fff;
+  border-color: #fff;
+}
+.navbar .btn.btn-outline-light i {
+  color: inherit;
+}
+
+/* Body buttons — outline-dark mirrors navbar outline-light (match index Site Map weight) */
+.btn.btn-outline-dark.btn-sm {
+  color: var(--sts-charcoal);
+  border-color: var(--sts-charcoal);
+}
+.btn.btn-outline-dark.btn-sm:hover,
+.btn.btn-outline-dark.btn-sm:focus {
+  color: #fff;
+  background-color: var(--sts-charcoal);
+  border-color: var(--sts-charcoal);
+}
+.btn.btn-outline-dark.btn-sm i {
+  color: inherit;
+}
+
+.page,
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px;
+}
+.page-wide {
+  max-width: 1400px;
+}
+h1 {
+  font-size: 22px;
+  margin: 0 0 8px;
+}
+h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+.subtitle,
+.muted {
+  color: var(--sts-session-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+body a:not(.btn):not(.button):not(.navbar-brand):not(.phase-list a) {
+  color: var(--sts-charcoal);
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #d8dee4;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.card h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+.card p {
+  margin: 0 0 12px;
+  color: #444;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.card-editor,
+.card-highlight {
+  border-color: var(--sts-charcoal);
+  background: #fff;
+}
+.card a.button,
+.btn-session {
+  display: inline-block;
+  text-decoration: none;
+  background: transparent;
+  color: var(--sts-charcoal);
+  border: 1px solid var(--sts-charcoal);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.card a.button {
+  text-align: center;
+}
+.card a.button:hover,
+.btn-session:hover {
+  background: var(--sts-charcoal);
+  color: #fff;
+  border-color: var(--sts-charcoal);
+}
+
+.phase-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+.phase-list a {
+  display: block;
+  text-decoration: none;
+  font-size: 15px;
+  line-height: 1.35;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--sts-charcoal);
+  color: #fff;
+  border: 0;
+  font-weight: 600;
+}
+.phase-list a:hover {
+  background: var(--sts-charcoal-hover);
+  color: #fff;
+}
+.phase-list .meta {
+  display: block;
+  font-weight: 400;
+  font-size: 13px;
+  opacity: 0.9;
+  margin-top: 4px;
+}
+
+.badge {
+  display: inline-block;
+  background: #e9ecef;
+  color: var(--sts-charcoal);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  margin-left: 6px;
+}
+
+.session-go-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin-top: 12px;
+}
+.session-go-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #444;
+  min-width: 220px;
+  flex: 1;
+}
+.session-go-form select {
+  padding: 8px 10px;
+  border: 1px solid #c8d0d8;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+pre.switchlist {
+  background: #fff;
+  border: 1px solid #d8dee4;
+  border-radius: 10px;
+  padding: 12px;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.25;
+}
+.halfsheet-wrap {
+  background: #fff;
+  border: 1px solid #d8dee4;
+  border-radius: 10px;
+  padding: 8px;
+  overflow-x: auto;
+}
+.print-all-phase {
+  background: #fff;
+  border: 1px solid #d8dee4;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 24px;
+  overflow-x: auto;
+}
+.print-all-phase table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+}
+.print-all-phase th,
+.print-all-phase td {
+  border: 1px solid black;
+  padding: 1px;
+  font: normal 8px Verdana, Arial, sans-serif;
+  vertical-align: middle;
+}
+.print-all-phase .phase-row td {
+  background: #e9ecef;
+  font-weight: bold;
+}
+
+@media print {
+  .navbar,
+  .noprint {
+    display: none !important;
+  }
+}

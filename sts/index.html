@@ -54,6 +54,12 @@
       padding: 8px 12px;
       border-radius: 4px;
       font-weight: 600;
+      text-decoration: none;
+    }
+    .session-badge-btn:hover {
+      background: #1f4d2e;
+      color: #fff;
+      text-decoration: none;
     }
     .menu-table {
       border-radius: 6px;
@@ -163,7 +169,9 @@
       </div>
       <div class="p-3 border-top d-flex align-items-center justify-content-between flex-wrap gap-2">
         <h5 class="mb-0" id="railroad_name">Shipper-driven Traffic Simulator</h5>
-        <span class="session-badge"><i class="bi bi-calendar-check"></i> Operating Session <span id="os_number"></span></span>
+        <a href="session.php" class="session-badge session-badge-btn" title="Operating sessions and session editor">
+          <i class="bi bi-calendar-check"></i> Operating Session <span id="os_number"></span>
+        </a>
       </div>
     </div>
 

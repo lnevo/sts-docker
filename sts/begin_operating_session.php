@@ -3,12 +3,13 @@
 /**
  * CLI: begin a live operating session from warm-start end state.
  *
- * After manual STG-SCULLY swap: load/unload, increment session, reposition
- * empties, auto-assign jobs. Does NOT fill orders unless --generate is passed.
+ * After manual STG-SCULLY swap: load/unload, increment session, fill unfilled
+ * orders, reposition empties, auto-assign jobs.
  *
  * Usage:
- *   php begin_operating_session.php [--run-stg-scully] [--no-increment] [--no-reposition] [--no-assign]
- *       [--no-load-unload] [--repo-fraction=N] [--generate] [--backup=NAME]
+ *   php begin_operating_session.php [--run-stg-scully] [--no-increment] [--no-reposition]
+ *       [--no-assign] [--no-fill] [--no-load-unload] [--repo-fraction=N] [--fill-fraction=N]
+ *       [--generate] [--backup=NAME]
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -25,8 +26,10 @@ $options = getopt('', [
     'no-increment',
     'no-reposition',
     'no-assign',
+    'no-fill',
     'no-load-unload',
     'repo-fraction::',
+    'fill-fraction::',
     'generate',
     'backup::',
     'help',
@@ -38,14 +41,16 @@ Usage: php begin_operating_session.php [options]
 Begin a live operating session from warm-start end state.
 
   --run-stg-scully       Run STG-SCULLY staging before session prep
-  --no-increment       Keep current session number
-  --no-load-unload     Skip offline load/unload transitions
-  --no-reposition      Skip empty reposition orders
-  --no-assign          Skip auto-assign
-  --repo-fraction=N    Reposition fraction (default from warm_start config)
-  --generate           Generate revenue orders for the new session
-  --backup=NAME        Save backup after setup
-  --help               Show this help
+  --no-increment         Keep current session number
+  --no-load-unload       Skip offline load/unload transitions
+  --no-fill              Skip filling unfilled car orders (default: fill all eligible)
+  --no-reposition        Skip empty reposition orders
+  --no-assign            Skip auto-assign
+  --repo-fraction=N      Reposition fraction (default from warm_start config)
+  --fill-fraction=N      Fraction of unfilled orders to fill (default 1.0)
+  --generate             Generate revenue orders for the new session
+  --backup=NAME          Save backup after setup
+  --help                 Show this help
 
 Prerequisites:
   - Warm-start end state loaded (e.g. hart_warm_start)
@@ -61,10 +66,14 @@ $session_options = [
     'increment' => !isset($options['no-increment']),
     'reposition' => !isset($options['no-reposition']),
     'assign' => !isset($options['no-assign']),
+    'fill' => !isset($options['no-fill']),
     'generate' => isset($options['generate']),
 ];
 if (isset($options['repo-fraction'])) {
     $session_options['reposition_fraction'] = (float) $options['repo-fraction'];
+}
+if (isset($options['fill-fraction'])) {
+    $session_options['fill_fraction'] = (float) $options['fill-fraction'];
 }
 
 $dbc = open_db();

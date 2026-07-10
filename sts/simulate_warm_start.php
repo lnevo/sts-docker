@@ -44,16 +44,7 @@ if (isset($options['ck1-test'])) {
     $overrides['run_ck1_test'] = true;
 }
 if (isset($options['tracked'])) {
-    $overrides['stop_when_stg_scully_ready'] = true;
-    $overrides['stop_when_locals_secured'] = false;
-    $overrides['stop_when_staging_ready'] = false;
-    $overrides['run_ck1_each_session'] = true;
-    $overrides['secure_locals_each_session'] = true;
-    $overrides['staging_after_locals'] = true;
-    $overrides['run_phased_locals'] = true;
-    if (!isset($overrides['max_sessions'])) {
-        $overrides['max_sessions'] = 10;
-    }
+    $overrides = array_merge($overrides, warm_start_tracked_sim_overrides());
 }
 $config = warm_start_merge_config($overrides);
 

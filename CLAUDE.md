@@ -83,6 +83,10 @@ publishes the image via `publish-docker.yaml`.
   `scan_location.php`, `load_unload.php`, and `reposition.php`. No
   authentication by design (private-network use). Documented in
   `sts/api/README.md`.
+- **Operational Steps API:** `sts/operational_steps_api.php` — session workflow
+  editor, recipe compile/save, simulator. OpenAPI + Swagger UI:
+  `sts/operational_steps_api.openapi.yaml`, `sts/operational_steps_api-docs.html`.
+  Command/param schema: `GET ?action=catalog`. Maintainer notes in `AGENTS.md`.
 
 ## Database schema pitfalls
 

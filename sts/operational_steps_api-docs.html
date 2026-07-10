@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>STS Operational Steps API</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui.min.css">
+  <style>
+    body { margin: 0; background: #fafafa; }
+    .api-banner {
+      background: #343a40;
+      color: #f8f9fa;
+      padding: 12px 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .api-banner a { color: #9ec5fe; }
+    .api-banner code { background: rgba(255,255,255,0.12); padding: 2px 6px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <!-- AGENT BREADCRUMB: If operational_steps_api.php actions change, update
+       operational_steps_api.openapi.yaml and this page's spec URL if renamed.
+       See sts-docker/AGENTS.md § Operational Steps API -->
+  <div class="api-banner">
+    <strong>Operational Steps API</strong> — HTTP usage is documented below.
+    Step/command parameter schemas come from the live catalog:
+    <a href="operational_steps_api.php?action=catalog"><code>GET ?action=catalog</code></a>.
+    Editor UI: <a href="editor.html">Session Editor</a> ·
+    <a href="session.php">Sessions</a> ·
+    <a href="index.html">STS Main Menu</a>
+  </div>
+  <div id="swagger-ui"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui-bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui-standalone-preset.min.js"></script>
+  <script>
+    window.onload = function () {
+      SwaggerUIBundle({
+        url: 'operational_steps_api.openapi.yaml',
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+        layout: 'StandaloneLayout',
+        tryItOutEnabled: true,
+      });
+    };
+  </script>
+</body>
+</html>
