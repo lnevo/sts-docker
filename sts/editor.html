@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>STS Session Editor</title>
+  <link rel="stylesheet" href="workflow-ui.css?v=32">
+</head>
+<body>
+  <nav class="nav-bar">
+    <a href="session.php">← Sessions</a>
+    <a href="/sts/">STS</a>
+    <a id="csv-download" href="STS_OPERATIONAL_STEPS.csv" download>CSV</a>
+    <a id="json-download" href="STS_OPERATIONAL_RECIPE.json" download>JSON</a>
+  </nav>
+  <div class="page page-wide">
+    <h1>Session Editor</h1>
+    <p class="subtitle">
+      Build the operating recipe step by step: <strong>Add step</strong>, pick a command, set parameters, and add remarks.
+      <strong>Import CSV</strong> loads steps into the editor only (nothing is written until <strong>Save</strong>).
+      Import again to append or combine workflows. <strong>Load</strong> replaces the editor from a file on disk.
+      <strong>Reset</strong> clears the editor.
+      The simulator runs against the live STS database — switch lists are generated at each
+      <em>Generate Switch Lists</em> step.
+    </p>
+    <div id="status" class="status info">Loading…</div>
+
+    <div class="panel workflow-bar">
+      <div class="workflow-bar-inner">
+        <label class="wf-field wf-field-select">
+          <span class="inline-lbl">Workflow CSV</span>
+          <select id="csv-file" class="field-select"></select>
+        </label>
+        <label class="wf-field wf-field-save-as">
+          <span class="inline-lbl">Save as</span>
+          <input type="text" id="csv-save-as" class="field-input" spellcheck="false" autocomplete="off">
+        </label>
+        <div class="wf-actions">
+          <button type="button" class="secondary" id="btn-reset">Reset</button>
+          <div class="btn-group">
+            <button type="button" class="secondary" id="btn-load-csv">Load</button>
+            <button type="button" class="primary" id="btn-save">Save</button>
+          </div>
+          <button type="button" class="secondary" id="btn-import">Import CSV…</button>
+        </div>
+      </div>
+      <input type="file" id="csv-import-file" accept=".csv,text/csv" hidden>
+    </div>
+
+    <div class="panel" id="simulator">
+      <h2>Simulator</h2>
+      <p class="run-instructions">
+        Pick a <strong>Section</strong> (from section labels in the recipe) or leave <strong>All</strong> for the full workflow.
+        Use <strong>Goto section</strong> to skip forward over steps (e.g. skip setup on repeat sessions).
+        Use simulator <strong>Repeat</strong> to run a section multiple times. Switch-list format is set on each
+        <em>Generate Switch Lists</em> step. DB session: <strong id="run-db-session">—</strong>.
+        View output in <a href="session.php">Sessions</a> after a run.
+      </p>
+      <div class="run-bar">
+        <label class="run-field run-field-wide">
+          <span class="inline-lbl">Section</span>
+          <select id="run-section" class="field-select"></select>
+        </label>
+        <label class="run-field">
+          <span class="inline-lbl">Start step</span>
+          <input type="number" id="run-start" class="field-input" min="1" value="1">
+        </label>
+        <label class="run-field">
+          <span class="inline-lbl">Stop step</span>
+          <input type="number" id="run-stop" class="field-input" min="1" value="1">
+        </label>
+        <button type="button" class="primary" id="btn-run">Run</button>
+        <label class="run-repeat-control chk">
+          <input type="checkbox" id="run-repeat-enabled">
+          <span>Repeat</span>
+          <input type="number" id="run-repeat" class="field-input" min="2" max="30" value="2" disabled>
+          <span class="run-repeat-suffix">times</span>
+        </label>
+      </div>
+      <pre class="log" id="log">Run output appears here.</pre>
+    </div>
+
+    <div class="panel">
+      <div class="actions-bar">
+        <div class="steps-heading">
+          <h2 style="margin:0;">Steps <span id="step-count"></span></h2>
+          <div class="section-jump">
+            <label class="section-jump-label">
+              <span class="inline-lbl">Section</span>
+              <select id="editor-section" class="field-select" disabled>
+                <option value="">—</option>
+              </select>
+            </label>
+            <button type="button" class="secondary" id="btn-goto-section" disabled>Goto</button>
+            <label class="section-jump-filter chk">
+              <input type="checkbox" id="hide-non-execute">
+              <span>Execute only</span>
+            </label>
+          </div>
+        </div>
+        <div class="toolbar">
+          <div class="insert-controls">
+            <label class="insert-label">
+              <span class="inline-lbl">Insert</span>
+              <select id="insert-mode" class="field-select">
+                <option value="before">Before</option>
+                <option value="after">After</option>
+                <option value="end">End</option>
+              </select>
+            </label>
+            <label class="insert-label insert-step-num-wrap" id="insert-step-num-wrap" hidden>
+              <span class="inline-lbl">Step #</span>
+              <input type="number" id="insert-step-num" class="field-input" min="1" value="1">
+            </label>
+          </div>
+          <button type="button" class="primary" id="btn-add">+ Add step</button>
+          <button type="button" class="ghost" id="btn-reload">Reload</button>
+        </div>
+      </div>
+      <div id="steps-scroll" class="steps-scroll">
+        <div id="steps-list" class="steps-list"></div>
+      </div>
+    </div>
+  </div>
+  <script src="workflow-shared.js?v=46"></script>
+  <script>
+(function () {
+  const W = WorkflowUI;
+
+  W.el('btn-add').addEventListener('click', () => W.addStep());
+  W.el('btn-save').addEventListener('click', () => W.saveRecipe().catch((e) => W.setStatus(e.message, 'err')));
+  W.el('btn-import').addEventListener('click', () => W.promptImportCsv());
+  W.el('csv-import-file')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (file) W.importCsvFile(file).catch((err) => W.setStatus(err.message, 'err'));
+  });
+  W.el('btn-reload').addEventListener('click', () => {
+    if (W.dirty && !confirm('Reload from disk? Unsaved changes will be lost.')) return;
+    init();
+  });
+  W.el('btn-load-csv')?.addEventListener('click', () => {
+    W.loadSelectedCsv().catch((e) => W.setStatus(e.message, 'err'));
+  });
+  W.el('btn-reset')?.addEventListener('click', () => W.resetEditor());
+  W.el('steps-list')?.addEventListener('input', () => W.markDirty());
+  W.el('steps-list')?.addEventListener('change', () => W.markDirty());
+  W.el('csv-file')?.addEventListener('change', () => {
+    W.syncCsvSaveFilename();
+    W.syncCsvDownloadLinks();
+  });
+  W.el('insert-mode')?.addEventListener('change', () => W.syncInsertUi());
+  W.el('insert-step-num')?.addEventListener('input', () => W.syncInsertFromDom());
+  W.el('btn-goto-section')?.addEventListener('click', () => W.scrollToEditorSection());
+  W.el('editor-section')?.addEventListener('change', () => W.syncEditorSectionUi());
+  W.el('hide-non-execute')?.addEventListener('change', (e) => {
+    W.hideNonExecute = !!e.target.checked;
+    W.syncStepVisibility();
+  });
+
+  W.el('run-start')?.addEventListener('input', (e) => {
+    e.target.dataset.userSet = '1';
+    W.syncRunRangeHighlight();
+    W.syncStepVisibility();
+  });
+  W.el('run-stop')?.addEventListener('input', (e) => {
+    e.target.dataset.userSet = '1';
+    W.syncRunRangeHighlight();
+    W.syncStepVisibility();
+  });
+  W.el('run-section')?.addEventListener('change', () => W.applyRunSection());
+  W.el('btn-run')?.addEventListener('click', () => {
+    W.runWorkflow({ saveFirst: true }).catch((e) => W.setStatus(e.message, 'err'));
+  });
+  W.el('run-repeat-enabled')?.addEventListener('change', (e) => {
+    const n = W.el('run-repeat');
+    if (n) n.disabled = !e.target.checked;
+  });
+
+  async function init() {
+    try {
+      await W.loadCatalog();
+      await W.loadCsvList();
+      if (W.autoLoadCsv && W.activeCsv) {
+        await W.loadRecipe();
+      } else {
+        W.recipe = { version: 1, name: 'workflow', steps: [] };
+        W.compiledSteps = [];
+        W.clearDirty();
+      }
+      await W.loadRunOptions();
+      W.syncInsertUi();
+      W.renderSteps({ skipSync: true });
+      const stepMsg = W.recipe.steps.length
+        ? (W.activeCsv + ' · ' + W.recipe.steps.length + ' steps')
+        : (W.csvFiles.length
+          ? 'Choose a CSV and click Load, or import and Save'
+          : 'No workflow CSV files yet — import or Save to create one');
+      W.setStatus(
+        'Ready — ' + stepMsg + ' · DB session ' + (W.runOptions?.current_session ?? '?'),
+        'ok'
+      );
+    } catch (e) {
+      W.setStatus(e.message, 'err');
+    }
+  }
+  init();
+})();
+  </script>
+</body>
+</html>
