@@ -3217,6 +3217,11 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
                 $result['reason'] = 'missing job param';
                 break;
             }
+            if (!is_readable(__DIR__ . '/track_scale_helpers.php')) {
+                $result['skipped'] = true;
+                $result['reason'] = 'track scale helpers not available (use track-scale or active branch)';
+                break;
+            }
             require_once __DIR__ . '/track_scale_helpers.php';
             $ts_config = operational_steps_track_scale_config($params);
             $result['commodity'] = (string) ($ts_config['commodity_code'] ?? '');
