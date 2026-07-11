@@ -4,7 +4,7 @@
  * CLI: generate master (multi-phase) switch lists for phased local jobs.
  *
  * Usage:
- *   php generate_master_switchlists.php [--format=halfsheet|mobile] [--render-only] [--save-cache-only]
+ *   php generate_master_switchlists.php [--format=all|mobile|half|full|dmp|wo|x2010] [--render-only] [--save-cache-only]
  *       [--session=N] [--jobs=D749,NVL,CK1] [--output=DIR]
  */
 
@@ -19,7 +19,7 @@ require_once __DIR__ . '/master_switchlist_helpers.php';
 
 $options = getopt('', ['session::', 'jobs::', 'output::', 'format::', 'render-only', 'save-cache-only', 'from-halfsheet', 'help']);
 if (isset($options['help'])) {
-    fwrite(STDOUT, "Usage: php generate_master_switchlists.php [--format=halfsheet|mobile|phased|phased-mobile] [--render-only] [--from-halfsheet] [--save-cache-only]\n");
+    fwrite(STDOUT, "Usage: php generate_master_switchlists.php [--format=all|mobile|half|full|dmp|wo|x2010] [--render-only] [--from-halfsheet] [--save-cache-only]\n");
     exit(0);
 }
 
@@ -28,11 +28,7 @@ if (!empty($options['jobs'])) {
     $job_names = array_values(array_filter(array_map('trim', explode(',', $options['jobs']))));
 }
 
-$format = $options['format'] ?? 'halfsheet';
-if (!in_array($format, ['halfsheet', 'mobile', 'phased', 'phased-mobile'], true)) {
-    fwrite(STDERR, "Unknown format: {$format}\n");
-    exit(1);
-}
+$format = master_sw_normalize_switchlist_format($options['format'] ?? 'all', 'all');
 
 $output_dir = $options['output'] ?? (__DIR__ . '/../../switchlists');
 $config = warm_start_merge_config([]);
@@ -54,7 +50,7 @@ $written = master_sw_generate_for_jobs($dbc, $job_names, $session_output_dir, $c
 $mode = isset($options['render-only']) ? 'render' : (isset($options['save-cache-only']) ? 'cache' : 'generate');
 fwrite(STDOUT, "=== Master switch lists ({$mode}, {$format}) — session {$session_nbr} ===" . PHP_EOL);
 
-if (master_sw_is_phased_format($format) && count($written) === 0) {
+if (count($written) === 0) {
     master_sw_render_empty_session_index(
         $dbc,
         $session_output_dir,
@@ -65,12 +61,6 @@ if (master_sw_is_phased_format($format) && count($written) === 0) {
     fwrite(STDERR, "No switch lists generated (empty session index written).\n");
     mysqli_close($dbc);
     exit(0);
-}
-
-if (count($written) === 0) {
-    fwrite(STDERR, "No switch lists generated.\n");
-    mysqli_close($dbc);
-    exit(1);
 }
 
 foreach ($written as $item) {

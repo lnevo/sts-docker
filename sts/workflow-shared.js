@@ -231,6 +231,12 @@
       if (from === 'setout_locations') return d.setout_locations || [];
       if (from === 'scopes') return d.scopes || [];
       if (from === 'backups') return (d.backups || []).map((b) => ({ value: b, label: b }));
+      if (from === 'condition_variables') {
+        return (d.condition_variables || []).map((v) => ({
+          value: v.key,
+          label: v.label || v.key,
+        }));
+      }
       if (from === 'switchlist_trains' || from === 'job_or_all' || p.type === 'job_or_all') {
         const names = new Set(['all']);
         (d.jobs || []).forEach((j) => {
@@ -245,7 +251,7 @@
         return (this.buildRunSections() || [])
           .filter((s) => s.id !== 'all')
           .filter((s) => {
-            if (context.step?.function !== 'goto' || fromStep <= 0) return true;
+            if ((context.step?.function !== 'goto' && context.step?.function !== 'if_then') || fromStep <= 0) return true;
             return s.start > fromStep;
           })
           .map((s) => ({
@@ -595,9 +601,9 @@
       params = params || {};
       const jobs = String(params.jobs || '').trim();
       if (!jobs) {
-        return 'Auto-Assign Cars';
+        return 'Assign Cars';
       }
-      return 'Auto-Assign Cars ' + jobs.split(',').map((s) => s.trim()).filter(Boolean).join(', ');
+      return 'Assign Cars ' + jobs.split(',').map((s) => s.trim()).filter(Boolean).join(', ');
     },
 
     compileTrainCarFiltersTitle(filters) {
@@ -638,11 +644,91 @@
       return parts.length ? 'Load/Unload ' + parts.join('; ') : 'Load/Unload offline';
     },
 
+    ifThenGotoParamsHtml(step, rowIdx) {
+      const def = this.catalogMap.if_then;
+      const values = step.params || {};
+      const paramByKey = {};
+      (def?.params || []).forEach((p) => { paramByKey[p.key] = p; });
+
+      let html = '<div class="param-if-then-goto-grid">';
+
+      html += '<div class="param-if-then-row">';
+      if (paramByKey.variable) {
+        html += this.inlineParamFieldHtml(
+          { ...paramByKey.variable, label: 'If variable' },
+          values.variable,
+          rowIdx,
+          undefined,
+          true,
+          step
+        );
+      }
+      ['operator', 'value'].forEach((key) => {
+        const p = paramByKey[key];
+        if (p) html += this.inlineParamFieldHtml(p, values[key], rowIdx, undefined, true, step);
+      });
+      html += '</div>';
+
+      html += '<div class="param-goto-row">';
+      if (paramByKey.section) {
+        html += this.inlineParamFieldHtml(
+          { ...paramByKey.section, label: 'Goto section' },
+          values.section,
+          rowIdx,
+          undefined,
+          true,
+          step
+        );
+      }
+      html += '</div>';
+
+      html += '</div>';
+      return html;
+    },
+
+    gotoParamsHtml(step, rowIdx) {
+      const def = this.catalogMap.goto;
+      const values = step.params || {};
+      const sectionParam = (def?.params || []).find((p) => p.key === 'section');
+      if (!sectionParam) return '<span class="inline-empty">No parameters</span>';
+      let html = '<div class="param-if-then-goto-grid">';
+      html += '<div class="param-goto-row">';
+      html += this.inlineParamFieldHtml(
+        { ...sectionParam, label: 'Goto section' },
+        values.section,
+        rowIdx,
+        undefined,
+        true,
+        step
+      );
+      html += '</div></div>';
+      return html;
+    },
+
+    rowHasMultiRowParams(step) {
+      if (!step?.function) return false;
+      return step.function === 'if_then'
+        || step.function === 'goto'
+        || step.function === 'load_unload'
+        || step.function === 'fill_orders'
+        || step.function === 'reposition_empties'
+        || step.function === 'pick_up_cars'
+        || step.function === 'set_out_cars';
+    },
+
+    ifThenHasGoto(step) {
+      if (!step || step.function !== 'if_then') return false;
+      const p = step.params || {};
+      return !!(String(p.section || '').trim() || String(p.section_label || '').trim() || parseInt(p.step, 10) > 0);
+    },
+
     shouldHideInlineParam(step, p) {
       if (!step || !p) return false;
       if (step.function === 'section_label' && p.key === 'remarks') return true;
       if (step.function === 'goto' && (p.key === 'step' || p.key === 'section_label')) return true;
-      if (step.function === 'if_then' && (p.key === 'job' || p.key === 'location')) return true;
+      if (step.function === 'if_then') {
+        if (p.key === 'section_label' || p.key === 'step') return true;
+      }
       if (step.function === 'reposition_empties' && p.key === 'destination') {
         return (step.params?.mode || 'reposition_to_home') !== 'update';
       }
@@ -675,6 +761,12 @@
         if (!p) return '<span class="inline-empty">No parameters</span>';
         const val = this.legacyInstructionText(step, rowIdx);
         return this.inlineParamFieldHtml(p, val, rowIdx, undefined, false, step);
+      }
+      if (step.function === 'if_then') {
+        return this.ifThenGotoParamsHtml(step, rowIdx);
+      }
+      if (step.function === 'goto') {
+        return this.gotoParamsHtml(step, rowIdx);
       }
       const def = this.catalogMap[step.function];
       if (!def || !def.params || !def.params.length) {
@@ -741,13 +833,15 @@
         step.function = selectedFn;
         if (fnSelect) delete fnSelect.dataset.actualFn;
       }
-      if (step.function === 'goto' && step.params.section) {
+      if ((step.function === 'goto' || step.function === 'if_then') && step.params.section) {
         const sec = this.buildRunSections().find((s) => s.id === step.params.section);
         if (sec) {
           step.params.section_label = sec.label;
+          step.params.step = String(sec.start);
           if (sec.start <= idx + 1) {
             delete step.params.section;
             delete step.params.section_label;
+            delete step.params.step;
           }
         }
       }
@@ -906,12 +1000,13 @@
 
     stepRowInnerHtml(step, idx) {
       const rowKey = idx;
+      const stepNumSize = Math.max(2, String(this.recipe.steps.length).length);
 
       return (
-        '<div class="row-top row-top-align-start' + ((step.function === 'load_unload' || step.function === 'fill_orders' || step.function === 'reposition_empties' || step.function === 'pick_up_cars' || step.function === 'set_out_cars') ? ' row-has-filters' : '') +
+        '<div class="row-top row-top-align-start' + (this.rowHasMultiRowParams(step) ? ' row-has-filters' : '') +
           this.remarksExpandedClass(step) + '">' +
           '<div class="step-num-control">' +
-            '<input type="number" class="step-num step-num-input field-input" data-step-num min="1" max="' + this.recipe.steps.length + '" value="' + (idx + 1) + '" title="Type step number to jump" aria-label="Step number">' +
+            '<input type="number" class="step-num step-num-input field-input" data-step-num min="1" max="' + this.recipe.steps.length + '" size="' + stepNumSize + '" value="' + (idx + 1) + '" title="Type step number to jump" aria-label="Step number">' +
             '<div class="step-num-arrows">' +
               '<button type="button" class="step-num-arrow" data-step-arrow="up" title="Move step up">▲</button>' +
               '<button type="button" class="step-num-arrow" data-step-arrow="down" title="Move step down">▼</button>' +
@@ -1047,7 +1142,16 @@
       if (step.function === 'if_then') {
         const p = step.params || {};
         const v = p.variable === 'session_nbr' ? 'session #' : (p.variable || 'session #');
-        return ('If ' + v + ' ' + (p.operator || '') + ' ' + (p.value || '')).replace(/\s+/g, ' ').trim();
+        let title = ('If ' + v + ' ' + (p.operator || '') + ' ' + (p.value || '')).replace(/\s+/g, ' ').trim();
+        if (p.section_label) {
+          title += ' then Goto ' + p.section_label;
+        } else if (p.section) {
+          const sec = (this.runSections || this.buildRunSections()).find((s) => s.id === p.section);
+          if (sec) title += ' then Goto ' + sec.label;
+        } else if (p.step) {
+          title += ' then Goto step ' + p.step;
+        }
+        return title;
       }
       if (step.function === 'text_instruction') {
         return (step.params?.instruction || '').trim();
@@ -1055,8 +1159,11 @@
       if (step.function === 'generate_switchlists') {
         const p = step.params || {};
         const jobs = String(p.jobs || 'all').trim() || 'all';
-        const fmt = String(p.format || 'phased').trim() || 'phased';
-        return ('Generate Switch Lists ' + jobs + ' (' + fmt + ')').replace(/\s+/g, ' ').trim();
+        const fmt = String(p.format || 'all').trim() || 'all';
+        const fmtLabel = (this.catalogMap.generate_switchlists?.params || [])
+          .find((param) => param.key === 'format')?.options
+          ?.find((opt) => String(opt.value || opt) === fmt)?.label || fmt;
+        return ('Generate Switch Lists ' + jobs + ' (' + fmtLabel + ')').replace(/\s+/g, ' ').trim();
       }
       if (def) {
         let t = def.gui_template || def.label || '';
@@ -1140,7 +1247,7 @@
       if (paramsEl) paramsEl.innerHTML = this.paramsHtmlForStep(step, idx);
       const top = row.querySelector('.row-top');
       if (top) {
-        top.classList.toggle('row-has-filters', step.function === 'load_unload' || step.function === 'fill_orders' || step.function === 'reposition_empties' || step.function === 'pick_up_cars' || step.function === 'set_out_cars');
+        top.classList.toggle('row-has-filters', this.rowHasMultiRowParams(step));
       }
       row.className = 'step-row ' + this.stepColorClass(step);
       this.updateRowStsLink(row, step);
@@ -1202,7 +1309,7 @@
       row.addEventListener('change', (e) => {
         const target = e.target;
         if (target.matches('[data-step-num]')) return;
-        if (target.matches('[data-param="mode"]')) {
+        if (target.matches('[data-param="mode"]') || target.matches('[data-param="variable"]')) {
           this.syncStepFromRow(row, idx);
           this.refreshRowParams(idx);
           return;
@@ -1281,6 +1388,8 @@
         this.syncAllStepsFromDom();
       }
 
+      this.renormalizeGotoTargets();
+
       const list = this.el('steps-list');
       if (!list) return;
       list.innerHTML = '';
@@ -1331,20 +1440,11 @@
       const p = step?.params || {};
       const sections = this.buildRunSections();
       let target = 0;
-      if (p.section) {
-        const sec = sections.find((s) => s.id === p.section);
-        if (sec) target = sec.start;
-      }
-      if (!target) {
-        const label = String(p.section_label || '').trim();
-        if (label) {
-          const sec = sections.find((s) => {
-            const sl = String(s.label || '').trim();
-            return sl === label || sl.includes(label) || label.includes(sl);
-          });
-          if (sec) target = sec.start;
-        }
-      }
+      // Section label is the stable identifier and must win over the
+      // position-encoded section id ("step-N"), which goes stale when steps
+      // are inserted/removed/reordered.
+      const sec = this.findSectionForGoto(sections, p);
+      if (sec) target = sec.start;
       if (!target) {
         const n = parseInt(p.step, 10);
         if (n > 0) target = n;
@@ -1353,6 +1453,48 @@
         return 0;
       }
       return target;
+    },
+
+    // Resolve the section a goto/if_then points at, preferring the stable
+    // section label over the position-encoded id.
+    findSectionForGoto(sections, params) {
+      const p = params || {};
+      const label = String(p.section_label || '').trim();
+      if (label) {
+        let sec = sections.find((s) => String(s.label || '').trim() === label);
+        if (!sec) {
+          sec = sections.find((s) => {
+            const sl = String(s.label || '').trim();
+            return sl && (sl.includes(label) || label.includes(sl));
+          });
+        }
+        if (sec) return sec;
+      }
+      if (p.section) {
+        const sec = sections.find((s) => s.id === p.section);
+        if (sec) return sec;
+      }
+      return null;
+    },
+
+    // Re-sync each goto/if_then's stored section id + step number from its
+    // (stable) section label so the displayed target follows the section when
+    // step numbers change.
+    renormalizeGotoTargets() {
+      const steps = (this.recipe && this.recipe.steps) || [];
+      if (!steps.length) return;
+      const sections = this.buildRunSections();
+      steps.forEach((step) => {
+        if (!step || (step.function !== 'goto' && step.function !== 'if_then')) return;
+        const p = step.params || {};
+        if (!String(p.section_label || '').trim()) return;
+        const sec = this.findSectionForGoto(sections, p);
+        if (!sec) return;
+        p.section = sec.id;
+        p.section_label = sec.label;
+        p.step = String(sec.start);
+        step.params = p;
+      });
     },
 
     evaluateCondition(params) {
@@ -1406,8 +1548,16 @@
         }
         if (fid === 'if_then') {
           const ok = this.evaluateCondition(step.params || {});
-          pc++;
-          if (!ok) pc++;
+          if (ok && this.ifThenHasGoto(step)) {
+            const target = this.resolveGotoTarget({ params: step.params || {} }, pc + 1);
+            if (target >= 1 && target <= steps.length) {
+              pc = target - 1;
+            } else {
+              pc++;
+            }
+          } else {
+            pc++;
+          }
           continue;
         }
         if (this.isExecutableStep(step)) {
@@ -1424,13 +1574,11 @@
       if (!step || !this.isExecutableStep(step)) return false;
       const stepNum = idx + 1;
       const { start, stop } = this.getRunStepRange();
-      if (stepNum >= start && stepNum <= stop) {
-        if (!this.executionPathSteps) {
-          this.executionPathSteps = this.computeExecutionPath(start, stop);
-        }
-        return this.executionPathSteps.has(stepNum);
+      if (stepNum < start || stepNum > stop) return false;
+      if (!this.executionPathSteps) {
+        this.executionPathSteps = this.computeExecutionPath(start, stop);
       }
-      return true;
+      return this.executionPathSteps.has(stepNum);
     },
 
     syncStepVisibility() {
@@ -1881,7 +2029,7 @@
             stop = j;
             break;
           }
-          if (fid === 'goto') {
+          if (fid === 'goto' || (fid === 'if_then' && this.ifThenHasGoto(step))) {
             stop = j + 1;
             break;
           }

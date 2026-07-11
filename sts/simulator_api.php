@@ -49,7 +49,7 @@ try {
                 'start_step' => (int) ($body['start_step'] ?? 0),
                 'stop_step' => (int) ($body['stop_step'] ?? 0),
                 'session_count' => (int) ($body['session_count'] ?? 1),
-                'format' => $body['format'] ?? 'phased',
+                'format' => $body['format'] ?? 'all',
                 'config' => is_array($body['config'] ?? null) ? $body['config'] : [],
             ]);
             mysqli_close($dbc);
@@ -70,7 +70,7 @@ try {
                 'start_step' => (int) ($body['start_step'] ?? 0),
                 'stop_step' => (int) ($body['stop_step'] ?? 0),
                 'session_count' => (int) ($body['session_count'] ?? 1),
-                'format' => $body['format'] ?? 'phased',
+                'format' => $body['format'] ?? 'all',
                 'min_sessions' => (int) ($body['min_sessions'] ?? 3),
                 'max_sessions' => (int) ($body['max_sessions'] ?? 12),
                 'config' => is_array($body['config'] ?? null) ? $body['config'] : [],

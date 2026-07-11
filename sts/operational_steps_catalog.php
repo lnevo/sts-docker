@@ -37,7 +37,7 @@ function operational_steps_catalog_adder_order()
     return [
         'before' => ['generate_orders', 'fill_orders', 'reposition_empties'],
         'during' => [
-            'build_switchlists_sts', 'auto_assign_locals', 'pick_up_cars', 'set_out_cars', 'track_scale',
+            'auto_assign_locals', 'pick_up_cars', 'set_out_cars', 'track_scale',
         ],
         'after' => ['load_unload'],
         'reports' => ['generate_switchlists', 'generate_waybills'],
@@ -47,7 +47,7 @@ function operational_steps_catalog_adder_order()
             'restart_session', 'reset_session',
             'import_data', 'remove_backup', 'wipe_database',
         ],
-        'workflow' => ['section_label', 'text_instruction', 'if_then', 'goto', 'stop'],
+        'workflow' => ['section_label', 'text_instruction', 'if_then', 'stop'],
     ];
 }
 
@@ -129,10 +129,13 @@ function operational_steps_catalog_job_or_all_param($key = 'jobs', $label = 'Job
 function operational_steps_catalog_switchlist_format_options()
 {
     return [
-        ['value' => 'phased', 'label' => 'Phased (mobile + half sheet)'],
-        ['value' => 'phased-mobile', 'label' => 'Phased (mobile only)'],
-        ['value' => 'halfsheet', 'label' => 'Master half sheet'],
-        ['value' => 'mobile', 'label' => 'Master mobile'],
+        ['value' => 'all', 'label' => 'All styles'],
+        ['value' => 'mobile', 'label' => 'Mobile'],
+        ['value' => 'half', 'label' => 'Half Sheet'],
+        ['value' => 'full', 'label' => 'Full Sheet'],
+        ['value' => 'dmp', 'label' => 'Dot Matrix'],
+        ['value' => 'wo', 'label' => 'Work Order'],
+        ['value' => 'x2010', 'label' => 'X2010'],
     ];
 }
 
@@ -140,10 +143,10 @@ function operational_steps_catalog_switchlist_format_param()
 {
     return [
         'key' => 'format',
-        'label' => 'Format',
+        'label' => 'Style',
         'type' => 'select',
         'options' => operational_steps_catalog_switchlist_format_options(),
-        'default' => 'phased',
+        'default' => 'all',
     ];
 }
 
@@ -154,11 +157,18 @@ function operational_steps_switchlist_format_values()
     }, operational_steps_catalog_switchlist_format_options());
 }
 
-function operational_steps_normalize_switchlist_format($format, $default = 'phased')
+function operational_steps_normalize_switchlist_format($format, $default = 'all')
 {
-    $format = trim((string) $format);
-    if ($format === 'phased_mobile') {
-        $format = 'phased-mobile';
+    $format = strtolower(trim((string) $format));
+    $aliases = [
+        'phased' => 'all',
+        'phased-mobile' => 'mobile',
+        'phased_mobile' => 'mobile',
+        'halfsheet' => 'half',
+        'master' => 'all',
+    ];
+    if (isset($aliases[$format])) {
+        $format = $aliases[$format];
     }
 
     return in_array($format, operational_steps_switchlist_format_values(), true) ? $format : $default;
@@ -387,9 +397,9 @@ function operational_steps_compile_auto_assign_gui(array $params)
     $jobs = operational_steps_normalize_auto_assign_jobs($params);
     $station = trim((string) ($params['station'] ?? ''));
     if ($jobs === '') {
-        $line = 'Auto-Assign Cars';
+        $line = 'Assign Cars';
     } else {
-        $line = 'Auto-Assign Cars ' . str_replace(',', ', ', $jobs);
+        $line = 'Assign Cars ' . str_replace(',', ', ', $jobs);
     }
     if ($station !== '' && strcasecmp($station, 'all') !== 0) {
         $line .= ' at ' . $station;
@@ -1362,7 +1372,7 @@ function operational_steps_catalog_definitions()
         [
             'id' => 'goto',
             'category' => 'workflow',
-            'adder' => true,
+            'adder' => false,
             'adder_group' => 'workflow',
             'label' => 'Goto section',
             'gui_template' => 'Goto {section_label}',
@@ -1380,9 +1390,9 @@ function operational_steps_catalog_definitions()
             'category' => 'workflow',
             'adder' => true,
             'adder_group' => 'workflow',
-            'label' => 'If … then',
-            'gui_template' => 'If {variable} {operator} {value}',
-            'description' => 'When false, skips the next step. When true, runs it (e.g. Goto section). Variables: session #, unfilled count, STG backlog, cars on job, cars at location.',
+            'label' => 'If … then goto …',
+            'gui_template' => 'If {variable} {operator} {value} then goto {section_label}',
+            'description' => 'When the condition is true, skip forward to a later section. When false, continue to the next step. Variables match the Operations dashboard counts (session #, open/unfilled orders, unassigned, pickup/set-out pending, organize, scale, load/unload).',
             'runnable' => true,
             'dispatch' => 'if_then',
             'params' => [
@@ -1390,10 +1400,7 @@ function operational_steps_catalog_definitions()
                     'key' => 'variable',
                     'label' => 'Variable',
                     'type' => 'select',
-                    'options' => [
-                        'session_nbr', 'unfilled_count', 'stg_backlog_eligible', 'stg_backlog_on_jobs',
-                        'cars_on_job', 'cars_at_location', 'awaiting_assignment',
-                    ],
+                    'options_from' => 'condition_variables',
                     'default' => 'session_nbr',
                 ],
                 [
@@ -1404,6 +1411,9 @@ function operational_steps_catalog_definitions()
                     'default' => '>=',
                 ],
                 ['key' => 'value', 'label' => 'Value', 'type' => 'text', 'default' => '1', 'required' => true],
+                ['key' => 'section', 'label' => 'Section', 'type' => 'workflow_section', 'default' => '', 'required' => true],
+                ['key' => 'section_label', 'label' => 'Section label', 'type' => 'text', 'default' => ''],
+                ['key' => 'step', 'label' => 'Step #', 'type' => 'number', 'default' => ''],
             ],
         ],
         [
@@ -1556,9 +1566,9 @@ function operational_steps_catalog_definitions()
             'category' => 'operations',
             'adder' => true,
             'adder_group' => 'during',
-            'label' => 'Auto-Assign Cars',
-            'gui_template' => 'Auto-Assign Cars {jobs} {station}',
-            'description' => 'Auto-assign eligible cars to selected job(s)/train(s). Hold Ctrl/Cmd to select multiple. Optional station filter limits picks to one yard.',
+            'label' => 'Assign Cars',
+            'gui_template' => 'Assign Cars {jobs} {station}',
+            'description' => 'Assign eligible cars to selected job(s)/train(s). Hold Ctrl/Cmd to select multiple. Optional station filter limits picks to one yard.',
             'runnable' => true,
             'dispatch' => 'auto_assign_locals',
             'gui_path' => '/sts/auto_assign.php',
@@ -1662,10 +1672,9 @@ function operational_steps_catalog_definitions()
             'category' => 'reports',
             'adder' => true,
             'adder_group' => 'reports',
-            'disabled' => true,
             'label' => 'Generate Switch Lists',
             'gui_template' => 'Generate Switch Lists {jobs} ({format})',
-            'description' => 'Replay the workflow recipe and write switch list HTML for selected job(s) or all. (Coming soon.)',
+            'description' => 'Write switch list HTML for the current simulator state for selected job(s) or all.',
             'runnable' => true,
             'dispatch' => 'generate_switchlists',
             'params' => [
@@ -1678,10 +1687,9 @@ function operational_steps_catalog_definitions()
             'category' => 'reports',
             'adder' => true,
             'adder_group' => 'reports',
-            'disabled' => true,
             'label' => 'Generate Waybill List',
             'gui_template' => 'Generate Waybill List',
-            'description' => 'Render printable waybill HTML for open waybills in the current session. (Coming soon.)',
+            'description' => 'Render printable waybill HTML for open waybills in the current session.',
             'runnable' => true,
             'dispatch' => 'generate_waybills',
             'params' => [],
@@ -1727,11 +1735,11 @@ function operational_steps_catalog_definitions()
         [
             'id' => 'build_switchlists_sts',
             'category' => 'operations',
-            'adder' => true,
+            'adder' => false,
             'adder_group' => 'during',
-            'label' => 'Build Switch Lists',
+            'label' => 'Build Switch Lists (legacy)',
             'gui_template' => 'Build Switch Lists {station} {job}',
-            'description' => 'Assign ordered cars at a station to a job/train (by-station switch list build).',
+            'description' => 'Legacy — use Assign Cars instead. Assign ordered cars at a station to a job/train (by-station switch list build).',
             'runnable' => true,
             'dispatch' => 'build_switchlists_sts',
             'gui_path' => '/sts/build_switchlists.php',
@@ -1973,9 +1981,6 @@ function operational_steps_catalog_adder_definitions()
                 continue;
             }
             $def['adder_group'] = $def['adder_group'] ?? $group;
-            if ($group === 'reports' && !isset($def['disabled'])) {
-                $def['disabled'] = true;
-            }
             $ordered[] = $def;
         }
     }
@@ -2120,7 +2125,7 @@ function operational_steps_workflow_sections(array $recipe)
                 $stop = $j;
                 break;
             }
-            if ($fid === 'goto') {
+            if ($fid === 'goto' || operational_steps_if_then_has_goto($steps[$j])) {
                 $stop = $j + 1;
                 break;
             }
@@ -2137,16 +2142,26 @@ function operational_steps_workflow_sections(array $recipe)
 
 function operational_steps_find_workflow_section(array $recipe, $id = '', $start = 0, $label = '')
 {
-    foreach (operational_steps_workflow_sections($recipe) as $sec) {
+    $sections = operational_steps_workflow_sections($recipe);
+    foreach ($sections as $sec) {
         if ($id !== '' && $sec['id'] === $id) {
             return $sec;
         }
         if ($start > 0 && (int) $sec['start'] === (int) $start) {
             return $sec;
         }
-        if ($label !== '') {
-            $want = trim($label);
-            if ($sec['label'] === $want || stripos($sec['label'], $want) !== false || stripos($want, $sec['label']) !== false) {
+    }
+    if ($label !== '') {
+        $want = trim($label);
+        // Prefer an exact label match before falling back to a substring match
+        // so similar names (e.g. "Setup" vs "Setup Session") don't collide.
+        foreach ($sections as $sec) {
+            if ($sec['label'] === $want) {
+                return $sec;
+            }
+        }
+        foreach ($sections as $sec) {
+            if (stripos($sec['label'], $want) !== false || stripos($want, $sec['label']) !== false) {
                 return $sec;
             }
         }
@@ -2154,18 +2169,65 @@ function operational_steps_find_workflow_section(array $recipe, $id = '', $start
     return null;
 }
 
+function operational_steps_if_then_has_goto(array $step)
+{
+    if (($step['function'] ?? '') !== 'if_then') {
+        return false;
+    }
+    $p = is_array($step['params'] ?? null) ? $step['params'] : [];
+    return trim((string) ($p['section'] ?? '')) !== ''
+        || trim((string) ($p['section_label'] ?? '')) !== ''
+        || (int) ($p['step'] ?? 0) > 0;
+}
+
+function operational_steps_merge_if_then_goto_steps(array $recipe)
+{
+    $steps = $recipe['steps'] ?? [];
+    if (!$steps) {
+        return $recipe;
+    }
+    $merged = [];
+    $count = count($steps);
+    for ($i = 0; $i < $count; $i++) {
+        $step = $steps[$i];
+        if (!is_array($step)) {
+            continue;
+        }
+        if (($step['function'] ?? '') === 'if_then'
+            && $i + 1 < $count
+            && is_array($steps[$i + 1])
+            && ($steps[$i + 1]['function'] ?? '') === 'goto') {
+            $goto = $steps[$i + 1];
+            $params = is_array($step['params'] ?? null) ? $step['params'] : [];
+            $gotoParams = is_array($goto['params'] ?? null) ? $goto['params'] : [];
+            foreach (['section', 'section_label', 'step'] as $key) {
+                if (($gotoParams[$key] ?? '') !== '' && ($params[$key] ?? '') === '') {
+                    $params[$key] = $gotoParams[$key];
+                }
+            }
+            $step['params'] = $params;
+            $i++;
+        }
+        $merged[] = $step;
+    }
+    $recipe['steps'] = $merged;
+    return $recipe;
+}
+
 function operational_steps_goto_resolve_step(array $recipe, array $params)
 {
-    $section = trim((string) ($params['section'] ?? ''));
-    if ($section !== '') {
-        $sec = operational_steps_find_workflow_section($recipe, $section);
+    // Section label is the stable identifier. The section id ("step-N") encodes
+    // a position and goes stale when steps shift, so resolve by label first.
+    $section_label = trim((string) ($params['section_label'] ?? ''));
+    if ($section_label !== '') {
+        $sec = operational_steps_find_workflow_section($recipe, '', 0, $section_label);
         if ($sec) {
             return (int) $sec['start'];
         }
     }
-    $section_label = trim((string) ($params['section_label'] ?? ''));
-    if ($section_label !== '') {
-        $sec = operational_steps_find_workflow_section($recipe, '', 0, $section_label);
+    $section = trim((string) ($params['section'] ?? ''));
+    if ($section !== '') {
+        $sec = operational_steps_find_workflow_section($recipe, $section);
         if ($sec) {
             return (int) $sec['start'];
         }
@@ -2186,16 +2248,29 @@ function operational_steps_normalize_goto_sections(array $recipe)
 {
     $steps = $recipe['steps'] ?? [];
     foreach ($steps as $i => $step) {
-        if (!is_array($step) || ($step['function'] ?? '') !== 'goto') {
+        if (!is_array($step)) {
+            continue;
+        }
+        $fid = $step['function'] ?? '';
+        if ($fid !== 'goto' && $fid !== 'if_then') {
             continue;
         }
         $params = is_array($step['params'] ?? null) ? $step['params'] : [];
+        if ($fid === 'if_then' && !operational_steps_if_then_has_goto($step)) {
+            $steps[$i]['params'] = $params;
+            continue;
+        }
+        // Resolve by label first (stable), then the position-encoded id, then
+        // the raw step number, so the stored id/step follow the named section
+        // when step numbers change.
         $sec = null;
-        if (!empty($params['section'])) {
-            $sec = operational_steps_find_workflow_section($recipe, (string) $params['section']);
-        } elseif (!empty($params['section_label'])) {
+        if (!empty($params['section_label'])) {
             $sec = operational_steps_find_workflow_section($recipe, '', 0, (string) $params['section_label']);
-        } elseif (!empty($params['step'])) {
+        }
+        if (!$sec && !empty($params['section'])) {
+            $sec = operational_steps_find_workflow_section($recipe, (string) $params['section']);
+        }
+        if (!$sec && !empty($params['step'])) {
             $sec = operational_steps_find_workflow_section($recipe, '', (int) $params['step']);
         }
         if ($sec) {
@@ -2221,11 +2296,15 @@ function operational_steps_compile_gui(array $def, array $params)
         return 'Goto';
     }
     if (($def['id'] ?? '') === 'if_then') {
-        $var = (string) ($params['variable'] ?? 'session_nbr');
-        if ($var === 'session_nbr') {
-            $var = 'session #';
+        $var_key = (string) ($params['variable'] ?? 'session_nbr');
+        $var = session_condition_variable_label($var_key);
+        $line = trim('If ' . $var . ' ' . ($params['operator'] ?? '') . ' ' . ($params['value'] ?? ''));
+        if (!empty($params['section_label'])) {
+            $line .= ' then Goto ' . trim((string) $params['section_label']);
+        } elseif (!empty($params['step'])) {
+            $line .= ' then Goto step ' . trim((string) $params['step']);
         }
-        return trim('If ' . $var . ' ' . ($params['operator'] ?? '') . ' ' . ($params['value'] ?? ''));
+        return $line;
     }
     if (($def['id'] ?? '') === 'text_instruction') {
         return trim((string) ($params['instruction'] ?? ''));
@@ -2279,7 +2358,7 @@ function operational_steps_compile_gui(array $def, array $params)
             $jobs = 'all';
         }
         $merged['jobs'] = $jobs;
-        $merged['format'] = operational_steps_normalize_switchlist_format($params['format'] ?? 'phased');
+        $merged['format'] = operational_steps_normalize_switchlist_format($params['format'] ?? 'all');
     }
     if (($def['id'] ?? '') === 'auto_assign_locals') {
         $merged['jobs'] = operational_steps_normalize_auto_assign_jobs($params);
@@ -2847,7 +2926,7 @@ function operational_steps_guess_params($instruction)
     if (preg_match('/^Generate Switch Lists(?:\s+(.+))?$/i', $s, $m)) {
         $rest = trim($m[1] ?? '');
         if ($rest !== '') {
-            if (preg_match('/\((phased-mobile|phased|halfsheet|mobile)\)\s*$/i', $rest, $fm)) {
+            if (preg_match('/\((all|mobile|half|halfsheet|full|dmp|wo|x2010|phased-mobile|phased)\)\s*$/i', $rest, $fm)) {
                 $params['format'] = strtolower(str_replace('_', '-', $fm[1]));
                 $rest = trim(preg_replace('/\s*\([^)]+\)\s*$/', '', $rest));
             }
@@ -2956,9 +3035,10 @@ function operational_steps_guess_params($instruction)
     } elseif (preg_match('/^\[(.+)\]$/', $s) || (preg_match('/^\[/', $s) && stripos($s, 'Assign Cars') === false && stripos($s, 'Restore Database') === false)) {
         $params['note'] = $s;
     }
-    if (stripos($s, 'locals') !== false && stripos($s, 'Auto-Assign') !== false) {
+    if (stripos($s, 'locals') !== false
+        && (stripos($s, 'Auto-Assign') !== false || preg_match('/\bAssign Cars\b/i', $s))) {
         $params['jobs'] = '';
-    } elseif (preg_match('/^Auto-Assign Cars(?:\s+(.+))?$/i', $s, $m)) {
+    } elseif (preg_match('/^(?:Auto-Assign|Assign) Cars(?:\s+(.+))?$/i', $s, $m)) {
         $rest = trim($m[1] ?? '');
         if ($rest === '' || strtolower($rest) === 'locals') {
             $params['jobs'] = '';
@@ -3184,7 +3264,7 @@ function operational_steps_normalize_step(array $step)
         }
     }
     if ($fid === 'generate_switchlists') {
-        $params['format'] = operational_steps_normalize_switchlist_format($params['format'] ?? 'phased');
+        $params['format'] = operational_steps_normalize_switchlist_format($params['format'] ?? 'all');
         $jobs = trim((string) ($params['jobs'] ?? 'all'));
         $params['jobs'] = $jobs !== '' ? $jobs : 'all';
     }
@@ -3270,6 +3350,7 @@ function operational_steps_normalize_recipe(array $recipe)
         $steps[] = operational_steps_normalize_step($step);
     }
     $recipe['steps'] = $steps;
+    $recipe = operational_steps_merge_if_then_goto_steps($recipe);
     if (!isset($recipe['version'])) {
         $recipe['version'] = 1;
     }
@@ -3763,8 +3844,13 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
             $filters = operational_steps_normalize_train_car_filters($params);
             if ($job === '') {
                 $staging = warm_start_staging_job_names($dbc, $config);
-                $result['picked_up'] = warm_start_pickup_cars($dbc, 1.0, $staging, true);
+                $picked_up_by_job = [];
+                $result['picked_up'] = warm_start_pickup_cars($dbc, 1.0, $staging, true, [], $picked_up_by_job);
+                if ($picked_up_by_job !== []) {
+                    $result['picked_up_by_job'] = $picked_up_by_job;
+                }
             } else {
+                $result['job'] = $job;
                 $station = operational_steps_location_station_id($dbc, $params['location'] ?? '');
                 if ($station > 0) {
                     $result['picked_up'] = warm_start_pickup_job_at_station($dbc, $job, $station, $filters);
@@ -3782,11 +3868,17 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
             $filters = operational_steps_normalize_train_car_filters($params);
             if ($job === '' && $loc === '') {
                 $staging = warm_start_staging_job_names($dbc, $config);
-                $result['set_out'] = warm_start_setout_cars($dbc, 1.0, $staging, true);
+                $set_out_by_job = [];
+                $result['set_out'] = warm_start_setout_cars($dbc, 1.0, $staging, true, [], $set_out_by_job);
+                if ($set_out_by_job !== []) {
+                    $result['set_out_by_job'] = $set_out_by_job;
+                }
             } elseif ($job !== '' && operational_steps_setout_auto_assign_destinations($loc)) {
+                $result['job'] = $job;
                 $result['set_out'] = warm_start_setout_all_job_train($dbc, $job, $filters);
                 $result['assign_destinations'] = true;
             } elseif ($loc !== '') {
+                $result['job'] = $job;
                 $loc_id = operational_steps_resolve_location_id($dbc, $loc);
                 if ($loc_id > 0) {
                     $result['set_out'] = warm_start_setout_job_at_location($dbc, $job, $loc_id, $filters);
@@ -3839,7 +3931,7 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
         case 'generate_switchlists':
             require_once __DIR__ . '/session_helpers.php';
             require_once __DIR__ . '/master_switchlist_helpers.php';
-            $format = operational_steps_normalize_switchlist_format($params['format'] ?? 'phased');
+            $format = operational_steps_normalize_switchlist_format($params['format'] ?? 'all');
             $jobs = session_resolve_jobs_param($params['jobs'] ?? 'all', $dbc);
             $session = master_sw_get_setting($dbc, 'session_nbr');
             $root = $config['session_root'] ?? session_web_root();
@@ -3859,6 +3951,7 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
             session_register_phase($manifest, $phase_num, [
                 'jobs' => $jobs,
                 'format' => $format,
+                'styles' => master_sw_styles_for_format($format),
                 'output' => $phase_dir,
             ]);
             session_save_manifest($session, $manifest, $root);
@@ -3879,7 +3972,7 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
         case 'render_switchlists':
             require_once __DIR__ . '/session_helpers.php';
             require_once __DIR__ . '/master_switchlist_helpers.php';
-            $format = operational_steps_normalize_switchlist_format($params['format'] ?? 'phased');
+            $format = operational_steps_normalize_switchlist_format($params['format'] ?? 'all');
             $jobs = session_resolve_jobs_param($params['jobs'] ?? 'all', $dbc);
             $session = trim($params['session'] ?? '') !== ''
                 ? trim($params['session'])
@@ -4020,11 +4113,15 @@ function operational_steps_format_dispatch_log_line(array $entry)
     }
 
     if (array_key_exists('picked_up', $entry)) {
-        $messages[] = sprintf('%d car(s) picked up.', (int) $entry['picked_up']);
+        $job = trim((string) ($entry['job'] ?? ''));
+        $prefix = $job !== '' ? $job . ': ' : '';
+        $messages[] = sprintf('%s%d car(s) picked up.', $prefix, (int) $entry['picked_up']);
     }
 
     if (array_key_exists('set_out', $entry)) {
-        $messages[] = sprintf('%d car(s) set out.', (int) $entry['set_out']);
+        $job = trim((string) ($entry['job'] ?? ''));
+        $prefix = $job !== '' ? $job . ': ' : '';
+        $messages[] = sprintf('%s%d car(s) set out.', $prefix, (int) $entry['set_out']);
     }
 
     if (array_key_exists('load_unload', $entry) && !isset($entry['stats'])) {
@@ -4194,7 +4291,7 @@ function operational_steps_discover_switchlist_sessions($session_root = null)
     return $sessions;
 }
 
-function operational_steps_run_switchlists_web($dbc, $format = 'phased', array $jobs = [], array $options = [])
+function operational_steps_run_switchlists_web($dbc, $format = 'all', array $jobs = [], array $options = [])
 {
     require_once __DIR__ . '/session_helpers.php';
     require_once __DIR__ . '/master_switchlist_helpers.php';
@@ -4214,7 +4311,12 @@ function operational_steps_run_switchlists_web($dbc, $format = 'phased', array $
         $gen_opts['render_only'] = true;
     }
     $written = master_sw_generate_for_jobs($dbc, $jobs, $out, $config, $gen_opts);
-    session_register_phase($manifest, $phase_num, ['jobs' => $jobs, 'format' => $format, 'output' => $out]);
+    session_register_phase($manifest, $phase_num, [
+        'jobs' => $jobs,
+        'format' => $format,
+        'styles' => master_sw_styles_for_format($format),
+        'output' => $out,
+    ]);
     session_save_manifest($session, $manifest, $root);
     return [
         'session' => $session,
@@ -4228,7 +4330,7 @@ function operational_steps_run_generator_web($dbc, array $options = [])
 {
     require_once __DIR__ . '/session_helpers.php';
     $recipe = $options['recipe'] ?? ['steps' => []];
-    $format = $options['format'] ?? 'phased';
+    $format = $options['format'] ?? 'all';
     $jobs = $options['jobs'] ?? [];
     if ($jobs === []) {
         $jobs = session_resolve_jobs_param('all', $dbc);
@@ -4353,7 +4455,7 @@ function operational_steps_run_generator_web($dbc, array $options = [])
                     $cycle_result['play'] = session_run_recipe($dbc, $recipe, [
                         'from_step' => $from,
                         'to_step' => $to,
-                        'format' => $config['format'] ?? 'phased',
+                        'format' => $config['format'] ?? 'all',
                         'config' => $config,
                     ]);
                 } else {

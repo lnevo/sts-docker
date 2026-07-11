@@ -212,7 +212,7 @@ components:
           -
             id: goto
             category: workflow
-            adder: true
+            adder: false
             adder_group: workflow
             label: Goto section
             gui_template: "Goto {section_label}"
@@ -241,9 +241,9 @@ components:
             category: workflow
             adder: true
             adder_group: workflow
-            label: If … then
-            gui_template: "If {variable} {operator} {value}"
-            description: "When false, skips the next step. When true, runs it (e.g. Goto section). Variables: session #, unfilled count, STG backlog, cars on job, cars at location."
+            label: If … then goto …
+            gui_template: "If {variable} {operator} {value} then goto {section_label}"
+            description: "When the condition is true, skip forward to a later section. When false, continue to the next step. Variables match the Operations dashboard counts (session #, open/unfilled orders, unassigned, pickup/set-out pending, organize, scale, load/unload)."
             runnable: true
             dispatch: if_then
             params:
@@ -251,14 +251,7 @@ components:
                 key: variable
                 label: Variable
                 type: select
-                options:
-                  - session_nbr
-                  - unfilled_count
-                  - stg_backlog_eligible
-                  - stg_backlog_on_jobs
-                  - cars_on_job
-                  - cars_at_location
-                  - awaiting_assignment
+                options_from: condition_variables
                 default: session_nbr
               -
                 key: operator
@@ -278,6 +271,22 @@ components:
                 type: text
                 default: 1
                 required: true
+              -
+                key: section
+                label: Section
+                type: workflow_section
+                default: ""
+                required: true
+              -
+                key: section_label
+                label: Section label
+                type: text
+                default: ""
+              -
+                key: step
+                label: "Step #"
+                type: number
+                default: ""
           -
             id: marker
             category: workflow
@@ -300,7 +309,7 @@ components:
             adder_group: before
             label: Generate Car Orders
             gui_template: "Generate Orders {shipment}"
-            description: "Auto-generate car orders for due shipments, or one shipment when Shipment is set."
+            description: Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or set Shipment for a single manual order. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore.
             runnable: true
             dispatch: generate_orders
             params:
@@ -323,10 +332,19 @@ components:
                   -
                     value: 1
                     label: Yes
-                default: ""
+                default: 1
               -
                 key: max_unfilled
                 label: Max unfilled orders
+                type: number
+                default: ""
+                required: false
+                min: 0
+                step: 1
+                visible_label: true
+              -
+                key: seed
+                label: Random seed
                 type: number
                 default: ""
                 required: false
@@ -352,7 +370,7 @@ components:
             adder_group: before
             label: Fill Car Orders
             gui_template: Fill Orders
-            description: Orders → fill unfilled car orders.
+            description: Auto-assign eligible cars to open orders (same as Fill Car Orders → Auto Assign). Uses car source checkboxes and optional order/car filters. Set Percent to limit how many orders are filled.
             runnable: true
             dispatch: fill_orders
             params:
@@ -534,21 +552,21 @@ components:
             category: operations
             adder: true
             adder_group: during
-            label: Auto-Assign Cars
-            gui_template: "Auto-Assign Cars {jobs} {station}"
-            description: Auto-assign eligible cars to job(s)/train(s). Optional station filter limits picks to one yard.
+            label: Assign Cars
+            gui_template: "Assign Cars {jobs} {station}"
+            description: Assign eligible cars to selected job(s)/train(s). Hold Ctrl/Cmd to select multiple. Optional station filter limits picks to one yard.
             runnable: true
             dispatch: auto_assign_locals
             gui_path: /sts/auto_assign.php
             params:
               -
                 key: jobs
-                label: Jobs
+                label: ""
                 type: jobs_multiselect
                 options_from: jobs
                 required: false
                 default: ""
-                visible_label: true
+                visible_label: false
               -
                 key: station
                 label: Station filter
@@ -556,7 +574,8 @@ components:
                 options_from: stations
                 allow_custom: true
                 required: false
-                default: all
+                default: ""
+                suppress_all_station_option: true
           -
             id: pick_up_cars
             category: operations
@@ -564,7 +583,7 @@ components:
             adder_group: during
             label: Pick Up Cars
             gui_template: "Pick Up Cars {job} {location_suffix}"
-            description: Pick up assigned cars onto a job train. Leave job blank for all locals (staging excluded).
+            description: Pick up assigned cars onto a job train. Optional car filters match the Pick Up Cars page. Leave job blank for all locals (staging excluded).
             runnable: true
             dispatch: pick_up_cars
             params:
@@ -584,6 +603,67 @@ components:
                 allow_custom: true
                 required: false
                 default: ""
+              -
+                key: car_filters
+                label: Car filters
+                type: filter_group
+                layout: train_car
+                fields:
+                  -
+                    key: pickup_location
+                    label: Pickup
+                    type: station_location
+                    options_from: station_locations
+                    default: ""
+                  -
+                    key: reporting_marks
+                    label: Marks
+                    type: text
+                    default: ""
+                  -
+                    key: car_code
+                    label: Car code
+                    type: car_code
+                    options_from: car_codes
+                    allow_custom: true
+                    default: ""
+                  -
+                    key: status
+                    label: Status
+                    type: select
+                    options:
+                      - ""
+                      - Ordered
+                      - Loaded
+                      - Loading
+                      - Unloading
+                      - Empty
+                    default: ""
+                  -
+                    key: consignment
+                    label: Consignment
+                    type: commodity
+                    options_from: commodities
+                    allow_custom: true
+                    default: ""
+                  -
+                    key: final_destination
+                    label: Final dest.
+                    type: station_location
+                    options_from: station_locations
+                    default: ""
+                  -
+                    key: loading_location
+                    label: Loading
+                    type: station_location
+                    options_from: station_locations
+                    default: ""
+                  -
+                    key: unloading_location
+                    label: Unloading
+                    type: station_location
+                    options_from: station_locations
+                    default: ""
           -
             id: set_out_cars
             category: operations
@@ -591,7 +671,7 @@ components:
             adder_group: during
             label: Set Out Cars
             gui_template: "Set Out Cars {job} {location}"
-            description: Set out cars from a job train at a location or destination. Leave job and location blank for all locals.
+            description: Set out cars from a job train. Choose Final Destination to assign each car to its loading or unloading location (same as Assign on set_out.php). Pick a yard to set out all matching train cars there. Optional car filters match the Set Out Cars page. Leave job and location blank for all locals.
             runnable: true
             dispatch: set_out_cars
             params:
@@ -609,8 +689,70 @@ components:
                 type: setout_location
                 options_from: setout_locations
                 allow_custom: true
+                suppress_any_option: true
                 required: false
                 default: ""
+              -
+                key: car_filters
+                label: Car filters
+                type: filter_group
+                layout: train_car
+                fields:
+                  -
+                    key: pickup_location
+                    label: Pickup
+                    type: station_location
+                    options_from: station_locations
+                    default: ""
+                  -
+                    key: reporting_marks
+                    label: Marks
+                    type: text
+                    default: ""
+                  -
+                    key: car_code
+                    label: Car code
+                    type: car_code
+                    options_from: car_codes
+                    allow_custom: true
+                    default: ""
+                  -
+                    key: status
+                    label: Status
+                    type: select
+                    options:
+                      - ""
+                      - Ordered
+                      - Loaded
+                      - Loading
+                      - Unloading
+                      - Empty
+                    default: ""
+                  -
+                    key: consignment
+                    label: Consignment
+                    type: commodity
+                    options_from: commodities
+                    allow_custom: true
+                    default: ""
+                  -
+                    key: final_destination
+                    label: Final dest.
+                    type: station_location
+                    options_from: station_locations
+                    default: ""
+                  -
+                    key: loading_location
+                    label: Loading
+                    type: station_location
+                    options_from: station_locations
+                    default: ""
+                  -
+                    key: unloading_location
+                    label: Unloading
+                    type: station_location
+                    options_from: station_locations
+                    default: ""
           -
             id: load_unload
             category: operations
@@ -708,10 +850,9 @@ components:
             category: reports
             adder: true
             adder_group: reports
-            disabled: true
             label: Generate Switch Lists
             gui_template: "Generate Switch Lists {jobs} ({format})"
-            description: Replay the workflow recipe and write switch list HTML for selected job(s) or all. (Coming soon.)
+            description: Replay the workflow recipe and write switch list HTML for selected job(s) or all.
             runnable: true
             dispatch: generate_switchlists
             params:
@@ -723,31 +864,39 @@ components:
                 required: false
               -
                 key: format
-                label: Format
+                label: Style
                 type: select
                 options:
                   -
-                    value: phased
-                    label: Phased (mobile + half sheet)
-                  -
-                    value: phased-mobile
-                    label: Phased (mobile only)
-                  -
-                    value: halfsheet
-                    label: Master half sheet
+                    value: all
+                    label: All styles
                   -
                     value: mobile
-                    label: Master mobile
-                default: phased
+                    label: Mobile
+                  -
+                    value: half
+                    label: Half Sheet
+                  -
+                    value: full
+                    label: Full Sheet
+                  -
+                    value: dmp
+                    label: Dot Matrix
+                  -
+                    value: wo
+                    label: Work Order
+                  -
+                    value: x2010
+                    label: X2010
+                default: all
           -
             id: generate_waybills
             category: reports
             adder: true
             adder_group: reports
-            disabled: true
             label: Generate Waybill List
             gui_template: Generate Waybill List
-            description: Render printable waybill HTML for open waybills in the current session. (Coming soon.)
+            description: Render printable waybill HTML for open waybills in the current session.
             runnable: true
             dispatch: generate_waybills
             params: []
@@ -763,22 +912,31 @@ components:
             params:
               -
                 key: format
-                label: Format
+                label: Style
                 type: select
                 options:
                   -
-                    value: phased
-                    label: Phased (mobile + half sheet)
-                  -
-                    value: phased-mobile
-                    label: Phased (mobile only)
-                  -
-                    value: halfsheet
-                    label: Master half sheet
+                    value: all
+                    label: All styles
                   -
                     value: mobile
-                    label: Master mobile
-                default: phased
+                    label: Mobile
+                  -
+                    value: half
+                    label: Half Sheet
+                  -
+                    value: full
+                    label: Full Sheet
+                  -
+                    value: dmp
+                    label: Dot Matrix
+                  -
+                    value: wo
+                    label: Work Order
+                  -
+                    value: x2010
+                    label: X2010
+                default: all
               -
                 key: jobs
                 label: Jobs
@@ -819,11 +977,11 @@ components:
           -
             id: build_switchlists_sts
             category: operations
-            adder: true
+            adder: false
             adder_group: during
-            label: Build Switch Lists
+            label: Build Switch Lists (legacy)
             gui_template: "Build Switch Lists {station} {job}"
-            description: Assign ordered cars at a station to a job/train (by-station switch list build).
+            description: Legacy — use Assign Cars instead. Assign ordered cars at a station to a job/train (by-station switch list build).
             runnable: true
             dispatch: build_switchlists_sts
             gui_path: /sts/build_switchlists.php
@@ -1021,7 +1179,7 @@ components:
             adder_group: before
             label: Generate Car Orders
             gui_template: "Generate Orders {shipment}"
-            description: "Auto-generate car orders for due shipments, or one shipment when Shipment is set."
+            description: Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or set Shipment for a single manual order. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore.
             runnable: true
             dispatch: generate_orders
             params:
@@ -1044,10 +1202,19 @@ components:
                   -
                     value: 1
                     label: Yes
-                default: ""
+                default: 1
               -
                 key: max_unfilled
                 label: Max unfilled orders
+                type: number
+                default: ""
+                required: false
+                min: 0
+                step: 1
+                visible_label: true
+              -
+                key: seed
+                label: Random seed
                 type: number
                 default: ""
                 required: false
@@ -1061,7 +1228,7 @@ components:
             adder_group: before
             label: Fill Car Orders
             gui_template: Fill Orders
-            description: Orders → fill unfilled car orders.
+            description: Auto-assign eligible cars to open orders (same as Fill Car Orders → Auto Assign). Uses car source checkboxes and optional order/car filters. Set Percent to limit how many orders are filled.
             runnable: true
             dispatch: fill_orders
             params:
@@ -1239,53 +1406,25 @@ components:
                       - 1
                     default: ""
           -
-            id: build_switchlists_sts
-            category: operations
-            adder: true
-            adder_group: during
-            label: Build Switch Lists
-            gui_template: "Build Switch Lists {station} {job}"
-            description: Assign ordered cars at a station to a job/train (by-station switch list build).
-            runnable: true
-            dispatch: build_switchlists_sts
-            gui_path: /sts/build_switchlists.php
-            params:
-              -
-                key: station
-                label: Station
-                type: station
-                options_from: stations
-                allow_custom: true
-                required: false
-                default: all
-              -
-                key: job
-                label: Job / train
-                type: job
-                options_from: jobs
-                allow_custom: true
-                required: false
-                default: ""
-          -
             id: auto_assign_locals
             category: operations
             adder: true
             adder_group: during
-            label: Auto-Assign Cars
-            gui_template: "Auto-Assign Cars {jobs} {station}"
-            description: Auto-assign eligible cars to job(s)/train(s). Optional station filter limits picks to one yard.
+            label: Assign Cars
+            gui_template: "Assign Cars {jobs} {station}"
+            description: Assign eligible cars to selected job(s)/train(s). Hold Ctrl/Cmd to select multiple. Optional station filter limits picks to one yard.
             runnable: true
             dispatch: auto_assign_locals
             gui_path: /sts/auto_assign.php
             params:
               -
                 key: jobs
-                label: Jobs
+                label: ""
                 type: jobs_multiselect
                 options_from: jobs
                 required: false
                 default: ""
-                visible_label: true
+                visible_label: false
               -
                 key: station
                 label: Station filter
@@ -1293,7 +1432,8 @@ components:
                 options_from: stations
                 allow_custom: true
                 required: false
-                default: all
+                default: ""
+                suppress_all_station_option: true
           -
             id: pick_up_cars
             category: operations
@@ -1301,7 +1441,7 @@ components:
             adder_group: during
             label: Pick Up Cars
             gui_template: "Pick Up Cars {job} {location_suffix}"
-            description: Pick up assigned cars onto a job train. Leave job blank for all locals (staging excluded).
+            description: Pick up assigned cars onto a job train. Optional car filters match the Pick Up Cars page. Leave job blank for all locals (staging excluded).
             runnable: true
             dispatch: pick_up_cars
             params:
@@ -1321,6 +1461,67 @@ components:
                 allow_custom: true
                 required: false
                 default: ""
+              -
+                key: car_filters
+                label: Car filters
+                type: filter_group
+                layout: train_car
+                fields:
+                  -
+                    key: pickup_location
+                    label: Pickup
+                    type: station_location
+                    options_from: station_locations
+                    default: ""
+                  -
+                    key: reporting_marks
+                    label: Marks
+                    type: text
+                    default: ""
+                  -
+                    key: car_code
+                    label: Car code
+                    type: car_code
+                    options_from: car_codes
+                    allow_custom: true
+                    default: ""
+                  -
+                    key: status
+                    label: Status
+                    type: select
+                    options:
+                      - ""
+                      - Ordered
+                      - Loaded
+                      - Loading
+                      - Unloading
+                      - Empty
+                    default: ""
+                  -
+                    key: consignment
+                    label: Consignment
+                    type: commodity
+                    options_from: commodities
+                    allow_custom: true
+                    default: ""
+                  -
+                    key: final_destination
+                    label: Final dest.
+                    type: station_location
+                    options_from: station_locations
+                    default: ""
+                  -
+                    key: loading_location
+                    label: Loading
+                    type: station_location
+                    options_from: station_locations
+                    default: ""
+                  -
+                    key: unloading_location
+                    label: Unloading
+                    type: station_location
+                    options_from: station_locations
+                    default: ""
           -
             id: set_out_cars
             category: operations
@@ -1328,7 +1529,7 @@ components:
             adder_group: during
             label: Set Out Cars
             gui_template: "Set Out Cars {job} {location}"
-            description: Set out cars from a job train at a location or destination. Leave job and location blank for all locals.
+            description: Set out cars from a job train. Choose Final Destination to assign each car to its loading or unloading location (same as Assign on set_out.php). Pick a yard to set out all matching train cars there. Optional car filters match the Set Out Cars page. Leave job and location blank for all locals.
             runnable: true
             dispatch: set_out_cars
             params:
@@ -1346,8 +1547,70 @@ components:
                 type: setout_location
                 options_from: setout_locations
                 allow_custom: true
+                suppress_any_option: true
                 required: false
                 default: ""
+              -
+                key: car_filters
+                label: Car filters
+                type: filter_group
+                layout: train_car
+                fields:
+                  -
+                    key: pickup_location
+                    label: Pickup
+                    type: station_location
+                    options_from: station_locations
+                    default: ""
+                  -
+                    key: reporting_marks
+                    label: Marks
+                    type: text
+                    default: ""
+                  -
+                    key: car_code
+                    label: Car code
+                    type: car_code
+                    options_from: car_codes
+                    allow_custom: true
+                    default: ""
+                  -
+                    key: status
+                    label: Status
+                    type: select
+                    options:
+                      - ""
+                      - Ordered
+                      - Loaded
+                      - Loading
+                      - Unloading
+                      - Empty
+                    default: ""
+                  -
+                    key: consignment
+                    label: Consignment
+                    type: commodity
+                    options_from: commodities
+                    allow_custom: true
+                    default: ""
+                  -
+                    key: final_destination
+                    label: Final dest.
+                    type: station_location
+                    options_from: station_locations
+                    default: ""
+                  -
+                    key: loading_location
+                    label: Loading
+                    type: station_location
+                    options_from: station_locations
+                    default: ""
+                  -
+                    key: unloading_location
+                    label: Unloading
+                    type: station_location
+                    options_from: station_locations
+                    default: ""
           -
             id: track_scale
             category: operations
@@ -1445,10 +1708,9 @@ components:
             category: reports
             adder: true
             adder_group: reports
-            disabled: true
             label: Generate Switch Lists
             gui_template: "Generate Switch Lists {jobs} ({format})"
-            description: Replay the workflow recipe and write switch list HTML for selected job(s) or all. (Coming soon.)
+            description: Replay the workflow recipe and write switch list HTML for selected job(s) or all.
             runnable: true
             dispatch: generate_switchlists
             params:
@@ -1460,31 +1722,39 @@ components:
                 required: false
               -
                 key: format
-                label: Format
+                label: Style
                 type: select
                 options:
                   -
-                    value: phased
-                    label: Phased (mobile + half sheet)
-                  -
-                    value: phased-mobile
-                    label: Phased (mobile only)
-                  -
-                    value: halfsheet
-                    label: Master half sheet
+                    value: all
+                    label: All styles
                   -
                     value: mobile
-                    label: Master mobile
-                default: phased
+                    label: Mobile
+                  -
+                    value: half
+                    label: Half Sheet
+                  -
+                    value: full
+                    label: Full Sheet
+                  -
+                    value: dmp
+                    label: Dot Matrix
+                  -
+                    value: wo
+                    label: Work Order
+                  -
+                    value: x2010
+                    label: X2010
+                default: all
           -
             id: generate_waybills
             category: reports
             adder: true
             adder_group: reports
-            disabled: true
             label: Generate Waybill List
             gui_template: Generate Waybill List
-            description: Render printable waybill HTML for open waybills in the current session. (Coming soon.)
+            description: Render printable waybill HTML for open waybills in the current session.
             runnable: true
             dispatch: generate_waybills
             params: []
@@ -1679,9 +1949,9 @@ components:
             category: workflow
             adder: true
             adder_group: workflow
-            label: If … then
-            gui_template: "If {variable} {operator} {value}"
-            description: "When false, skips the next step. When true, runs it (e.g. Goto section). Variables: session #, unfilled count, STG backlog, cars on job, cars at location."
+            label: If … then goto …
+            gui_template: "If {variable} {operator} {value} then goto {section_label}"
+            description: "When the condition is true, skip forward to a later section. When false, continue to the next step. Variables match the Operations dashboard counts (session #, open/unfilled orders, unassigned, pickup/set-out pending, organize, scale, load/unload)."
             runnable: true
             dispatch: if_then
             params:
@@ -1689,14 +1959,7 @@ components:
                 key: variable
                 label: Variable
                 type: select
-                options:
-                  - session_nbr
-                  - unfilled_count
-                  - stg_backlog_eligible
-                  - stg_backlog_on_jobs
-                  - cars_on_job
-                  - cars_at_location
-                  - awaiting_assignment
+                options_from: condition_variables
                 default: session_nbr
               -
                 key: operator
@@ -1716,17 +1979,6 @@ components:
                 type: text
                 default: 1
                 required: true
-          -
-            id: goto
-            category: workflow
-            adder: true
-            adder_group: workflow
-            label: Goto section
-            gui_template: "Goto {section_label}"
-            description: Skip forward to a later section (steps between here and the section are not run). Use simulator Repeat to run a section multiple times — backward gotos are not allowed.
-            runnable: true
-            dispatch: goto
-            params:
               -
                 key: section
                 label: Section
@@ -2188,7 +2440,7 @@ components:
               enum: [if_then]
             label:
               type: string
-              example: If … then
+              example: If … then goto …
             category:
               type: string
               example: workflow
@@ -2200,10 +2452,10 @@ components:
               example: if_then
             gui_template:
               type: string
-              example: "If {variable} {operator} {value}"
+              example: "If {variable} {operator} {value} then goto {section_label}"
             description:
               type: string
-              example: "When false, skips the next step. When true, runs it (e.g. Goto section). Variables: session #, unfilled count, STG backlog, cars on job, cars at location."
+              example: "When the condition is true, skip forward to a later section. When false, continue to the next step. Variables match the Operations dashboard counts (session #, open/unfilled orders, unassigned, pickup/set-out pending, organize, scale, load/unload)."
             params:
               type: array
               items:
@@ -2213,14 +2465,7 @@ components:
                   key: variable
                   label: Variable
                   type: select
-                  options:
-                    - session_nbr
-                    - unfilled_count
-                    - stg_backlog_eligible
-                    - stg_backlog_on_jobs
-                    - cars_on_job
-                    - cars_at_location
-                    - awaiting_assignment
+                  options_from: condition_variables
                   default: session_nbr
                 -
                   key: operator
@@ -2240,6 +2485,22 @@ components:
                   type: text
                   default: 1
                   required: true
+                -
+                  key: section
+                  label: Section
+                  type: workflow_section
+                  default: ""
+                  required: true
+                -
+                  key: section_label
+                  label: Section label
+                  type: text
+                  default: ""
+                -
+                  key: step
+                  label: "Step #"
+                  type: number
+                  default: ""
         marker:
           type: object
           required: [id, label, params]
@@ -2297,7 +2558,7 @@ components:
               example: "Generate Orders {shipment}"
             description:
               type: string
-              example: "Auto-generate car orders for due shipments, or one shipment when Shipment is set."
+              example: Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or set Shipment for a single manual order. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore.
             params:
               type: array
               items:
@@ -2322,10 +2583,19 @@ components:
                     -
                       value: 1
                       label: Yes
-                  default: ""
+                  default: 1
                 -
                   key: max_unfilled
                   label: Max unfilled orders
+                  type: number
+                  default: ""
+                  required: false
+                  min: 0
+                  step: 1
+                  visible_label: true
+                -
+                  key: seed
+                  label: Random seed
                   type: number
                   default: ""
                   required: false
@@ -2386,7 +2656,7 @@ components:
               example: Fill Orders
             description:
               type: string
-              example: Orders → fill unfilled car orders.
+              example: Auto-assign eligible cars to open orders (same as Fill Car Orders → Auto Assign). Uses car source checkboxes and optional order/car filters. Set Percent to limit how many orders are filled.
             params:
               type: array
               items:
@@ -2592,7 +2862,7 @@ components:
               enum: [auto_assign_locals]
             label:
               type: string
-              example: Auto-Assign Cars
+              example: Assign Cars
             category:
               type: string
               example: operations
@@ -2604,10 +2874,10 @@ components:
               example: auto_assign_locals
             gui_template:
               type: string
-              example: "Auto-Assign Cars {jobs} {station}"
+              example: "Assign Cars {jobs} {station}"
             description:
               type: string
-              example: Auto-assign eligible cars to job(s)/train(s). Optional station filter limits picks to one yard.
+              example: Assign eligible cars to selected job(s)/train(s). Hold Ctrl/Cmd to select multiple. Optional station filter limits picks to one yard.
             params:
               type: array
               items:
@@ -2615,12 +2885,12 @@ components:
               example:
                 -
                   key: jobs
-                  label: Jobs
+                  label: ""
                   type: jobs_multiselect
                   options_from: jobs
                   required: false
                   default: ""
-                  visible_label: true
+                  visible_label: false
                 -
                   key: station
                   label: Station filter
@@ -2628,7 +2898,8 @@ components:
                   options_from: stations
                   allow_custom: true
                   required: false
-                  default: all
+                  default: ""
+                  suppress_all_station_option: true
         pick_up_cars:
           type: object
           required: [id, label, params]
@@ -2653,7 +2924,7 @@ components:
               example: "Pick Up Cars {job} {location_suffix}"
             description:
               type: string
-              example: Pick up assigned cars onto a job train. Leave job blank for all locals (staging excluded).
+              example: Pick up assigned cars onto a job train. Optional car filters match the Pick Up Cars page. Leave job blank for all locals (staging excluded).
             params:
               type: array
               items:
@@ -2675,6 +2946,67 @@ components:
                   allow_custom: true
                   required: false
                   default: ""
+                -
+                  key: car_filters
+                  label: Car filters
+                  type: filter_group
+                  layout: train_car
+                  fields:
+                    -
+                      key: pickup_location
+                      label: Pickup
+                      type: station_location
+                      options_from: station_locations
+                      default: ""
+                    -
+                      key: reporting_marks
+                      label: Marks
+                      type: text
+                      default: ""
+                    -
+                      key: car_code
+                      label: Car code
+                      type: car_code
+                      options_from: car_codes
+                      allow_custom: true
+                      default: ""
+                    -
+                      key: status
+                      label: Status
+                      type: select
+                      options:
+                        - ""
+                        - Ordered
+                        - Loaded
+                        - Loading
+                        - Unloading
+                        - Empty
+                      default: ""
+                    -
+                      key: consignment
+                      label: Consignment
+                      type: commodity
+                      options_from: commodities
+                      allow_custom: true
+                      default: ""
+                    -
+                      key: final_destination
+                      label: Final dest.
+                      type: station_location
+                      options_from: station_locations
+                      default: ""
+                    -
+                      key: loading_location
+                      label: Loading
+                      type: station_location
+                      options_from: station_locations
+                      default: ""
+                    -
+                      key: unloading_location
+                      label: Unloading
+                      type: station_location
+                      options_from: station_locations
+                      default: ""
         set_out_cars:
           type: object
           required: [id, label, params]
@@ -2699,7 +3031,7 @@ components:
               example: "Set Out Cars {job} {location}"
             description:
               type: string
-              example: Set out cars from a job train at a location or destination. Leave job and location blank for all locals.
+              example: Set out cars from a job train. Choose Final Destination to assign each car to its loading or unloading location (same as Assign on set_out.php). Pick a yard to set out all matching train cars there. Optional car filters match the Set Out Cars page. Leave job and location blank for all locals.
             params:
               type: array
               items:
@@ -2719,8 +3051,70 @@ components:
                   type: setout_location
                   options_from: setout_locations
                   allow_custom: true
+                  suppress_any_option: true
                   required: false
                   default: ""
+                -
+                  key: car_filters
+                  label: Car filters
+                  type: filter_group
+                  layout: train_car
+                  fields:
+                    -
+                      key: pickup_location
+                      label: Pickup
+                      type: station_location
+                      options_from: station_locations
+                      default: ""
+                    -
+                      key: reporting_marks
+                      label: Marks
+                      type: text
+                      default: ""
+                    -
+                      key: car_code
+                      label: Car code
+                      type: car_code
+                      options_from: car_codes
+                      allow_custom: true
+                      default: ""
+                    -
+                      key: status
+                      label: Status
+                      type: select
+                      options:
+                        - ""
+                        - Ordered
+                        - Loaded
+                        - Loading
+                        - Unloading
+                        - Empty
+                      default: ""
+                    -
+                      key: consignment
+                      label: Consignment
+                      type: commodity
+                      options_from: commodities
+                      allow_custom: true
+                      default: ""
+                    -
+                      key: final_destination
+                      label: Final dest.
+                      type: station_location
+                      options_from: station_locations
+                      default: ""
+                    -
+                      key: loading_location
+                      label: Loading
+                      type: station_location
+                      options_from: station_locations
+                      default: ""
+                    -
+                      key: unloading_location
+                      label: Unloading
+                      type: station_location
+                      options_from: station_locations
+                      default: ""
         load_unload:
           type: object
           required: [id, label, params]
@@ -2874,7 +3268,7 @@ components:
               example: "Generate Switch Lists {jobs} ({format})"
             description:
               type: string
-              example: Replay the workflow recipe and write switch list HTML for selected job(s) or all. (Coming soon.)
+              example: Replay the workflow recipe and write switch list HTML for selected job(s) or all.
             params:
               type: array
               items:
@@ -2888,22 +3282,31 @@ components:
                   required: false
                 -
                   key: format
-                  label: Format
+                  label: Style
                   type: select
                   options:
                     -
-                      value: phased
-                      label: Phased (mobile + half sheet)
-                    -
-                      value: phased-mobile
-                      label: Phased (mobile only)
-                    -
-                      value: halfsheet
-                      label: Master half sheet
+                      value: all
+                      label: All styles
                     -
                       value: mobile
-                      label: Master mobile
-                  default: phased
+                      label: Mobile
+                    -
+                      value: half
+                      label: Half Sheet
+                    -
+                      value: full
+                      label: Full Sheet
+                    -
+                      value: dmp
+                      label: Dot Matrix
+                    -
+                      value: wo
+                      label: Work Order
+                    -
+                      value: x2010
+                      label: X2010
+                  default: all
         generate_waybills:
           type: object
           required: [id, label, params]
@@ -2928,7 +3331,7 @@ components:
               example: Generate Waybill List
             description:
               type: string
-              example: Render printable waybill HTML for open waybills in the current session. (Coming soon.)
+              example: Render printable waybill HTML for open waybills in the current session.
             params:
               type: array
               items:
@@ -2966,22 +3369,31 @@ components:
               example:
                 -
                   key: format
-                  label: Format
+                  label: Style
                   type: select
                   options:
                     -
-                      value: phased
-                      label: Phased (mobile + half sheet)
-                    -
-                      value: phased-mobile
-                      label: Phased (mobile only)
-                    -
-                      value: halfsheet
-                      label: Master half sheet
+                      value: all
+                      label: All styles
                     -
                       value: mobile
-                      label: Master mobile
-                  default: phased
+                      label: Mobile
+                    -
+                      value: half
+                      label: Half Sheet
+                    -
+                      value: full
+                      label: Full Sheet
+                    -
+                      value: dmp
+                      label: Dot Matrix
+                    -
+                      value: wo
+                      label: Work Order
+                    -
+                      value: x2010
+                      label: X2010
+                  default: all
                 -
                   key: jobs
                   label: Jobs
@@ -3069,7 +3481,7 @@ components:
               enum: [build_switchlists_sts]
             label:
               type: string
-              example: Build Switch Lists
+              example: Build Switch Lists (legacy)
             category:
               type: string
               example: operations
@@ -3084,7 +3496,7 @@ components:
               example: "Build Switch Lists {station} {job}"
             description:
               type: string
-              example: Assign ordered cars at a station to a job/train (by-station switch list build).
+              example: Legacy — use Assign Cars instead. Assign ordered cars at a station to a job/train (by-station switch list build).
             params:
               type: array
               items:

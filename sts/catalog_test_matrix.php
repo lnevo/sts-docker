@@ -229,13 +229,12 @@ function catalog_test_matrix_sections($dbc = null)
                 ],
                 [
                     'function' => 'if_then',
-                    'params' => ['variable' => 'session_nbr', 'operator' => '>', 'value' => '0'],
-                    'description' => 'Test: If … then',
-                ],
-                [
-                    'function' => 'goto',
-                    'params' => ['step' => '36'],
-                    'description' => 'Test: Goto step (forward to Stop)',
+                    'params' => [
+                        'variable' => 'session_nbr',
+                        'operator' => '>',
+                        'value' => '0',
+                    ],
+                    'description' => 'Test: If … then goto',
                 ],
             ],
         ],

@@ -75,6 +75,12 @@ try {
             $indices = operational_steps_recipe_indices($recipe);
             $dbc = open_db();
             $current_session = session_get_db_session($dbc);
+            $condition_context = session_evaluate_context($dbc, []);
+            unset(
+                $condition_context['_dbc'],
+                $condition_context['_config'],
+                $condition_context['_runtime_limited']
+            );
             mysqli_close($dbc);
             $existing = operational_steps_discover_switchlist_sessions($session_dir);
             operational_steps_api_json([
@@ -87,6 +93,7 @@ try {
                 'default_stop' => $indices['total'] ?: count($recipe['steps'] ?? []),
                 'breakpoints' => $indices['breakpoints'],
                 'compiled' => $compiled,
+                'condition_context' => $condition_context,
             ]);
 
         case 'list_workflows':
@@ -149,7 +156,7 @@ try {
                 operational_steps_api_json(['ok' => false, 'error' => 'POST required'], 405);
             }
             $body = operational_steps_api_body();
-            $format = $body['format'] ?? 'phased';
+            $format = $body['format'] ?? 'all';
             $jobs = isset($body['jobs']) ? array_values(array_filter(array_map('trim', explode(',', $body['jobs'])))) : [];
             if (isset($body['recipe']) && is_array($body['recipe'])) {
                 operational_steps_save_recipe(
@@ -222,7 +229,35 @@ try {
                 'warnings' => $result['warnings'] ?? [],
                 'cycles' => $result['cycles'],
                 'index_url' => '/sts/session.php',
-                'session_url' => $last ? '/sts/session_' . $last['session'] . '/index.php' : '/sts/session.php',
+                'session_url' => $last ? '/sts/' . session_output_url('session_' . $last['session'] . '/index.php') : '/sts/session.php',
+            ]);
+
+        case 'rerender_session_style':
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                operational_steps_api_json(['ok' => false, 'error' => 'POST required'], 405);
+            }
+            $body = operational_steps_api_body();
+            $session = (int) ($body['session'] ?? 0);
+            $style = session_normalize_switchlist_style($body['style'] ?? 'mobile');
+            if ($session < 1) {
+                operational_steps_api_json(['ok' => false, 'error' => 'session required'], 400);
+            }
+            require_once __DIR__ . '/session_helpers.php';
+            $dbc = open_db();
+            $root = session_web_root();
+            $manifest = session_load_manifest($session, $root);
+            $already = session_session_style_available($session, $style, $manifest, $root);
+            $results = session_rerender_session_style($dbc, $session, $style, $root);
+            mysqli_close($dbc);
+            $skipped = count($results) > 0 && count(array_filter($results, static function ($r) {
+                return !empty($r['skipped']);
+            })) === count($results);
+            operational_steps_api_json([
+                'ok' => true,
+                'session' => $session,
+                'style' => $style,
+                'skipped' => $already || $skipped,
+                'results' => $results,
             ]);
 
         case 'normalize_recipe':
@@ -336,7 +371,7 @@ try {
                 'ok' => false,
                 'error' => 'Unknown action',
                 'actions' => [
-                    'catalog', 'list_workflows', 'recipe', 'compile', 'save', 'run_switchlists',
+                    'catalog', 'list_workflows', 'recipe', 'compile', 'save', 'run_switchlists', 'rerender_session_style',
                     'run_options', 'import_workflow', 'normalize_recipe', 'set_active_workflow', 'delete_workflow', 'download',
                 ],
             ], 400);

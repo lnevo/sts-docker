@@ -28,7 +28,7 @@ $recipe = operational_steps_load_recipe_from_json_file($jsonPath);
 $recipe['source_workflow'] = basename($jsonPath);
 
 $dbc = open_db();
-$result = session_run_recipe($dbc, $recipe, ['format' => 'phased']);
+$result = session_run_recipe($dbc, $recipe, ['format' => 'all']);
 
 $errors = [];
 $skipped = 0;

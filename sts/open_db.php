@@ -7,8 +7,15 @@
     static $dbc = null;
 
     if ($dbc instanceof mysqli) {
-      if (@mysqli_ping($dbc)) {
-        return $dbc;
+      // A cached handle may have been closed elsewhere (e.g. mysqli_close in a
+      // page/helper). On PHP 8.1+ calling mysqli_ping() on a closed connection
+      // throws an Error rather than returning false, so guard it and reconnect.
+      try {
+        if (@mysqli_ping($dbc)) {
+          return $dbc;
+        }
+      } catch (\Throwable $e) {
+        // fall through and open a fresh connection below
       }
       $dbc = null;
     }

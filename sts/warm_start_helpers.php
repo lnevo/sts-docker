@@ -2657,11 +2657,12 @@ function warm_start_auto_assign_all($dbc, $fraction = 1.0, $staging_jobs = [], $
     return $assigned;
 }
 
-function warm_start_pickup_cars($dbc, $fraction = 1.0, $staging_jobs = [], $skip_staging = false, $skip_jobs = [])
+function warm_start_pickup_cars($dbc, $fraction = 1.0, $staging_jobs = [], $skip_staging = false, $skip_jobs = [], &$by_job = null)
 {
     $session_number = warm_start_get_session($dbc);
     $picked_up = 0;
     $skip_jobs = array_flip(array_map('strval', $skip_jobs));
+    $track_by_job = is_array($by_job);
 
     $rs = mysqli_query(
         $dbc,
@@ -2710,6 +2711,9 @@ function warm_start_pickup_cars($dbc, $fraction = 1.0, $staging_jobs = [], $skip
         );
         warm_start_record_job_pickup($dbc, $job_name, $location);
         $picked_up++;
+        if ($track_by_job) {
+            $by_job[$job_name] = ($by_job[$job_name] ?? 0) + 1;
+        }
     }
 
     return $picked_up;
@@ -2831,11 +2835,12 @@ function warm_start_apply_setout_transitions($dbc, $car_id, $session_number)
     }
 }
 
-function warm_start_setout_cars($dbc, $fraction = 1.0, $staging_jobs = [], $skip_staging = false, $skip_jobs = [])
+function warm_start_setout_cars($dbc, $fraction = 1.0, $staging_jobs = [], $skip_staging = false, $skip_jobs = [], &$by_job = null)
 {
     $session_number = warm_start_get_session($dbc);
     $set_out = 0;
     $skip_jobs = array_flip(array_map('strval', $skip_jobs));
+    $track_by_job = is_array($by_job);
 
     $rs = mysqli_query(
         $dbc,
@@ -2896,6 +2901,9 @@ function warm_start_setout_cars($dbc, $fraction = 1.0, $staging_jobs = [], $skip
         warm_start_apply_setout_transitions($dbc, $car_id, $session_number);
         warm_start_record_job_setout($dbc, $job_name, $location_id);
         $set_out++;
+        if ($track_by_job) {
+            $by_job[$job_name] = ($by_job[$job_name] ?? 0) + 1;
+        }
     }
 
     return $set_out;

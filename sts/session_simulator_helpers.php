@@ -107,7 +107,7 @@ function session_simulator_run_recipe_range($dbc, array $recipe, $from_step, $to
     return session_run_recipe($dbc, $recipe, [
         'from_step' => (int) $from_step,
         'to_step' => (int) $to_step,
-        'format' => $options['format'] ?? 'phased',
+        'format' => $options['format'] ?? 'all',
         'config' => array_merge(session_simulator_merge_config($options['config'] ?? []), [
             'recipe' => $recipe,
         ]),
@@ -153,6 +153,21 @@ function session_simulator_run($dbc, array $recipe, array $options = [])
     }
 
     $last = end($cycles) ?: [];
+    $run_stats = session_simulator_aggregate_run_stats($cycles);
+    $move_summary = $run_stats['move_summary'];
+    $station_counts = session_simulator_station_car_counts($dbc);
+    $on_train_count = session_on_train_car_count($dbc);
+    require_once __DIR__ . '/operations_stats.php';
+    $dashboard = operations_get_stats($dbc);
+    $summary = session_simulator_format_summary(
+        $cycles,
+        $warnings,
+        $move_summary,
+        $run_stats['operations'],
+        $station_counts,
+        $on_train_count,
+        $dashboard
+    );
     return [
         'ok' => true,
         'mode' => $repeat > 1 ? 'repeat' : 'run',
@@ -163,10 +178,15 @@ function session_simulator_run($dbc, array $recipe, array $options = [])
         'sessions' => array_values(array_unique(array_column($cycles, 'session'))),
         'cycles' => $cycles,
         'warnings' => $warnings,
-        'summary' => session_simulator_format_summary($cycles, $warnings),
+        'run_stats' => $run_stats,
+        'move_summary' => $move_summary,
+        'station_counts' => $station_counts,
+        'on_train_count' => $on_train_count,
+        'dashboard' => $dashboard,
+        'summary' => $summary,
         'index_url' => '/sts/session.php',
-        'session_url' => !empty($last['session'])
-            ? '/sts/session_' . $last['session'] . '/index.php'
+                'session_url' => !empty($last['session'])
+            ? '/sts/' . session_output_url('session_' . $last['session'] . '/index.php')
             : '/sts/session.php',
     ];
 }
@@ -209,7 +229,148 @@ function session_simulator_run_section($dbc, array $recipe, $section_id, array $
     ]));
 }
 
-function session_simulator_format_summary(array $cycles, array $warnings = [])
+function session_simulator_format_train_moves_summary(array $move_summary)
+{
+    $picked_up = $move_summary['picked_up'] ?? [];
+    $set_out = $move_summary['set_out'] ?? [];
+    if ($picked_up === [] && $set_out === []) {
+        return [];
+    }
+
+    $jobs = array_values(array_unique(array_merge(array_keys($picked_up), array_keys($set_out))));
+    sort($jobs, SORT_NATURAL | SORT_FLAG_CASE);
+
+    $lines = ['=== Cars moved by train ==='];
+    foreach ($jobs as $job) {
+        $parts = [];
+        $picked = (int) ($picked_up[$job] ?? 0);
+        $setout = (int) ($set_out[$job] ?? 0);
+        if ($picked > 0) {
+            $parts[] = $picked . ' picked up';
+        }
+        if ($setout > 0) {
+            $parts[] = $setout . ' set out';
+        }
+        if ($parts !== []) {
+            $lines[] = '  ' . $job . ': ' . implode(', ', $parts);
+        }
+    }
+
+    $total_picked = array_sum($picked_up);
+    $total_setout = array_sum($set_out);
+    if (count($jobs) > 1) {
+        $totals = [];
+        if ($total_picked > 0) {
+            $totals[] = $total_picked . ' picked up';
+        }
+        if ($total_setout > 0) {
+            $totals[] = $total_setout . ' set out';
+        }
+        if ($totals !== []) {
+            $lines[] = '  Total: ' . implode(', ', $totals);
+        }
+    }
+
+    return $lines;
+}
+
+function session_simulator_format_operations_summary(array $operations)
+{
+    $operations = is_array($operations) ? $operations : [];
+    $labels = [
+        'generated' => 'orders generated',
+        'filled' => 'orders filled',
+        'repositioned' => 'empties repositioned',
+        'load_unload' => 'loads loaded/unloaded',
+    ];
+    $lines = [];
+    foreach ($labels as $key => $label) {
+        $count = (int) ($operations[$key] ?? 0);
+        if ($count > 0) {
+            $lines[] = '  ' . $count . ' ' . $label;
+        }
+    }
+    if ($lines === []) {
+        return [];
+    }
+
+    return array_merge(['=== Session operations ==='], $lines);
+}
+
+/**
+ * @return list<array{station_id: int, station_name: string, car_count: int}>
+ */
+function session_simulator_station_car_counts($dbc)
+{
+    return session_station_car_counts($dbc);
+}
+
+function session_simulator_on_train_car_count($dbc)
+{
+    return session_on_train_car_count($dbc);
+}
+
+function session_simulator_format_station_car_summary(array $station_counts, $on_train_count = 0)
+{
+    $station_counts = is_array($station_counts) ? $station_counts : [];
+    $on_train_count = (int) $on_train_count;
+    if ($station_counts === [] && $on_train_count <= 0) {
+        return [];
+    }
+
+    $lines = ['=== Cars by station ==='];
+    foreach ($station_counts as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $count = (int) ($row['car_count'] ?? 0);
+        if ($count <= 0) {
+            continue;
+        }
+        $name = trim((string) ($row['station_name'] ?? ''));
+        if ($name === '') {
+            $name = 'Unknown station';
+        }
+        $lines[] = '  ' . $name . ': ' . $count;
+    }
+    if ($on_train_count > 0) {
+        $lines[] = '  On trains (not at track): ' . $on_train_count;
+    }
+    $placed = array_sum(array_map(static function ($row) {
+        return (int) ($row['car_count'] ?? 0);
+    }, $station_counts));
+    if (count($station_counts) > 1 || $on_train_count > 0) {
+        if ($on_train_count > 0) {
+            $lines[] = '  Total: ' . $placed . ' at track, ' . $on_train_count . ' on trains';
+        } else {
+            $lines[] = '  Total at track: ' . $placed;
+        }
+    }
+
+    return $lines;
+}
+
+function session_simulator_format_dashboard_summary(array $dashboard)
+{
+    if ($dashboard === []) {
+        return [];
+    }
+    require_once __DIR__ . '/operations_stats.php';
+    $lines = ['=== Operations dashboard (end of session) ==='];
+    $has = false;
+    foreach (operations_dashboard_condition_variables() as $var) {
+        $key = $var['key'] ?? '';
+        if ($key === '' || $key === 'session_nbr' || !array_key_exists($key, $dashboard)) {
+            continue;
+        }
+        $lines[] = '  ' . ($var['label'] ?? $key) . ': ' . (int) $dashboard[$key];
+        $has = true;
+    }
+
+    return $has ? $lines : [];
+}
+
+function session_simulator_format_summary(array $cycles, array $warnings = [], array $move_summary = null, array $operations = null, array $station_counts = null, $on_train_count = null, array $dashboard = null)
 {
     $lines = [];
     foreach ($cycles as $cycle) {
@@ -284,6 +445,69 @@ function session_simulator_format_summary(array $cycles, array $warnings = [])
             } elseif (!empty($entry['function']) || !empty($entry['dispatch'])) {
                 $lines[] = operational_steps_format_dispatch_log_line($entry);
             }
+        }
+    }
+    if ($move_summary === null || $operations === null) {
+        $aggregated = session_simulator_aggregate_run_stats($cycles);
+        if ($move_summary === null) {
+            $move_summary = $aggregated['move_summary'];
+        }
+        if ($operations === null) {
+            $operations = $aggregated['operations'];
+        }
+    }
+    if (count($cycles) > 1) {
+        $lines[] = '';
+        $lines[] = '=== Per-cycle totals ===';
+        foreach ($cycles as $cycle) {
+            $cycle_stats = session_simulator_aggregate_run_stats([$cycle]);
+            $ops = $cycle_stats['operations'] ?? [];
+            $parts = [];
+            foreach (['generated', 'filled', 'repositioned', 'load_unload'] as $key) {
+                $count = (int) ($ops[$key] ?? 0);
+                if ($count > 0) {
+                    $parts[] = $key . '=' . $count;
+                }
+            }
+            $lines[] = sprintf(
+                '  Cycle %s session %s: %s',
+                $cycle['cycle'] ?? '?',
+                $cycle['session'] ?? '?',
+                $parts !== [] ? implode(', ', $parts) : 'no counted operations'
+            );
+        }
+    }
+    $operation_lines = session_simulator_format_operations_summary($operations);
+    if ($operation_lines !== []) {
+        $lines[] = '';
+        if (count($cycles) > 1) {
+            $operation_lines[0] = '=== All cycles combined ===';
+        }
+        $lines = array_merge($lines, $operation_lines);
+    }
+    $move_lines = session_simulator_format_train_moves_summary($move_summary);
+    if ($move_lines !== []) {
+        $lines[] = '';
+        if (count($cycles) > 1 && $operation_lines === []) {
+            $move_lines[0] = '=== All cycles combined ===';
+        }
+        $lines = array_merge($lines, $move_lines);
+    }
+    if ($station_counts !== null) {
+        $station_lines = session_simulator_format_station_car_summary(
+            $station_counts,
+            $on_train_count ?? 0
+        );
+        if ($station_lines !== []) {
+            $lines[] = '';
+            $lines = array_merge($lines, $station_lines);
+        }
+    }
+    if ($dashboard !== null) {
+        $dashboard_lines = session_simulator_format_dashboard_summary($dashboard);
+        if ($dashboard_lines !== []) {
+            $lines[] = '';
+            $lines = array_merge($lines, $dashboard_lines);
         }
     }
     if (count($warnings) > 0) {

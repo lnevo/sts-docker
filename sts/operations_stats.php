@@ -76,6 +76,36 @@ function operations_get_stats($dbc)
     return $stats;
 }
 
+/**
+ * Workflow if/then variables — matches counts shown on operations.php.
+ */
+function operations_dashboard_condition_variables()
+{
+    return [
+        ['key' => 'session_nbr', 'label' => 'Session number'],
+        ['key' => 'open_orders', 'label' => 'Open orders'],
+        ['key' => 'unfilled_orders', 'label' => 'Unfilled orders'],
+        ['key' => 'reposition_off_home', 'label' => 'Empty cars not at home'],
+        ['key' => 'unassigned', 'label' => 'Unassigned cars'],
+        ['key' => 'pending_pickup', 'label' => 'Pending pickup'],
+        ['key' => 'organize_unique', 'label' => 'Organize cars'],
+        ['key' => 'pending_setout', 'label' => 'Pending set-out'],
+        ['key' => 'scale_to_weigh', 'label' => 'Cars to weigh'],
+        ['key' => 'load_unload_pending', 'label' => 'Load/unload pending'],
+    ];
+}
+
+function operations_dashboard_condition_label($key)
+{
+    foreach (operations_dashboard_condition_variables() as $var) {
+        if (($var['key'] ?? '') === $key) {
+            return (string) ($var['label'] ?? $key);
+        }
+    }
+
+    return (string) $key;
+}
+
 function operations_get_session_nbr($dbc)
 {
     $sql = 'SELECT setting_value FROM settings WHERE setting_name = "session_nbr"';

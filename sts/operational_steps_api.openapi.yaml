@@ -77,6 +77,7 @@ paths:
         |--------|---------------|-------------|
         | `save` | `recipe` | Normalize and write workflow JSON |
         | `run_switchlists` | optional `recipe` | Run workflow simulator / generator |
+        | `rerender_session_style` | `session`, `style` | Re-render cached switch lists for a session in one style |
         | `import_workflow` | `recipe`, `workflow`, or `use_file` | Parse JSON into recipe (editor only) |
         | `normalize_recipe` | `recipe` or `use_file` | Normalize step functions/params |
         | `set_active_workflow` | `workflow_file` | Set active workflow file |
@@ -114,7 +115,7 @@ paths:
                 summary: run_switchlists (simulator)
                 value:
                   action: run_switchlists
-                  format: phased
+                  format: all
                   jobs: JOB_A,JOB_B
                   start_step: 1
                   stop_step: 10
@@ -128,6 +129,7 @@ paths:
                 oneOf:
                   - $ref: "#/components/schemas/SaveResponse"
                   - $ref: "#/components/schemas/RunSwitchlistsResponse"
+                  - $ref: "#/components/schemas/RerenderSessionStyleResponse"
                   - $ref: "#/components/schemas/ImportWorkflowResponse"
                   - $ref: "#/components/schemas/NormalizeRecipeResponse"
                   - $ref: "#/components/schemas/SetActiveWorkflowResponse"
@@ -164,6 +166,7 @@ components:
         enum:
           - save
           - run_switchlists
+          - rerender_session_style
           - import_workflow
           - normalize_recipe
           - set_active_workflow
@@ -457,6 +460,14 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/CompiledStep"
+            condition_context:
+              type: object
+              description: >-
+                Current DB values for if/then condition variables (matches the
+                Operations dashboard counts plus session_nbr). Used by the editor
+                to predict which steps execute under "Execute only".
+              additionalProperties:
+                type: integer
 
     SaveRequest:
       type: object
@@ -502,8 +513,8 @@ components:
           $ref: "#/components/schemas/Recipe"
         format:
           type: string
-          enum: [phased, phased-mobile, halfsheet, mobile]
-          default: phased
+          enum: [all, mobile, half, full, dmp, wo, x2010]
+          default: all
         jobs:
           type: string
           description: Comma-separated job names from the layout database, e.g. JOB_A,JOB_B
@@ -526,6 +537,22 @@ components:
           type: array
           items:
             type: integer
+
+    RerenderSessionStyleResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiOk"
+        - type: object
+          properties:
+            session:
+              type: integer
+            style:
+              type: string
+            skipped:
+              type: boolean
+            results:
+              type: array
+              items:
+                type: object
 
     RunSwitchlistsResponse:
       allOf:
