@@ -121,6 +121,10 @@
       return 'cat-neutral';
     },
 
+    rowClassName(step) {
+      return 'step-row ' + this.stepColorClass(step) + (step && step.enabled === false ? ' step-disabled' : '');
+    },
+
     isDatabaseStep(step) {
       const def = this.catalogMap[step?.function];
       const group = def?.adder_group || '';
@@ -860,6 +864,10 @@
       if (step.function === 'section_label' && step.params.remarks !== undefined) {
         delete step.params.remarks;
       }
+      const enabledBox = row.querySelector('[data-step-enabled]');
+      if (enabledBox ? !enabledBox.checked : prev.enabled === false) {
+        step.enabled = false;
+      }
       this.recipe.steps[idx] = step;
       return step;
     },
@@ -1026,6 +1034,10 @@
           '<button type="button" class="btn-icon btn-del" title="Delete">×</button>' +
         '</div>' +
         '<div class="row-bottom">' +
+          '<label class="step-active-toggle" title="When unchecked, this step is skipped in every run (like a commented-out command)">' +
+            '<input type="checkbox" data-step-enabled' + (step.enabled === false ? '' : ' checked') + '>' +
+            '<span>Active</span>' +
+          '</label>' +
           '<div class="step-preview">' + this.previewHtml(step, idx) + '</div>' +
         '</div>'
       );
@@ -1249,7 +1261,7 @@
       if (top) {
         top.classList.toggle('row-has-filters', this.rowHasMultiRowParams(step));
       }
-      row.className = 'step-row ' + this.stepColorClass(step);
+      row.className = this.rowClassName(step);
       this.updateRowStsLink(row, step);
       this.updateRowPreview(row, idx);
     },
@@ -1273,7 +1285,7 @@
         this.refreshRowParams(idx);
         const updatedRow = this.el('steps-list')?.querySelector('.step-row[data-idx="' + idx + '"]');
         if (updatedRow) {
-          updatedRow.className = 'step-row ' + this.stepColorClass(this.recipe.steps[idx]);
+          updatedRow.className = this.rowClassName(this.recipe.steps[idx]);
           this.updateRowStsLink(updatedRow, this.recipe.steps[idx]);
           const fnSelect = updatedRow.querySelector('[data-fn-select]');
           const hint = this.catalogHintText(this.recipe.steps[idx], newFn);
@@ -1302,7 +1314,7 @@
 
       const onRowEdit = () => {
         this.syncStepFromRow(row, idx);
-        row.className = 'step-row ' + this.stepColorClass(this.recipe.steps[idx]);
+        row.className = this.rowClassName(this.recipe.steps[idx]);
         this.updateRemarksLayout(row);
         this.updateRowPreview(row, idx);
       };
@@ -1396,7 +1408,7 @@
 
       this.recipe.steps.forEach((step, idx) => {
         const row = document.createElement('div');
-        row.className = 'step-row ' + this.stepColorClass(step);
+        row.className = this.rowClassName(step);
         row.dataset.idx = String(idx);
         row.innerHTML = this.stepRowInnerHtml(step, idx);
         this.bindRowEvents(row, idx);

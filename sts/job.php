@@ -34,9 +34,32 @@ $next_session = session_adjacent_session($browser_sessions, $session, 'next');
 
 $phase_links = session_train_switchlist_phase_links($session, $job, $phase_nums, $root);
 
-$session_wb = session_output_url('session_' . $session . '/waybills');
-$has_session_wb = is_file(session_output_fs_path('session_' . $session . '/waybills/index.html', $root));
-$has_session_wb_print = session_waybills_bundle_ready($session, null, $root);
+// Job-scoped waybills page (this train across its phases).
+$job_wb_href = session_output_url('session_' . $session . '/waybills/job_' . $job . '.index.html');
+
+// Header "All switch lists" points at this train's own phase switch-list index
+// (e.g. session_9/phase_02/CK1/index.html); fall back to the session overview.
+$job_switchlists_href = session_session_index_href($session);
+foreach ($phase_links as $pl) {
+    if (!empty($pl['has_index'])) {
+        $job_switchlists_href = $pl['index_href'];
+        break;
+    }
+}
+
+// Preselect the work-leg when arriving from a phase index link
+// (job.php?...&wp=<workflow phase>&leg=<work leg>).
+$req_wp = isset($_GET['wp']) ? (int) $_GET['wp'] : 0;
+$req_leg = isset($_GET['leg']) ? (int) $_GET['leg'] : 0;
+$initial_leg = 0;
+if ($req_wp > 0 && $req_leg > 0) {
+    foreach ($legs as $i => $lg) {
+        if ((int) ($lg['workflow_phase'] ?? 0) === $req_wp && (int) ($lg['work_leg'] ?? 0) === $req_leg) {
+            $initial_leg = $i;
+            break;
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -51,7 +74,10 @@ $has_session_wb_print = session_waybills_bundle_ready($session, null, $root);
 session_render_nav_bar([
     ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
     ['href' => 'session.php?session=' . (int) $session, 'label' => 'All Sessions', 'icon' => 'collection'],
-    ['href' => 'session_switchlists.php?session=' . (int) $session, 'label' => 'All switch lists', 'icon' => 'list-check'],
+    ['href' => session_session_index_href($session), 'label' => 'Session ' . (int) $session, 'icon' => 'calendar-event'],
+    ['href' => 'session-sitemap.html', 'label' => 'Session Site Map', 'icon' => 'diagram-3'],
+    ['href' => $job_switchlists_href, 'label' => 'All switch lists', 'icon' => 'list-check'],
+    ['href' => $job_wb_href, 'label' => 'All waybills', 'icon' => 'file-text'],
 ], 'Train ' . $job);
 ?>
   <main>
@@ -105,7 +131,7 @@ session_render_nav_bar([
             <section class="switchlist-leg"
                      data-leg="<?php echo (int) $i; ?>"
                      data-base="<?php echo htmlspecialchars($leg['base_href']); ?>"
-                     style="<?php echo $i === 0 ? '' : 'display:none;'; ?>">
+                     style="<?php echo $i === $initial_leg ? '' : 'display:none;'; ?>">
               <h2 class="switchlist-leg-title">
                 Phase <?php echo (int) $leg['work_leg']; ?> of <?php echo (int) $leg['work_leg_total']; ?>
                 <span class="muted">— <?php echo htmlspecialchars($leg['label']); ?></span>
@@ -116,7 +142,19 @@ session_render_nav_bar([
                       data-base="<?php echo htmlspecialchars($leg['base_href']); ?>"
                       src="<?php echo $leg_src; ?>"></iframe>
               <div class="switchlist-leg-waybills">
-                <h3>Waybills on this switch list</h3>
+                <?php
+                  $wb_print_href = 'waybills_print.php?session=' . (int) $session
+                      . '&job=' . urlencode($job)
+                      . '&wp=' . (int) $leg['workflow_phase']
+                      . '&leg=' . (int) $leg['work_leg']
+                      . '&style=' . urlencode($selected_style);
+                ?>
+                <div class="switchlist-leg-waybills-head">
+                  <h3>Waybills on this switch list</h3>
+                  <?php if (count($leg['waybills'])): ?>
+                    <a class="btn btn-outline-dark btn-sm switchlist-leg-print" href="<?php echo htmlspecialchars($wb_print_href); ?>" target="_blank" rel="noopener"><i class="bi bi-printer"></i> Print waybills</a>
+                  <?php endif; ?>
+                </div>
                 <?php if (count($leg['waybills'])): ?>
                   <ul>
                     <?php foreach ($leg['waybills'] as $wb): ?>
@@ -142,42 +180,6 @@ session_render_nav_bar([
         <p class="muted">No switch lists generated for this train yet. Run <em>Generate Switch Lists</em> in the Session Editor workflow.</p>
       </div>
     <?php endif; ?>
-
-    <div class="card">
-      <h2 style="margin:0 0 8px;font-size:16px;">Session switch lists</h2>
-      <?php if (count($phase_links)): ?>
-        <ul>
-          <?php foreach ($phase_links as $pl): ?>
-            <li>
-              Phase <?php echo (int) $pl['phase']; ?>:
-              <?php if ($pl['has_index']): ?>
-                <a href="<?php echo htmlspecialchars($pl['index_href']); ?>">browse</a>
-              <?php else: ?>
-                <span class="muted">not generated</span>
-              <?php endif; ?>
-              <?php if ($pl['has_print']): ?>
-                · <a href="<?php echo htmlspecialchars($pl['print_href']); ?>">print all switch lists</a>
-              <?php endif; ?>
-            </li>
-          <?php endforeach; ?>
-        </ul>
-      <?php else: ?>
-        <p class="muted" style="margin:0;">No switch-list phases for this train.</p>
-      <?php endif; ?>
-    </div>
-
-    <div class="card">
-      <h2 style="margin:0 0 8px;font-size:16px;">Session waybills</h2>
-      <ul>
-        <li><a href="<?php echo htmlspecialchars($session_wb . '/index.html'); ?>">All session waybills</a>
-          <?php if ($has_session_wb_print): ?>
-            · <a href="<?php echo htmlspecialchars($session_wb . '/print_all.html'); ?>">print all</a>
-          <?php elseif (!$has_session_wb): ?>
-            <span class="muted"> (none generated yet)</span>
-          <?php endif; ?>
-        </li>
-      </ul>
-    </div>
   </main>
 
   <script>
@@ -190,7 +192,7 @@ session_render_nav_bar([
       const nextBtn = document.getElementById('phase-next');
       const sessionId = <?php echo (int) $session; ?>;
       const storageKey = 'session_switchlist_style';
-      let current = 0;
+      let current = <?php echo (int) $initial_leg; ?>;
 
       const savedStyle = localStorage.getItem(storageKey);
       if (savedStyle && styleSelect && !window.location.search.includes('style=')) {
@@ -248,7 +250,7 @@ session_render_nav_bar([
         }
       });
 
-      showLeg(0);
+      showLeg(current);
       if (styleSelect) applyStyle(styleSelect.value);
     })();
   </script>

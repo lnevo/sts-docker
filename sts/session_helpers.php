@@ -294,6 +294,103 @@ function session_count_generated_output(array $manifest)
     ];
 }
 
+/**
+ * Roll up run statistics across sessions 1..$through into a single stats array:
+ * operations, cars moved by train, cars by station, on-train count, and
+ * generated-output counts are all summed. The operations dashboard is NOT
+ * aggregated here — callers keep the selected session's snapshot so it reflects
+ * the state at that point in time.
+ *
+ * @return array run_stats-shaped array (no 'dashboard' key)
+ */
+function session_aggregate_run_stats_through($through, $root = null)
+{
+    $root = $root ?? session_web_root();
+    $through = (int) $through;
+
+    $operations = ['generated' => 0, 'filled' => 0, 'repositioned' => 0, 'load_unload' => 0];
+    $generated = ['waybills' => 0, 'switchlists' => 0, 'phases' => 0, 'trains' => 0];
+    $picked_up = [];
+    $set_out = [];
+    $station_map = [];
+    $on_train_total = 0;
+    $latest_updated = null;
+    $runs = 0;
+
+    for ($s = 1; $s <= $through; $s++) {
+        $manifest = session_load_manifest($s, $root);
+        $gen = session_count_generated_output($manifest);
+        foreach ($generated as $k => $v) {
+            $generated[$k] += (int) ($gen[$k] ?? 0);
+        }
+
+        $rs = $manifest['run_stats'] ?? [];
+        if (!session_run_stats_has_data($rs)) {
+            continue;
+        }
+        $runs++;
+        foreach ($operations as $k => $v) {
+            $operations[$k] += (int) ($rs['operations'][$k] ?? 0);
+        }
+        foreach (['picked_up', 'set_out'] as $kind) {
+            foreach ((array) ($rs['move_summary'][$kind] ?? []) as $job => $cnt) {
+                $job = trim((string) $job);
+                if ($job === '') {
+                    continue;
+                }
+                if ($kind === 'picked_up') {
+                    $picked_up[$job] = ($picked_up[$job] ?? 0) + (int) $cnt;
+                } else {
+                    $set_out[$job] = ($set_out[$job] ?? 0) + (int) $cnt;
+                }
+            }
+        }
+        foreach ((array) ($rs['station_counts'] ?? []) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $id = (int) ($row['station_id'] ?? 0);
+            $name = trim((string) ($row['station_name'] ?? '')) ?: 'Unknown station';
+            $key = $id > 0 ? 'id:' . $id : 'name:' . $name;
+            if (!isset($station_map[$key])) {
+                $station_map[$key] = [
+                    'station_id' => $id,
+                    'station_name' => $name,
+                    'sort_seq' => $row['sort_seq'] ?? null,
+                    'car_count' => 0,
+                ];
+            }
+            $station_map[$key]['car_count'] += (int) ($row['car_count'] ?? 0);
+        }
+        $on_train_total += (int) ($rs['on_train_count'] ?? 0);
+        if (!empty($rs['updated'])) {
+            $latest_updated = $rs['updated'];
+        }
+    }
+
+    ksort($picked_up, SORT_NATURAL | SORT_FLAG_CASE);
+    ksort($set_out, SORT_NATURAL | SORT_FLAG_CASE);
+    usort($station_map, static function ($a, $b) {
+        $sa = $a['sort_seq'];
+        $sb = $b['sort_seq'];
+        if ($sa !== null && $sb !== null && (int) $sa !== (int) $sb) {
+            return (int) $sa <=> (int) $sb;
+        }
+        return strnatcasecmp((string) $a['station_name'], (string) $b['station_name']);
+    });
+
+    return [
+        'operations' => $operations,
+        'generated' => $generated,
+        'move_summary' => ['picked_up' => $picked_up, 'set_out' => $set_out],
+        'station_counts' => array_values($station_map),
+        'on_train_count' => $on_train_total,
+        'updated' => $latest_updated,
+        'aggregated_through' => $through,
+        'aggregated_runs' => $runs,
+    ];
+}
+
 function session_manifest_record_run_stats(array $manifest, array $run_stats, array $meta = [])
 {
     $snapshot = array_merge([
@@ -322,6 +419,7 @@ function session_manifest_record_run_stats(array $manifest, array $run_stats, ar
         'move_summary' => $snapshot['move_summary'],
         'station_counts' => $snapshot['station_counts'] ?? [],
         'on_train_count' => (int) ($snapshot['on_train_count'] ?? 0),
+        'generated' => is_array($run_stats['generated'] ?? null) ? $run_stats['generated'] : [],
         'dashboard' => $snapshot['dashboard'] ?? [],
         'updated' => date('c'),
         'last_run' => $snapshot,
@@ -407,6 +505,7 @@ function session_persist_recipe_run_stats($dbc, array $log, array $meta, $start_
         $stats['on_train_count'] = session_on_train_car_count($dbc);
         $stats['dashboard'] = $dashboard_snapshot;
         $manifest = session_load_manifest($session_nbr, $root);
+        $stats['generated'] = session_count_generated_output($manifest);
         $manifest = session_manifest_record_run_stats($manifest, $stats, array_merge($meta, [
             'started_session' => (int) $start_session,
         ]));
@@ -419,17 +518,11 @@ function session_persist_recipe_run_stats($dbc, array $log, array $meta, $start_
 function session_list_browser_sessions($current, $root = null)
 {
     $current = max(1, (int) $current);
-    $root = $root ?? session_web_root();
-    $discovered = session_discover_sessions($root);
-    // After a DB reset the current session number can be lower than sessions
-    // already recorded on disk. Span up to the highest recorded session so the
-    // count reflects every session, not just those <= the current DB session.
-    $max_session = max(array_merge([$current], $discovered));
-    $sessions = array_merge(range(1, $max_session), $discovered);
-    $sessions = array_values(array_unique(array_map('intval', $sessions)));
-    $sessions = array_values(array_filter($sessions, static function ($n) {
-        return (int) $n >= 1;
-    }));
+    // Only sessions up to the current DB session are browsable. Folders on disk
+    // that are ahead of the live session (e.g. left over from a run that later
+    // rewound the DB) are excluded so the browser never shows a "future"
+    // session that isn't the current operating point yet.
+    $sessions = range(1, $current);
     sort($sessions, SORT_NUMERIC);
 
     return $sessions;
@@ -493,7 +586,25 @@ function session_on_train_car_count($dbc)
     return (int) ($row['c'] ?? 0);
 }
 
-function session_render_run_stats_block(array $run_stats, $empty_message = '')
+/** Standalone "Updated <date> · N workflow runs" line for a stats block. */
+function session_run_stats_updated_html(array $run_stats)
+{
+    if (empty($run_stats['updated'])) {
+        return '';
+    }
+    $when = strtotime((string) $run_stats['updated']);
+    $when_label = $when ? date('M j, Y g:i A', $when) : (string) $run_stats['updated'];
+    $html = '<p class="srs-updated">Updated ' . htmlspecialchars($when_label);
+    $history = $run_stats['history'] ?? [];
+    if (count($history) > 1) {
+        $html .= ' · ' . count($history) . ' workflow runs recorded';
+    }
+    $html .= '</p>';
+
+    return $html;
+}
+
+function session_render_run_stats_block(array $run_stats, $empty_message = '', $show_updated = true)
 {
     if (!session_run_stats_has_data($run_stats)) {
         if ($empty_message === '') {
@@ -622,15 +733,8 @@ function session_render_run_stats_block(array $run_stats, $empty_message = '')
         $html .= '<div class="srs-panels">' . implode('', $panels) . '</div>';
     }
 
-    if (!empty($run_stats['updated'])) {
-        $when = strtotime((string) $run_stats['updated']);
-        $when_label = $when ? date('M j, Y g:i A', $when) : (string) $run_stats['updated'];
-        $html .= '<p class="srs-updated">Updated ' . htmlspecialchars($when_label);
-        $history = $run_stats['history'] ?? [];
-        if (count($history) > 1) {
-            $html .= ' · ' . count($history) . ' workflow runs recorded';
-        }
-        $html .= '</p>';
+    if ($show_updated) {
+        $html .= session_run_stats_updated_html($run_stats);
     }
 
     $html .= '</div>';
@@ -671,7 +775,9 @@ function session_simulator_aggregate_train_moves(array $cycles)
                         $add_counts($picked_up, $job, (int) $count);
                     }
                 } else {
-                    $add_counts($picked_up, $entry['job'] ?? '', (int) $entry['picked_up']);
+                    $picked = $entry['picked_up'];
+                    $count = is_array($picked) ? count($picked) : (int) $picked;
+                    $add_counts($picked_up, $entry['job'] ?? '', $count);
                 }
             }
 
@@ -681,7 +787,9 @@ function session_simulator_aggregate_train_moves(array $cycles)
                         $add_counts($set_out, $job, (int) $count);
                     }
                 } else {
-                    $add_counts($set_out, $entry['job'] ?? '', (int) $entry['set_out']);
+                    $set_out_val = $entry['set_out'];
+                    $count = is_array($set_out_val) ? count($set_out_val) : (int) $set_out_val;
+                    $add_counts($set_out, $entry['job'] ?? '', $count);
                 }
             }
         }
@@ -886,24 +994,44 @@ function session_waybill_session_nav_html($session_nbr, $phase_num = null, $dbc 
         return '';
     }
 
-    $html = '<div class="session-nav-row session-nav-row-stats">';
+    $html = '<div class="session-nav-row waybill-session-nav">';
     if ($prev !== null) {
-        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
+        $html .= '<a class="btn btn-outline-dark" href="'
             . htmlspecialchars(session_waybill_index_rel_href($prev, $phase_num))
             . '"><i class="bi bi-chevron-left"></i> Session ' . (int) $prev . '</a>';
     } else {
-        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>';
+        $html .= '<span class="btn btn-outline-dark disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>';
     }
     if ($next !== null) {
-        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
+        $html .= '<a class="btn btn-outline-dark" href="'
             . htmlspecialchars(session_waybill_index_rel_href($next, $phase_num))
             . '">Session ' . (int) $next . ' <i class="bi bi-chevron-right"></i></a>';
     } else {
-        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true">Next <i class="bi bi-chevron-right"></i></span>';
+        $html .= '<span class="btn btn-outline-dark disabled" aria-disabled="true">Next <i class="bi bi-chevron-right"></i></span>';
     }
     $html .= '</div>';
 
     return $html;
+}
+
+/** Header nav items for a generated waybill index page. */
+function session_waybill_index_nav_items($session_nbr, $back_href, $back_label)
+{
+    $session_nbr = (int) $session_nbr;
+    $all_sessions = $session_nbr >= 1
+        ? '/sts/session.php?session=' . $session_nbr
+        : '/sts/session.php';
+
+    $items = [
+        ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+        ['href' => $all_sessions, 'label' => 'All Sessions', 'icon' => 'collection'],
+        ['href' => $back_href, 'label' => $back_label, 'icon' => 'calendar-event'],
+    ];
+    if ($session_nbr >= 1) {
+        $items[] = ['href' => '/sts/session_overview.php?session=' . $session_nbr, 'label' => 'Session overview', 'icon' => 'clipboard-data'];
+    }
+
+    return $items;
 }
 
 function session_write_empty_waybill_index($out_dir, array $options = [])
@@ -918,24 +1046,26 @@ function session_write_empty_waybill_index($out_dir, array $options = [])
     $back = $options['back_href'] ?? '../session.php';
     $back_label = $options['back_label'] ?? 'All Sessions';
     $message = $options['message'] ?? 'No waybills available yet. Run Generate Waybill List in the workflow after switch lists.';
+    $session_nbr = isset($options['session_nbr']) ? (int) $options['session_nbr'] : 0;
+    $phase_num = array_key_exists('phase_num', $options) ? $options['phase_num'] : null;
     $index_html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
         . '<title>' . htmlspecialchars($title) . '</title>'
         . session_static_head_assets()
         . '</head><body>';
-    $index_html .= session_nav_bar_html([
-        ['href' => $back, 'label' => $back_label],
-    ], $title);
-    $session_nbr = isset($options['session_nbr']) ? (int) $options['session_nbr'] : 0;
-    $phase_num = array_key_exists('phase_num', $options) ? $options['phase_num'] : null;
-    if ($session_nbr >= 1) {
-        $index_html .= session_waybill_session_nav_html(
+    $index_html .= session_nav_bar_html(
+        session_waybill_index_nav_items($session_nbr, $back, $back_label),
+        $title
+    );
+    $nav_row = $session_nbr >= 1
+        ? session_waybill_session_nav_html(
             $session_nbr,
             $phase_num,
             $options['dbc'] ?? null,
             $options['root'] ?? null
-        );
-    }
+        )
+        : '';
     $index_html .= '<main><h1>' . htmlspecialchars($title) . '</h1>'
+        . $nav_row
         . '<div class="card"><p>' . htmlspecialchars($message) . '</p>'
         . '<ul><li>No waybills available.</li></ul></div></main></body></html>';
     file_put_contents($out_dir . '/index.html', $index_html);
@@ -1265,6 +1395,18 @@ function session_write_waybill_bundle($dbc, $out_dir, array $waybill_numbers, ar
     $list_items = '';
     $bundle_sheets = '';
 
+    // Remove stale per-waybill files from prior runs so waybills that no longer
+    // qualify (e.g. orders that became unfilled) don't linger on disk.
+    $keep = ['index.html' => true, 'print_all.html' => true];
+    foreach ($waybill_numbers as $wb_keep) {
+        $keep[waybill_print_safe_filename($wb_keep) . '.html'] = true;
+    }
+    foreach (glob(rtrim($out_dir, '/') . '/*.html') ?: [] as $existing) {
+        if (!isset($keep[basename($existing)])) {
+            @unlink($existing);
+        }
+    }
+
     foreach ($waybill_numbers as $waybill_number) {
         $safe = waybill_print_safe_filename($waybill_number);
         $file = $safe . '.html';
@@ -1286,19 +1428,21 @@ function session_write_waybill_bundle($dbc, $out_dir, array $waybill_numbers, ar
     $title = $options['title'] ?? 'Waybills';
     $back = $options['back_href'] ?? '../session.php';
     $back_label = $options['back_label'] ?? 'All Sessions';
+    $session_nbr = isset($options['session_nbr']) ? (int) $options['session_nbr'] : 0;
+    $phase_num = array_key_exists('phase_num', $options) ? $options['phase_num'] : null;
     $index_html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
         . '<title>' . htmlspecialchars($title) . '</title>'
         . session_static_head_assets()
         . '</head><body>';
-    $index_html .= session_nav_bar_html([
-        ['href' => $back, 'label' => $back_label],
-    ], $title);
-    $session_nbr = isset($options['session_nbr']) ? (int) $options['session_nbr'] : 0;
-    $phase_num = array_key_exists('phase_num', $options) ? $options['phase_num'] : null;
-    if ($session_nbr >= 1) {
-        $index_html .= session_waybill_session_nav_html($session_nbr, $phase_num, $dbc, $options['root'] ?? null);
-    }
+    $index_html .= session_nav_bar_html(
+        session_waybill_index_nav_items($session_nbr, $back, $back_label),
+        $title
+    );
+    $nav_row = $session_nbr >= 1
+        ? session_waybill_session_nav_html($session_nbr, $phase_num, $dbc, $options['root'] ?? null)
+        : '';
     $index_html .= '<main><h1>' . htmlspecialchars($title) . '</h1>'
+        . $nav_row
         . '<div class="card"><p>' . count($written) . ' printable waybill(s) generated from the current database.</p>'
         . ($written ? '<p><a href="print_all.html"><strong>Print all waybills</strong></a></p>' : '')
         . '<ul>' . ($list_items !== '' ? $list_items : '<li>No waybills available.</li>') . '</ul></div>'
@@ -1320,40 +1464,409 @@ function session_write_waybill_bundle($dbc, $out_dir, array $waybill_numbers, ar
     ];
 }
 
+/**
+ * Resolve the waybill number for a switchlist car row by matching the exact
+ * car order (car + consignment/shipment), falling back to the car's most recent
+ * waybill. Waybills are keyed to the car on the switch list, so this may return
+ * a waybill issued in an earlier session (e.g. an order carried forward).
+ */
+function session_waybill_number_for_car_row($dbc, array $row)
+{
+    require_once __DIR__ . '/master_switchlist_helpers.php';
+    // Prefer the waybill number frozen into the switchlist snapshot at
+    // generation time. The section cache captures the car's waybill while the
+    // DB still reflects that phase's state, so later reads (after the live DB
+    // has advanced or rewound) stay pinned to the correct historical waybill.
+    $frozen = trim((string) ($row['waybill_number'] ?? ''));
+    if ($frozen !== '') {
+        return $frozen;
+    }
+    $marks = trim((string) ($row['reporting_marks'] ?? ''));
+    if ($marks === '') {
+        return '';
+    }
+    $car_id = master_sw_car_id_by_marks($dbc, $marks);
+    if ($car_id <= 0) {
+        return '';
+    }
+    $consignment = (int) ($row['consignment_id'] ?? 0);
+    if ($consignment > 0) {
+        $rs = mysqli_query(
+            $dbc,
+            'SELECT co.waybill_number
+             FROM car_orders co
+             JOIN shipments s ON s.id = co.shipment
+             WHERE co.car = ' . $car_id . '
+               AND s.consignment = ' . $consignment . '
+               AND co.waybill_number IS NOT NULL AND co.waybill_number != ""
+             ORDER BY co.waybill_number DESC
+             LIMIT 1'
+        );
+        if ($rs && mysqli_num_rows($rs) > 0) {
+            return (string) mysqli_fetch_row($rs)[0];
+        }
+    }
+    $rs = mysqli_query(
+        $dbc,
+        'SELECT waybill_number FROM car_orders
+         WHERE car = ' . $car_id . '
+           AND waybill_number IS NOT NULL AND waybill_number != ""
+         ORDER BY waybill_number DESC
+         LIMIT 1'
+    );
+    if ($rs && mysqli_num_rows($rs) > 0) {
+        return (string) mysqli_fetch_row($rs)[0];
+    }
+
+    return '';
+}
+
+/** Ordered distinct waybill numbers for the cars in a job's switchlist sections. */
+function session_waybill_numbers_for_sections($dbc, array $sections)
+{
+    $numbers = [];
+    foreach ($sections as $section) {
+        foreach ($section['cars'] ?? [] as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $wb = session_waybill_number_for_car_row($dbc, $row);
+            if ($wb !== '' && !in_array($wb, $numbers, true)) {
+                $numbers[] = $wb;
+            }
+        }
+    }
+
+    return $numbers;
+}
+
+function session_waybill_store_path($session_nbr, $root = null)
+{
+    return session_waybill_dir_for($session_nbr, null, $root) . '/waybills.json';
+}
+
+function session_waybill_store_load($session_nbr, $root = null)
+{
+    $path = session_waybill_store_path($session_nbr, $root);
+    if (is_readable($path)) {
+        $data = json_decode((string) file_get_contents($path), true);
+        if (is_array($data)) {
+            $data['bodies'] = $data['bodies'] ?? [];
+            $data['order'] = $data['order'] ?? [];
+            $data['groups'] = $data['groups'] ?? [];
+            return $data;
+        }
+    }
+    return ['session' => (int) $session_nbr, 'bodies' => [], 'order' => [], 'groups' => []];
+}
+
+function session_waybill_store_save($session_nbr, array $store, $root = null)
+{
+    $dir = session_waybill_dir_for($session_nbr, null, $root);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+    file_put_contents(session_waybill_store_path($session_nbr, $root), json_encode($store));
+}
+
+/** Subset of the store's global order filtered to a set of waybill numbers. */
+function session_waybill_order_subset(array $store, array $subset)
+{
+    $set = array_flip($subset);
+    $out = [];
+    foreach ($store['order'] as $num) {
+        if (isset($set[$num])) {
+            $out[] = $num;
+        }
+    }
+    return $out;
+}
+
+function session_waybill_render_single_page($session_nbr, $waybill_number, $body)
+{
+    $title = 'Waybill ' . $waybill_number;
+    return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
+        . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        . '<title>' . htmlspecialchars($title) . '</title><style>'
+        . waybill_print_page_styles() . '</style></head><body>'
+        . '<div class="noprint"><button type="button" onclick="window.print()">Print</button>'
+        . ' &nbsp; <a href="index.html">Waybill list</a><br /><br /></div>'
+        . '<div class="waybill-sheet">' . $body . '</div></body></html>';
+}
+
+function session_waybill_render_index_page($session_nbr, $title, array $numbers, array $store, array $options = [])
+{
+    $back = $options['back_href'] ?? '../index.php';
+    $back_label = $options['back_label'] ?? ('Session ' . (int) $session_nbr);
+    $phase_num = $options['phase_num'] ?? null;
+    $print_all_file = $options['print_all_file'] ?? 'print_all.html';
+    $dbc = $options['dbc'] ?? null;
+
+    $list_items = '';
+    foreach ($numbers as $num) {
+        $file = waybill_print_safe_filename($num) . '.html';
+        $list_items .= '<li><a href="' . htmlspecialchars($file) . '">' . htmlspecialchars($num) . '</a></li>';
+    }
+
+    $html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        . '<title>' . htmlspecialchars($title) . '</title>'
+        . session_static_head_assets()
+        . '</head><body>';
+    $html .= session_nav_bar_html(
+        session_waybill_index_nav_items($session_nbr, $back, $back_label),
+        $title
+    );
+    $nav_row = ($phase_num === null && $session_nbr >= 1)
+        ? session_waybill_session_nav_html($session_nbr, null, $dbc, $options['root'] ?? null)
+        : '';
+    $html .= '<main><h1>' . htmlspecialchars($title) . '</h1>' . $nav_row
+        . '<div class="card"><p>' . count($numbers) . ' waybill(s).</p>'
+        . ($numbers ? '<p><a href="' . htmlspecialchars($print_all_file) . '"><strong>Print all waybills</strong></a></p>' : '')
+        . '<ul>' . ($list_items !== '' ? $list_items : '<li>No waybills available.</li>') . '</ul></div>'
+        . '</main></body></html>';
+
+    return $html;
+}
+
+function session_waybill_render_print_all_page($session_nbr, $title, array $numbers, array $store)
+{
+    $sheets = '';
+    foreach ($numbers as $num) {
+        $body = $store['bodies'][$num] ?? '';
+        if ($body !== '') {
+            $sheets .= '<div class="waybill-sheet">' . $body . '</div>';
+        }
+    }
+    $controls = '<div class="noprint"><button type="button" onclick="window.print()">Print all</button>'
+        . ' &nbsp; <a href="index.html">Back</a><br /><br /></div>';
+
+    return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        . '<title>' . htmlspecialchars($title) . ' — print all</title><style>'
+        . waybill_print_page_styles() . '</style></head><body>'
+        . $controls . $sheets . '</body></html>';
+}
+
+/**
+ * Rebuild every waybill page (session, per-job, per-phase-train) plus the
+ * individual snapshot pages, from the frozen store. Pure aggregation — no new
+ * rendering — so previously captured snapshots stay unchanged.
+ */
+function session_waybill_rebuild_pages($dbc, $session_nbr, array $store, $root = null)
+{
+    require_once __DIR__ . '/waybill_print_helpers.php';
+    $root = $root ?? session_web_root();
+    $dir = session_waybill_dir_for($session_nbr, null, $root);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+
+    // Individual snapshot pages + cleanup of stale ones.
+    $keep = ['index.html' => true, 'print_all.html' => true];
+    foreach ($store['order'] as $num) {
+        $safe = waybill_print_safe_filename($num);
+        $keep[$safe . '.html'] = true;
+        file_put_contents(
+            $dir . '/' . $safe . '.html',
+            session_waybill_render_single_page($session_nbr, $num, $store['bodies'][$num] ?? '')
+        );
+    }
+
+    // Session scope.
+    file_put_contents($dir . '/index.html', session_waybill_render_index_page(
+        $session_nbr,
+        'Waybills — session ' . (int) $session_nbr,
+        $store['order'],
+        $store,
+        ['back_href' => '../index.php', 'back_label' => 'Session ' . (int) $session_nbr, 'dbc' => $dbc, 'root' => $root]
+    ));
+    file_put_contents($dir . '/print_all.html', session_waybill_render_print_all_page(
+        $session_nbr,
+        'Waybills — session ' . (int) $session_nbr,
+        $store['order'],
+        $store
+    ));
+    $keep['waybills.json'] = true;
+
+    // Per-job and per-phase-train scopes.
+    $by_job = [];
+    foreach ($store['groups'] as $key => $nums) {
+        // key = "JOB|PHASE"
+        [$job, $phase] = array_pad(explode('|', $key, 2), 2, '');
+        $job = (string) $job;
+        $phase = (int) $phase;
+        $by_job[$job] = array_values(array_unique(array_merge($by_job[$job] ?? [], $nums)));
+
+        $phase_numbers = session_waybill_order_subset($store, $nums);
+        $pfile = 'phase_' . session_phase_pad($phase) . '_' . $job;
+        $keep[$pfile . '.index.html'] = true;
+        $keep[$pfile . '.print_all.html'] = true;
+        $title = $job . ' waybills — session ' . (int) $session_nbr . ', phase ' . $phase;
+        file_put_contents($dir . '/' . $pfile . '.index.html', session_waybill_render_index_page(
+            $session_nbr,
+            $title,
+            $phase_numbers,
+            $store,
+            ['back_href' => '../index.php', 'back_label' => 'Session ' . (int) $session_nbr, 'phase_num' => $phase, 'print_all_file' => $pfile . '.print_all.html', 'dbc' => $dbc, 'root' => $root]
+        ));
+        file_put_contents($dir . '/' . $pfile . '.print_all.html', session_waybill_render_print_all_page(
+            $session_nbr,
+            $title,
+            $phase_numbers,
+            $store
+        ));
+    }
+    foreach ($by_job as $job => $nums) {
+        $job_numbers = session_waybill_order_subset($store, $nums);
+        $jfile = 'job_' . $job;
+        $keep[$jfile . '.index.html'] = true;
+        $keep[$jfile . '.print_all.html'] = true;
+        $title = $job . ' waybills — session ' . (int) $session_nbr;
+        file_put_contents($dir . '/' . $jfile . '.index.html', session_waybill_render_index_page(
+            $session_nbr,
+            $title,
+            $job_numbers,
+            $store,
+            ['back_href' => '../index.php', 'back_label' => 'Session ' . (int) $session_nbr, 'phase_num' => 0, 'print_all_file' => $jfile . '.print_all.html', 'dbc' => $dbc, 'root' => $root]
+        ));
+        file_put_contents($dir . '/' . $jfile . '.print_all.html', session_waybill_render_print_all_page(
+            $session_nbr,
+            $title,
+            $job_numbers,
+            $store
+        ));
+    }
+
+    // Remove stale files from earlier schemes/runs.
+    foreach (glob($dir . '/*.html') ?: [] as $existing) {
+        if (!isset($keep[basename($existing)])) {
+            @unlink($existing);
+        }
+    }
+}
+
 function session_refresh_session_waybills($dbc, $session_nbr, $root = null)
 {
     require_once __DIR__ . '/waybill_print_helpers.php';
     $root = $root ?? session_web_root();
-    $numbers = waybill_print_session_numbers($dbc, $session_nbr);
-    return session_write_waybill_bundle($dbc, session_waybill_dir_for($session_nbr, null, $root), $numbers, [
-        'title' => 'Waybills — session ' . (int) $session_nbr,
-        'back_href' => '../index.php',
-        'back_label' => 'Session ' . (int) $session_nbr,
-        'session_nbr' => $session_nbr,
-        'phase_num' => null,
-        'root' => $root,
-    ]);
+    $store = session_waybill_store_load($session_nbr, $root);
+    session_waybill_rebuild_pages($dbc, $session_nbr, $store, $root);
+    return [
+        'path' => session_waybill_dir_for($session_nbr, null, $root) . '/index.html',
+        'print_all' => session_waybill_dir_for($session_nbr, null, $root) . '/print_all.html',
+        'count' => count($store['order']),
+        'waybills' => $store['order'],
+    ];
 }
 
+/**
+ * Capture the waybills for the switch lists generated in a workflow phase.
+ * Waybills are derived from the cars on each train's switch list (not the
+ * session-number prefix), rendered once and frozen into the session store so
+ * each phase keeps its own snapshot. Session/job/phase pages are rebuilt from
+ * the store.
+ */
 function session_generate_waybills_for_phase($dbc, $session_nbr, $phase_num, $root = null)
 {
     require_once __DIR__ . '/waybill_print_helpers.php';
+    require_once __DIR__ . '/master_switchlist_helpers.php';
     $root = $root ?? session_web_root();
-    $out_dir = session_waybill_dir_for($session_nbr, $phase_num, $root);
-    $numbers = waybill_print_session_numbers($dbc, $session_nbr);
-    $phase_back = '../../index.php';
-    $result = session_write_waybill_bundle($dbc, $out_dir, $numbers, [
-        'title' => 'Waybills — session ' . (int) $session_nbr . ', phase ' . (int) $phase_num,
-        'back_href' => $phase_back,
-        'back_label' => 'Session ' . (int) $session_nbr,
-        'session_nbr' => $session_nbr,
-        'phase_num' => (int) $phase_num,
-        'root' => $root,
-    ]);
-    $session_bundle = session_refresh_session_waybills($dbc, $session_nbr, $root);
-    $result['session_print_all'] = $session_bundle['print_all'] ?? null;
-    $result['session_count'] = $session_bundle['count'] ?? 0;
-    return $result;
+    $phase_num = (int) $phase_num;
+
+    $manifest = session_load_manifest($session_nbr, $root);
+    $phase_dir = session_phase_output_dir($session_nbr, $phase_num, $root);
+
+    // Which trains ran in this workflow phase.
+    $jobs = [];
+    foreach ($manifest['phases'] ?? [] as $phase) {
+        if ((int) ($phase['phase'] ?? 0) === $phase_num) {
+            $jobs = array_values(array_filter(array_map('trim', $phase['jobs'] ?? [])));
+            break;
+        }
+    }
+    if (!$jobs) {
+        foreach (glob($phase_dir . '/*_master.json') ?: [] as $cache) {
+            if (preg_match('#/([^/]+)_session_\d+_master\.json$#', $cache, $m)) {
+                $jobs[] = $m[1];
+            }
+        }
+        $jobs = array_values(array_unique($jobs));
+    }
+
+    $store = session_waybill_store_load($session_nbr, $root);
+    $settings = waybill_print_settings($dbc);
+    $phase_total_numbers = 0;
+
+    foreach ($jobs as $job) {
+        $sections = master_sw_load_sections_cache($phase_dir, $job, $session_nbr);
+        if (!is_array($sections) || count($sections) === 0) {
+            continue;
+        }
+        $numbers = session_waybill_numbers_for_sections($dbc, $sections);
+        // Snapshot bodies once (freeze on first capture).
+        foreach ($numbers as $num) {
+            if (!isset($store['bodies'][$num])) {
+                $body = waybill_print_render_body($dbc, $num, $settings);
+                if (trim((string) $body) === '') {
+                    continue;
+                }
+                $store['bodies'][$num] = $body;
+            }
+            if (!in_array($num, $store['order'], true)) {
+                $store['order'][] = $num;
+            }
+        }
+        // Only keep numbers that actually have a snapshot body.
+        $numbers = array_values(array_filter($numbers, function ($n) use ($store) {
+            return isset($store['bodies'][$n]);
+        }));
+        $store['groups'][$job . '|' . $phase_num] = $numbers;
+        $phase_total_numbers += count($numbers);
+    }
+
+    session_waybill_store_save($session_nbr, $store, $root);
+    session_waybill_rebuild_pages($dbc, $session_nbr, $store, $root);
+
+    return [
+        'path' => session_waybill_dir_for($session_nbr, null, $root) . '/index.html',
+        'print_all' => session_waybill_dir_for($session_nbr, null, $root) . '/print_all.html',
+        'count' => $phase_total_numbers,
+        'session_count' => count($store['order']),
+        'session_print_all' => session_waybill_dir_for($session_nbr, null, $root) . '/print_all.html',
+        'waybills' => $store['order'],
+    ];
+}
+
+/**
+ * Normalized "generate waybills" entry point shared by the recipe runner and
+ * the standalone dispatch handler so both behave identically.
+ *
+ * Captures waybills for every phase that produced switch lists (idempotent:
+ * waybill bodies freeze on first capture, so re-running never re-renders or
+ * corrupts an earlier phase's snapshot), then rebuilds all session/job/phase
+ * pages from the accumulated store. This means that if orders are filled and
+ * additional switch lists are generated later in the session, every phase's
+ * waybills are rolled into one complete, self-consistent session bundle.
+ */
+function session_capture_and_refresh_waybills($dbc, $session_nbr, $root = null)
+{
+    $root = $root ?? session_web_root();
+    $manifest = session_load_manifest($session_nbr, $root);
+
+    foreach ($manifest['phases'] ?? [] as $phase) {
+        $pn = (int) ($phase['phase'] ?? 0);
+        if ($pn < 1) {
+            continue;
+        }
+        // Only phases with a switch-list cache capture anything; the rest are
+        // no-ops. Bodies already frozen by generate_switchlists stay untouched.
+        session_generate_waybills_for_phase($dbc, $session_nbr, $pn, $root);
+    }
+
+    // Rebuild pages from the now-complete store (also covers sessions whose
+    // waybills were captured but whose pages need refreshing).
+    $wb = session_refresh_session_waybills($dbc, $session_nbr, $root);
+    $wb['session_count'] = $wb['count'] ?? 0;
+    return $wb;
 }
 
 function session_run_recipe($dbc, array $recipe, array $options = [])
@@ -1369,22 +1882,41 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
     $session_nbr = function_exists('warm_start_get_session')
         ? warm_start_get_session($dbc)
         : session_get_db_session($dbc);
+    $recipe_start_session = (int) $session_nbr;
     $manifest = session_load_manifest($session_nbr, $root);
-    // A run that begins at the first step (re)builds the session from scratch, so
-    // purge any previously generated files/manifest entries first. This prevents
-    // stale phase directories, waybills, and caches from accumulating under
-    // session_N when the same session is generated more than once. Callers can
-    // force or suppress this with the 'reset_output' option.
+    // Output is keyed to the operating session that owns the switch lists. A
+    // step such as generate_orders/begin_session can advance the DB session
+    // mid-run, so the switch lists (and their waybills) belong to the session
+    // that is current when they are produced -- not the session at recipe
+    // start. The output session number is therefore (re)synced to the live DB
+    // right before any output step (see $sync_output_session), and a fresh run
+    // (reset_output) purges that session's stale files exactly once.
     $reset_output = array_key_exists('reset_output', $options)
         ? (bool) $options['reset_output']
         : ($from_step <= 1);
-    if ($reset_output) {
-        session_reset_output($session_nbr, $root);
-        $manifest['phases'] = [];
-        $manifest['jobs'] = [];
-        unset($manifest['waybills']);
-    }
+    $reset_applied_for = null;
     $phase_num = count($manifest['phases'] ?? []);
+
+    $sync_output_session = function () use (
+        $dbc, $root, $reset_output, &$session_nbr, &$manifest, &$phase_num, &$reset_applied_for
+    ) {
+        $live = function_exists('warm_start_get_session')
+            ? (int) warm_start_get_session($dbc)
+            : (int) session_get_db_session($dbc);
+        if ($live > 0 && $live !== (int) $session_nbr) {
+            $session_nbr = $live;
+            $manifest = session_load_manifest($session_nbr, $root);
+            $phase_num = count($manifest['phases'] ?? []);
+        }
+        if ($reset_output && $reset_applied_for !== (int) $session_nbr) {
+            session_reset_output($session_nbr, $root);
+            $manifest['phases'] = [];
+            $manifest['jobs'] = [];
+            unset($manifest['waybills']);
+            $phase_num = 0;
+            $reset_applied_for = (int) $session_nbr;
+        }
+    };
     $ctx = session_evaluate_context($dbc, $config);
     $log = [];
     $stopped = false;
@@ -1410,6 +1942,12 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
         }
         $n = $pc + 1;
         $fid = $step['function'] ?? '';
+
+        if (array_key_exists('enabled', $step) && !$step['enabled']) {
+            $log[] = ['step' => $n, 'action' => 'skipped_disabled'];
+            $pc++;
+            continue;
+        }
 
         if ($fid === 'stop') {
             $stopped = true;
@@ -1464,6 +2002,7 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
         }
 
         if ($fid === 'generate_switchlists') {
+            $sync_output_session();
             $phase_num++;
             $jobs = session_resolve_jobs_param($step['params']['jobs'] ?? 'all', $dbc);
             $phase_dir = session_phase_output_dir($session_nbr, $phase_num, $root);
@@ -1472,6 +2011,7 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
                 'format' => $fmt,
                 'recipe' => $recipe,
                 'through_step' => $n - 1,
+                'session_override' => $session_nbr,
             ]);
             session_register_phase($manifest, $phase_num, [
                 'step' => $n,
@@ -1481,19 +2021,29 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
                 'label' => operational_steps_compile_recipe(['steps' => [$step]])[0]['instruction'] ?? 'Generate Switch Lists',
                 'output' => $phase_dir,
             ]);
-            $log[] = ['step' => $n, 'phase' => $phase_num, 'written' => $written];
+            // Snapshot each phase's waybills immediately while the DB still
+            // reflects this phase's state. The switch list cache freezes each
+            // car's waybill number, so the waybill bundle always matches the
+            // switch lists regardless of where generate_waybills runs.
+            session_save_manifest($session_nbr, $manifest, $root);
+            $phase_wb = session_generate_waybills_for_phase($dbc, $session_nbr, $phase_num, $root);
+            $log[] = ['step' => $n, 'phase' => $phase_num, 'written' => $written, 'waybills' => $phase_wb['count'] ?? 0];
             $pc++;
             continue;
         }
         if ($fid === 'generate_waybills') {
+            $sync_output_session();
             if ($phase_num < 1) {
                 $phase_num = 1;
             }
-            $wb = session_generate_waybills_for_phase($dbc, $session_nbr, $phase_num, $root);
+            // Capture every switch-list phase (idempotent) then rebuild pages,
+            // so filling orders and generating extra switch lists mid-session
+            // still yields one complete, self-consistent waybill bundle.
+            $wb = session_capture_and_refresh_waybills($dbc, $session_nbr, $root);
             foreach ($manifest['phases'] as &$phase_entry) {
                 if ((int) ($phase_entry['phase'] ?? 0) === (int) $phase_num) {
                     $phase_entry['waybills'] = [
-                        'count' => $wb['count'] ?? 0,
+                        'count' => session_waybill_phase_count($session_nbr, $phase_num, $root),
                         'index' => 'waybills/index.html',
                         'print_all' => 'waybills/print_all.html',
                     ];
@@ -1524,12 +2074,15 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
         $pc++;
     }
 
+    session_save_manifest($session_nbr, $manifest, $root);
+    // Persist run stats after the manifest write so phase/waybill data is on
+    // disk first; persist reloads the manifest and adds run_stats. Doing this
+    // after session_save_manifest avoids the final save wiping run_stats.
     session_persist_recipe_run_stats($dbc, $log, [
         'start_step' => $from_step,
         'stop_step' => $to_step,
-    ], $session_nbr, $root);
+    ], $recipe_start_session, $root);
 
-    session_save_manifest($session_nbr, $manifest, $root);
     $final_session = function_exists('warm_start_get_session')
         ? (int) warm_start_get_session($dbc)
         : (int) session_get_db_session($dbc);
@@ -1587,10 +2140,42 @@ function session_phase_pad($phase_num)
 
 function session_waybills_bundle_ready($session_nbr, $phase_num = null, $root = null)
 {
-    $dir = session_waybill_dir_for($session_nbr, $phase_num, $root);
-    $print = $dir . '/print_all.html';
+    // Waybills now live in a single session-level store; "ready" means at least
+    // one waybill has been captured for the session.
+    $store = session_waybill_store_load($session_nbr, $root);
+    return !empty($store['order']);
+}
 
-    return is_file($print) && filesize($print) > 800;
+/** Waybill counts for a train (job) in a session, from the snapshot store. */
+function session_waybill_job_count($session_nbr, $job, $root = null)
+{
+    $store = session_waybill_store_load($session_nbr, $root);
+    $nums = [];
+    foreach ($store['groups'] ?? [] as $key => $group) {
+        [$gjob] = array_pad(explode('|', $key, 2), 2, '');
+        if ((string) $gjob === (string) $job) {
+            foreach ($group as $n) {
+                $nums[$n] = true;
+            }
+        }
+    }
+    return count($nums);
+}
+
+/** Distinct waybill count captured for a given workflow phase. */
+function session_waybill_phase_count($session_nbr, $phase_num, $root = null)
+{
+    $store = session_waybill_store_load($session_nbr, $root);
+    $nums = [];
+    foreach ($store['groups'] ?? [] as $key => $group) {
+        [, $gphase] = array_pad(explode('|', $key, 2), 2, '');
+        if ((int) $gphase === (int) $phase_num) {
+            foreach ($group as $n) {
+                $nums[$n] = true;
+            }
+        }
+    }
+    return count($nums);
 }
 
 function session_switchlist_styles()
@@ -1753,14 +2338,7 @@ function session_waybill_href_for_number($waybill_number, $session_nbr, $phase_n
     require_once __DIR__ . '/waybill_print_helpers.php';
     $root = $root ?? session_web_root();
     $file = waybill_print_safe_filename($waybill_number) . '.html';
-    if ($phase_num !== null) {
-        $phase_path = session_waybill_dir_for($session_nbr, $phase_num, $root) . '/' . $file;
-        if (is_file($phase_path)) {
-            return session_output_url('session_' . (int) $session_nbr
-                . '/phase_' . session_phase_pad($phase_num)
-                . '/waybills/' . $file);
-        }
-    }
+    // All snapshot pages live in the session-level waybills directory.
     $session_path = session_waybill_dir_for($session_nbr, null, $root) . '/' . $file;
     if (is_file($session_path)) {
         return session_output_url('session_' . (int) $session_nbr . '/waybills/' . $file);
@@ -1850,16 +2428,7 @@ function session_train_switchlist_legs($dbc, $session_nbr, $job, $root = null)
         $work_leg_total = count($sections);
         foreach ($sections as $idx => $section) {
             $work_leg = $idx + 1;
-            $numbers = [];
-            foreach ($section['cars'] ?? [] as $row) {
-                if (!is_array($row)) {
-                    continue;
-                }
-                $wb = session_waybill_for_marks($dbc, $row['reporting_marks'] ?? '');
-                if ($wb !== '' && !in_array($wb, $numbers, true)) {
-                    $numbers[] = $wb;
-                }
-            }
+            $numbers = session_waybill_numbers_for_sections($dbc, [$section]);
             sort($numbers, SORT_NATURAL | SORT_FLAG_CASE);
             $waybills = [];
             foreach ($numbers as $wb) {
@@ -1910,26 +2479,149 @@ function session_train_switchlist_phase_links($session_nbr, $job, array $phase_n
     return $links;
 }
 
-function session_manifest_has_switchlists(array $manifest, $session_nbr, $root = null)
+/**
+ * Per-train output counts for a session: number of generated switch lists
+ * (work-legs across workflow phases) and the number of distinct waybills for
+ * the cars that train handles.
+ *
+ * @return array{switchlists:int, waybills:int}
+ */
+function session_train_output_counts($dbc, $session_nbr, $job, $root = null)
 {
+    $legs = session_train_switchlist_legs($dbc, $session_nbr, $job, $root);
+    $waybills = [];
+    foreach ($legs as $leg) {
+        foreach ($leg['waybills'] ?? [] as $wb) {
+            $num = $wb['number'] ?? '';
+            if ($num !== '') {
+                $waybills[$num] = true;
+            }
+        }
+    }
+
+    return [
+        'switchlists' => count($legs),
+        'waybills' => count($waybills),
+    ];
+}
+
+/**
+ * Build a session-wide "print all switch lists" page that concatenates every
+ * built workflow phase and train for the session into one printable document at
+ * session_N/print_all.html. Returns the relative path (for session_output_url)
+ * or null when the session has no generated switch lists.
+ */
+function session_build_switchlist_print_all($dbc, $session_nbr, $root = null)
+{
+    require_once __DIR__ . '/master_switchlist_helpers.php';
     $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
+    $manifest = session_load_manifest($session_nbr, $root);
+
+    $phases_html = '';
+    $phase_count = 0;
+    $trains = [];
     foreach ($manifest['phases'] ?? [] as $phase) {
-        $phase_num = (int) ($phase['phase'] ?? 0);
-        if ($phase_num < 1) {
+        $pnum = (int) ($phase['phase'] ?? 0);
+        if ($pnum < 1) {
             continue;
         }
+        $phase_dir = session_phase_output_dir($session_nbr, $pnum, $root);
         foreach ($phase['jobs'] ?? [] as $job) {
             $job = trim((string) $job);
             if ($job === '') {
                 continue;
             }
-            $index = session_output_fs_path('session_' . (int) $session_nbr
-                . '/phase_' . session_phase_pad($phase_num)
-                . '/' . rawurlencode((string) $job)
-                . '/index.html', $root);
-            if (is_file($index) && filesize($index) > 400) {
-                return true;
+            $sections = master_sw_load_sections_cache($phase_dir, $job, $session_nbr);
+            if (!is_array($sections) || count($sections) === 0) {
+                continue;
             }
+            $meta = master_sw_job_meta($dbc, $job);
+            if ($meta === null) {
+                continue;
+            }
+            $table_name = $meta['table_name'];
+            $total = count($sections);
+            for ($i = 0; $i < $total; $i++) {
+                $phases_html .= master_sw_render_print_all_phase_body(
+                    $dbc,
+                    $sections[$i],
+                    $i + 1,
+                    $total,
+                    $table_name
+                );
+                $phase_count++;
+            }
+            $trains[$job] = true;
+        }
+    }
+
+    if ($phases_html === '') {
+        return null;
+    }
+
+    $rel = 'session_' . $session_nbr . '/print_all.html';
+    $html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
+        . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        . '<title>Session ' . (int) $session_nbr . ' — print all switch lists</title>'
+        . master_sw_render_head_assets()
+        . '</head><body>'
+        . session_nav_bar_html([
+            ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+            ['href' => '/sts/session.php?session=' . $session_nbr, 'label' => 'All Sessions', 'icon' => 'collection'],
+            ['href' => '/sts/session_overview.php?session=' . $session_nbr, 'label' => 'Session ' . $session_nbr, 'icon' => 'calendar-event'],
+        ], 'Print all switch lists · ' . count($trains) . ' train(s) · ' . $phase_count . ' phase(s)')
+        . '<div class="page">'
+        . '<div class="noprint" style="margin-bottom:12px;">'
+        . '<button onclick="window.print()">PRINT ALL SWITCH LISTS</button>'
+        . '<p style="margin:8px 0 0; color:#555; font-size:14px;">Each phase starts on a new printed page.</p>'
+        . '</div>'
+        . $phases_html
+        . '</div></body></html>';
+
+    $fs = session_output_fs_path($rel, $root);
+    $dir = dirname($fs);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+    if (file_put_contents($fs, $html) === false) {
+        return null;
+    }
+
+    return $rel;
+}
+
+/** True when at least one train in the phase has a generated switch-list page. */
+function session_phase_has_switchlists(array $phase, $session_nbr, $root = null)
+{
+    $root = $root ?? session_web_root();
+    $phase_num = (int) ($phase['phase'] ?? 0);
+    if ($phase_num < 1) {
+        return false;
+    }
+    foreach ($phase['jobs'] ?? [] as $job) {
+        $job = trim((string) $job);
+        if ($job === '') {
+            continue;
+        }
+        $index = session_output_fs_path('session_' . (int) $session_nbr
+            . '/phase_' . session_phase_pad($phase_num)
+            . '/' . rawurlencode((string) $job)
+            . '/index.html', $root);
+        if (is_file($index) && filesize($index) > 400) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function session_manifest_has_switchlists(array $manifest, $session_nbr, $root = null)
+{
+    $root = $root ?? session_web_root();
+    foreach ($manifest['phases'] ?? [] as $phase) {
+        if (session_phase_has_switchlists($phase, $session_nbr, $root)) {
+            return true;
         }
     }
 

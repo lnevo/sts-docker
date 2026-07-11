@@ -353,6 +353,19 @@ a.btn-editor-primary i {
   font-size: 14px;
   margin: 0 0 6px;
 }
+.switchlist-leg-waybills-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.switchlist-leg-waybills-head h3 {
+  margin: 0;
+}
+.switchlist-leg-waybills-head .switchlist-leg-print {
+  margin-left: auto;
+}
 .session-nav-row .btn.disabled,
 .session-quick-links .btn.disabled {
   opacity: 0.45;
@@ -361,6 +374,10 @@ a.btn-editor-primary i {
 .session-nav-row-stats {
   margin-top: 0;
   margin-bottom: 12px;
+}
+.waybill-session-nav {
+  margin: 14px 0 18px;
+  gap: 10px;
 }
 
 pre.switchlist {
@@ -461,9 +478,14 @@ pre.switchlist {
 /* Detail panels */
 .srs-panels {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 16px;
   align-items: start;
+}
+@media (max-width: 640px) {
+  .srs-panels {
+    grid-template-columns: 1fr;
+  }
 }
 .srs-panel {
   border: 1px solid var(--srs-border);

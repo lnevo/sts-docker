@@ -3103,6 +3103,8 @@ function operational_steps_normalize_step(array $step)
     $catalog_description = trim($step['catalog_description'] ?? '');
     $description = trim($step['description'] ?? '');
     $structured_import = !empty($step['structured_import']);
+    $step_disabled = array_key_exists('enabled', $step)
+        && filter_var($step['enabled'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) === false;
 
     // Editor / structured CSV rows keep catalog function + params. Re-guessing from
     // instruction text is only for legacy CSV rows (no Function column).
@@ -3311,6 +3313,9 @@ function operational_steps_normalize_step(array $step)
         'function' => $fid,
         'params' => $params,
     ];
+    if ($step_disabled) {
+        $normalized['enabled'] = false;
+    }
     $def = $catalog[$fid] ?? [];
     if (!empty($def)) {
         [$catalog_description, $description] = operational_steps_migrate_step_descriptions(
@@ -3962,12 +3967,9 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
             require_once __DIR__ . '/session_helpers.php';
             $session = warm_start_get_session($dbc);
             $root = $config['session_root'] ?? session_web_root();
-            $phase_num = (int) ($config['phase'] ?? 0);
-            if ($phase_num < 1) {
-                $manifest = session_load_manifest($session, $root);
-                $phase_num = max(1, count($manifest['phases'] ?? []));
-            }
-            $result['waybills'] = session_generate_waybills_for_phase($dbc, $session, $phase_num, $root);
+            // Same normalized path as the recipe runner: capture every
+            // switch-list phase (idempotent) and rebuild the session bundle.
+            $result['waybills'] = session_capture_and_refresh_waybills($dbc, $session, $root);
             break;
         case 'render_switchlists':
             require_once __DIR__ . '/session_helpers.php';

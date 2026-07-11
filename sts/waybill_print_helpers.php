@@ -31,12 +31,19 @@ function waybill_print_session_prefix($session_nbr)
 function waybill_print_session_numbers($dbc, $session_nbr)
 {
     $prefix = waybill_print_session_prefix($session_nbr);
+    // Mirror display_waybill.php / drop_down_car_orders: only produce waybills
+    // for car orders that are actually filled (a car is assigned) AND whose car
+    // is currently at a station (current_location_id > 0). Ordered-but-unfilled
+    // orders (car = 0) and enroute cars have no printable waybill, so excluding
+    // them keeps this list in step with what the app would let you display/print.
     $rs = mysqli_query(
         $dbc,
-        'SELECT DISTINCT waybill_number
+        'SELECT DISTINCT car_orders.waybill_number
          FROM car_orders
-         WHERE waybill_number LIKE "' . mysqli_real_escape_string($dbc, $prefix) . '-%"
-         ORDER BY waybill_number'
+         JOIN cars ON cars.id = car_orders.car
+         WHERE car_orders.waybill_number LIKE "' . mysqli_real_escape_string($dbc, $prefix) . '-%"
+           AND cars.current_location_id > 0
+         ORDER BY car_orders.waybill_number'
     );
     $numbers = [];
     while ($row = mysqli_fetch_array($rs)) {

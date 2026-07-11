@@ -29,15 +29,25 @@ $has_data = is_dir($dir);
 $phases = $manifest['phases'] ?? [];
 $jobs_meta = $manifest['jobs'] ?? [];
 $jobs = array_keys($jobs_meta);
-$run_stats = $manifest['run_stats'] ?? [];
-$run_stats['generated'] = session_count_generated_output($manifest);
+$train_counts = [];
+$session_print_all_rel = null;
+if ($jobs) {
+    $dbc_trains = open_db();
+    foreach ($jobs as $job) {
+        $train_counts[$job] = session_train_output_counts($dbc_trains, $selected, $job, $root);
+    }
+    $session_print_all_rel = session_build_switchlist_print_all($dbc_trains, $selected, $root);
+    mysqli_close($dbc_trains);
+}
+$selected_manifest_stats = $manifest['run_stats'] ?? [];
+// Cumulative roll-up of operations, cars moved, cars by station, and generated
+// output across sessions 1..selected. The operations dashboard is kept as the
+// selected session's own snapshot (state at that time), not aggregated.
+$run_stats = session_aggregate_run_stats_through($selected, $root);
+$run_stats['dashboard'] = $selected_manifest_stats['dashboard'] ?? [];
 if ($selected === $current) {
     require_once $sts_dir . '/operations_stats.php';
     $dbc_stats = open_db();
-    if (empty($run_stats['station_counts']) && (int) ($run_stats['on_train_count'] ?? 0) === 0) {
-        $run_stats['station_counts'] = session_station_car_counts($dbc_stats);
-        $run_stats['on_train_count'] = session_on_train_car_count($dbc_stats);
-    }
     $run_stats['dashboard'] = operations_get_stats($dbc_stats);
     $run_stats['dashboard_live'] = true;
     mysqli_close($dbc_stats);
@@ -63,6 +73,8 @@ $switchlist_styles = session_switchlist_styles();
 <?php
 session_render_nav_bar([
     ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+    ['href' => 'editor.html', 'label' => 'Session Editor', 'icon' => 'pencil-square'],
+    ['href' => 'session-sitemap.html', 'label' => 'Session Site Map', 'icon' => 'diagram-3'],
 ], 'Operating Sessions');
 ?>
   <main>
@@ -88,24 +100,14 @@ session_render_nav_bar([
         <?php endif; ?>
       </p>
       <div class="session-quick-links">
-        <a class="btn btn-outline-dark btn-sm" id="all-switchlists-link" href="session_switchlists.php?session=<?php echo (int) $selected; ?>&amp;style=<?php echo urlencode($selected_style); ?>"><i class="bi bi-list-check"></i> All switch lists</a>
+        <a class="btn btn-outline-dark btn-sm" href="<?php echo htmlspecialchars(session_session_index_href($selected)); ?>"><i class="bi bi-clipboard-data"></i> Session overview</a>
+        <?php if ($session_print_all_rel !== null): ?>
+          <a class="btn btn-outline-dark btn-sm" href="<?php echo htmlspecialchars(session_output_url($session_print_all_rel)); ?>"><i class="bi bi-printer"></i> Print all switch lists</a>
+        <?php endif; ?>
         <a class="btn btn-outline-dark btn-sm" href="<?php echo htmlspecialchars(session_output_url('session_' . (int) $selected . '/waybills/index.html')); ?>"><i class="bi bi-file-text"></i> All waybills</a>
         <?php if (session_waybills_bundle_ready($selected, null, $root)): ?>
           <a class="btn btn-outline-dark btn-sm" href="<?php echo htmlspecialchars(session_output_url('session_' . (int) $selected . '/waybills/print_all.html')); ?>"><i class="bi bi-printer"></i> Print all waybills</a>
         <?php endif; ?>
-        <form class="session-style-form" id="switchlist-style-form">
-          <label>
-            <span>Style</span>
-            <select id="switchlist-style" name="style">
-              <?php foreach ($switchlist_styles as $style_key => $style_label): ?>
-                <option value="<?php echo htmlspecialchars($style_key); ?>"<?php echo $style_key === $selected_style ? ' selected' : ''; ?>>
-                  <?php echo htmlspecialchars($style_label); ?>
-                </option>
-              <?php endforeach; ?>
-            </select>
-          </label>
-          <span class="muted" id="switchlist-style-status"><?php echo $style_available ? 'Ready' : 'Will generate on select'; ?></span>
-        </form>
       </div>
       <?php if (!$has_switchlists): ?>
         <p class="muted" style="margin:12px 0 0;">Switch lists not generated yet — run <em>Generate Switch Lists</em> in the Session Editor.</p>
@@ -140,11 +142,15 @@ session_render_nav_bar([
       <?php if (count($jobs)): ?>
         <ul class="phase-list train-tiles">
           <?php foreach ($jobs as $job): ?>
-            <?php $job_phase_count = count($jobs_meta[$job]['phases'] ?? []); ?>
+            <?php
+              $tc = $train_counts[$job] ?? ['switchlists' => 0, 'waybills' => 0];
+              $sw = (int) $tc['switchlists'];
+              $wb = (int) $tc['waybills'];
+            ?>
             <li>
               <a href="job.php?session=<?php echo (int) $selected; ?>&amp;job=<?php echo urlencode($job); ?>">
                 <?php echo htmlspecialchars($job); ?>
-                <span class="meta">Switch lists &amp; waybills<?php echo $job_phase_count ? ' · ' . $job_phase_count . ' phase(s)' : ''; ?></span>
+                <span class="meta"><?php echo $sw . ' switchlist' . ($sw === 1 ? '' : 's') . ' · ' . $wb . ' waybill' . ($wb === 1 ? '' : 's'); ?></span>
               </a>
             </li>
           <?php endforeach; ?>
@@ -155,70 +161,19 @@ session_render_nav_bar([
     </div>
 
     <div class="card">
-      <h2 style="margin:0 0 8px;">Session <?php echo (int) $selected; ?> statistics</h2>
+      <h2 style="margin:0 0 8px;">Statistics<?php echo $selected > 1 ? ' — sessions 1–' . (int) $selected : ''; ?></h2>
       <?php echo session_render_run_stats_block(
           $run_stats,
-          'No workflow statistics recorded for this session yet. Run the workflow in the Session Editor while this session is active.'
+          'No workflow statistics recorded through this session yet. Run the workflow in the Session Editor.'
       ); ?>
     </div>
   </main>
   <script>
     (function () {
       const sessionSelect = document.getElementById('session-select');
-      const styleSelect = document.getElementById('switchlist-style');
-      const styleStatus = document.getElementById('switchlist-style-status');
-      const allLink = document.getElementById('all-switchlists-link');
-      const sessionId = <?php echo (int) $selected; ?>;
-      const storageKey = 'session_switchlist_style';
-
       sessionSelect?.addEventListener('change', function () {
         document.getElementById('session-select-form')?.submit();
       });
-
-      const savedStyle = localStorage.getItem(storageKey);
-      if (savedStyle && styleSelect && !window.location.search.includes('style=')) {
-        styleSelect.value = savedStyle;
-      }
-
-      function applyStyleToLinks(style) {
-        if (allLink) {
-          allLink.href = 'session_switchlists.php?session=' + sessionId + '&style=' + encodeURIComponent(style);
-        }
-        const url = new URL(window.location.href);
-        url.searchParams.set('style', style);
-        window.history.replaceState({}, '', url);
-        localStorage.setItem(storageKey, style);
-      }
-
-      styleSelect?.addEventListener('change', async function () {
-        const style = styleSelect.value;
-        applyStyleToLinks(style);
-        if (styleStatus) {
-          styleStatus.textContent = 'Generating…';
-        }
-        try {
-          const resp = await fetch('operational_steps_api.php?action=rerender_session_style', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session: sessionId, style: style }),
-          });
-          const data = await resp.json();
-          if (!data.ok) {
-            throw new Error(data.error || 'Generation failed');
-          }
-          if (styleStatus) {
-            styleStatus.textContent = data.skipped ? 'Ready (cached)' : 'Generated';
-          }
-        } catch (err) {
-          if (styleStatus) {
-            styleStatus.textContent = String(err.message || err);
-          }
-        }
-      });
-
-      if (styleSelect) {
-        applyStyleToLinks(styleSelect.value);
-      }
     })();
   </script>
 </body>

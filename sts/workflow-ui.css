@@ -270,6 +270,13 @@ h2 { margin: 0 0 12px; font-size: 16px; }
   min-height: 72px;
   max-height: 200px;
 }
+#simulator {
+  margin-bottom: 24px;
+}
+#simulator .status {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
 
 /* Category legend + row colors */
 .legend {
@@ -354,6 +361,52 @@ h2 { margin: 0 0 12px; font-size: 16px; }
 .step-row.dragging { opacity: 0.5; }
 .step-row.drag-over { outline: 2px solid var(--sts-charcoal); }
 .step-row.insert-marker { box-shadow: inset 0 3px 0 var(--sts-charcoal); }
+
+/* Inactive (commented-out) step */
+.step-row.step-disabled {
+  background: repeating-linear-gradient(
+    -45deg,
+    #f4f5f7,
+    #f4f5f7 9px,
+    #eceef1 9px,
+    #eceef1 18px
+  );
+  border-left-color: #9aa5b1;
+  border-left-style: dashed;
+}
+.step-row.step-disabled .row-top,
+.step-row.step-disabled .step-preview {
+  opacity: 0.5;
+}
+.step-row.step-disabled .step-preview {
+  text-decoration: line-through;
+  text-decoration-color: rgba(90, 100, 110, 0.6);
+}
+/* Keep the toggle itself fully legible while the rest is muted.
+   Sits in the left gutter, directly under the step number. */
+.step-active-toggle {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 52px;
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7683;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.step-active-toggle input {
+  margin: 0;
+  cursor: pointer;
+}
+.step-row.step-disabled .step-active-toggle {
+  color: #b02a2a;
+}
 .btn-insert-before {
   color: var(--sts-charcoal-muted);
   font-weight: 700;
@@ -755,7 +808,7 @@ h2 { margin: 0 0 12px; font-size: 16px; }
   align-items: flex-start;
   gap: 12px;
   margin-top: 8px;
-  padding-left: 64px;
+  padding-left: 0;
   font-size: 12px;
   color: #555;
 }

@@ -34,6 +34,7 @@ function master_sw_switchlist_sql($job_id, $table_name)
                  cars.status AS status,
                  commodities.code AS consignment,
                  shipments.consignment AS consignment_id,
+                 car_orders.waybill_number AS waybill_number,
                  shipments.special_instructions AS special_instructions,
                  routing.station AS current_station,
                  locations.code AS current_location,
@@ -66,6 +67,7 @@ function master_sw_switchlist_sql($job_id, $table_name)
                  cars.status AS status,
                  "" AS consignment,
                  0 AS consignment_id,
+                 car_orders.waybill_number AS waybill_number,
                  "" AS special_instructions,
                  routing.station AS current_station,
                  locations.code AS current_location,
@@ -462,6 +464,16 @@ function master_sw_get_setting($dbc, $name)
     return (string) mysqli_fetch_row($rs)[0];
 }
 
+/** Session number for generated output: prefer explicit override over live DB setting. */
+function master_sw_session_nbr_from_options($dbc, array $options = [])
+{
+    if (isset($options['session_override']) && $options['session_override'] !== '') {
+        return (string) $options['session_override'];
+    }
+
+    return master_sw_get_setting($dbc, 'session_nbr');
+}
+
 function master_sw_row_destination_style($dbc, $row)
 {
     if (!function_exists('set_colors')) {
@@ -783,8 +795,21 @@ function master_sw_render_mobile_car_block($dbc, array $section, $page_width, &$
 
 function master_sw_waybills_href_for_job_dir($job_dir)
 {
-    $waybill_index = dirname(rtrim($job_dir, '/')) . '/waybills/index.html';
-    return is_file($waybill_index) ? '../waybills/index.html' : '';
+    // Waybills live in the session-level store as per-train/per-phase scoped
+    // pages: session_N/waybills/phase_PP_JOB.index.html
+    $norm = str_replace('\\', '/', rtrim($job_dir, '/'));
+    if (!preg_match('#/session_(\d+)/phase_(\d+)/([^/]+)$#', $norm, $m)) {
+        return '';
+    }
+    if (!function_exists('session_output_fs_path')) {
+        require_once __DIR__ . '/session_helpers.php';
+    }
+    $file = 'phase_' . str_pad($m[2], 2, '0', STR_PAD_LEFT) . '_' . $m[3] . '.index.html';
+    $fs = session_output_fs_path('session_' . (int) $m[1] . '/waybills/' . $file);
+    if (!is_file($fs)) {
+        return '';
+    }
+    return '../../waybills/' . $file;
 }
 
 function master_sw_waybills_card_html($href, $title = 'Waybills')
@@ -792,11 +817,15 @@ function master_sw_waybills_card_html($href, $title = 'Waybills')
     if ($href === '') {
         return '';
     }
+    $print_href = preg_replace('/\.index\.html$/', '.print_all.html', $href);
+    if ($print_href === $href) {
+        $print_href = dirname($href) . '/print_all.html';
+    }
     return '<div class="card">
       <h2>' . htmlspecialchars($title) . '</h2>
-      <p>View or print freight waybills generated for this session phase.</p>
+      <p>View or print freight waybills for the cars on this train\'s switch list.</p>
       <a class="button" href="' . htmlspecialchars($href) . '">Open waybills</a>
-      <p style="margin-top:10px;font-size:14px;"><a href="' . htmlspecialchars(dirname($href) . '/print_all.html') . '">Print all waybills</a></p>
+      <p style="margin-top:10px;font-size:14px;"><a href="' . htmlspecialchars($print_href) . '">Print all waybills</a></p>
     </div>';
 }
 
@@ -874,14 +903,17 @@ function master_sw_root_prefix($dir)
 function master_sw_session_nav_links($dir, $session_nbr, array $middle = [])
 {
     $prefix = master_sw_root_prefix($dir);
+    $session_nbr = (int) $session_nbr;
+    // Plain public relative links; so.php rewrites them when serving the file
+    // (session_N/index.php -> session_overview.php, session.php -> /sts/session.php).
+    // Order matches job.php: Main Menu · All Sessions · Session N · … · All waybills.
     $links = [['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house']];
+    $links[] = ['href' => $prefix . 'session.php', 'label' => 'All Sessions', 'icon' => 'collection'];
+    $links[] = ['href' => $prefix . 'session_' . $session_nbr . '/index.php', 'label' => 'Session ' . $session_nbr, 'icon' => 'calendar-event'];
     foreach ($middle as $link) {
         $links[] = $link;
     }
-    // Plain public relative links; so.php rewrites them when serving the file
-    // (session_N/index.php -> session_overview.php, session.php -> /sts/session.php).
-    $links[] = ['href' => $prefix . 'session_' . (int) $session_nbr . '/index.php', 'label' => 'Session ' . $session_nbr, 'icon' => 'calendar-event'];
-    $links[] = ['href' => $prefix . 'session.php', 'label' => 'All Sessions', 'icon' => 'collection'];
+    $links[] = ['href' => $prefix . 'session_' . $session_nbr . '/waybills/index.html', 'label' => 'All waybills', 'icon' => 'file-text'];
     return $links;
 }
 
@@ -979,16 +1011,27 @@ function master_sw_render_format_toggle_script()
     return '';
 }
 
-function master_sw_build_phase_list_html(array $sections, $layout)
+function master_sw_build_phase_list_html(array $sections, $layout, $session_nbr = null, $job_name = null, $workflow_phase = null)
 {
+    $layout = master_sw_normalize_layout($layout);
+    $link_to_job = $session_nbr !== null && $job_name !== null && $workflow_phase !== null;
     $items = '';
     foreach ($sections as $index => $section) {
-        $phase_num = $index + 1;
-        $phase_path = 'phase_' . str_pad((string) $phase_num, 2, '0', STR_PAD_LEFT) . master_sw_phase_layout_suffix($layout);
+        $work_leg = $index + 1;
         $label = htmlspecialchars($section['label']);
         $car_count = count($section['cars']);
-        $items .= '<li><a href="' . $phase_path . '">' . $label
-            . '<span class="meta">' . $car_count . ' car' . ($car_count === 1 ? '' : 's') . '</span></a></li>';
+        $meta = '<span class="meta">' . $car_count . ' car' . ($car_count === 1 ? '' : 's') . '</span>';
+        if ($link_to_job) {
+            // Open the interactive train viewer at the matching work-leg.
+            $href = '/sts/job.php?session=' . (int) $session_nbr
+                . '&amp;job=' . rawurlencode((string) $job_name)
+                . '&amp;style=' . rawurlencode($layout)
+                . '&amp;wp=' . (int) $workflow_phase
+                . '&amp;leg=' . (int) $work_leg;
+        } else {
+            $href = 'phase_' . str_pad((string) $work_leg, 2, '0', STR_PAD_LEFT) . master_sw_phase_layout_suffix($layout);
+        }
+        $items .= '<li><a href="' . $href . '">' . $label . $meta . '</a></li>';
     }
     return $items;
 }
@@ -1028,44 +1071,49 @@ function master_sw_render_phase_nav_bar($table_name, $session_nbr, array $nav)
     if (!function_exists('session_nav_bar_html')) {
         require_once __DIR__ . '/session_helpers.php';
     }
-    $layout = $nav['layout'] ?? 'mobile';
+    $layout = master_sw_normalize_layout($nav['layout'] ?? 'mobile');
     $phase_index = (int) ($nav['phase_index'] ?? 0);
     $phase_total = (int) ($nav['phase_total'] ?? 0);
+    $session_int = (int) preg_replace('/\D/', '', (string) $session_nbr);
+    // Left nav matches job.php: Main Menu · All Sessions · Session N · All waybills.
     $links = [
         ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+        ['href' => '/sts/session.php', 'label' => 'All Sessions', 'icon' => 'collection'],
+        ['href' => '/sts/session_overview.php?session=' . $session_int, 'label' => 'Session ' . $session_int, 'icon' => 'calendar-event'],
     ];
-    if (!empty($nav['prev'])) {
-        $links[] = ['href' => $nav['prev'], 'label' => 'Prev', 'icon' => 'chevron-left'];
-    }
-    if (!empty($nav['job_index'])) {
-        $links[] = ['href' => $nav['job_index'], 'label' => $table_name . ' Index', 'icon' => 'list-ul'];
-    }
-    if (!empty($nav['session_index'])) {
-        $links[] = ['href' => $nav['session_index'], 'label' => 'Session ' . $session_nbr, 'icon' => 'calendar-event'];
-    }
-    if (!empty($nav['sessions_index'])) {
-        $links[] = ['href' => $nav['sessions_index'], 'label' => 'All Sessions', 'icon' => 'collection'];
-    }
     if (!empty($nav['waybills_href'])) {
-        $links[] = ['href' => $nav['waybills_href'], 'label' => 'Waybills', 'icon' => 'file-text'];
+        $links[] = ['href' => $nav['waybills_href'], 'label' => 'All waybills', 'icon' => 'file-text'];
     }
+
+    // Right-hand cluster: prev/next phase, phase trail, and style dropdown.
+    $trail = $phase_index > 0 ? ('Phase ' . $phase_index . ' / ' . $phase_total) : '';
+    $options = '';
     foreach ($nav['available_styles'] ?? master_sw_all_styles() as $style) {
-        $href_key = $style . '_href';
-        if (empty($nav[$href_key])) {
-            continue;
-        }
-        $links[] = [
-            'href' => $nav[$href_key],
-            'label' => master_sw_style_label($style),
-            'icon' => session_nav_icon_for_label(master_sw_style_label($style)),
-            'active' => master_sw_normalize_layout($layout) === master_sw_normalize_layout($style),
-        ];
+        $style = master_sw_normalize_layout($style);
+        $sel = $style === $layout ? ' selected' : '';
+        $options .= '<option value="' . htmlspecialchars($style, ENT_QUOTES) . '"' . $sel . '>'
+            . htmlspecialchars(master_sw_style_label($style)) . '</option>';
+    }
+    $cluster = '<div class="d-flex align-items-center gap-2 ms-auto">';
+    if (!empty($nav['prev'])) {
+        $cluster .= '<a href="' . htmlspecialchars($nav['prev'], ENT_QUOTES) . '" class="btn btn-outline-light btn-sm"><i class="bi bi-chevron-left"></i> Prev phase</a>';
+    }
+    if ($trail !== '') {
+        $cluster .= '<span class="navbar-text text-white-50 small">' . htmlspecialchars($trail) . '</span>';
     }
     if (!empty($nav['next'])) {
-        $links[] = ['href' => $nav['next'], 'label' => 'Next', 'icon' => 'chevron-right'];
+        $cluster .= '<a href="' . htmlspecialchars($nav['next'], ENT_QUOTES) . '" class="btn btn-outline-light btn-sm">Next phase <i class="bi bi-chevron-right"></i></a>';
     }
-    $trail = $phase_index > 0 ? ('Phase ' . $phase_index . ' / ' . $phase_total) : '';
-    echo session_nav_bar_html($links, $trail);
+    $cluster .= '<label for="sw-style-select" class="text-white-50 small mb-0">Style</label>'
+        . '<select id="sw-style-select" class="form-select form-select-sm" style="width:auto;">'
+        . $options . '</select></div>';
+
+    $nav_html = session_nav_bar_html($links, '');
+    $nav_html = str_replace('</div></div></nav>', $cluster . '</div></div></nav>', $nav_html);
+    echo $nav_html;
+    echo '<script>(function(){var el=document.getElementById("sw-style-select");if(!el)return;'
+        . 'el.addEventListener("change",function(){var re=/_(mobile|half|full|dmp|wo|x2010)\.html/;'
+        . 'window.location.href=window.location.href.replace(re,"_"+this.value+".html");});})();</script>';
 }
 
 function master_sw_render_job_index($dbc, $job_name, array $sections, $job_dir, $session_nbr, $preferred_style = 'mobile', array $available_styles = null)
@@ -1082,7 +1130,11 @@ function master_sw_render_job_index($dbc, $job_name, array $sections, $job_dir, 
     $job_desc = nl2br(htmlspecialchars($meta['description']));
     $preferred_style = master_sw_normalize_layout($preferred_style);
     $styles = $available_styles ?? master_sw_all_styles();
-    $phase_items = master_sw_build_phase_list_html($sections, $preferred_style);
+    $workflow_phase = 0;
+    if (preg_match('#/phase_(\d+)/[^/]+/?$#', str_replace('\\', '/', $job_dir), $wpm)) {
+        $workflow_phase = (int) $wpm[1];
+    }
+    $phase_items = master_sw_build_phase_list_html($sections, $preferred_style, $session_nbr, $job_name, $workflow_phase);
     $style_links = '';
     foreach ($styles as $style) {
         $active = $style === $preferred_style ? ' class="active"' : '';
@@ -1090,6 +1142,10 @@ function master_sw_render_job_index($dbc, $job_name, array $sections, $job_dir, 
             . htmlspecialchars(master_sw_style_label($style)) . '</a> ';
     }
     $waybills_href = master_sw_waybills_href_for_job_dir($job_dir);
+    $has_print_all = is_file(master_sw_print_all_path($job_dir));
+    $print_all_link = $has_print_all
+        ? '<p><a class="button" href="print_all.html"><i class="bi bi-printer"></i> Print all switch lists</a></p>'
+        : '';
 
     $html = '<!DOCTYPE html>
 <html lang="en">
@@ -1113,6 +1169,7 @@ function master_sw_render_job_index($dbc, $job_name, array $sections, $job_dir, 
       <p>Style: ' . $style_links . '</p>
       <p>Open each leg in order. Switch style on the switch list page nav bar.</p>
       <ul class="phase-list">' . $phase_items . '</ul>
+      ' . $print_all_link . '
     </div>
     ' . master_sw_waybills_card_html($waybills_href) . '
   </div>
@@ -1122,7 +1179,10 @@ function master_sw_render_job_index($dbc, $job_name, array $sections, $job_dir, 
       const style = params.get("style") || "' . htmlspecialchars($preferred_style, ENT_QUOTES) . '";
       const suffixRe = /_(mobile|half|full|dmp|wo|x2010)\\.html$/;
       document.querySelectorAll(".phase-list a").forEach(function (anchor) {
-        if (suffixRe.test(anchor.getAttribute("href") || "")) {
+        const href = anchor.getAttribute("href") || "";
+        if (href.indexOf("job.php") !== -1) {
+          anchor.href = href.replace(/([?&]style=)[^&]*/, "$1" + style);
+        } else if (suffixRe.test(href)) {
           anchor.href = anchor.href.replace(suffixRe, "_" + style + ".html");
         }
       });
@@ -1240,6 +1300,14 @@ function master_sw_discover_session_dirs($output_root, $max_session = null)
 
 function master_sw_render_switchlists_root_index($output_root, $max_session = null)
 {
+    // The live STS app uses session.php as its dynamic sessions landing page, so
+    // the static "HART Switchlists" root index is redundant there. Skip writing
+    // it whenever the app root provides session.php.
+    $app_root = function_exists('session_app_root') ? session_app_root() : null;
+    if ($app_root !== null && is_file($app_root . '/session.php')) {
+        return null;
+    }
+
     $sessions = master_sw_discover_session_dirs($output_root, $max_session);
     $cards = '';
     foreach ($sessions as $session) {
@@ -1304,6 +1372,7 @@ function master_sw_generate_phased($dbc, $job_name, array $sections, $output_dir
                     'phase_index' => $phase_index,
                     'phase_total' => $phase_total,
                     'nav' => $nav,
+                    'session_override' => $session_nbr,
                 ]
             );
             $written_paths[] = $path;
@@ -1525,7 +1594,7 @@ function master_sw_render_mobile($dbc, $job_name, array $sections, $output_path,
 
     $print_width = master_sw_get_setting($dbc, 'print_width') ?: '7.5in';
     $rr_name = master_sw_get_setting($dbc, 'railroad_name') ?: 'HART Railroad';
-    $session_nbr = master_sw_get_setting($dbc, 'session_nbr');
+    $session_nbr = master_sw_session_nbr_from_options($dbc, $options);
     $table_name = $meta['table_name'];
     $job_desc = $meta['description'];
     $page_width = (int) ((float) substr($print_width, 0, 3) * 10);
@@ -1710,7 +1779,7 @@ function master_sw_render_phase_shell_start($dbc, $job_name, $style, array $opti
     if ($meta === null) {
         throw new RuntimeException('Unknown job: ' . $job_name);
     }
-    $session_nbr = master_sw_get_setting($dbc, 'session_nbr');
+    $session_nbr = master_sw_session_nbr_from_options($dbc, $options);
     $table_name = $meta['table_name'];
     $phase_index = (int) ($options['phase_index'] ?? 0);
     $phase_total = (int) ($options['phase_total'] ?? 0);
@@ -1985,7 +2054,7 @@ function master_sw_render_halfsheet($dbc, $job_name, array $sections, $output_pa
 
     $print_width = master_sw_get_setting($dbc, 'print_width') ?: '7.5in';
     $rr_initials = master_sw_get_setting($dbc, 'railroad_initials') ?: 'HART';
-    $session_nbr = master_sw_get_setting($dbc, 'session_nbr');
+    $session_nbr = master_sw_session_nbr_from_options($dbc, $options);
     $table_name = $meta['table_name'];
     $job_desc = $meta['description'];
     $phase_index = (int) ($options['phase_index'] ?? 0);
@@ -2255,56 +2324,13 @@ function master_sw_generate_for_jobs($dbc, array $job_names, $output_dir, array 
         ];
     }
 
-    if (count($job_summaries) > 0 && array_sum(array_column($job_summaries, 'cars')) > 0) {
-        $index_path = master_sw_render_session_index($dbc, $job_summaries, $output_dir, $session_nbr);
-        $session_print_all_path = master_sw_render_session_print_all($dbc, $job_sections_map, $output_dir, $session_nbr);
-        $written[] = [
-            'job' => 'INDEX',
-            'path' => $index_path,
-            'phases' => count($job_summaries),
-            'cars' => array_sum(array_column($job_summaries, 'cars')),
-            'format' => $format,
-        ];
-        $written[] = [
-            'job' => 'PRINT_ALL',
-            'path' => $session_print_all_path,
-            'phases' => array_sum(array_column($job_summaries, 'phases')),
-            'cars' => array_sum(array_column($job_summaries, 'cars')),
-            'format' => $format,
-        ];
-    } else {
-        $empty_msg = count($job_summaries) > 0
-            ? 'No switch list files were generated for this session — every train had zero matching cars.'
-            : 'No switch list files were generated for this session.';
-        $index_path = master_sw_render_empty_session_index($dbc, $output_dir, $session_nbr, $empty_msg);
-        $written[] = [
-            'job' => 'INDEX',
-            'path' => $index_path,
-            'phases' => 0,
-            'cars' => 0,
-            'format' => $format,
-            'empty' => true,
-        ];
-    }
-    // The switchlists landing page lists sessions and belongs at the parent of the
-    // session_N directory. In the phased layout $output_dir is session_N/phase_PP,
-    // so derive the session root explicitly rather than using dirname($output_dir)
-    // (which used to drop the stale "HART Switchlists" stub into session_N/index.html).
-    $session_root = master_sw_session_root_from_output($output_dir);
-    $root_dir = dirname($session_root);
-    $app_root = function_exists('session_app_root') ? session_app_root() : $root_dir;
-    // Skip it on the live STS web root, which uses session.php as its dynamic index
-    // and keeps its own index.html (the STS main menu).
-    if (!is_file($app_root . '/session.php')) {
-        $root_index = master_sw_render_switchlists_root_index($root_dir, $session_nbr);
-        $written[] = [
-            'job' => 'ROOT',
-            'path' => $root_index,
-            'phases' => count($job_summaries),
-            'cars' => array_sum(array_column($job_summaries, 'cars')),
-            'format' => $format,
-        ];
-    }
+    // Per-train switch-list index + print-all are produced by
+    // master_sw_generate_phased above. The per-phase "engineer" index and
+    // per-phase print-all pages were redundant with the session overview
+    // (session_overview.php) and the session-wide print-all
+    // (session_build_switchlist_print_all → session_N/print_all.html), so they
+    // are no longer generated. The static "HART Switchlists" root index is also
+    // skipped on the live app (see master_sw_render_switchlists_root_index).
 
     return $written;
 }
