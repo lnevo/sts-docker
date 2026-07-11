@@ -1,0 +1,152 @@
+<?php
+/**
+ * Shared automatic car-order generation (generate.php AUTOMATIC button + workflow API).
+ */
+
+function generate_orders_get_session($dbc)
+{
+    if (!function_exists('session_get_db_session')) {
+        require_once __DIR__ . '/session_runtime.php';
+    }
+    return (int) session_get_db_session($dbc);
+}
+
+function generate_orders_set_session($dbc, $session_number)
+{
+    $session_number = (int) $session_number;
+    mysqli_query(
+        $dbc,
+        'UPDATE settings SET setting_value = ' . $session_number . ' WHERE setting_name = "session_nbr"'
+    );
+    return $session_number;
+}
+
+function generate_orders_get_next_auto_waybill_counter($dbc, $session_number)
+{
+    $session_prefix = str_pad((int) $session_number, 3, '0', STR_PAD_LEFT) . '-';
+    $session_prefix = mysqli_real_escape_string($dbc, $session_prefix);
+    $sql = 'SELECT MAX(CAST(SUBSTR(waybill_number, 5, 3) AS UNSIGNED)) AS max_counter
+            FROM car_orders
+            WHERE waybill_number LIKE "' . $session_prefix . '___"
+              AND SUBSTR(waybill_number, 5, 1) != "M"';
+    $rs = mysqli_query($dbc, $sql);
+    $row = mysqli_fetch_array($rs);
+    if (!$row || $row['max_counter'] === null) {
+        return 0;
+    }
+    return (int) $row['max_counter'];
+}
+
+/** Optional RNG seed for reproducible automatic generation (empty = PHP default). */
+function generate_orders_parse_seed($value)
+{
+    $value = trim((string) $value);
+    if ($value === '') {
+        return null;
+    }
+    if (!ctype_digit($value)) {
+        return null;
+    }
+    return (int) $value;
+}
+
+function generate_orders_apply_seed($seed)
+{
+    $parsed = generate_orders_parse_seed($seed);
+    if ($parsed === null) {
+        return null;
+    }
+    mt_srand($parsed);
+    return $parsed;
+}
+
+/** Core automatic generation loop (matches generate.php). */
+function generate_orders_run_automatic($dbc, $session_number, $waybill_counter = 0, $seed = null)
+{
+    $applied_seed = generate_orders_apply_seed($seed);
+
+    $orders_created = 0;
+    $session_number = (int) $session_number;
+    $rs_shipments = mysqli_query(
+        $dbc,
+        'SELECT id, last_ship_date, min_interval, max_interval, min_amount, max_amount
+         FROM shipments
+         ORDER BY id'
+    );
+    if (!$rs_shipments) {
+        return 0;
+    }
+
+    while ($row = mysqli_fetch_array($rs_shipments)) {
+        $interval = round(mt_rand($row['min_interval'] * 100, $row['max_interval'] * 100) / 100);
+        $ship_date = (int) $row['last_ship_date'] + $interval;
+        if ($ship_date > $session_number) {
+            continue;
+        }
+
+        mysqli_query(
+            $dbc,
+            'UPDATE shipments SET last_ship_date = ' . $session_number . ' WHERE id = "' . (int) $row['id'] . '"'
+        );
+
+        $num_cars = round(mt_rand($row['min_amount'] * 100, $row['max_amount'] * 100) / 100);
+        for ($i = 0; $i < $num_cars; $i++) {
+            $waybill_counter++;
+            $wb_nbr = str_pad($session_number, 3, '0', STR_PAD_LEFT) . '-'
+                . str_pad($waybill_counter, 3, '0', STR_PAD_LEFT);
+            if (mysqli_query(
+                $dbc,
+                'INSERT INTO car_orders (waybill_number, shipment, car) VALUES ("'
+                . mysqli_real_escape_string($dbc, $wb_nbr) . '", "' . (int) $row['id'] . '", "0")'
+            )) {
+                $orders_created++;
+            }
+        }
+    }
+
+    if ($applied_seed !== null) {
+        // Avoid leaking seeded RNG state to later steps in the same request.
+        mt_srand();
+    }
+
+    return $orders_created;
+}
+
+/**
+ * Resolve session + waybill counter for automatic generation.
+ *
+ * increment_session=Yes (default): same as generate.php "Generate Session" — advance session, counter 0.
+ * increment_session=No: same as "Generate Orders" — keep session, continue waybill counter.
+ * Session 0 with No: still opens session 1 (nothing to generate at session 0).
+ */
+function generate_orders_resolve_automatic_run($dbc, array $gen_params)
+{
+    $session = generate_orders_get_session($dbc);
+    $increment = ($gen_params['increment_session'] ?? '') === '1';
+
+    if ($increment) {
+        $session = generate_orders_set_session($dbc, $session + 1);
+        return ['session' => $session, 'counter' => 0, 'incremented' => true];
+    }
+
+    if ($session <= 0) {
+        $session = generate_orders_set_session($dbc, 1);
+        return ['session' => $session, 'counter' => 0, 'incremented' => true];
+    }
+
+    return [
+        'session' => $session,
+        'counter' => generate_orders_get_next_auto_waybill_counter($dbc, $session),
+        'incremented' => false,
+    ];
+}
+
+function generate_orders_count_unfilled($dbc)
+{
+    $rs = mysqli_query($dbc, 'SELECT COUNT(*) AS c FROM car_orders WHERE car = "" OR car IS NULL OR car = "0"');
+    if (!$rs) {
+        return 0;
+    }
+    $row = mysqli_fetch_array($rs);
+    return (int) ($row['c'] ?? 0);
+}

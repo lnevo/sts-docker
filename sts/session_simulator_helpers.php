@@ -23,8 +23,8 @@ function session_simulator_load_recipe($session_dir, array $body = [])
     if (!empty($body['recipe']) && is_array($body['recipe'])) {
         return $body['recipe'];
     }
-    $csv = $body['csv_file'] ?? null;
-    return operational_steps_load_recipe($session_dir, $csv);
+    $workflow = $body['workflow_file'] ?? $body['csv_file'] ?? null;
+    return operational_steps_load_recipe($session_dir, $workflow);
 }
 
 function session_simulator_maybe_save_recipe($session_dir, array $body)
@@ -39,7 +39,7 @@ function session_simulator_maybe_save_recipe($session_dir, array $body)
     return operational_steps_save_recipe(
         $session_dir,
         operational_steps_normalize_recipe($recipe),
-        $body['csv_file'] ?? null
+        $body['workflow_file'] ?? $body['csv_file'] ?? null
     );
 }
 
@@ -254,15 +254,35 @@ function session_simulator_format_summary(array $cycles, array $warnings = [])
                         $item['cars'] ?? 0
                     );
                 }
+            } elseif (!empty($entry['phase']) && isset($entry['waybills'])) {
+                $wb = $entry['waybills'];
+                $count = is_array($wb) ? (int) ($wb['count'] ?? 0) : (int) $wb;
+                $lines[] = sprintf(
+                    '  step %s phase %s: %d waybill(s) generated.',
+                    $entry['step'] ?? '?',
+                    $entry['phase'] ?? '?',
+                    $count
+                );
             } elseif (!empty($entry['action'])) {
-                $detail = $entry['action']
-                    . (isset($entry['target']) ? ' → ' . $entry['target'] : '');
-                if (!empty($entry['error'])) {
-                    $detail .= ' — ' . $entry['error'];
+                if (($entry['action'] ?? '') === 'section_label') {
+                    $lines[] = sprintf(
+                        '  step %s: section — %s',
+                        $entry['step'] ?? '?',
+                        $entry['label'] ?? ''
+                    );
+                } else {
+                    $detail = $entry['action']
+                        . (isset($entry['target']) ? ' → ' . $entry['target'] : '');
+                    if (($entry['action'] ?? '') === 'if_then') {
+                        $detail .= ' → ' . (!empty($entry['result']) ? 'true' : 'false');
+                    }
+                    if (!empty($entry['error'])) {
+                        $detail .= ' — ' . $entry['error'];
+                    }
+                    $lines[] = '  step ' . ($entry['step'] ?? '?') . ': ' . $detail;
                 }
-                $lines[] = '  step ' . ($entry['step'] ?? '?') . ': ' . $detail;
-            } elseif (!empty($entry['function']) && empty($entry['skipped'])) {
-                $lines[] = '  step ' . ($entry['step'] ?? '?') . ': ' . ($entry['function'] ?? 'dispatch');
+            } elseif (!empty($entry['function']) || !empty($entry['dispatch'])) {
+                $lines[] = operational_steps_format_dispatch_log_line($entry);
             }
         }
     }

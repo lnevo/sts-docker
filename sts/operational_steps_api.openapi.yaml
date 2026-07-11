@@ -13,7 +13,7 @@ openapi: 3.0.3
 info:
   title: STS Operational Steps API
   description: |
-    JSON RPC-style API for the session workflow editor (recipe CSV/JSON, simulator, switch lists).
+    JSON RPC-style API for the session workflow editor (recipe JSON, simulator, switch lists).
 
     **Command catalog:** `GET ?action=catalog` returns live `functions`, `adder_functions`, and
     `dynamic_options`. Per-command **params** are documented in Swagger under
@@ -38,26 +38,19 @@ paths:
         | action | Description |
         |--------|-------------|
         | `catalog` | Full command catalog + dynamic dropdown options |
-        | `list_csv` | Workflow CSV files in editor directory |
-        | `recipe` | Load recipe + compiled steps for active CSV |
+        | `list_workflows` | Workflow JSON files in editor directory |
+        | `recipe` | Load recipe + compiled steps for active workflow |
         | `run_options` | Simulator breakpoints, session, compiled recipe |
         | `compile` | Compile recipe from body or disk (POST body optional on GET) |
-        | `download` | File download (`kind=csv` or `recipe`/`json`) — not JSON |
+        | `download` | Download workflow JSON file — not JSON API response |
       tags: [Operational Steps]
       parameters:
         - $ref: "#/components/parameters/actionGet"
-        - name: csv_file
+        - name: workflow_file
           in: query
           schema:
             type: string
-          description: Optional workflow CSV filename (recipe, list_csv, run_options, download)
-        - name: kind
-          in: query
-          schema:
-            type: string
-            enum: [csv, recipe, json]
-            default: csv
-          description: For `download` only
+          description: Optional workflow filename (recipe, list_workflows, run_options, download)
       responses:
         "200":
           description: JSON response (except download)
@@ -68,7 +61,7 @@ paths:
                   - $ref: "#/components/schemas/CatalogResponse"
                   - $ref: "#/components/schemas/RecipeResponse"
                   - $ref: "#/components/schemas/CompileResponse"
-                  - $ref: "#/components/schemas/ListCsvResponse"
+                  - $ref: "#/components/schemas/ListWorkflowsResponse"
                   - $ref: "#/components/schemas/RunOptionsResponse"
                   - $ref: "#/components/schemas/ApiOk"
               examples:
@@ -82,12 +75,13 @@ paths:
       description: |
         | action | Required body | Description |
         |--------|---------------|-------------|
-        | `save` | `recipe` | Normalize and write CSV + JSON recipe |
+        | `save` | `recipe` | Normalize and write workflow JSON |
         | `run_switchlists` | optional `recipe` | Run workflow simulator / generator |
-        | `import_csv` | `csv` or `use_file` | Parse CSV into recipe (editor only) |
+        | `import_workflow` | `recipe`, `workflow`, or `use_file` | Parse JSON into recipe (editor only) |
         | `normalize_recipe` | `recipe` or `use_file` | Normalize step functions/params |
-        | `set_active_csv` | `csv_file` | Set active workflow file |
-        | `compile` | optional `recipe` | Compile steps to instructions + CSV text |
+        | `set_active_workflow` | `workflow_file` | Set active workflow file |
+        | `delete_workflow` | `workflow_file` | Delete workflow JSON from editor directory |
+        | `compile` | optional `recipe` | Compile steps to instructions |
       tags: [Operational Steps]
       parameters:
         - $ref: "#/components/parameters/actionPost"
@@ -99,16 +93,16 @@ paths:
               oneOf:
                 - $ref: "#/components/schemas/SaveRequest"
                 - $ref: "#/components/schemas/RunSwitchlistsRequest"
-                - $ref: "#/components/schemas/ImportCsvRequest"
+                - $ref: "#/components/schemas/ImportWorkflowRequest"
                 - $ref: "#/components/schemas/NormalizeRecipeRequest"
-                - $ref: "#/components/schemas/SetActiveCsvRequest"
+                - $ref: "#/components/schemas/SetActiveWorkflowRequest"
                 - $ref: "#/components/schemas/CompileRequest"
             examples:
               save:
                 summary: save
                 value:
                   action: save
-                  csv_file: STS_OPERATIONAL_STEPS.csv
+                  workflow_file: start_session.workflow.json
                   recipe:
                     version: 1
                     name: workflow
@@ -134,9 +128,9 @@ paths:
                 oneOf:
                   - $ref: "#/components/schemas/SaveResponse"
                   - $ref: "#/components/schemas/RunSwitchlistsResponse"
-                  - $ref: "#/components/schemas/ImportCsvResponse"
+                  - $ref: "#/components/schemas/ImportWorkflowResponse"
                   - $ref: "#/components/schemas/NormalizeRecipeResponse"
-                  - $ref: "#/components/schemas/SetActiveCsvResponse"
+                  - $ref: "#/components/schemas/SetActiveWorkflowResponse"
                   - $ref: "#/components/schemas/CompileResponse"
         "400":
           $ref: "#/components/responses/ApiError"
@@ -155,7 +149,7 @@ components:
         type: string
         enum:
           - catalog
-          - list_csv
+          - list_workflows
           - recipe
           - run_options
           - compile
@@ -170,9 +164,10 @@ components:
         enum:
           - save
           - run_switchlists
-          - import_csv
+          - import_workflow
           - normalize_recipe
-          - set_active_csv
+          - set_active_workflow
+          - delete_workflow
           - compile
 
   responses:
@@ -400,7 +395,7 @@ components:
               items:
                 $ref: "#/components/schemas/CatalogFunction"
 
-    ListCsvResponse:
+    ListWorkflowsResponse:
       allOf:
         - $ref: "#/components/schemas/ApiOk"
         - type: object
@@ -409,7 +404,7 @@ components:
               type: array
               items:
                 type: string
-            active_csv:
+            active_workflow:
               type: string
             auto_load:
               type: boolean
@@ -421,7 +416,7 @@ components:
           properties:
             recipe:
               $ref: "#/components/schemas/Recipe"
-            csv_file:
+            workflow_file:
               type: string
             compiled:
               type: array
@@ -437,9 +432,6 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/CompiledStep"
-            csv:
-              type: string
-              description: Recipe as CSV text
 
     RunOptionsResponse:
       allOf:
@@ -475,7 +467,7 @@ components:
           enum: [save]
         recipe:
           $ref: "#/components/schemas/Recipe"
-        csv_file:
+        workflow_file:
           type: string
 
     SaveResponse:
@@ -497,7 +489,7 @@ components:
                 $ref: "#/components/schemas/CompiledStep"
             rows:
               type: integer
-            csv_file:
+            workflow_file:
               type: string
 
     RunSwitchlistsRequest:
@@ -572,28 +564,33 @@ components:
             session_url:
               type: string
 
-    ImportCsvRequest:
+    ImportWorkflowRequest:
       type: object
       properties:
         action:
           type: string
-          enum: [import_csv]
-        csv:
+          enum: [import_workflow]
+        recipe:
+          $ref: "#/components/schemas/Recipe"
+        workflow:
+          type: object
+          description: Raw workflow JSON object
+        json:
           type: string
-          description: Raw CSV text
+          description: Raw workflow JSON text
         use_file:
           type: boolean
-        csv_file:
+        workflow_file:
           type: string
 
-    ImportCsvResponse:
+    ImportWorkflowResponse:
       allOf:
         - $ref: "#/components/schemas/ApiOk"
         - type: object
           properties:
             recipe:
               $ref: "#/components/schemas/Recipe"
-            csv_file:
+            workflow_file:
               type: string
             compiled:
               type: array
@@ -610,7 +607,7 @@ components:
           $ref: "#/components/schemas/Recipe"
         use_file:
           type: boolean
-        csv_file:
+        workflow_file:
           type: string
 
     NormalizeRecipeResponse:
@@ -627,22 +624,22 @@ components:
             rows:
               type: integer
 
-    SetActiveCsvRequest:
+    SetActiveWorkflowRequest:
       type: object
-      required: [csv_file]
+      required: [workflow_file]
       properties:
         action:
           type: string
-          enum: [set_active_csv]
-        csv_file:
+          enum: [set_active_workflow]
+        workflow_file:
           type: string
 
-    SetActiveCsvResponse:
+    SetActiveWorkflowResponse:
       allOf:
         - $ref: "#/components/schemas/ApiOk"
         - type: object
           properties:
-            active_csv:
+            active_workflow:
               type: string
 
     CompileRequest:

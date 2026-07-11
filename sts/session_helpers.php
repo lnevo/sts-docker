@@ -614,6 +614,7 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
 {
     require_once __DIR__ . '/operational_steps_catalog.php';
     require_once __DIR__ . '/master_switchlist_helpers.php';
+    $recipe = operational_steps_normalize_recipe($recipe);
     $config = session_merge_runtime_config($options['config'] ?? []);
     $format = $options['format'] ?? 'phased';
     $root = $options['session_root'] ?? session_web_root();

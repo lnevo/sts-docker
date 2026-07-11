@@ -193,6 +193,38 @@ function fill_order_parse_categories($input)
     return count($selected) > 0 ? $selected : $valid;
 }
 
+/** Treat UI "All/Any" sentinel values as no filter (matches fill_orders.php empty select). */
+function fill_order_normalize_scope_filter($value)
+{
+    $value = trim((string) $value);
+    if ($value === '' || strcasecmp($value, 'all') === 0 || strcasecmp($value, 'any') === 0) {
+        return '';
+    }
+    return $value;
+}
+
+function fill_order_car_filter_skip_reason(array $car_filters)
+{
+    $parts = [];
+    if (!empty($car_filters['current_station'])) {
+        $parts[] = 'station=' . $car_filters['current_station'];
+    }
+    if (!empty($car_filters['current_location'])) {
+        $parts[] = 'location=' . $car_filters['current_location'];
+    }
+    if (!empty($car_filters['car_code'])) {
+        $parts[] = 'car_type=' . $car_filters['car_code'];
+    }
+    $categories = $car_filters['categories'] ?? fill_order_valid_categories();
+    if (is_array($categories) && count($categories) < count(fill_order_valid_categories())) {
+        $parts[] = 'sources=' . implode(',', $categories);
+    }
+    if (empty($parts)) {
+        return 'No cars match car filters';
+    }
+    return 'No cars match car filters (' . implode('; ', $parts) . ')';
+}
+
 function fill_order_parse_car_filters($input)
 {
     $filters = [
@@ -207,12 +239,14 @@ function fill_order_parse_car_filters($input)
         $filters['categories'] = fill_order_parse_categories($input['categories']);
     }
 
-    if (!empty($input['current_station'])) {
-        $filters['current_station'] = trim((string) $input['current_station']);
+    $station = fill_order_normalize_scope_filter($input['current_station'] ?? '');
+    if ($station !== '') {
+        $filters['current_station'] = $station;
     }
 
-    if (!empty($input['current_location'])) {
-        $filters['current_location'] = trim((string) $input['current_location']);
+    $location = fill_order_normalize_scope_filter($input['current_location'] ?? '');
+    if ($location !== '') {
+        $filters['current_location'] = $location;
     }
 
     if (!empty($input['car_code'])) {
@@ -362,6 +396,144 @@ function fill_order_pick_car_for_categories($available_cars, $categories, $car_f
     }
 
     return null;
+}
+
+/**
+ * Assign eligible cars to open orders (same rules as fill_orders.php Auto Assign / auto_fill_orders_ajax.php).
+ *
+ * Options:
+ *   waybills       — if set, only these waybills; if null, all unfilled (optionally filtered by order_filters)
+ *   order_filters  — from fill_order_parse_filters()
+ *   car_filters    — from fill_order_parse_car_filters(); null = all sources, no car location/type filters
+ *   fraction       — 0–1, max share of eligible orders to attempt (default 1.0)
+ *   shuffle        — randomize order before applying fraction (warm-start uses true; GUI uses false)
+ */
+function fill_order_auto_assign($dbc, array $options = [])
+{
+    $selected_waybills = $options['waybills'] ?? null;
+    if ($selected_waybills !== null) {
+        $selected_waybills = array_values(array_filter(array_map('trim', (array) $selected_waybills)));
+        if (count($selected_waybills) === 0) {
+            return [
+                'filled' => 0,
+                'filled_items' => [],
+                'skipped' => [],
+                'filtered_out' => 0,
+            ];
+        }
+    }
+
+    $order_filters = $options['order_filters'] ?? [];
+    if (!is_array($order_filters)) {
+        $order_filters = [];
+    }
+
+    $car_filters = $options['car_filters'] ?? null;
+    if ($car_filters !== null && !is_array($car_filters)) {
+        $car_filters = null;
+    }
+
+    $categories = fill_order_valid_categories();
+    if ($car_filters !== null) {
+        $categories = $car_filters['categories'] ?? $categories;
+    }
+    if (!is_array($categories)) {
+        $categories = fill_order_parse_categories($categories);
+    }
+
+    $fraction = max(0.0, min(1.0, (float) ($options['fraction'] ?? 1.0)));
+    $shuffle = !empty($options['shuffle']);
+
+    $waybills = fill_order_get_unfilled_waybills($dbc);
+    $filtered_out = 0;
+    $eligible = [];
+
+    foreach ($waybills as $waybill_number) {
+        if ($selected_waybills !== null && !in_array($waybill_number, $selected_waybills, true)) {
+            continue;
+        }
+
+        $order_row = fill_order_get_details($dbc, $waybill_number);
+        if ($order_row === null) {
+            continue;
+        }
+
+        if ($selected_waybills === null && !fill_order_matches_filters($order_row, $order_filters)) {
+            $filtered_out++;
+            continue;
+        }
+
+        $eligible[] = $waybill_number;
+    }
+
+    if ($shuffle) {
+        shuffle($eligible);
+    }
+
+    $limit = (int) ceil(count($eligible) * $fraction);
+    $filled = [];
+    $skipped = [];
+
+    foreach ($eligible as $index => $waybill_number) {
+        if ($index >= $limit) {
+            break;
+        }
+
+        $order_row = fill_order_get_details($dbc, $waybill_number);
+        if ($order_row === null) {
+            $skipped[] = [
+                'waybill_number' => $waybill_number,
+                'reason' => 'Order not found',
+            ];
+            continue;
+        }
+
+        $available_cars = fill_order_get_available_cars($dbc, $order_row);
+        if ($car_filters !== null) {
+            $filtered_cars = fill_order_filter_cars($available_cars, $car_filters);
+            if (count($available_cars) > 0 && count($filtered_cars) === 0) {
+                $skipped[] = [
+                    'waybill_number' => $waybill_number,
+                    'reason' => fill_order_car_filter_skip_reason($car_filters),
+                ];
+                continue;
+            }
+        }
+        $selected_car = fill_order_pick_car_for_categories($available_cars, $categories, $car_filters);
+        if ($selected_car === null) {
+            $skipped[] = [
+                'waybill_number' => $waybill_number,
+                'reason' => count($available_cars) === 0
+                    ? 'No cars available for this order'
+                    : 'No eligible cars in selected source categories',
+            ];
+            continue;
+        }
+
+        $result = fill_order_assign_car($dbc, $waybill_number, $selected_car['car_id']);
+        if (!$result['success']) {
+            $skipped[] = [
+                'waybill_number' => $waybill_number,
+                'reason' => $result['error'],
+            ];
+            continue;
+        }
+
+        $filled[] = [
+            'waybill_number' => $waybill_number,
+            'car_id' => $selected_car['car_id'],
+            'reporting_marks' => $result['car_reporting_marks'],
+            'car_code' => $result['car_code'],
+            'category' => $selected_car['category'],
+        ];
+    }
+
+    return [
+        'filled' => count($filled),
+        'filled_items' => $filled,
+        'skipped' => $skipped,
+        'filtered_out' => $filtered_out,
+    ];
 }
 
 function fill_order_assign_car($dbc, $waybill_number, $car_id)

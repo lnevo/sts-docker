@@ -132,7 +132,7 @@ function catalog_test_matrix_sections($dbc = null)
                 [
                     'function' => 'auto_assign_locals',
                     'params' => [],
-                    'description' => 'Test: Auto-Assign Cars (locals default)',
+                    'description' => 'Test: Auto-Assign Cars (no jobs selected)',
                 ],
                 [
                     'function' => 'pick_up_cars',

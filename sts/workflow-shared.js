@@ -13,11 +13,10 @@
     recipe: { version: 1, name: 'workflow', steps: [] },
     compiledSteps: [],
     runOptions: {},
-    csvFiles: [],
-    activeCsv: '',
-    autoLoadCsv: false,
-    dragIndex: null,
-    insertMode: 'before',
+    workflowFiles: [],
+    activeWorkflow: '',
+    autoLoadWorkflow: false,
+    insertMode: 'end',
     insertStepNum: 1,
     hideNonExecute: false,
     executionPathSteps: null,
@@ -155,6 +154,7 @@
       const selectedId = typeof step === 'string' ? step : (step?.function || '');
       const actualFn = selectedId;
       const displayId = (selectedId && !this.isAdderFunction(selectedId)) ? 'text_instruction' : selectedId;
+      const selectedHint = this.catalogHintText(step, actualFn);
       const adder = this.catalog.adder_functions || [];
       const cats = this.catalog.adder_categories || {};
       const byGroup = {};
@@ -165,6 +165,9 @@
       });
       const order = Object.keys(cats).length ? Object.keys(cats) : Object.keys(byGroup);
       let html = '<select class="row-fn field-select" data-fn-select data-row="' + rowIdx + '"';
+      if (selectedHint) {
+        html += ' title="' + this.escapeHtml(selectedHint) + '"';
+      }
       if (displayId === 'text_instruction' && actualFn && actualFn !== 'text_instruction') {
         html += ' data-actual-fn="' + this.escapeHtml(actualFn) + '"';
       }
@@ -176,8 +179,10 @@
         if (!items.length) return;
         html += '<optgroup label="' + this.escapeHtml(cats[g] || g) + '">';
         items.forEach((f) => {
+          const hint = (f.description || '').trim();
           html += '<option value="' + f.id + '"' +
-            (f.id === displayId ? ' selected' : '') + '>' +
+            (f.id === displayId ? ' selected' : '') +
+            (hint ? ' title="' + this.escapeHtml(hint) + '"' : '') + '>' +
             this.escapeHtml(f.label || f.id) + '</option>';
         });
         html += '</optgroup>';
@@ -186,32 +191,21 @@
       return html;
     },
 
-    nonStagingJobNames() {
-      const staging = new Set((this.dynamicOptions.staging_jobs || []).map(String));
-      return (this.dynamicOptions.jobs || [])
-        .map((j) => j.name)
-        .filter((name) => name && !staging.has(name));
+    catalogHintText(step, fid) {
+      const fn = fid || step?.function || '';
+      if (!fn) return '';
+      return (step?.catalog_description || this.catalogMap[fn]?.description || '').trim();
     },
 
-    resolveAutoAssignJobsValue(val, step) {
-      let selected = String(val || '').split(',').map((s) => s.trim()).filter(Boolean);
-      if (!selected.length && step?.params?.scope) {
-        if (step.params.scope === 'locals') {
-          selected = this.nonStagingJobNames();
-        } else {
-          selected = [String(step.params.scope).trim()];
-        }
-      }
-      if (!selected.length) {
-        selected = this.nonStagingJobNames();
-      }
-      return selected;
+    resolveAutoAssignJobsValue(val) {
+      return String(val || '').split(',').map((s) => s.trim()).filter(Boolean);
     },
 
     optionsForParam(p, context) {
       context = context || {};
       const from = p.options_from || p.type;
       const d = this.dynamicOptions;
+      const paramKey = context.paramKey || '';
       if (p.type === 'select' && p.options) {
         return p.options.map((o) => {
           if (o && typeof o === 'object') {
@@ -226,7 +220,14 @@
       if (from === 'car_codes') return (d.car_codes || []).map((c) => ({ value: c.code, label: c.label }));
       if (from === 'commodities') return (d.commodities || []).map((c) => ({ value: c.code, label: c.label }));
       if (from === 'locations') return (d.locations || []).map((l) => ({ value: l.code || l.label, label: l.label }));
-      if (from === 'stations') return (d.stations || []).map((s) => ({ value: s.name, label: s.label }));
+      if (from === 'station_locations') return d.station_locations || [];
+      if (from === 'stations') {
+        let stations = (d.stations || []).map((s) => ({ value: s.name, label: s.label }));
+        if (paramKey.indexOf('car_filters.') === 0 || p.suppress_all_station_option) {
+          stations = stations.filter((s) => String(s.value).toLowerCase() !== 'all');
+        }
+        return stations;
+      }
       if (from === 'setout_locations') return d.setout_locations || [];
       if (from === 'scopes') return d.scopes || [];
       if (from === 'backups') return (d.backups || []).map((b) => ({ value: b, label: b }));
@@ -259,8 +260,10 @@
       const paramKey = dataParamKey || p.key;
       const id = 'r' + rowIdx + '-' + paramKey.replace(/\./g, '-');
       const lblClass = visibleLabels ? 'inline-lbl inline-lbl-visible' : 'inline-lbl';
-      const lbl = '<span class="' + lblClass + '">' + this.escapeHtml(p.label) + '</span>';
-      const opts = this.optionsForParam(p, { rowIdx, step });
+      const lbl = (visibleLabels && p.label)
+        ? '<span class="' + lblClass + '">' + this.escapeHtml(p.label) + '</span>'
+        : '';
+      const opts = this.optionsForParam(p, { rowIdx, step, paramKey });
       val = val != null ? val : (p.default != null ? p.default : '');
 
       if (p.type === 'select' && p.options) {
@@ -277,11 +280,27 @@
         });
         return h + '</select></label>';
       }
-      if (['job', 'location', 'station', 'backup', 'scope', 'setout_location', 'shipment', 'car_code', 'commodity', 'switchlist_trains', 'job_or_all', 'workflow_section'].includes(p.type) || opts.length) {
-        const allowCustom = p.type !== 'backup' && p.type !== 'switchlist_trains' && p.type !== 'job_or_all' && p.type !== 'station' && p.allow_custom !== false;
+      if (['job', 'location', 'station', 'backup', 'scope', 'setout_location', 'station_location', 'shipment', 'car_code', 'commodity', 'switchlist_trains', 'job_or_all', 'workflow_section'].includes(p.type) || opts.length) {
+        const allowAny = p.allow_custom !== false
+          && p.type !== 'backup'
+          && p.type !== 'switchlist_trains'
+          && p.type !== 'job_or_all'
+          && !p.suppress_any_option;
+        if (
+          (paramKey.indexOf('car_filters.') === 0 && (p.key === 'current_station' || p.key === 'current_location'))
+          || p.suppress_all_station_option
+        ) {
+          const v = String(val || '').trim();
+          if (v.toLowerCase() === 'all' || v.toLowerCase() === 'any') {
+            val = '';
+          }
+        }
         let h = '<label class="inline-field' + (visibleLabels ? ' inline-field-labeled' : '') + '">' + lbl +
           '<select class="field-select" data-param="' + this.escapeHtml(paramKey) + '" id="' + id + '">';
-        if (allowCustom) h += '<option value="">Any</option>';
+        if (allowAny && p.type !== 'setout_location') {
+          const anyLabel = (p.type === 'station_location' || paramKey.indexOf('car_filters.') === 0) ? 'All' : 'Any';
+          h += '<option value=""' + (String(val) === '' ? ' selected' : '') + '>' + anyLabel + '</option>';
+        }
         opts.forEach((o) => {
           const v = o.value != null ? o.value : o;
           const l = o.label != null ? o.label : o;
@@ -292,6 +311,11 @@
           h += '<option value="' + this.escapeHtml(String(val)) + '" selected>' + this.escapeHtml(String(val)) + '</option>';
         }
         return h + '</select></label>';
+      }
+      if (p.type === 'station_location' || p.type === 'text') {
+        return '<label class="inline-field' + (visibleLabels ? ' inline-field-labeled' : '') + '">' + lbl +
+          '<input type="text" class="field-input" data-param="' + this.escapeHtml(paramKey) + '" id="' + id + '" value="' +
+          this.escapeHtml(String(val)) + '"></label>';
       }
       if (p.type === 'number') {
         const min = p.min != null ? ' min="' + p.min + '"' : '';
@@ -313,7 +337,7 @@
       }
       if (p.type === 'jobs_multiselect') {
         const opts = this.optionsForParam(p, { rowIdx, step });
-        const selected = this.resolveAutoAssignJobsValue(val, step);
+        const selected = this.resolveAutoAssignJobsValue(val);
         const selectedSet = new Set(selected.map(String));
         let h = '<label class="inline-field inline-field-multiselect' + (visibleLabels ? ' inline-field-labeled' : '') + '">' + lbl +
           '<select multiple class="field-select field-multiselect" data-param="' + this.escapeHtml(paramKey) + '" id="' + id + '" size="4">';
@@ -344,6 +368,9 @@
       }
       if (p.layout === 'reposition') {
         return this.repositionFilterGroupHtml(p, values, rowIdx);
+      }
+      if (p.layout === 'train_car') {
+        return this.trainCarFilterGroupHtml(p, values, rowIdx);
       }
       const fields = p.fields || [];
       values = values || {};
@@ -398,6 +425,30 @@
       html += '<input type="hidden" data-param="' + this.escapeHtml(paramKey) + '" id="' + id + '" value="' +
         this.escapeHtml(hiddenVal) + '">';
       html += '</div>';
+      return html;
+    },
+
+    trainCarFilterGroupHtml(p, values, rowIdx) {
+      const fields = p.fields || [];
+      values = values || {};
+      const byKey = {};
+      fields.forEach((f) => { byKey[f.key] = f; });
+      const row1 = ['pickup_location', 'reporting_marks', 'car_code', 'status', 'consignment'];
+      const row2 = ['final_destination', 'loading_location', 'unloading_location'];
+      let html = '<div class="param-filter-grid param-filter-grid-train-car">';
+      html += '<span class="param-filter-group-lbl">' + this.escapeHtml(p.label || 'Car filters') + '</span>';
+      html += '<div class="param-filter-row param-filter-row-train-car">';
+      row1.forEach((key) => {
+        const f = byKey[key];
+        if (f) html += this.inlineParamFieldHtml(f, values[f.key], rowIdx, p.key + '.' + f.key, true);
+      });
+      html += '</div>';
+      html += '<div class="param-filter-row param-filter-row-train-car-locations">';
+      row2.forEach((key) => {
+        const f = byKey[key];
+        if (f) html += this.inlineParamFieldHtml(f, values[f.key], rowIdx, p.key + '.' + f.key, true);
+      });
+      html += '</div></div>';
       return html;
     },
 
@@ -534,6 +585,8 @@
       if (String(params.increment_session || '') === '1') parts.push('increment session');
       const maxUnfilled = String(params.max_unfilled || '').trim();
       if (maxUnfilled) parts.push('max_unfilled=' + maxUnfilled);
+      const seed = String(params.seed || '').trim();
+      if (seed) parts.push('seed=' + seed);
       if (!parts.length) return 'Generate Orders';
       return 'Generate Orders ' + parts.join('; ');
     },
@@ -542,12 +595,29 @@
       params = params || {};
       const jobs = String(params.jobs || '').trim();
       if (!jobs) {
-        if (params.scope === 'locals' || !params.scope) {
-          return 'Auto-Assign Cars locals';
-        }
-        return 'Auto-Assign Cars ' + String(params.scope);
+        return 'Auto-Assign Cars';
       }
       return 'Auto-Assign Cars ' + jobs.split(',').map((s) => s.trim()).filter(Boolean).join(', ');
+    },
+
+    compileTrainCarFiltersTitle(filters) {
+      filters = filters || {};
+      const parts = [];
+      const labels = {
+        pickup_location: 'pickup',
+        reporting_marks: 'marks',
+        car_code: 'car',
+        status: 'status',
+        consignment: 'consignment',
+        final_destination: 'final',
+        loading_location: 'load',
+        unloading_location: 'unload',
+      };
+      Object.keys(labels).forEach((key) => {
+        const v = String(filters[key] || '').trim();
+        if (v) parts.push(labels[key] + '=' + v);
+      });
+      return parts.length ? parts.join('; ') : '';
     },
 
     compileLoadUnloadTitle(filters) {
@@ -655,6 +725,7 @@
       const selectedFn = fnSelect?.value || this.recipe.steps[idx]?.function || '';
       const preservedFn = fnSelect?.dataset.actualFn || '';
       const desc = row.querySelector('[data-notes]')?.value?.trim() || '';
+      const prev = this.recipe.steps[idx] || {};
       const step = { function: selectedFn, params: this.readParamsFromRow(row) };
       if (selectedFn === 'text_instruction' && preservedFn) {
         const instruction = (step.params.instruction || '').trim();
@@ -680,7 +751,18 @@
           }
         }
       }
-      if (desc) step.description = desc;
+      if (step.function && this.isAdderFunction(step.function)) {
+        if (prev.function === step.function && prev.catalog_description) {
+          step.catalog_description = prev.catalog_description;
+        } else {
+          step.catalog_description = this.catalogMap[step.function]?.description || '';
+        }
+      } else if (prev.catalog_description) {
+        step.catalog_description = prev.catalog_description;
+      }
+      if (desc) {
+        step.description = desc;
+      }
       if (step.function === 'section_label' && step.params.remarks !== undefined) {
         delete step.params.remarks;
       }
@@ -702,6 +784,7 @@
         function: '',
         params: {},
         description: '',
+        catalog_description: '',
       };
     },
 
@@ -710,7 +793,7 @@
     },
 
     readInsertFromDom() {
-      const mode = this.el('insert-mode')?.value || 'before';
+      const mode = this.el('insert-mode')?.value || 'end';
       const num = parseInt(this.el('insert-step-num')?.value, 10) || 1;
       this.insertMode = mode;
       this.insertStepNum = num;
@@ -742,7 +825,7 @@
       const numInput = this.el('insert-step-num');
       const modeSel = this.el('insert-mode');
       if (!wrap || !numInput || !modeSel) return;
-      const mode = modeSel.value || 'before';
+      const mode = modeSel.value || 'end';
       this.insertMode = mode;
       const needsNum = mode === 'before' || mode === 'after' || mode === 'end';
       wrap.hidden = !needsNum;
@@ -761,6 +844,35 @@
       }
       this.insertAtIndex = this.resolveInsertIndex();
       this.highlightInsertTarget();
+    },
+
+    moveStepToNumber(fromIdx, requestedNum) {
+      const steps = this.recipe.steps;
+      const n = steps.length;
+      if (fromIdx < 0 || fromIdx >= n || n === 0) return fromIdx;
+
+      let targetNum = parseInt(requestedNum, 10);
+      if (isNaN(targetNum) || targetNum < 1) targetNum = 1;
+      if (targetNum > n) targetNum = n;
+
+      const toIdx = targetNum - 1;
+      if (fromIdx === toIdx) return fromIdx;
+
+      const moved = steps.splice(fromIdx, 1)[0];
+      steps.splice(toIdx, 0, moved);
+      return toIdx;
+    },
+
+    swapStepWithNeighbor(fromIdx, delta) {
+      const steps = this.recipe.steps;
+      const toIdx = fromIdx + delta;
+      if (fromIdx < 0 || fromIdx >= steps.length || toIdx < 0 || toIdx >= steps.length) {
+        return fromIdx;
+      }
+      const tmp = steps[fromIdx];
+      steps[fromIdx] = steps[toIdx];
+      steps[toIdx] = tmp;
+      return toIdx;
     },
 
     setInsertBefore(stepNum) {
@@ -796,10 +908,15 @@
       const rowKey = idx;
 
       return (
-        '<div class="row-top row-top-align-start' + ((step.function === 'load_unload' || step.function === 'fill_orders' || step.function === 'reposition_empties') ? ' row-has-filters' : '') +
+        '<div class="row-top row-top-align-start' + ((step.function === 'load_unload' || step.function === 'fill_orders' || step.function === 'reposition_empties' || step.function === 'pick_up_cars' || step.function === 'set_out_cars') ? ' row-has-filters' : '') +
           this.remarksExpandedClass(step) + '">' +
-          '<span class="handle" title="Drag to reorder">⋮⋮</span>' +
-          '<span class="step-num">' + (idx + 1) + '</span>' +
+          '<div class="step-num-control">' +
+            '<input type="number" class="step-num step-num-input field-input" data-step-num min="1" max="' + this.recipe.steps.length + '" value="' + (idx + 1) + '" title="Type step number to jump" aria-label="Step number">' +
+            '<div class="step-num-arrows">' +
+              '<button type="button" class="step-num-arrow" data-step-arrow="up" title="Move step up">▲</button>' +
+              '<button type="button" class="step-num-arrow" data-step-arrow="down" title="Move step down">▼</button>' +
+            '</div>' +
+          '</div>' +
           '<button type="button" class="btn-icon btn-insert-before" title="Add step below step ' + (idx + 1) + '">+</button>' +
           '<label class="inline-field row-command">' +
             '<span class="inline-lbl">Command</span>' +
@@ -833,17 +950,23 @@
           params[k] = {};
           (p.fields || []).forEach((f) => {
             const fk = f.key;
+            let v = '';
             if (oldParams[k]?.[fk] !== undefined && oldParams[k][fk] !== '') {
-              params[k][fk] = oldParams[k][fk];
+              v = oldParams[k][fk];
             } else if (fk === 'current_location' && oldParams.location !== undefined && oldParams.location !== '') {
-              params[k][fk] = oldParams.location;
+              v = oldParams.location;
             } else if (oldParams[fk] !== undefined && oldParams[fk] !== '') {
-              params[k][fk] = oldParams[fk];
+              v = oldParams[fk];
             } else if (f.default !== undefined) {
-              params[k][fk] = f.default;
-            } else {
-              params[k][fk] = '';
+              v = f.default;
             }
+            if (k === 'car_filters' && (fk === 'current_station' || fk === 'current_location')) {
+              v = String(v ?? '').trim();
+              if (v.toLowerCase() === 'all' || v.toLowerCase() === 'any') {
+                v = '';
+              }
+            }
+            params[k][fk] = v;
           });
           return;
         }
@@ -853,15 +976,7 @@
           return;
         }
         if (k === 'jobs' && p.type === 'jobs_multiselect') {
-          let jobsVal = oldParams.jobs;
-          if ((!jobsVal || jobsVal === '') && oldParams.scope) {
-            if (oldParams.scope === 'locals') {
-              jobsVal = this.nonStagingJobNames().join(',');
-            } else {
-              jobsVal = String(oldParams.scope);
-            }
-          }
-          params[k] = jobsVal || this.nonStagingJobNames().join(',');
+          params[k] = oldParams.jobs != null ? String(oldParams.jobs) : '';
           return;
         }
         if (oldParams[k] !== undefined && oldParams[k] !== '') {
@@ -893,13 +1008,34 @@
       if (step.function === 'auto_assign_locals') {
         return this.compileAutoAssignTitle(step.params);
       }
-      if (step.function === 'pick_up_cars' && !String(step.params?.job || '').trim()) {
-        return 'Pick Up Cars locals';
+      if (step.function === 'pick_up_cars') {
+        const job = String(step.params?.job || '').trim();
+        const filterSuffix = this.compileTrainCarFiltersTitle(step.params?.car_filters);
+        if (!job && !String(step.params?.location || '').trim()) {
+          return filterSuffix ? ('Pick Up Cars locals (' + filterSuffix + ')') : 'Pick Up Cars locals';
+        }
+        let title = '';
+        if (!job) title = 'Pick Up Cars locals';
+        else {
+          const loc = String(step.params?.location || '').trim();
+          title = loc ? ('Pick Up Cars ' + job + ' ' + loc) : ('Pick Up Cars ' + job);
+        }
+        if (filterSuffix) title += ' (' + filterSuffix + ')';
+        return title;
       }
-      if (step.function === 'set_out_cars'
-        && !String(step.params?.job || '').trim()
-        && !String(step.params?.location || '').trim()) {
-        return 'Set Out Cars locals';
+      if (step.function === 'set_out_cars') {
+        const job = String(step.params?.job || '').trim();
+        const loc = String(step.params?.location || '').trim();
+        const filterSuffix = this.compileTrainCarFiltersTitle(step.params?.car_filters);
+        if (!job && !loc) return 'Set Out Cars locals';
+        let title = '';
+        if (job && !loc) title = 'Set Out Cars ' + job + ' Final Destination';
+        else title = this.catalogMap[step.function]
+          ? (this.catalogMap[step.function].gui_template || '')
+              .replace('{job}', job).replace('{location}', loc).replace(/\s+/g, ' ').trim()
+          : ('Set Out Cars ' + job + ' ' + loc).trim();
+        if (filterSuffix) title += ' (' + filterSuffix + ')';
+        return title;
       }
       if (step.function === 'goto') {
         const p = step.params || {};
@@ -1004,7 +1140,7 @@
       if (paramsEl) paramsEl.innerHTML = this.paramsHtmlForStep(step, idx);
       const top = row.querySelector('.row-top');
       if (top) {
-        top.classList.toggle('row-has-filters', step.function === 'load_unload' || step.function === 'fill_orders' || step.function === 'reposition_empties');
+        top.classList.toggle('row-has-filters', step.function === 'load_unload' || step.function === 'fill_orders' || step.function === 'reposition_empties' || step.function === 'pick_up_cars' || step.function === 'set_out_cars');
       }
       row.className = 'step-row ' + this.stepColorClass(step);
       this.updateRowStsLink(row, step);
@@ -1022,11 +1158,21 @@
         this.recipe.steps[idx].params = newFn
           ? this.defaultParamsForFunction(newFn, this.recipe.steps[idx].params)
           : {};
+        if (newFn) {
+          this.recipe.steps[idx].catalog_description = this.catalogMap[newFn]?.description || '';
+        } else {
+          this.recipe.steps[idx].catalog_description = '';
+        }
         this.refreshRowParams(idx);
         const updatedRow = this.el('steps-list')?.querySelector('.step-row[data-idx="' + idx + '"]');
         if (updatedRow) {
           updatedRow.className = 'step-row ' + this.stepColorClass(this.recipe.steps[idx]);
           this.updateRowStsLink(updatedRow, this.recipe.steps[idx]);
+          const fnSelect = updatedRow.querySelector('[data-fn-select]');
+          const hint = this.catalogHintText(this.recipe.steps[idx], newFn);
+          if (fnSelect) {
+            fnSelect.title = hint || '';
+          }
         }
         this.setStatus(
           newFn ? ('Step ' + (idx + 1) + ': ' + (this.catalogMap[newFn]?.label || newFn)) : ('Step ' + (idx + 1) + ': pick a command'),
@@ -1055,6 +1201,7 @@
       };
       row.addEventListener('change', (e) => {
         const target = e.target;
+        if (target.matches('[data-step-num]')) return;
         if (target.matches('[data-param="mode"]')) {
           this.syncStepFromRow(row, idx);
           this.refreshRowParams(idx);
@@ -1072,36 +1219,58 @@
         }
         onRowEdit();
       });
-      row.addEventListener('input', onRowEdit);
+      row.addEventListener('input', (e) => {
+        if (e.target.matches('[data-step-num]')) return;
+        onRowEdit();
+      });
       this.updateRemarksLayout(row);
 
-      row.querySelector('.handle')?.addEventListener('mousedown', (e) => e.stopPropagation());
+      const stepNumInput = row.querySelector('[data-step-num]');
+      if (stepNumInput) {
+        let stepNumHandled = false;
 
-      row.addEventListener('dragstart', (e) => {
-        if (e.target.closest('select, input, button')) { e.preventDefault(); return; }
-        this.syncAllStepsFromDom();
-        this.dragIndex = idx;
-        row.classList.add('dragging');
-      });
-      row.addEventListener('dragend', () => {
-        row.classList.remove('dragging');
-        this.dragIndex = null;
-        this.el('steps-list')?.querySelectorAll('.drag-over').forEach((n) => n.classList.remove('drag-over'));
-      });
-      row.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        if (this.dragIndex !== null && this.dragIndex !== idx) row.classList.add('drag-over');
-      });
-      row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
-      row.addEventListener('drop', (e) => {
-        e.preventDefault();
-        row.classList.remove('drag-over');
-        if (this.dragIndex === null || this.dragIndex === idx) return;
-        const moved = this.recipe.steps.splice(this.dragIndex, 1)[0];
-        this.recipe.steps.splice(idx, 0, moved);
-        this.markDirty();
-        this.renderSteps({ preserveScroll: true });
-      });
+        const finishStepMove = (newIdx) => {
+          stepNumHandled = true;
+          this.markDirty();
+          this.renderSteps({
+            skipSync: true,
+            preserveScroll: true,
+            scrollToIndex: newIdx,
+            focusStepNum: true,
+          });
+          this.setStatus('Moved step to position ' + (newIdx + 1), 'ok');
+          queueMicrotask(() => {
+            stepNumHandled = false;
+          });
+        };
+
+        stepNumInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            stepNumInput.blur();
+          }
+        });
+        row.querySelector('[data-step-arrow="up"]')?.addEventListener('click', () => {
+          this.syncStepFromRow(row, idx);
+          const newIdx = this.swapStepWithNeighbor(idx, -1);
+          if (newIdx !== idx) finishStepMove(newIdx);
+        });
+        row.querySelector('[data-step-arrow="down"]')?.addEventListener('click', () => {
+          this.syncStepFromRow(row, idx);
+          const newIdx = this.swapStepWithNeighbor(idx, +1);
+          if (newIdx !== idx) finishStepMove(newIdx);
+        });
+        stepNumInput.addEventListener('change', () => {
+          if (stepNumHandled) return;
+          this.syncStepFromRow(row, idx);
+          const newIdx = this.moveStepToNumber(idx, stepNumInput.value);
+          if (newIdx !== idx) {
+            finishStepMove(newIdx);
+            return;
+          }
+          stepNumInput.value = String(idx + 1);
+        });
+      }
     },
 
     renderSteps(options) {
@@ -1119,7 +1288,6 @@
       this.recipe.steps.forEach((step, idx) => {
         const row = document.createElement('div');
         row.className = 'step-row ' + this.stepColorClass(step);
-        row.draggable = true;
         row.dataset.idx = String(idx);
         row.innerHTML = this.stepRowInnerHtml(step, idx);
         this.bindRowEvents(row, idx);
@@ -1136,6 +1304,9 @@
         if (target) {
           target.classList.add('insert-marker');
           target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          if (options.focusStepNum) {
+            target.querySelector('[data-step-num]')?.focus();
+          }
         }
       }
 
@@ -1396,11 +1567,11 @@
       this.compiledSteps = d.compiled || [];
     },
 
-    syncCsvSelect(options) {
+    syncWorkflowSelect(options) {
       options = options || {};
-      const sel = this.el('csv-file');
+      const sel = this.el('workflow-file');
       if (!sel) return;
-      const files = this.csvFiles || [];
+      const files = this.workflowFiles || [];
       const placeholder = 'Select a file to load';
       let html = '';
       if (files.length !== 1) {
@@ -1412,98 +1583,90 @@
       sel.innerHTML = html;
       if (files.length === 1) {
         sel.value = files[0];
-        this.activeCsv = files[0];
+        this.activeWorkflow = files[0];
       } else if (files.length > 1) {
-        if (!options.preferEmpty && this.activeCsv && files.includes(this.activeCsv)) {
-          sel.value = this.activeCsv;
+        if (!options.preferEmpty && this.activeWorkflow && files.includes(this.activeWorkflow)) {
+          sel.value = this.activeWorkflow;
         } else {
           sel.value = '';
           if (options.preferEmpty) {
-            this.activeCsv = '';
+            this.activeWorkflow = '';
           }
         }
       } else {
         sel.value = '';
       }
-      this.syncCsvSaveFilename();
-      this.syncCsvDownloadLinks();
+      this.syncWorkflowSaveFilename();
+      this.syncWorkflowDownloadLink();
     },
 
-    syncCsvSaveFilename() {
-      const sel = this.el('csv-file');
-      const input = this.el('csv-save-as');
+    syncWorkflowSaveFilename() {
+      const sel = this.el('workflow-file');
+      const input = this.el('workflow-save-as');
       if (!input || this.dirty) return;
-      input.value = sel?.value || this.activeCsv || '';
+      input.value = sel?.value || this.activeWorkflow || '';
     },
 
-    readSaveCsvFilename() {
-      const input = this.el('csv-save-as');
-      let name = (input?.value || this.activeCsv || '').trim();
+    readSaveWorkflowFilename() {
+      const input = this.el('workflow-save-as');
+      let name = (input?.value || this.activeWorkflow || '').trim();
       if (!name) {
-        throw new Error('Enter a CSV filename to save');
+        throw new Error('Enter a workflow filename to save');
       }
-      if (!/\.csv$/i.test(name)) name += '.csv';
+      if (!/\.(workflow|recipe)\.json$/i.test(name)) {
+        name += '.workflow.json';
+      }
       return name.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^\.+/, '');
     },
 
-    syncCsvDownloadLinks() {
-      const sel = this.el('csv-file');
-      const name = sel?.value || this.activeCsv;
-      const dl = this.el('csv-download');
-      const json = this.el('json-download');
+    syncWorkflowDownloadLink() {
+      const sel = this.el('workflow-file');
+      const name = sel?.value || this.activeWorkflow;
+      const dl = this.el('workflow-download');
       if (!name) {
         if (dl) {
           dl.removeAttribute('href');
           dl.classList.add('disabled');
         }
-        if (json) {
-          json.removeAttribute('href');
-          json.classList.add('disabled');
-        }
         return;
       }
       const q = encodeURIComponent(name);
       if (dl) {
-        dl.href = 'operational_steps_api.php?action=download&kind=csv&csv_file=' + q;
+        dl.href = 'operational_steps_api.php?action=download&workflow_file=' + q;
         dl.download = name;
         dl.classList.remove('disabled');
       }
-      if (json) {
-        json.href = 'operational_steps_api.php?action=download&kind=recipe&csv_file=' + q;
-        json.download = name.replace(/\.csv$/i, '.workflow.json');
-        json.classList.remove('disabled');
-      }
     },
 
-    async loadCsvList(options) {
+    async loadWorkflowList(options) {
       options = options || {};
-      const prevActive = this.activeCsv;
-      const d = await this.api('list_csv');
-      this.csvFiles = d.files || [];
-      if (this.csvFiles.length === 1) {
-        this.activeCsv = d.active_csv || this.csvFiles[0];
-        this.autoLoadCsv = true;
-        this.syncCsvSelect();
+      const prevActive = this.activeWorkflow;
+      const d = await this.api('list_workflows');
+      this.workflowFiles = d.files || [];
+      if (this.workflowFiles.length === 1) {
+        this.activeWorkflow = d.active_workflow || this.workflowFiles[0];
+        this.autoLoadWorkflow = true;
+        this.syncWorkflowSelect();
         return;
       }
-      this.autoLoadCsv = false;
-      if (this.csvFiles.length > 1) {
-        if (options.keepActive && prevActive && this.csvFiles.includes(prevActive)) {
-          this.activeCsv = prevActive;
-          this.syncCsvSelect();
+      this.autoLoadWorkflow = false;
+      if (this.workflowFiles.length > 1) {
+        if (options.keepActive && prevActive && this.workflowFiles.includes(prevActive)) {
+          this.activeWorkflow = prevActive;
+          this.syncWorkflowSelect();
         } else {
-          this.activeCsv = '';
-          this.syncCsvSelect({ preferEmpty: true });
+          this.activeWorkflow = '';
+          this.syncWorkflowSelect({ preferEmpty: true });
         }
         return;
       }
-      this.activeCsv = '';
-      this.syncCsvSelect({ preferEmpty: true });
+      this.activeWorkflow = '';
+      this.syncWorkflowSelect({ preferEmpty: true });
     },
 
     async loadRecipe(options) {
       options = options || {};
-      if (!this.activeCsv) {
+      if (!this.activeWorkflow) {
         this.recipe = { version: 1, name: 'workflow', steps: [] };
         this.compiledSteps = [];
         if (options.clearDirty !== false) {
@@ -1511,57 +1674,37 @@
         }
         return;
       }
-      if (options.fromCsv) {
-        const imported = await this.api('import_csv', 'POST', {
-          use_file: true,
-          csv_file: this.activeCsv,
-        });
-        this.recipe = imported.recipe;
-        this.activeCsv = imported.csv_file || this.activeCsv;
-      } else {
-        const d = await this.api('recipe', 'GET', null, { csv_file: this.activeCsv });
-        this.recipe = d.recipe;
-        this.activeCsv = d.csv_file || this.activeCsv;
-        if (!this.recipe.steps?.length && this.activeCsv) {
-          try {
-            const imported = await this.api('import_csv', 'POST', {
-              use_file: true,
-              csv_file: this.activeCsv,
-            });
-            this.recipe = imported.recipe;
-          } catch (e) {
-            this.recipe = { version: 1, name: 'workflow', steps: [] };
-          }
-        }
-      }
+      const d = await this.api('recipe', 'GET', null, { workflow_file: this.activeWorkflow });
+      this.recipe = d.recipe;
+      this.activeWorkflow = d.workflow_file || this.activeWorkflow;
       await this.loadCompiled();
-      this.syncCsvSelect();
+      this.syncWorkflowSelect();
       if (options.clearDirty !== false) {
         this.clearDirty();
       }
     },
 
-    async loadSelectedCsv() {
-      const sel = this.el('csv-file');
+    async loadSelectedWorkflow() {
+      const sel = this.el('workflow-file');
       const next = sel?.value || '';
       if (!next) {
-        this.setStatus('Choose a CSV file, then click Load', 'info');
+        this.setStatus('Choose a workflow file, then click Load', 'info');
         return;
       }
       if (this.dirty) {
         if (!confirm('Load ' + next + ' from disk? Unsaved changes will be lost.')) {
-          sel.value = this.activeCsv;
+          sel.value = this.activeWorkflow;
           return;
         }
       }
-      this.activeCsv = next;
-      await this.api('set_active_csv', 'POST', { csv_file: this.activeCsv });
-      await this.loadRecipe({ fromCsv: true });
+      this.activeWorkflow = next;
+      await this.api('set_active_workflow', 'POST', { workflow_file: this.activeWorkflow });
+      await this.loadRecipe();
       await this.loadRunOptions();
       this.renderSteps({ skipSync: true });
-      this.syncCsvSaveFilename();
+      this.syncWorkflowSaveFilename();
       this.setStatus(
-        'Loaded ' + this.activeCsv + ' — ' + this.recipe.steps.length + ' steps · DB session ' +
+        'Loaded ' + this.activeWorkflow + ' — ' + this.recipe.steps.length + ' steps · DB session ' +
         (this.runOptions?.current_session ?? '?'),
         'ok'
       );
@@ -1582,6 +1725,40 @@
       this.el('steps-list')?.querySelector('[data-fn-select]')?.focus();
     },
 
+    async deleteSelectedWorkflow() {
+      const sel = this.el('workflow-file');
+      const name = sel?.value || this.activeWorkflow || '';
+      if (!name) {
+        this.setStatus('Choose a workflow file to delete', 'info');
+        return;
+      }
+      if (!confirm(
+        'Delete "' + name + '" from the session editor folder?\n\nThis permanently removes the file from disk and cannot be undone.'
+      )) {
+        return;
+      }
+      if (this.activeWorkflow === name && this.dirty) {
+        if (!confirm('The editor has unsaved changes for this workflow. Delete the file anyway?')) {
+          return;
+        }
+      }
+      const d = await this.api('delete_workflow', 'POST', { workflow_file: name });
+      const wasActive = this.activeWorkflow === name;
+      this.workflowFiles = d.files || [];
+      this.activeWorkflow = d.active_workflow || '';
+      this.syncWorkflowSelect({ preferEmpty: !this.activeWorkflow });
+      if (wasActive || !this.activeWorkflow) {
+        this.recipe = this.freshEditorRecipe();
+        this.compiledSteps = [];
+        this.clearDirty();
+        await this.loadRunOptions();
+        this.renderSteps({ skipSync: true });
+      }
+      this.syncWorkflowSaveFilename();
+      this.syncWorkflowDownloadLink();
+      this.setStatus('Deleted ' + (d.deleted || name), 'ok');
+    },
+
     async loadCatalog() {
       this.catalog = await this.api('catalog');
       this.dynamicOptions = this.catalog.dynamic_options || {};
@@ -1590,15 +1767,15 @@
 
     async saveRecipe() {
       this.syncAllStepsFromDom();
-      const saveAs = this.readSaveCsvFilename();
-      const d = await this.api('save', 'POST', { recipe: this.recipe, csv_file: saveAs });
-      this.activeCsv = d.csv_file || saveAs;
-      await this.loadCsvList({ keepActive: true });
+      const saveAs = this.readSaveWorkflowFilename();
+      const d = await this.api('save', 'POST', { recipe: this.recipe, workflow_file: saveAs });
+      this.activeWorkflow = d.workflow_file || saveAs;
+      await this.loadWorkflowList({ keepActive: true });
       await this.loadCompiled();
       this.renderSteps();
       this.clearDirty();
       this.setStatus(
-        'Saved ' + this.activeCsv + ' (' + (d.rows || this.recipe.steps.length) + ' steps)',
+        'Saved ' + this.activeWorkflow + ' (' + (d.rows || this.recipe.steps.length) + ' steps)',
         'ok'
       );
       return d;
@@ -1613,19 +1790,25 @@
       this.setStatus('Normalized ' + data.rows + ' steps', 'ok');
     },
 
-    async importCsv() {
-      return this.promptImportCsv();
+    async importWorkflow() {
+      return this.promptImportWorkflow();
     },
 
-    promptImportCsv() {
-      this.el('csv-import-file')?.click();
+    promptImportWorkflow() {
+      this.el('workflow-import-file')?.click();
     },
 
-    async importCsvFile(file) {
+    async importWorkflowFile(file) {
       if (!file) return;
-      const name = file.name || 'imported.csv';
+      const name = file.name || 'imported.workflow.json';
       const text = await file.text();
-      const d = await this.api('import_csv', 'POST', { csv: text });
+      let payload;
+      try {
+        payload = JSON.parse(text);
+      } catch (e) {
+        throw new Error('Invalid workflow JSON in ' + name);
+      }
+      const d = await this.api('import_workflow', 'POST', { recipe: payload });
       const importedSteps = d.recipe?.steps || [];
       if (!importedSteps.length) {
         this.setStatus('No steps found in ' + name, 'err');
@@ -1654,8 +1837,8 @@
       } else {
         this.recipe = d.recipe;
       }
-      const saveAs = this.el('csv-save-as');
-      if (saveAs) saveAs.value = name;
+      const saveAs = this.el('workflow-save-as');
+      if (saveAs) saveAs.value = name.replace(/\.(workflow|recipe)\.json$/i, '') + '.workflow.json';
       this.markDirty();
       await this.loadCompiled();
       this.renderSteps({ skipSync: true });
@@ -1808,7 +1991,7 @@
         recipe: this.recipe,
         save_recipe: true,
         session_count: repeat,
-        csv_file: this.activeCsv,
+        workflow_file: this.activeWorkflow,
       };
       let d;
       if (sectionId === 'all') {

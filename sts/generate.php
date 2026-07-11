@@ -126,6 +126,7 @@
       // bring in the function files
       require 'open_db.php';
       require 'drop_down_list_functions.php';
+      require_once __DIR__ . '/generate_order_helpers.php';
 
       // get a database connection
       $dbc = open_db();
@@ -145,78 +146,12 @@
 
       function run_automatic_car_order_generation($dbc, $session_number, $waybill_counter)
       {
-        $orders_created = 0;
-
-        $sql = 'select id as id,
-                       shipments.code as code,
-                       shipments.last_ship_date as last_ship_date,
-                       shipments.min_interval as min_interval,
-                       shipments.max_interval as max_interval,
-                       shipments.min_amount as min_amount,
-                       shipments.max_amount as max_amount
-                  from shipments';
-        $rs_shipments = mysqli_query($dbc, $sql);
-        if (!$rs_shipments || mysqli_num_rows($rs_shipments) <= 0) {
-          return 0;
-        }
-
-        while ($row = mysqli_fetch_array($rs_shipments))
-        {
-          $last_ship_date = $row['last_ship_date'];
-          $min_interval = $row['min_interval'];
-          $max_interval = $row['max_interval'];
-          $min_amount = $row['min_amount'];
-          $max_amount = $row['max_amount'];
-
-          $interval = round(mt_rand($min_interval * 100, $max_interval * 100)/100);
-          $ship_date = $last_ship_date + $interval;
-
-          if ($ship_date <= $session_number)
-          {
-            $sql = 'update shipments set last_ship_date = ' . $session_number . ' where id = "' . $row['id'] . '"';
-            if (!mysqli_query($dbc, $sql))
-            {
-              print 'Update Error: [' . mysqli_error($dbc) . '] SQL: ' . $sql . '<br /><br />';
-            }
-
-            $num_cars = round(mt_rand($min_amount * 100, $max_amount * 100)/100);
-
-            for ($i=0; $i<$num_cars; $i++)
-            {
-              $waybill_counter++;
-              $wb_nbr = str_pad($session_number, 3, '0', STR_PAD_LEFT) . "-" . str_pad($waybill_counter, 3, '0', STR_PAD_LEFT);
-
-              $sql = 'insert into car_orders (waybill_number, shipment, car) values ("' . $wb_nbr . '", "' . $row['id'] . '", "0")';
-              if (!mysqli_query($dbc, $sql))
-              {
-                print 'Insert Error: [' . mysqli_error($dbc) . '] SQL: ' . $sql . '<br /><br />';
-              }
-              else
-              {
-                $orders_created++;
-              }
-            }
-          }
-        }
-
-        return $orders_created;
+        return generate_orders_run_automatic($dbc, $session_number, $waybill_counter);
       }
 
       function get_next_auto_waybill_counter($dbc, $session_number)
       {
-        $session_prefix = str_pad($session_number, 3, '0', STR_PAD_LEFT) . '-';
-        $session_prefix = mysqli_real_escape_string($dbc, $session_prefix);
-        $sql = 'select max(cast(substr(waybill_number, 5, 3) as unsigned)) as max_counter
-                from car_orders
-                where waybill_number like "' . $session_prefix . '___"
-                  and substr(waybill_number, 5, 1) != "M"';
-        $rs = mysqli_query($dbc, $sql);
-        $row = mysqli_fetch_array($rs);
-        if (!$row || $row['max_counter'] === null) {
-          return 0;
-        }
-
-        return (int)$row['max_counter'];
+        return generate_orders_get_next_auto_waybill_counter($dbc, $session_number);
       }
 
 //-------------------------------------------- process the request -------------------------------------------

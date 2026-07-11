@@ -2,9 +2,8 @@
 /**
  * Bootstrap runtime for the session editor and workflow simulator.
  *
- * warm_start_helpers.php (track-scale / active branch) supplies DB session
- * simulation helpers. session_simulator_ops.php adds filtered fill/load-unload
- * extensions used by catalog dispatch.
+ * Loads session_simulator_ops.php (filtered fill/reposition/load-unload) and, when
+ * present, warm_start_helpers.php for catalog dispatch (pick up, set out, staging, etc.).
  */
 
 function session_runtime_bootstrap()
@@ -47,5 +46,5 @@ function session_get_db_session($dbc)
 
 function session_runtime_notice()
 {
-    return 'Session simulation requires optional runtime helpers (warm_start_helpers on active/track-scale branch). Recipe editing and catalog validation still work without them.';
+    return 'Session simulator dispatch requires warm_start_helpers.php in sts/. Rebuild the web image (docker compose --profile build up -d --build).';
 }

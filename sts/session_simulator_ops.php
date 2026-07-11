@@ -8,51 +8,20 @@ function session_sim_auto_fill($dbc, $fraction = 1.0, array $options = [])
 {
     require_once __DIR__ . '/fill_order_helpers.php';
 
-    $filled = 0;
     $order_filters = fill_order_parse_filters($options['order_filters'] ?? null);
     $car_filters = $options['car_filters'] ?? null;
     if ($car_filters !== null && !is_array($car_filters)) {
         $car_filters = null;
     }
 
-    $waybills = fill_order_get_unfilled_waybills($dbc);
-    if (!empty($order_filters)) {
-        $waybills = array_values(array_filter($waybills, function ($waybill_number) use ($dbc, $order_filters) {
-            $order_row = fill_order_get_details($dbc, $waybill_number);
-            return $order_row !== null && fill_order_matches_filters($order_row, $order_filters);
-        }));
-    }
+    $result = fill_order_auto_assign($dbc, [
+        'order_filters' => $order_filters,
+        'car_filters' => $car_filters,
+        'fraction' => max(0.0, min(1.0, (float) $fraction)),
+        'shuffle' => false,
+    ]);
 
-    shuffle($waybills);
-    $limit = (int) ceil(count($waybills) * max(0.0, min(1.0, $fraction)));
-
-    foreach ($waybills as $index => $waybill_number) {
-        if ($index >= $limit) {
-            break;
-        }
-
-        $order_row = fill_order_get_details($dbc, $waybill_number);
-        if ($order_row === null) {
-            continue;
-        }
-
-        $available_cars = fill_order_get_available_cars($dbc, $order_row);
-        $selected_car = fill_order_pick_car_for_categories(
-            $available_cars,
-            fill_order_valid_categories(),
-            $car_filters
-        );
-        if ($selected_car === null) {
-            continue;
-        }
-
-        $result = fill_order_assign_car($dbc, $waybill_number, $selected_car['car_id']);
-        if ($result['success']) {
-            $filled++;
-        }
-    }
-
-    return $filled;
+    return (int) $result['filled'];
 }
 
 function session_sim_load_unload_filter_token_match($needle, $station, $code)

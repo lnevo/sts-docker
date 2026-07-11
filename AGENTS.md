@@ -18,7 +18,7 @@ the repo root — read it too, it's tool-agnostic despite the name.
 
 ## Operational Steps API (legacy `sts/`)
 
-Session workflow editor, recipe CSV/JSON, and simulator HTTP API.
+Session workflow editor, recipe JSON, and simulator HTTP API.
 
 | Artifact | Path |
 |----------|------|
@@ -38,31 +38,29 @@ in `operational_steps_api.openapi.yaml`, and this section if paths move.
 `bin/run_catalog_tests.sh`) to refresh `operational_steps_catalog.openapi.generated.yaml`
 for Swagger. The live `GET ?action=catalog` response remains authoritative at runtime.
 
-**Deploy:** `docker cp sts/operational_steps_api.php sts-docker-web-1:/var/www/html/sts/`
-(and the `.openapi.yaml` + `-docs.html` siblings). Or copy all changed `sts/`
-files per `CLAUDE.md`.
+**Deploy:** Rebuild the web image after changing `sts/` (`docker compose --profile build up -d --build`). For live dev without rebuild, `sts-docker-helpers/bin/sync_operational_steps.sh` hot-copies `sts-docker/sts/` into the running container.
 
-**Helpers:** Host-side sync/validate scripts (e.g. catalog test matrix, workflow
-CSV generation) belong in the parent **`sts-docker-helpers/`** repo, not under
-`sts-docker/sts/`.
+**Runtime PHP** (workflow editor, catalog, session dispatch, track scale, switch-list helpers) lives in **`sts-docker/sts/`** and is included in the Docker image. **`sts-docker-helpers/sts/`** holds optional legacy CLI scripts only (`begin_operating_session.php`, `simulate_warm_start.php`, etc.) — see that folder's README.
 
-### Session runtime (branches)
+**Helpers:** Host-side seed/sync/validate scripts belong in **`sts-docker-helpers/`** (not under `sts-docker/sts/`).
 
-| Branch | Contents |
-|--------|----------|
-| `workflow-editor` | Session editor UI/API, catalog, switch-list helpers — **no** `warm_start_helpers.php` or track-scale CLI |
-| `track-scale` | Warm-start simulation, CK1 scale, `warm_start_helpers.php` |
-| `active` | `track-scale` + session editor layered for local full-stack runs |
+### Session runtime (in-image)
 
-Bootstrap: `sts/session_runtime.php` loads `warm_start_helpers.php` when present,
-then `sts/session_simulator_ops.php` (filtered fill/reposition/load-unload and
-play-session composites). Recipe editing works on `workflow-editor`; simulator
-dispatch needs `active` or a merge with `track-scale`.
+The default Docker image includes the full workflow simulator runtime under `sts/`:
 
-**Data model:** The workflow CSV is the only persisted recipe. Rows are compiled
+- `session_runtime.php` bootstraps `warm_start_helpers.php` and `session_simulator_ops.php`
+- `simulator_api.php` + `session_simulator_helpers.php` drive in-editor simulation
+- `operational_steps_api.php` + catalog dispatch run recipe steps against the live DB
+
+No hot-sync from `sts-docker-helpers/sts/` is required after rebuild. See **`sts/RUNTIME.md`** for the file list. Verify with `sts-docker-helpers/bin/verify_sts_runtime.sh`.
+
+Optional legacy CLI scripts (`begin_operating_session.php`, `simulate_warm_start.php`, …) stay in **`sts-docker-helpers/sts/`** for host bin wrappers only.
+
+**Data model:** Workflow JSON (`*.workflow.json` or `*.recipe.json` under
+`sts-backups/session_editor/`) is the persisted recipe. Steps are compiled
 from the catalog (`GET ?action=catalog`); jobs, locations, and stations come from
 the DB via `dynamic_options`, not hardcoded PHP lists. Switch-list phases replay
-the CSV steps in a dry-run transaction and capture at each `build_switchlists_sts`
+recipe steps in a dry-run transaction and capture at each `build_switchlists_sts`
 step for the requested job.
 
 
