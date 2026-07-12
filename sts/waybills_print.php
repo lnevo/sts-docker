@@ -19,6 +19,9 @@ require_once __DIR__ . '/open_db.php';
 require_once __DIR__ . '/session_helpers.php';
 require_once __DIR__ . '/waybill_print_helpers.php';
 
+// Redirect to the latest overview if the DB was rewound past this session.
+session_redirect_if_beyond_current($session);
+
 $root = session_web_root();
 $dbc = open_db();
 $legs = session_train_switchlist_legs($dbc, $session, $job, $root);

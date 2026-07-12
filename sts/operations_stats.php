@@ -83,6 +83,8 @@ function operations_dashboard_condition_variables()
 {
     return [
         ['key' => 'session_nbr', 'label' => 'Session number'],
+        ['key' => 'session_is_odd', 'label' => 'Session is odd (1=yes)'],
+        ['key' => 'session_is_even', 'label' => 'Session is even (1=yes)'],
         ['key' => 'open_orders', 'label' => 'Open orders'],
         ['key' => 'unfilled_orders', 'label' => 'Unfilled orders'],
         ['key' => 'reposition_off_home', 'label' => 'Empty cars not at home'],

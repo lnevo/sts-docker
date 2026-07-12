@@ -47,7 +47,7 @@ function master_sw_display_train_name($table_name, array $options = [])
     $train = $title !== '' ? $title : (string) $table_name;
     $info = master_sw_switchlist_info($options);
 
-    return $info !== '' ? $train . ' — ' . $info : $train;
+    return $info !== '' ? $train . ' ' . $info : $train;
 }
 
 function master_sw_switchlist_sql($job_id, $table_name)
@@ -2387,10 +2387,18 @@ function master_sw_generate_for_jobs($dbc, array $job_names, $output_dir, array 
                 }
                 continue;
             }
-            $job_title = $payload !== null
-                ? trim((string) ($payload['title'] ?? ''))
-                : master_sw_switchlist_title_from_cache($output_dir, $job_name, $session_nbr);
-            $job_info = $payload !== null ? trim((string) ($payload['info'] ?? '')) : '';
+            // Prefer the cached title/info, but fall back to values passed by the
+            // caller (e.g. session_rerender_session_style derives them from the
+            // manifest). This lets sessions generated before the "info" note was
+            // persisted still recover their Inbound/Outbound label on re-render.
+            $cache_title = $payload !== null ? trim((string) ($payload['title'] ?? '')) : '';
+            $cache_info = $payload !== null ? trim((string) ($payload['info'] ?? '')) : '';
+            $opt_title = master_sw_switchlist_title($options);
+            $opt_info = master_sw_switchlist_info($options);
+            $job_title = $cache_title !== ''
+                ? $cache_title
+                : ($opt_title !== '' ? $opt_title : master_sw_switchlist_title_from_cache($output_dir, $job_name, $session_nbr));
+            $job_info = $cache_info !== '' ? $cache_info : $opt_info;
         } else {
             $sections = master_sw_build_sections($dbc, $job_name, $config, [
                 'recipe' => $options['recipe'] ?? null,

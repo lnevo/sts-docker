@@ -34,7 +34,24 @@ if (preg_match('#^session_(\d+)/index\.(php|html)$#', $rel, $m)) {
     exit;
 }
 
+// If the DB was rewound, requests for a session past the current one point at
+// output that no longer represents live state. Bounce to the latest overview.
+if (preg_match('#^session_(\d+)/#', $rel, $sm)) {
+    session_redirect_if_beyond_current((int) $sm[1]);
+}
+
 $fs = session_output_fs_path($rel);
+// Print-all bundles are built on demand (they aren't pre-generated for every
+// train/session). If a requested bundle is missing — e.g. following a prev/next
+// session link to a session whose overview was never opened — build it now so
+// navigation never dead-ends on "Not found".
+if (!is_file($fs)) {
+    $built = so_build_print_all_on_demand($rel);
+    if ($built !== null) {
+        $fs = session_output_fs_path($built);
+        $rel = $built;
+    }
+}
 if (!is_file($fs)) {
     http_response_code(404);
     header('Content-Type: text/plain; charset=UTF-8');
@@ -68,8 +85,10 @@ if ($ext === 'html' || $ext === 'htm') {
     // stale or missing nav row. Refresh it against the current set of sessions
     // so navigation is consistent across every session's waybill index.
     $html = so_refresh_waybill_session_nav($html, $rel);
+    $html = so_refresh_waybill_print_all_session_nav($html, $rel);
     $html = so_refresh_switchlist_print_all_session_nav($html, $rel);
     $html = so_refresh_switchlist_job_print_all_session_nav($html, $rel);
+    $html = so_refresh_switchlist_train_print_all_session_nav($html, $rel);
     // Embedded mode (used by job.php's inline switch-list viewer): drop the
     // top navigation bar since the surrounding page provides navigation and the
     // style selector.
@@ -79,6 +98,38 @@ if ($ext === 'html' || $ext === 'htm') {
     echo so_rewrite_html($html, $dir);
 } else {
     readfile($fs);
+}
+
+/**
+ * Build a print-all bundle on demand when its static file is missing, so
+ * cross-session prev/next links always resolve. Handles the session-wide combined
+ * print-all, the per-style combined print-all, and the per-train print-all.
+ * Returns the (possibly new) relative output path, or null when nothing built.
+ */
+function so_build_print_all_on_demand($rel)
+{
+    if (!preg_match('#^session_(\d+)/#', $rel)) {
+        return null;
+    }
+    $built = null;
+    if (preg_match('#^session_(\d+)/train_(.+)\.print_all\.html$#', $rel, $m)) {
+        require_once __DIR__ . '/open_db.php';
+        $dbc = open_db();
+        $built = session_build_switchlist_train_print_all($dbc, (int) $m[1], rawurldecode((string) $m[2]));
+        mysqli_close($dbc);
+    } elseif (preg_match('#^session_(\d+)/print_all_([a-z0-9_-]+)\.html$#', $rel, $m)) {
+        require_once __DIR__ . '/open_db.php';
+        $dbc = open_db();
+        $built = session_build_switchlist_print_all_style($dbc, (int) $m[1], (string) $m[2]);
+        mysqli_close($dbc);
+    } elseif (preg_match('#^session_(\d+)/print_all\.html$#', $rel, $m)) {
+        require_once __DIR__ . '/open_db.php';
+        $dbc = open_db();
+        $built = session_build_switchlist_print_all($dbc, (int) $m[1]);
+        mysqli_close($dbc);
+    }
+
+    return $built;
 }
 
 /**
@@ -118,6 +169,36 @@ function so_refresh_waybill_session_nav($html, $rel)
         $html,
         1
     );
+}
+
+/**
+ * Rebuild the prev/next session nav on a waybills print-all page
+ * (session_N/waybills/<scope>.print_all.html) from the current set of sessions,
+ * disabling directions whose target print-all doesn't exist.
+ */
+function so_refresh_waybill_print_all_session_nav($html, $rel)
+{
+    if (!preg_match('#^session_(\d+)/waybills/(.+\.print_all\.html)$#', $rel, $m)) {
+        return $html;
+    }
+    $session_nbr = (int) $m[1];
+    $basename = (string) $m[2];
+    $nav = session_waybill_print_all_session_nav_html($session_nbr, $basename);
+    if ($nav === '') {
+        return $html;
+    }
+    if (strpos($html, 'waybill-print-all-session-nav') !== false) {
+        return preg_replace_callback(
+            '#<div class="session-nav-row waybill-print-all-session-nav[^"]*">.*?</div>#s',
+            static function () use ($nav) {
+                return $nav;
+            },
+            $html,
+            1
+        );
+    }
+
+    return preg_replace('#</h1>#', '</h1>' . $nav, $html, 1);
 }
 
 /**
@@ -174,6 +255,40 @@ function so_refresh_switchlist_job_print_all_session_nav($html, $rel)
     if (strpos($html, 'switchlist-job-print-all-session-nav') !== false) {
         return preg_replace_callback(
             '#<div class="session-nav-row switchlist-job-print-all-session-nav[^"]*">.*?</div>#s',
+            static function () use ($nav) {
+                return $nav;
+            },
+            $html,
+            1
+        );
+    }
+
+    return preg_replace(
+        '#</nav>#',
+        '</nav>' . $nav,
+        $html,
+        1
+    );
+}
+
+/**
+ * Rebuild prev/next session nav on a per-train switch-list print-all page
+ * (session_N/train_<job>.print_all.html).
+ */
+function so_refresh_switchlist_train_print_all_session_nav($html, $rel)
+{
+    if (!preg_match('#^session_(\d+)/train_(.+)\.print_all\.html$#', $rel, $m)) {
+        return $html;
+    }
+    $session_nbr = (int) $m[1];
+    $job = rawurldecode((string) $m[2]);
+    $nav = session_switchlist_train_print_all_session_nav_html($session_nbr, $job);
+    if ($nav === '') {
+        return $html;
+    }
+    if (strpos($html, 'switchlist-train-print-all-session-nav') !== false) {
+        return preg_replace_callback(
+            '#<div class="session-nav-row switchlist-train-print-all-session-nav[^"]*">.*?</div>#s',
             static function () use ($nav) {
                 return $nav;
             },

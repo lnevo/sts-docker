@@ -243,11 +243,12 @@ try {
                 operational_steps_api_json(['ok' => false, 'error' => 'session required'], 400);
             }
             require_once __DIR__ . '/session_helpers.php';
+            $force = !empty($body['force']);
             $dbc = open_db();
             $root = session_web_root();
             $manifest = session_load_manifest($session, $root);
             $already = session_session_style_available($session, $style, $manifest, $root);
-            $results = session_rerender_session_style($dbc, $session, $style, $root);
+            $results = session_rerender_session_style($dbc, $session, $style, $root, $force);
             mysqli_close($dbc);
             $skipped = count($results) > 0 && count(array_filter($results, static function ($r) {
                 return !empty($r['skipped']);
