@@ -52,11 +52,37 @@ $prev_session = session_adjacent_session($browser_sessions, $session, 'prev');
 $next_session = session_adjacent_session($browser_sessions, $session, 'next');
 $session_waybills = session_dir_for($session, $root) . '/waybills';
 $has_session_waybills = is_file($session_waybills . '/index.html');
-$has_session_wb_print = session_waybills_bundle_ready($session, null, $root);
 $has_switchlists = session_manifest_has_switchlists($manifest, $session, $root);
+$session_wb_print_rel = 'session_' . (int) $session . '/waybills/print_all.html';
+$session_wb_index_rel = 'session_' . (int) $session . '/waybills/index.html';
+$session_wb_href = is_file(session_output_fs_path($session_wb_print_rel, $root))
+    ? session_output_url($session_wb_print_rel)
+    : ($has_session_waybills
+        ? session_output_url($session_wb_index_rel)
+        : null);
 $selected_style = session_normalize_switchlist_style(
     $_GET['style'] ?? ($manifest['preferred_switchlist_style'] ?? 'mobile')
 );
+$overview_nav = [
+    ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+    ['href' => '/sts/session.php?session=' . (int) $session, 'label' => 'All-session totals', 'icon' => 'bar-chart-line'],
+    ['href' => '/sts/editor.html', 'label' => 'Session Editor', 'icon' => 'pencil-square'],
+    ['href' => '/sts/session-sitemap.html', 'label' => 'Session Site Map', 'icon' => 'diagram-3'],
+];
+if ($has_switchlists && $session_print_all_rel !== null) {
+    $overview_nav[] = [
+        'href' => session_output_url($session_print_all_rel),
+        'label' => 'Session switch lists',
+        'icon' => 'printer',
+    ];
+}
+if ($session_wb_href !== null) {
+    $overview_nav[] = [
+        'href' => $session_wb_href,
+        'label' => 'Session waybills',
+        'icon' => 'files',
+    ];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -68,12 +94,7 @@ $selected_style = session_normalize_switchlist_style(
 </head>
 <body>
 <?php
-session_render_nav_bar([
-    ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
-    ['href' => '/sts/session.php?session=' . (int) $session, 'label' => 'All-session totals', 'icon' => 'bar-chart-line'],
-    ['href' => '/sts/editor.html', 'label' => 'Session Editor', 'icon' => 'pencil-square'],
-    ['href' => '/sts/session-sitemap.html', 'label' => 'Session Site Map', 'icon' => 'diagram-3'],
-], 'Session ' . (int) $session);
+session_render_nav_bar($overview_nav, 'Session ' . (int) $session);
 ?>
   <main>
   <h1>Session <?php echo (int) $session; ?></h1>
@@ -151,25 +172,6 @@ session_render_nav_bar([
   <?php if (!count($jobs)): ?>
     <p class="muted">No trains yet. Run the workflow generator from the editor.</p>
   <?php endif; ?>
-
-  <div class="card card-highlight">
-    <h2 style="margin:0 0 8px;">Consolidated views</h2>
-    <div class="session-quick-links">
-      <?php if ($session_print_all_rel !== null): ?>
-        <a class="btn btn-outline-dark btn-sm" href="<?php echo htmlspecialchars(session_output_url($session_print_all_rel)); ?>"><i class="bi bi-printer"></i> Print all switch lists</a>
-      <?php endif; ?>
-      <a class="btn btn-outline-dark btn-sm" href="<?php echo htmlspecialchars(session_output_url('session_' . (int) $session . '/waybills/index.html')); ?>"><i class="bi bi-file-text"></i> All waybills</a>
-      <?php if ($has_session_wb_print): ?>
-        <a class="btn btn-outline-dark btn-sm" href="<?php echo htmlspecialchars(session_output_url('session_' . (int) $session . '/waybills/print_all.html')); ?>"><i class="bi bi-printer"></i> Print all waybills</a>
-      <?php endif; ?>
-    </div>
-    <?php if (!$has_switchlists): ?>
-      <p class="muted" style="margin:12px 0 0;">No switch lists yet. Run <em>Generate Switch Lists</em> in the workflow.</p>
-    <?php endif; ?>
-    <?php if (!$has_session_waybills): ?>
-      <p class="muted" style="margin:8px 0 0;">No waybill files yet. Run <em>Generate Waybill List</em> after switch lists.</p>
-    <?php endif; ?>
-  </div>
 
   <?php echo session_run_stats_updated_html($run_stats); ?>
   </main>
