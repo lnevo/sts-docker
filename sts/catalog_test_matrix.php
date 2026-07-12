@@ -87,6 +87,11 @@ function catalog_test_matrix_sections($dbc = null)
                     'description' => 'Test: Generate Car Orders',
                 ],
                 [
+                    'function' => 'replenish_coke_orders',
+                    'params' => ['target_min' => '6', 'target_max' => '8'],
+                    'description' => 'Test: Replenish Coke Orders',
+                ],
+                [
                     'function' => 'fill_orders',
                     'params' => [
                         'percent' => '100',
@@ -185,6 +190,26 @@ function catalog_test_matrix_sections($dbc = null)
             ],
         ],
         [
+            'label' => '[Switch Lists]',
+            'steps' => [
+                [
+                    'function' => 'generate_switchlists',
+                    'params' => [
+                        'jobs' => $job_a,
+                        'format' => 'mobile',
+                        'title' => $job_a,
+                        'info' => 'Test',
+                    ],
+                    'description' => 'Test: Generate Switch Lists (' . $job_a . ' mobile)',
+                ],
+                [
+                    'function' => 'generate_waybills',
+                    'params' => [],
+                    'description' => 'Test: Generate Waybill List',
+                ],
+            ],
+        ],
+        [
             'label' => '[Database]',
             'steps' => [
                 [
@@ -270,6 +295,8 @@ function catalog_test_matrix_round_trip_skip()
         'text_instruction',
         'track_scale',
         'auto_assign_locals',
+        'generate_switchlists',
+        'replenish_coke_orders',
     ];
 }
 
