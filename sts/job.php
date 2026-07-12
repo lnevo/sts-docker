@@ -66,6 +66,14 @@ $next_session = session_adjacent_session($browser_sessions, $session, 'next');
 $phase_links = [];
 foreach ($train_members as $member_job) {
     $member_phases = $manifest['jobs'][$member_job]['phases'] ?? [];
+    // Restrict to the latest generation token so re-runs that appended phases to
+    // the same session don't surface stale historical copies.
+    $token_phase_nums = session_job_latest_token_phase_nums($manifest, $member_job);
+    if ($token_phase_nums !== []) {
+        $member_phases = array_values(array_filter($member_phases, static function ($p) use ($token_phase_nums) {
+            return isset($token_phase_nums[(int) $p]);
+        }));
+    }
     foreach (session_train_switchlist_phase_links($session, $member_job, $member_phases, $root) as $pl) {
         $phase_links[] = $pl;
     }

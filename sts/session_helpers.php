@@ -357,18 +357,41 @@ function session_manifest_merge_run_stats(array $manifest, array $run_stats, arr
  *
  * @return array{waybills:int, switchlists:int, phases:int, trains:int}
  */
-function session_count_generated_output(array $manifest)
+function session_count_generated_output(array $manifest, $root = null)
 {
-    $phases = is_array($manifest['phases'] ?? null) ? $manifest['phases'] : [];
+    require_once __DIR__ . '/master_switchlist_helpers.php';
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) ($manifest['session'] ?? 0);
+    // Count only the latest generation token's phases so repeated recipe runs
+    // that appended to the same session (e.g. a simulator replaying seeds) don't
+    // inflate the "switch lists"/"phases" tallies with stale historical copies.
+    $phases = session_latest_token_phases($manifest);
     $jobs_meta = is_array($manifest['jobs'] ?? null) ? $manifest['jobs'] : [];
 
+    // "Switch lists" are counted as work legs (switch-list sections) per train per
+    // phase, matching the per-train totals shown in the overview's train tiles
+    // (session_train_output_counts -> session_train_switchlist_legs). A single
+    // phase can yield several legs for a train, so counting (phase,job) pairs
+    // would disagree with the tiles; counting sections keeps the dashboard total
+    // equal to the sum of the tile counts.
     $switchlists = 0;
     foreach ($phases as $phase) {
         if (!is_array($phase)) {
             continue;
         }
-        $phase_jobs = $phase['jobs'] ?? [];
-        $switchlists += is_array($phase_jobs) ? count($phase_jobs) : 0;
+        $pnum = (int) ($phase['phase'] ?? 0);
+        if ($pnum < 1) {
+            continue;
+        }
+        $phase_dir = session_phase_output_dir($session_nbr, $pnum, $root);
+        foreach ((array) ($phase['jobs'] ?? []) as $job) {
+            $job = trim((string) $job);
+            if ($job === '') {
+                continue;
+            }
+            $sections = master_sw_load_sections_cache($phase_dir, $job, $session_nbr);
+            $switchlists += is_array($sections) ? count($sections) : 0;
+        }
     }
 
     $waybills = 0;
@@ -416,6 +439,9 @@ function session_aggregate_run_stats_through($through, $root = null)
     for ($s = 1; $s <= $through; $s++) {
         $manifest = session_load_manifest($s, $root);
         $gen = session_count_generated_output($manifest);
+        // Waybills are counted from the store scoped to the latest token, matching
+        // the per-session overview and excluding accumulated re-run copies.
+        $gen['waybills'] = session_latest_token_waybill_count($s, $manifest, $root);
         foreach ($generated as $k => $v) {
             $generated[$k] += (int) ($gen[$k] ?? 0);
         }
@@ -2035,37 +2061,54 @@ function session_waybill_render_print_all_page($session_nbr, $title, array $numb
     $phase_num = array_key_exists('phase_num', $options) ? $options['phase_num'] : null;
     $train_job = trim((string) ($options['train_job'] ?? ''));
 
-    // Shared top nav: STS Main Menu, back to the session overview, and the matching
-    // waybill list (index) for this scope. Per-train pages also link back to that
-    // train's switch-list print-all and the session-wide switch-list / waybill bundles.
+    // Minimal top nav: STS Main Menu, back to the session overview, and a single
+    // "Switch lists" link whose scope follows the current train selection (a
+    // specific train -> that train's switch-list print-all; all -> the session
+    // switch lists). The Train dropdown (added below) handles hopping between
+    // trains / all, so no per-scope switch-list/waybill buttons are needed.
     $nav_items = session_waybill_index_nav_items($session_nbr, $back_href, $back_label);
-    $nav_items[] = ['href' => $index_file, 'label' => 'Waybill list', 'icon' => 'file-text'];
     if ($train_job !== '') {
         $train_sw_primary = session_train_print_all_primary_job($session_nbr, $train_job, $options['root'] ?? null);
-        $nav_items[] = [
-            'href' => '../train_' . rawurlencode($train_sw_primary) . '.print_all.html',
-            'label' => 'Train switch lists',
-            'icon' => 'printer',
-        ];
-        $nav_items[] = [
-            'href' => '/sts/job.php?session=' . $session_nbr . '&job=' . rawurlencode($train_job),
-            'label' => 'Train Overview',
-            'icon' => 'list-check',
-        ];
+        $switchlist_href = '../train_' . rawurlencode($train_sw_primary) . '.print_all.html';
+    } else {
+        $switchlist_href = '../print_all.html';
     }
     $nav_items[] = [
-        'href' => '../print_all.html',
-        'label' => 'Session switch lists',
+        'href' => $switchlist_href,
+        'label' => 'Switch lists',
         'icon' => 'list-task',
     ];
-    if ($basename !== 'print_all.html') {
-        $nav_items[] = [
-            'href' => 'print_all.html',
-            'label' => 'Session waybills',
-            'icon' => 'files',
-        ];
+    $nav_html = session_nav_bar_html($nav_items, '');
+
+    // Train dropdown: narrow to one train's waybill bundle or back to the
+    // session-wide "All waybills" bundle. Mirrors the switch-list print-all
+    // Train control so operators can hop between scopes without going back to
+    // an index. Values are the raw job keys the waybill store is grouped by; the
+    // page navigates through so.php (building the target bundle on demand).
+    $wb_train_jobs = array_values(array_filter(array_map('strval', (array) ($options['train_jobs'] ?? []))));
+    sort($wb_train_jobs, SORT_NATURAL | SORT_FLAG_CASE);
+    if ($wb_train_jobs) {
+        $wb_train_options = '<option value="">All waybills</option>';
+        foreach ($wb_train_jobs as $wb_job) {
+            $wb_sel = ($train_job !== '' && $wb_job === $train_job) ? ' selected' : '';
+            $wb_train_options .= '<option value="' . htmlspecialchars($wb_job, ENT_QUOTES) . '"' . $wb_sel . '>'
+                . htmlspecialchars($wb_job) . '</option>';
+        }
+        $wb_cluster = '<div class="d-flex align-items-center gap-2 ms-auto">'
+            . '<label for="wb-train-select" class="text-white-50 small mb-0">Train</label>'
+            . '<select id="wb-train-select" class="form-select form-select-sm" style="width:auto;">'
+            . $wb_train_options . '</select></div>';
+        $nav_html = str_replace('</div></div></nav>', $wb_cluster . '</div></div></nav>', $nav_html);
+        $wb_script = '<script>(function(){'
+            . 'var el=document.getElementById("wb-train-select");if(!el)return;'
+            . 'var sid=' . $session_nbr . ';'
+            . 'el.addEventListener("change",function(){var job=el.value;'
+            . 'var f=job===""?("session_"+sid+"/waybills/print_all.html"):("session_"+sid+"/waybills/job_"+encodeURIComponent(job)+".print_all.html");'
+            . 'window.location.href="/sts/so.php?f="+encodeURIComponent(f).replace(/%2F/g,"/");});'
+            . '})();</script>';
+    } else {
+        $wb_script = '';
     }
-    $nav_html = session_nav_bar_html($nav_items, $title . ' · print all');
 
     // Prev/next session nav (same scope), refreshed at serve time by so.php.
     $session_nav = session_waybill_print_all_session_nav_html(
@@ -2102,7 +2145,9 @@ function session_waybill_render_print_all_page($session_nbr, $title, array $numb
         . '<p class="muted">' . $count . ' waybill' . ($count === 1 ? '' : 's') . ' · each prints on its own page.</p>'
         . $controls
         . '<div class="waybill-print">' . ($sheets !== '' ? $sheets : '<div class="card"><p>No waybills to print.</p></div>') . '</div>'
-        . '</main></body></html>';
+        . '</main>'
+        . $wb_script
+        . '</body></html>';
 }
 
 /**
@@ -2116,6 +2161,18 @@ function session_waybill_rebuild_pages($dbc, $session_nbr, array $store, $root =
     $root = $root ?? session_web_root();
     $dir = session_waybill_dir_for($session_nbr, null, $root);
     session_ensure_writable_dir($dir);
+
+    // Distinct train (job) keys with waybills — populates the Train dropdown on
+    // every waybills print-all page so operators can hop between scopes.
+    $all_train_jobs = [];
+    foreach ($store['groups'] as $group_key => $group_nums) {
+        [$group_job] = array_pad(explode('|', (string) $group_key, 2), 2, '');
+        $group_job = (string) $group_job;
+        if ($group_job !== '') {
+            $all_train_jobs[$group_job] = true;
+        }
+    }
+    $all_train_jobs = array_keys($all_train_jobs);
 
     // Individual snapshot pages + cleanup of stale ones.
     $keep = ['index.html' => true, 'print_all.html' => true];
@@ -2147,6 +2204,7 @@ function session_waybill_rebuild_pages($dbc, $session_nbr, array $store, $root =
             'index_file' => 'index.html',
             'print_all_basename' => 'print_all.html',
             'phase_num' => null,
+            'train_jobs' => $all_train_jobs,
             'dbc' => $dbc,
             'root' => $root,
         ]
@@ -2185,6 +2243,8 @@ function session_waybill_rebuild_pages($dbc, $session_nbr, array $store, $root =
                 'index_file' => $pfile . '.index.html',
                 'print_all_basename' => $pfile . '.print_all.html',
                 'phase_num' => $phase,
+                'train_job' => $job,
+                'train_jobs' => $all_train_jobs,
                 'dbc' => $dbc,
                 'root' => $root,
             ]
@@ -2214,6 +2274,7 @@ function session_waybill_rebuild_pages($dbc, $session_nbr, array $store, $root =
                 'index_file' => $jfile . '.index.html',
                 'print_all_basename' => $jfile . '.print_all.html',
                 'train_job' => $job,
+                'train_jobs' => $all_train_jobs,
                 'phase_num' => 0,
                 'dbc' => $dbc,
                 'root' => $root,
@@ -2970,11 +3031,17 @@ function session_train_switchlist_legs($dbc, $session_nbr, $job, $root = null)
     $root = $root ?? session_web_root();
     $manifest = session_load_manifest($session_nbr, $root);
     $job_meta = $manifest['jobs'][$job] ?? ['phases' => []];
+    // Only the latest generation token's phases for this train, so repeated
+    // recipe runs that appended to the same session don't stack stale copies.
+    $token_phases = session_job_latest_token_phase_nums($manifest, $job);
     $legs = [];
 
     foreach ($job_meta['phases'] ?? [] as $p) {
         $p = (int) $p;
         if ($p < 1) {
+            continue;
+        }
+        if ($token_phases !== [] && !isset($token_phases[$p])) {
             continue;
         }
         $phase_dir = session_phase_output_dir($session_nbr, $p, $root);
@@ -3124,6 +3191,99 @@ function session_train_print_all_primary_job($session_nbr, $job, $root = null)
 }
 
 /**
+ * The manifest phases that make up the session's *latest generation token* —
+ * i.e. only the most recent switch list produced for each logical slot.
+ *
+ * A recipe run for a session can be repeated (e.g. a simulator replaying seeds,
+ * or re-running "Generate Switch Lists" after filling orders). Each run appends
+ * its phases to the manifest, so over time a single session accumulates many
+ * historical copies of the same train's switch list. For display we only want
+ * the freshest copy of each slot.
+ *
+ * A slot is keyed by its train(s) + recipe step + title/info (direction), and
+ * because phases are stored in chronological append order, the last entry seen
+ * for a key wins. Clean single-run sessions are unaffected (each key appears
+ * once). Returns the surviving phase entries in phase order.
+ */
+function session_latest_token_phases(array $manifest)
+{
+    $latest = [];
+    foreach ($manifest['phases'] ?? [] as $phase) {
+        if (!is_array($phase)) {
+            continue;
+        }
+        if ((int) ($phase['phase'] ?? 0) < 1) {
+            continue;
+        }
+        $jobs = array_values(array_filter(array_map('trim', (array) ($phase['jobs'] ?? []))));
+        $key = implode(',', $jobs)
+            . '|' . (string) ($phase['step'] ?? '')
+            . '|' . (string) ($phase['title'] ?? '')
+            . '|' . (string) ($phase['info'] ?? '');
+        // Later (more recent) entries overwrite earlier ones for the same slot.
+        $latest[$key] = $phase;
+    }
+    $result = array_values($latest);
+    usort($result, static function ($a, $b) {
+        return (int) ($a['phase'] ?? 0) <=> (int) ($b['phase'] ?? 0);
+    });
+
+    return $result;
+}
+
+/**
+ * Set of phase numbers ([phase_num => true]) belonging to a job in the session's
+ * latest generation token (see session_latest_token_phases). Used to hide stale
+ * appended copies from per-train leg/phase enumerations.
+ */
+function session_job_latest_token_phase_nums(array $manifest, $job)
+{
+    $job = (string) $job;
+    $nums = [];
+    foreach (session_latest_token_phases($manifest) as $phase) {
+        $jobs = array_map('strval', (array) ($phase['jobs'] ?? []));
+        if (in_array($job, $jobs, true)) {
+            $nums[(int) ($phase['phase'] ?? 0)] = true;
+        }
+    }
+
+    return $nums;
+}
+
+/**
+ * Distinct waybill count for the session's latest generation token. The waybill
+ * store groups snapshots by "JOB|PHASE"; summing only the groups whose phase is
+ * in the latest token (see session_latest_token_phases) yields the freshest
+ * cycle's waybills instead of every historical copy accumulated by repeated runs.
+ */
+function session_latest_token_waybill_count($session_nbr, array $manifest = null, $root = null)
+{
+    $root = $root ?? session_web_root();
+    if ($manifest === null) {
+        $manifest = session_load_manifest($session_nbr, $root);
+    }
+    $token = [];
+    foreach (session_latest_token_phases($manifest) as $phase) {
+        $token[(int) ($phase['phase'] ?? 0)] = true;
+    }
+    if ($token === []) {
+        return 0;
+    }
+    $store = session_waybill_store_load($session_nbr, $root);
+    $nums = [];
+    foreach ($store['groups'] ?? [] as $key => $group) {
+        [, $gphase] = array_pad(explode('|', (string) $key, 2), 2, '');
+        if (isset($token[(int) $gphase])) {
+            foreach ((array) $group as $num) {
+                $nums[$num] = true;
+            }
+        }
+    }
+
+    return count($nums);
+}
+
+/**
  * Browse link to the "same" train in another session. Trains are identified by
  * their operator-facing display name (the Generate Switch Lists "Override Train"
  * value), which is stable across sessions even when the underlying job key
@@ -3239,7 +3399,7 @@ function session_build_switchlist_print_all($dbc, $session_nbr, $root = null)
     $phases_html = '';
     $phase_count = 0;
     $trains = [];
-    foreach ($manifest['phases'] ?? [] as $phase) {
+    foreach (session_latest_token_phases($manifest) as $phase) {
         $pnum = (int) ($phase['phase'] ?? 0);
         if ($pnum < 1) {
             continue;
@@ -3290,14 +3450,15 @@ function session_build_switchlist_print_all($dbc, $session_nbr, $root = null)
     // (print_all_<style>.html) that stitches each train/phase's real switch list
     // in that layout, generated on demand and cached (see
     // session_build_switchlist_print_all_style + the build_print_all_style API).
-    [$style_cluster, $style_script] = session_print_all_style_controls($session_nbr, '');
-    // "Session waybills" is RELATIVE to this file's directory (session_N/) so
-    // so.php rewrites it into a so.php?f= URL for the waybills print-all bundle.
+    [$style_cluster, $style_script] = session_print_all_style_controls($session_nbr, '', '', $root);
+    // Minimal nav: the Train/Style dropdowns handle scope; "Waybills" follows the
+    // current selection (all trains -> all waybills). "waybills/print_all.html" is
+    // RELATIVE to this file's directory (session_N/) so so.php rewrites it.
     $nav_html = session_nav_bar_html([
         ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
         ['href' => '/sts/session_overview.php?session=' . $session_nbr, 'label' => 'Session ' . $session_nbr, 'icon' => 'calendar-event'],
-        ['href' => 'waybills/print_all.html', 'label' => 'Session waybills', 'icon' => 'files'],
-    ], 'Print all switch lists · combined · ' . count($trains) . ' train(s) · ' . $phase_count . ' phase(s)');
+        ['href' => 'waybills/print_all.html', 'label' => 'Waybills', 'icon' => 'files'],
+    ], '');
     $nav_html = str_replace('</div></div></nav>', $style_cluster . '</div></div></nav>', $nav_html);
     $session_nav = session_switchlist_print_all_session_nav_html($session_nbr, '', $dbc, $root);
 
@@ -3353,7 +3514,7 @@ function session_build_switchlist_train_print_all($dbc, $session_nbr, $job, $roo
 
     $phases_html = '';
     $phase_count = 0;
-    foreach ($manifest['phases'] ?? [] as $phase) {
+    foreach (session_latest_token_phases($manifest) as $phase) {
         $pnum = (int) ($phase['phase'] ?? 0);
         if ($pnum < 1) {
             continue;
@@ -3399,26 +3560,23 @@ function session_build_switchlist_train_print_all($dbc, $session_nbr, $job, $roo
     $rel = 'session_' . $session_nbr . '/train_' . $job . '.print_all.html';
     // App-level pages must use absolute /sts/ hrefs: this document is served
     // through so.php, whose link rewriter would otherwise treat a relative
-    // "session_overview.php"/"job.php" as a file under session_N/ and mangle it.
+    // "session_overview.php" as a file under session_N/ and mangle it.
     $browse_href = '/sts/session_overview.php?session=' . $session_nbr;
-    $job_href = '/sts/job.php?session=' . $session_nbr . '&job=' . rawurlencode($job);
-    // Cross-scope links to other generated bundles. These are RELATIVE to this
-    // file's directory (session_N/) so so.php rewrites them into so.php?f= URLs.
-    // A consolidated train (multiple member jobs) has no single per-train waybill
-    // bundle, so it falls back to the session-wide waybills print-all.
-    $session_sw_href = 'print_all.html';
-    $session_wb_href = 'waybills/print_all.html';
+    // "Waybills" is RELATIVE to this file's directory (session_N/) so so.php
+    // rewrites it. A consolidated train (multiple member jobs) has no single
+    // per-train waybill bundle, so it falls back to the session-wide waybills.
     $train_wb_href = count($members) > 1
-        ? $session_wb_href
+        ? 'waybills/print_all.html'
         : 'waybills/job_' . rawurlencode($job) . '.print_all.html';
+    [$style_cluster, $style_script] = session_print_all_style_controls($session_nbr, '', $job, $root);
+    // Minimal nav: Train/Style dropdowns handle scope; "Waybills" follows this
+    // train (session-wide waybills for a consolidated multi-member train).
     $nav_html = session_nav_bar_html([
         ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
         ['href' => $browse_href, 'label' => 'Session ' . $session_nbr, 'icon' => 'calendar-event'],
-        ['href' => $job_href, 'label' => 'Train Overview', 'icon' => 'list-check'],
-        ['href' => $train_wb_href, 'label' => 'Train waybills', 'icon' => 'file-text'],
-        ['href' => $session_sw_href, 'label' => 'Session switch lists', 'icon' => 'list-task'],
-        ['href' => $session_wb_href, 'label' => 'Session waybills', 'icon' => 'files'],
-    ], 'Print all · ' . $train_label . ' · ' . $phase_count . ' phase(s)');
+        ['href' => $train_wb_href, 'label' => 'Waybills', 'icon' => 'file-text'],
+    ], '');
+    $nav_html = str_replace('</div></div></nav>', $style_cluster . '</div></div></nav>', $nav_html);
     $session_nav = session_switchlist_train_print_all_session_nav_html($session_nbr, $job, $dbc, $root);
 
     $html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
@@ -3432,10 +3590,11 @@ function session_build_switchlist_train_print_all($dbc, $session_nbr, $job, $roo
         . '<div class="noprint" style="margin-bottom:12px;">'
         . '<button onclick="window.print()">PRINT ALL SWITCH LISTS</button>'
         . '<p style="margin:8px 0 0; color:#555; font-size:14px;">All phases for '
-        . htmlspecialchars($train_label) . '. Each switch list starts on a new printed page.</p>'
+        . htmlspecialchars($train_label) . '. Pick a style above to print in that layout — each switch list starts on a new printed page.</p>'
         . '</div>'
         . $phases_html
         . '</div>'
+        . $style_script
         . '</body></html>';
 
     $fs = session_output_fs_path($rel, $root);
@@ -3448,44 +3607,80 @@ function session_build_switchlist_train_print_all($dbc, $session_nbr, $job, $roo
 }
 
 /**
- * Nav-bar style dropdown + script shared by the combined print-all
- * (print_all.html) and the per-style print-all pages (print_all_<style>.html).
- * Selecting a style POSTs to the build_print_all_style API, which renders/caches
- * the per-style combined document and returns its URL to navigate to.
+ * Nav-bar Train + Style dropdowns + script shared by every switch-list print-all
+ * page: the combined session view (print_all.html), the per-style session views
+ * (print_all_<style>.html), the per-train combined view (train_<job>.print_all
+ * .html) and the per-train per-style views (train_<job>.print_all_<style>.html).
  *
+ * The Train dropdown lets you narrow to one consolidated train or back to "All
+ * trains"; the Style dropdown switches layout. Combined (style="") views are the
+ * style-agnostic consolidated table and are reached by direct so.php navigation;
+ * picking an actual style POSTs to build_print_all_style (optionally scoped to a
+ * train via `job`), which renders/caches the stitched per-style document and
+ * returns its URL.
+ *
+ * @param string $selected_style '' for the combined view, else a style key.
+ * @param string $selected_job   '' for all trains, else a member job key (the
+ *                               dropdown resolves it to its consolidated primary).
  * @return array{0:string,1:string} [cluster_html, script_html]
  */
-function session_print_all_style_controls($session_nbr, $selected_style)
+function session_print_all_style_controls($session_nbr, $selected_style, $selected_job = '', $root = null)
 {
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
     $selected_style = $selected_style === '' ? '' : session_normalize_switchlist_style($selected_style);
-    $options = '';
+    $selected_job = trim((string) $selected_job);
+
+    // Train dropdown: "All trains" + one entry per consolidated train. The option
+    // value is the group's primary job key (matches the train_<primary>.print_all
+    // file naming); the current train is selected when its member set contains the
+    // requested job.
+    $train_options = '<option value="">All trains</option>';
+    foreach (session_job_group_map($session_nbr, null, $root) as $name => $members) {
+        $primary = isset($members[0]) ? (string) $members[0] : '';
+        if ($primary === '') {
+            continue;
+        }
+        $is_sel = ($selected_job !== '' && in_array($selected_job, $members, true));
+        $train_options .= '<option value="' . htmlspecialchars($primary, ENT_QUOTES) . '"'
+            . ($is_sel ? ' selected' : '') . '>' . htmlspecialchars($name) . '</option>';
+    }
+
+    // Style dropdown: "Combined" (style-agnostic) + each switch-list style.
+    $style_options = '<option value="">Combined</option>';
     foreach (session_switchlist_styles() as $key => $label) {
         $sel = ($selected_style !== '' && $key === $selected_style) ? ' selected' : '';
-        $options .= '<option value="' . htmlspecialchars($key, ENT_QUOTES) . '"' . $sel . '>'
+        $style_options .= '<option value="' . htmlspecialchars($key, ENT_QUOTES) . '"' . $sel . '>'
             . htmlspecialchars($label) . '</option>';
     }
-    if ($selected_style === '') {
-        // Combined (style-agnostic) landing view: show a non-selectable prompt so
-        // the dropdown doesn't imply one of the styles is already applied.
-        $options = '<option value="" selected disabled>Combined</option>' . $options;
-    }
+
     $cluster = '<div class="d-flex align-items-center gap-2 ms-auto">'
+        . '<label for="sw-train-select" class="text-white-50 small mb-0">Train</label>'
+        . '<select id="sw-train-select" class="form-select form-select-sm" style="width:auto;">'
+        . $train_options . '</select>'
         . '<label for="sw-style-select" class="text-white-50 small mb-0">Style</label>'
         . '<select id="sw-style-select" class="form-select form-select-sm" style="width:auto;">'
-        . $options . '</select>'
+        . $style_options . '</select>'
         . '<span id="sw-style-status" class="text-white-50 small"></span></div>';
     $script = '<script>(function(){'
-        . 'var el=document.getElementById("sw-style-select");if(!el)return;'
+        . 'var tr=document.getElementById("sw-train-select");'
+        . 'var el=document.getElementById("sw-style-select");'
+        . 'if(!tr||!el)return;'
         . 'var st=document.getElementById("sw-style-status");'
-        . 'var sid=' . (int) $session_nbr . ';'
-        . 'el.addEventListener("change",function(){var style=el.value;if(!style)return;'
-        . 'el.disabled=true;if(st)st.textContent="Rendering\u2026";'
+        . 'var sid=' . $session_nbr . ';'
+        . 'function go(){var job=tr.value;var style=el.value;'
+        . 'if(style===""){'
+        . 'var f=job===""?("session_"+sid+"/print_all.html"):("session_"+sid+"/train_"+encodeURIComponent(job)+".print_all.html");'
+        . 'window.location.href="/sts/so.php?f="+encodeURIComponent(f).replace(/%2F/g,"/");return;}'
+        . 'tr.disabled=true;el.disabled=true;if(st)st.textContent="Rendering\u2026";'
+        . 'var body={session:sid,style:style};if(job!=="")body.job=job;'
         . 'fetch("/sts/operational_steps_api.php?action=build_print_all_style",{method:"POST",'
-        . 'headers:{"Content-Type":"application/json"},body:JSON.stringify({session:sid,style:style})})'
+        . 'headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})'
         . '.then(function(r){return r.json();})'
         . '.then(function(d){if(!d.ok||!d.url)throw new Error(d.error||"Render failed");window.location.href=d.url;})'
-        . '.catch(function(e){el.disabled=false;if(st)st.textContent=String(e.message||e);});'
-        . '});})();</script>';
+        . '.catch(function(e){tr.disabled=false;el.disabled=false;if(st)st.textContent=String(e.message||e);});}'
+        . 'tr.addEventListener("change",go);el.addEventListener("change",go);'
+        . '})();</script>';
 
     return [$cluster, $script];
 }
@@ -3559,7 +3754,7 @@ function session_build_switchlist_print_all_style($dbc, $session_nbr, $style, $r
     $phases_html = '';
     $phase_count = 0;
     $trains = [];
-    foreach ($manifest['phases'] ?? [] as $phase) {
+    foreach (session_latest_token_phases($manifest) as $phase) {
         $pnum = (int) ($phase['phase'] ?? 0);
         if ($pnum < 1) {
             continue;
@@ -3600,12 +3795,12 @@ function session_build_switchlist_print_all_style($dbc, $session_nbr, $style, $r
     }
 
     $rel = 'session_' . $session_nbr . '/print_all_' . $style . '.html';
-    [$style_cluster, $style_script] = session_print_all_style_controls($session_nbr, $style);
+    [$style_cluster, $style_script] = session_print_all_style_controls($session_nbr, $style, '', $root);
     $nav_html = session_nav_bar_html([
         ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
         ['href' => '/sts/session_overview.php?session=' . $session_nbr, 'label' => 'Session ' . $session_nbr, 'icon' => 'calendar-event'],
-        ['href' => session_output_url('session_' . $session_nbr . '/print_all.html'), 'label' => 'Combined', 'icon' => 'grid-3x3-gap'],
-    ], 'Print all · ' . master_sw_style_label($style) . ' · ' . count($trains) . ' train(s) · ' . $phase_count . ' phase(s)');
+        ['href' => 'waybills/print_all.html', 'label' => 'Waybills', 'icon' => 'files'],
+    ], '');
     $nav_html = str_replace('</div></div></nav>', $style_cluster . '</div></div></nav>', $nav_html);
     $session_nav = session_switchlist_print_all_session_nav_html($session_nbr, $style, $dbc, $root);
 
@@ -3621,6 +3816,116 @@ function session_build_switchlist_print_all_style($dbc, $session_nbr, $style, $r
         . '<div class="noprint" style="margin-bottom:12px;">'
         . '<button onclick="window.print()">PRINT ALL SWITCH LISTS</button>'
         . '<p style="margin:8px 0 0; color:#555; font-size:14px;">Style: ' . htmlspecialchars($style_label)
+        . '. Each switch list starts on a new printed page.</p>'
+        . '</div>'
+        . $phases_html
+        . '</div>'
+        . $style_script
+        . '</body></html>';
+
+    $fs = session_output_fs_path($rel, $root);
+    session_ensure_writable_dir(dirname($fs));
+    if (file_put_contents($fs, $html) === false) {
+        return null;
+    }
+
+    return $rel;
+}
+
+/**
+ * Build (and cache) a per-train print-all switch list in a single style:
+ * session_N/train_<job>.print_all_<style>.html. The per-train analogue of
+ * session_build_switchlist_print_all_style — every phase/leg the consolidated
+ * train runs, stitched in the requested layout, one per printed page.
+ * Returns the relative output path, or null when the train has no switch lists.
+ */
+function session_build_switchlist_train_print_all_style($dbc, $session_nbr, $job, $style, $root = null)
+{
+    require_once __DIR__ . '/master_switchlist_helpers.php';
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
+    $job = trim((string) $job);
+    $style = session_normalize_switchlist_style($style);
+    if ($job === '') {
+        return null;
+    }
+
+    // Ensure per-phase switch lists exist in this style (idempotent).
+    session_rerender_session_style($dbc, $session_nbr, $style, $root);
+    $manifest = session_load_manifest($session_nbr, $root);
+    $members = session_train_group_members($session_nbr, $job, $manifest, $root);
+    $member_set = array_fill_keys($members, true);
+    $display = session_job_display_map($session_nbr, $manifest, $root);
+    $train_label = $display[$job] ?? $job;
+
+    $phases_html = '';
+    $phase_count = 0;
+    foreach (session_latest_token_phases($manifest) as $phase) {
+        $pnum = (int) ($phase['phase'] ?? 0);
+        if ($pnum < 1) {
+            continue;
+        }
+        foreach ($phase['jobs'] ?? [] as $pj) {
+            $pj = trim((string) $pj);
+            if ($pj === '' || !isset($member_set[$pj])) {
+                continue;
+            }
+            $phase_dir = session_phase_output_dir($session_nbr, $pnum, $root);
+            $sections = master_sw_load_sections_cache($phase_dir, $pj, $session_nbr);
+            if (!is_array($sections) || count($sections) === 0) {
+                continue;
+            }
+            $total = count($sections);
+            for ($i = 0; $i < $total; $i++) {
+                $work_leg = $i + 1;
+                $leg_rel = session_switchlist_work_phase_rel($session_nbr, $pnum, $pj, $work_leg, $style);
+                $leg_fs = session_output_fs_path($leg_rel, $root);
+                if (!is_file($leg_fs)) {
+                    continue;
+                }
+                $body = session_extract_switchlist_page_html((string) file_get_contents($leg_fs));
+                if (trim($body) === '') {
+                    continue;
+                }
+                $phases_html .= '<section class="print-all-phase">' . $body . '</section>';
+                $phase_count++;
+            }
+        }
+    }
+
+    if ($phases_html === '') {
+        return null;
+    }
+
+    $rel = 'session_' . $session_nbr . '/train_' . $job . '.print_all_' . $style . '.html';
+    $browse_href = '/sts/session_overview.php?session=' . $session_nbr;
+    $train_wb_href = count($members) > 1
+        ? 'waybills/print_all.html'
+        : 'waybills/job_' . rawurlencode($job) . '.print_all.html';
+    [$style_cluster, $style_script] = session_print_all_style_controls($session_nbr, $style, $job, $root);
+    // Minimal nav: Train/Style dropdowns handle scope; "Waybills" follows this
+    // train (session-wide waybills for a consolidated multi-member train).
+    $nav_html = session_nav_bar_html([
+        ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+        ['href' => $browse_href, 'label' => 'Session ' . $session_nbr, 'icon' => 'calendar-event'],
+        ['href' => $train_wb_href, 'label' => 'Waybills', 'icon' => 'file-text'],
+    ], '');
+    $nav_html = str_replace('</div></div></nav>', $style_cluster . '</div></div></nav>', $nav_html);
+    $session_nav = session_switchlist_train_print_all_session_nav_html($session_nbr, $job, $dbc, $root);
+
+    $style_label = master_sw_style_label($style);
+    $html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
+        . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        . '<title>Session ' . $session_nbr . ' — ' . htmlspecialchars($train_label) . ' print all (' . htmlspecialchars($style_label) . ')</title>'
+        . master_sw_render_head_assets()
+        . '</head><body>'
+        . $nav_html
+        . $session_nav
+        . '<div class="page">'
+        . '<div class="noprint" style="margin-bottom:12px;">'
+        . '<button onclick="window.print()">PRINT ALL SWITCH LISTS</button>'
+        . '<p style="margin:8px 0 0; color:#555; font-size:14px;">All phases for '
+        . htmlspecialchars($train_label) . ' · ' . htmlspecialchars($style_label)
         . '. Each switch list starts on a new printed page.</p>'
         . '</div>'
         . $phases_html

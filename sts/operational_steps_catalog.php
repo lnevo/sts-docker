@@ -1080,6 +1080,7 @@ function operational_steps_normalize_generate_orders_params(array $params)
     $normalized = [
         'shipment' => trim((string) ($params['shipment'] ?? '')),
         'max_unfilled' => trim((string) ($params['max_unfilled'] ?? '')),
+        'max_new' => trim((string) ($params['max_new'] ?? '')),
         'seed' => trim((string) ($params['seed'] ?? '')),
     ];
     if (array_key_exists('increment_session', $params)) {
@@ -1088,6 +1089,9 @@ function operational_steps_normalize_generate_orders_params(array $params)
     }
     if ($normalized['max_unfilled'] !== '' && !ctype_digit($normalized['max_unfilled'])) {
         $normalized['max_unfilled'] = '';
+    }
+    if ($normalized['max_new'] !== '' && !ctype_digit($normalized['max_new'])) {
+        $normalized['max_new'] = '';
     }
     if ($normalized['seed'] !== '' && !ctype_digit($normalized['seed'])) {
         $normalized['seed'] = '';
@@ -1107,6 +1111,9 @@ function operational_steps_compile_generate_orders_gui(array $params)
     }
     if ($params['max_unfilled'] !== '') {
         $parts[] = 'max_unfilled=' . $params['max_unfilled'];
+    }
+    if ($params['max_new'] !== '') {
+        $parts[] = 'max_new=' . $params['max_new'];
     }
     if ($params['seed'] !== '') {
         $parts[] = 'seed=' . $params['seed'];
@@ -1463,7 +1470,7 @@ function operational_steps_catalog_definitions()
             'adder_group' => 'before',
             'label' => 'Generate Car Orders',
             'gui_template' => 'Generate Orders {shipment}',
-            'description' => 'Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or set Shipment for a single manual order. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore.',
+            'description' => 'Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or set Shipment for a single manual order. Max unfilled orders skips generation entirely when the unfilled backlog is above the limit (hard gate). Max new orders/session is a soft cap: it still generates every session but stops after that many new orders, serving due shipments in random order and leaving the rest due for later — this spreads demand smoothly and avoids the burst-then-starve pattern a hard gate causes. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore.',
             'runnable' => true,
             'dispatch' => 'generate_orders',
             'params' => [
@@ -1489,6 +1496,16 @@ function operational_steps_catalog_definitions()
                 [
                     'key' => 'max_unfilled',
                     'label' => 'Max unfilled orders',
+                    'type' => 'number',
+                    'default' => '',
+                    'required' => false,
+                    'min' => 0,
+                    'step' => 1,
+                    'visible_label' => true,
+                ],
+                [
+                    'key' => 'max_new',
+                    'label' => 'Max new orders/session',
                     'type' => 'number',
                     'default' => '',
                     'required' => false,
@@ -3088,6 +3105,9 @@ function operational_steps_guess_params($instruction)
         if (preg_match('/max_unfilled=(\d+)/i', $s, $m)) {
             $params['max_unfilled'] = $m[1];
         }
+        if (preg_match('/max_new=(\d+)/i', $s, $m)) {
+            $params['max_new'] = $m[1];
+        }
         if (preg_match('/seed=(\d+)/i', $s, $m)) {
             $params['seed'] = $m[1];
         }
@@ -3881,14 +3901,20 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
                     $result['reason'] = 'Unfilled count ' . $unfilled . ' exceeds max ' . $gen_params['max_unfilled'];
                 } else {
                     $seed = $gen_params['seed'] ?? '';
+                    $max_new = ($gen_params['max_new'] ?? '') !== '' ? (int) $gen_params['max_new'] : 0;
                     $result['generated'] = generate_orders_run_automatic(
                         $dbc,
                         $session,
                         (int) $run['counter'],
-                        $seed
+                        $seed,
+                        $max_new
                     );
                     if ($seed !== '') {
                         $result['seed'] = (int) $seed;
+                    }
+                    if ($max_new > 0) {
+                        $result['max_new'] = $max_new;
+                        $result['capped'] = ($result['generated'] >= $max_new);
                     }
                 }
             }

@@ -155,7 +155,7 @@ session_render_nav_bar([
               $tip = ($group_name !== $primary || count($members) > 1) ? implode(', ', $members) : '';
             ?>
             <li>
-              <a href="job.php?session=<?php echo (int) $selected; ?>&amp;job=<?php echo urlencode($primary); ?>&amp;style=<?php echo urlencode($selected_style); ?>"<?php echo $tip !== '' ? ' title="' . htmlspecialchars($tip) . '"' : ''; ?>>
+              <a href="/sts/so.php?f=session_<?php echo (int) $selected; ?>/train_<?php echo urlencode($primary); ?>.print_all_<?php echo urlencode($selected_style); ?>.html"<?php echo $tip !== '' ? ' title="' . htmlspecialchars($tip) . '"' : ''; ?>>
                 <?php echo htmlspecialchars($group_name); ?>
                 <span class="meta"><?php echo $sw . ' switchlist' . ($sw === 1 ? '' : 's') . ' · ' . $wb . ' waybill' . ($wb === 1 ? '' : 's'); ?></span>
               </a>

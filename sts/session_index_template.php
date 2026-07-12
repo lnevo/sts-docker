@@ -34,6 +34,12 @@ session_ensure_output_stubs($session, $manifest, $root);
 $phases = $manifest['phases'] ?? [];
 $jobs = $manifest['jobs'] ?? [];
 $run_stats = $manifest['run_stats'] ?? [];
+// Recompute the generated-output tallies from the manifest at display time so the
+// "Switch lists / Phases / Trains / Waybills" cards always reflect the latest
+// generation token, even if the persisted run_stats were written when the
+// session's manifest had accumulated repeated runs (e.g. a simulator replaying seeds).
+$run_stats['generated'] = session_count_generated_output($manifest);
+$run_stats['generated']['waybills'] = session_latest_token_waybill_count($session, $manifest, $root);
 $dbc_stats = open_db();
 $current_session = session_get_db_session($dbc_stats);
 if (empty($run_stats['station_counts']) && (int) ($run_stats['on_train_count'] ?? 0) === 0 && $session === $current_session) {
@@ -60,9 +66,6 @@ $session_wb_href = is_file(session_output_fs_path($session_wb_print_rel, $root))
     : ($has_session_waybills
         ? session_output_url($session_wb_index_rel)
         : null);
-$selected_style = session_normalize_switchlist_style(
-    $_GET['style'] ?? ($manifest['preferred_switchlist_style'] ?? 'mobile')
-);
 $overview_nav = [
     ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
     ['href' => '/sts/session.php?session=' . (int) $session, 'label' => 'All-session totals', 'icon' => 'bar-chart-line'],
@@ -134,19 +137,6 @@ session_render_nav_bar($overview_nav, 'Session ' . (int) $session);
     <div class="card">
       <div class="job-switchlist-controls" style="margin:0 0 10px;">
         <h2 style="margin:0;">Trains</h2>
-        <?php if ($has_switchlists): ?>
-          <form class="session-style-form" id="overview-style-form" onsubmit="return false;">
-            <label>
-              <span>Switch list style</span>
-              <select id="overview-style" name="style">
-                <?php foreach (session_switchlist_styles() as $style_key => $style_label): ?>
-                  <option value="<?php echo htmlspecialchars($style_key); ?>"<?php echo $style_key === $selected_style ? ' selected' : ''; ?>><?php echo htmlspecialchars($style_label); ?></option>
-                <?php endforeach; ?>
-              </select>
-            </label>
-            <span class="muted" style="margin-left:8px;">Applies when you open a train.</span>
-          </form>
-        <?php endif; ?>
       </div>
       <ul class="phase-list train-tiles">
         <?php foreach ($train_groups as $group_name => $members): ?>
@@ -162,7 +152,7 @@ session_render_nav_bar($overview_nav, 'Session ' . (int) $session);
             $tip = ($group_name !== $primary || count($members) > 1) ? implode(', ', $members) : '';
           ?>
           <li>
-            <a class="train-link" href="/sts/job.php?session=<?php echo (int) $session; ?>&amp;job=<?php echo urlencode($primary); ?>&amp;style=<?php echo urlencode($selected_style); ?>"<?php echo $tip !== '' ? ' title="' . htmlspecialchars($tip) . '"' : ''; ?>>
+            <a class="train-link" href="/sts/so.php?f=session_<?php echo (int) $session; ?>/train_<?php echo urlencode($primary); ?>.print_all.html"<?php echo $tip !== '' ? ' title="' . htmlspecialchars($tip) . '"' : ''; ?>>
               <?php echo htmlspecialchars($group_name); ?>
               <span class="meta"><?php echo $sw . ' switchlist' . ($sw === 1 ? '' : 's') . ' · ' . $wb . ' waybill' . ($wb === 1 ? '' : 's'); ?></span>
             </a>
@@ -190,33 +180,6 @@ session_render_nav_bar($overview_nav, 'Session ' . (int) $session);
       sessionSelect?.addEventListener('change', function () {
         document.getElementById('session-select-form')?.submit();
       });
-
-      // Switch-list style selector: flow the chosen style into every train link so
-      // opening a train lands in the operator's preferred layout. Persisted (and
-      // shared with job.php) via localStorage under the same key.
-      const styleSelect = document.getElementById('overview-style');
-      const storageKey = 'session_switchlist_style';
-      function applyStyle(style) {
-        document.querySelectorAll('a.train-link').forEach(function (a) {
-          try {
-            const u = new URL(a.href, window.location.origin);
-            u.searchParams.set('style', style);
-            a.href = u.pathname + u.search;
-          } catch (e) { /* ignore malformed */ }
-        });
-      }
-      if (styleSelect) {
-        const saved = localStorage.getItem(storageKey);
-        if (saved && !window.location.search.includes('style=')) {
-          const opt = Array.from(styleSelect.options).some(function (o) { return o.value === saved; });
-          if (opt) styleSelect.value = saved;
-        }
-        applyStyle(styleSelect.value);
-        styleSelect.addEventListener('change', function () {
-          localStorage.setItem(storageKey, styleSelect.value);
-          applyStyle(styleSelect.value);
-        });
-      }
     })();
   </script>
 </body>

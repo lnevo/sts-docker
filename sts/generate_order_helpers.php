@@ -60,13 +60,25 @@ function generate_orders_apply_seed($seed)
     return $parsed;
 }
 
-/** Core automatic generation loop (matches generate.php). */
-function generate_orders_run_automatic($dbc, $session_number, $waybill_counter = 0, $seed = null)
+/**
+ * Core automatic generation loop (matches generate.php).
+ *
+ * $max_new (soft cap): when > 0, generate at most this many new car orders this
+ * session. Due shipments are processed in randomized order and generation stops
+ * once the cap is reached; shipments not reached keep their last_ship_date so they
+ * stay due and fire in a later session. This spreads full demand smoothly across
+ * sessions (bounded per-session intake) instead of the all-or-nothing skip that a
+ * gate / max_unfilled performs, which avoids the burst-then-starve sawtooth.
+ * $max_new = 0 (default) preserves the original uncapped, id-ordered behavior.
+ */
+function generate_orders_run_automatic($dbc, $session_number, $waybill_counter = 0, $seed = null, $max_new = 0)
 {
     $applied_seed = generate_orders_apply_seed($seed);
 
     $orders_created = 0;
     $session_number = (int) $session_number;
+    $max_new = max(0, (int) $max_new);
+
     $rs_shipments = mysqli_query(
         $dbc,
         'SELECT id, last_ship_date, min_interval, max_interval, min_amount, max_amount
@@ -77,7 +89,27 @@ function generate_orders_run_automatic($dbc, $session_number, $waybill_counter =
         return 0;
     }
 
-    while ($row = mysqli_fetch_array($rs_shipments)) {
+    $shipments = [];
+    while ($row = mysqli_fetch_array($rs_shipments, MYSQLI_ASSOC)) {
+        $shipments[] = $row;
+    }
+
+    // With a soft cap, randomize which due shipments get served first so no single
+    // lane is perpetually starved when the cap bites.
+    if ($max_new > 0) {
+        for ($i = count($shipments) - 1; $i > 0; $i--) {
+            $j = mt_rand(0, $i);
+            $tmp = $shipments[$i];
+            $shipments[$i] = $shipments[$j];
+            $shipments[$j] = $tmp;
+        }
+    }
+
+    foreach ($shipments as $row) {
+        if ($max_new > 0 && $orders_created >= $max_new) {
+            break;
+        }
+
         $interval = round(mt_rand($row['min_interval'] * 100, $row['max_interval'] * 100) / 100);
         $ship_date = (int) $row['last_ship_date'] + $interval;
         if ($ship_date > $session_number) {

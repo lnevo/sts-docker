@@ -199,31 +199,22 @@
           </td>
 
           <td>
-            <span class="sitemap-subhead">Train view (interactive)</span>
+            <span class="sitemap-subhead">Train view</span>
             <ul>
               <li>
-                <a href="job.php" data-session-link="job.php?session={n}&amp;job=CK1">Train Overview</a>
-                <span class="sitemap-path">job.php — embedded switch lists, phase nav, style picker, reload</span>
+                <a href="so.php" data-session-link="so.php?f=session_{n}/train_CK1.print_all_mobile.html">Train switch lists</a>
+                <span class="sitemap-path">train_JOB.print_all[_style].html — one train, every phase</span>
               </li>
+              <li>Opened by clicking a train on the session overview</li>
               <li>Prev / next session follow the same train by name</li>
             </ul>
 
-            <span class="sitemap-subhead">Print</span>
+            <span class="sitemap-subhead">Dropdowns (top-right)</span>
             <ul>
-              <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/train_CK1.print_all.html">Train switch lists</a>
-                <span class="sitemap-path">train_JOB.print_all.html — one train, every phase</span>
-              </li>
-              <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/print_all.html">Session switch lists</a>
-                <span class="sitemap-path">session_N/print_all.html</span>
-              </li>
+              <li><strong>Train</strong> — narrow to one train or back to All trains</li>
+              <li><strong>Style</strong> — Combined or mobile / half / full / dmp / wo / x2010 (rendered on demand)</li>
             </ul>
-
-            <span class="sitemap-subhead">Styles</span>
-            <ul style="margin-bottom:0;">
-              <li>mobile, half, full, dmp, wo, x2010 — rendered on demand</li>
-            </ul>
+            <p class="sitemap-note" style="margin-bottom:0;">All trains = <a href="so.php" data-session-link="so.php?f=session_{n}/print_all.html">session_N/print_all.html</a>.</p>
           </td>
 
           <td>
@@ -265,14 +256,14 @@
             <span class="sitemap-subhead">Typical path</span>
             <p style="margin-bottom:0.75rem;">
               <a href="session_overview.php" data-session-link="session_overview.php?session={n}">Session overview</a>
-              → <a href="job.php" data-session-link="job.php?session={n}&amp;job=CK1">Train Overview</a>
-              → switch list + matching waybills. Print bundles cross-link to each other and to the session bundles.
+              → click a train → <a href="so.php" data-session-link="so.php?f=session_{n}/train_CK1.print_all_mobile.html">train switch lists</a>
+              → use the Train / Style dropdowns or the <strong>Waybills</strong> link (scope follows the selected train). Switch-list and waybill bundles cross-link to each other.
             </p>
             <span class="sitemap-subhead">Header links</span>
             <ul style="margin-bottom:0;">
-              <li><strong>STS Main Menu</strong>, <strong>Session N</strong>, and <strong>Site Map</strong> (top-right) on every session page</li>
-              <li><strong>Session switch lists / Session waybills</strong> — session-wide print bundles</li>
-              <li><strong>Train switch lists / Train waybills / Train Overview</strong> — on train print bundles</li>
+              <li><strong>STS Main Menu</strong>, <strong>Session N</strong>, and <strong>Site Map</strong> (top-right) on session pages</li>
+              <li>Print bundles carry a minimal nav (<strong>Main Menu</strong>, <strong>Session N</strong>, <strong>Waybills</strong>/<strong>Switch lists</strong>) plus the Train / Style dropdowns top-right</li>
+              <li>Session-wide switch lists &amp; waybills are reached from the session overview or the Train dropdown's "All"</li>
               <li>Prev / next session buttons on every print bundle (built on demand)</li>
             </ul>
           </td>

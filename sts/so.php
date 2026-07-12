@@ -44,8 +44,10 @@ $fs = session_output_fs_path($rel);
 // Print-all bundles are built on demand (they aren't pre-generated for every
 // train/session). If a requested bundle is missing — e.g. following a prev/next
 // session link to a session whose overview was never opened — build it now so
-// navigation never dead-ends on "Not found".
-if (!is_file($fs)) {
+// navigation never dead-ends on "Not found". Also rebuild when the session's
+// manifest is newer than the cached bundle, so a bundle always reflects the
+// current "latest generation token" even while a session is being (re)generated.
+if (!is_file($fs) || so_print_all_bundle_stale($rel, $fs)) {
     $built = so_build_print_all_on_demand($rel);
     if ($built !== null) {
         $fs = session_output_fs_path($built);
@@ -106,13 +108,41 @@ if ($ext === 'html' || $ext === 'htm') {
  * print-all, the per-style combined print-all, and the per-train print-all.
  * Returns the (possibly new) relative output path, or null when nothing built.
  */
+/**
+ * A switch-list print-all bundle is stale when the owning session's manifest has
+ * been rewritten since the bundle was generated. Rebuilding then re-applies the
+ * latest-token filter so repeated generation runs (e.g. a simulator) never leave
+ * a bundle showing an old/oversized set of switch lists. Only matches the
+ * cheap-to-rebuild switch-list bundles (not waybills or leaf switch-list pages).
+ */
+function so_print_all_bundle_stale($rel, $fs)
+{
+    if (!preg_match('#^session_(\d+)/(?:print_all(?:_[a-z0-9_-]+)?|train_.+\.print_all(?:_[a-z0-9_-]+)?)\.html$#', $rel, $m)) {
+        return false;
+    }
+    if (!is_file($fs)) {
+        return false;
+    }
+    $manifest = session_dir_for((int) $m[1]) . '/manifest.json';
+    if (!is_file($manifest)) {
+        return false;
+    }
+
+    return filemtime($manifest) > filemtime($fs);
+}
+
 function so_build_print_all_on_demand($rel)
 {
     if (!preg_match('#^session_(\d+)/#', $rel)) {
         return null;
     }
     $built = null;
-    if (preg_match('#^session_(\d+)/train_(.+)\.print_all\.html$#', $rel, $m)) {
+    if (preg_match('#^session_(\d+)/train_(.+)\.print_all_([a-z0-9_-]+)\.html$#', $rel, $m)) {
+        require_once __DIR__ . '/open_db.php';
+        $dbc = open_db();
+        $built = session_build_switchlist_train_print_all_style($dbc, (int) $m[1], rawurldecode((string) $m[2]), (string) $m[3]);
+        mysqli_close($dbc);
+    } elseif (preg_match('#^session_(\d+)/train_(.+)\.print_all\.html$#', $rel, $m)) {
         require_once __DIR__ . '/open_db.php';
         $dbc = open_db();
         $built = session_build_switchlist_train_print_all($dbc, (int) $m[1], rawurldecode((string) $m[2]));
@@ -277,7 +307,7 @@ function so_refresh_switchlist_job_print_all_session_nav($html, $rel)
  */
 function so_refresh_switchlist_train_print_all_session_nav($html, $rel)
 {
-    if (!preg_match('#^session_(\d+)/train_(.+)\.print_all\.html$#', $rel, $m)) {
+    if (!preg_match('#^session_(\d+)/train_(.+)\.print_all(?:_[a-z0-9_-]+)?\.html$#', $rel, $m)) {
         return $html;
     }
     $session_nbr = (int) $m[1];

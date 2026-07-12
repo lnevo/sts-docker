@@ -269,12 +269,18 @@ try {
             $body = operational_steps_api_body();
             $session = (int) ($body['session'] ?? 0);
             $style = session_normalize_switchlist_style($body['style'] ?? 'mobile');
+            $job = trim((string) ($body['job'] ?? ''));
             if ($session < 1) {
                 operational_steps_api_json(['ok' => false, 'error' => 'session required'], 400);
             }
             $dbc = open_db();
             $root = session_web_root();
-            $rel = session_build_switchlist_print_all_style($dbc, $session, $style, $root);
+            // A `job` scopes the per-style build to one consolidated train
+            // (train_<job>.print_all_<style>.html); otherwise render the
+            // session-wide per-style bundle (print_all_<style>.html).
+            $rel = $job !== ''
+                ? session_build_switchlist_train_print_all_style($dbc, $session, $job, $style, $root)
+                : session_build_switchlist_print_all_style($dbc, $session, $style, $root);
             mysqli_close($dbc);
             if ($rel === null) {
                 operational_steps_api_json(['ok' => false, 'error' => 'No switch lists to render for this style'], 404);
@@ -283,6 +289,7 @@ try {
                 'ok' => true,
                 'session' => $session,
                 'style' => $style,
+                'job' => $job,
                 'url' => session_output_url($rel),
             ]);
 
