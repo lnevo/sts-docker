@@ -63,4 +63,8 @@ return [
     ],
 
     'no_warm_start_dispatch' => ['track_scale'],
+
+    'catalog_test_sections_callback' => 'track_scale_catalog_test_sections',
+
+    'catalog_test_round_trip_skip' => ['track_scale'],
 ];

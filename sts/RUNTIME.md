@@ -15,6 +15,7 @@ The Docker image copies all of `sts/` to `/var/www/html/sts/`. After `docker com
 | Orders | `generate_order_helpers.php`, `fill_order_helpers.php` |
 | Plugins | `plugins/plugins.php` — addon registry (operations buttons, catalog steps, dispatch) |
 | Track scale (addon) | `plugins/track_scale/` — GUI + workflow weigh/calibrate steps (`track_scale.php` stub at sts root) |
+| Coke orders (addon) | `plugins/coke_orders/` — outbound coke order replenishment catalog step |
 | Switch lists | `master_switchlist_helpers.php`, `generate_master_switchlists.php` |
 
 Recipe CSVs live on the **`sts-backups`** bind mount (`backups/session_editor/`), not in the image.

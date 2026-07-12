@@ -40,6 +40,7 @@ function catalog_test_matrix_sections($dbc = null)
     $station_b = 'Offline';
     $jobs_csv = 'JOB_A,JOB_B';
     $commodity = '';
+    $default_backup = 'catalog_test_backup';
     if ($dbc !== null) {
         require_once __DIR__ . '/session_helpers.php';
         $jobs = session_list_switchlist_job_names($dbc);
@@ -66,14 +67,28 @@ function catalog_test_matrix_sections($dbc = null)
             $commodity = (string) ($row['code'] ?? '');
         }
     }
+    $backups = operational_steps_list_backup_files();
+    if (!empty($backups[0])) {
+        $default_backup = $backups[0];
+    }
 
-    return [
+    $context = [
+        'job_a' => $job_a,
+        'job_b' => $job_b,
+        'station_a' => $station_a,
+        'station_b' => $station_b,
+        'jobs_csv' => $jobs_csv,
+        'commodity' => $commodity,
+        'default_backup' => $default_backup,
+    ];
+
+    $sections = [
         [
             'label' => '[Catalog test — setup]',
             'steps' => [
                 [
                     'function' => 'restore_database',
-                    'params' => ['backup' => 'hart_seed'],
+                    'params' => ['backup' => $default_backup],
                     'description' => 'Test: Restore Database',
                 ],
             ],
@@ -85,11 +100,6 @@ function catalog_test_matrix_sections($dbc = null)
                     'function' => 'generate_orders',
                     'params' => [],
                     'description' => 'Test: Generate Car Orders',
-                ],
-                [
-                    'function' => 'replenish_coke_orders',
-                    'params' => ['target_min' => '6', 'target_max' => '8'],
-                    'description' => 'Test: Replenish Coke Orders',
                 ],
                 [
                     'function' => 'fill_orders',
@@ -158,19 +168,6 @@ function catalog_test_matrix_sections($dbc = null)
                     'function' => 'set_out_cars',
                     'params' => [],
                     'description' => 'Test: Set Out Cars (all locals)',
-                ],
-                [
-                    'function' => 'calibrate_track_scale',
-                    'params' => ['every_sessions' => '1'],
-                    'description' => 'Test: Calibrate Track Scale (every 1 session)',
-                ],
-                [
-                    'function' => 'track_scale',
-                    'params' => array_filter([
-                        'job' => $job_a,
-                        'commodity' => $commodity,
-                    ]),
-                    'description' => 'Test: Track Scale (' . $job_a . ($commodity !== '' ? ' ' . $commodity : '') . ')',
                 ],
             ],
         ],
@@ -269,6 +266,8 @@ function catalog_test_matrix_sections($dbc = null)
             ],
         ],
     ];
+
+    return array_merge($sections, plugins_catalog_test_sections($dbc, $context));
 }
 
 /** Commands covered by catalog_test_matrix_sections() (one entry per function id). */
@@ -286,18 +285,16 @@ function catalog_test_matrix_covered_command_ids($dbc = null)
 /** Round-trip import is unreliable for these command ids (complex param encoding). */
 function catalog_test_matrix_round_trip_skip()
 {
-    return [
+    return array_values(array_unique(array_merge([
         'fill_orders',
         'reposition_empties',
         'load_unload',
         'import_data',
         'goto',
         'text_instruction',
-        'track_scale',
         'auto_assign_locals',
         'generate_switchlists',
-        'replenish_coke_orders',
-    ];
+    ], plugins_catalog_test_round_trip_skip())));
 }
 
 /** Recipe runner handles these; operational_steps_dispatch_step() has no case. */

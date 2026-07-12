@@ -263,6 +263,67 @@ function plugins_no_warm_start_dispatches()
     return $ids;
 }
 
+/** Dispatch ids that may run when warm_start/session runtime helpers are absent. */
+function plugins_runtime_without_warm_start()
+{
+    plugins_bootstrap_all();
+    $ids = [];
+    foreach (plugins_discover() as $manifest) {
+        foreach ($manifest['runtime_without_warm_start'] ?? [] as $dispatch) {
+            $ids[] = (string) $dispatch;
+        }
+    }
+
+    return $ids;
+}
+
+function plugins_append_dispatch_log_messages($dispatch, array $entry, array &$messages)
+{
+    plugins_bootstrap_all();
+    $dispatch = (string) $dispatch;
+    foreach (plugins_discover() as $manifest) {
+        $hooks = $manifest['dispatch_log_hooks'] ?? [];
+        if (!isset($hooks[$dispatch])) {
+            continue;
+        }
+        $hook = $hooks[$dispatch];
+        if (is_callable($hook)) {
+            $hook($entry, $messages);
+        }
+    }
+}
+
+function plugins_catalog_test_sections($dbc, array $context)
+{
+    plugins_bootstrap_all();
+    $sections = [];
+    foreach (plugins_discover() as $manifest) {
+        $callback = $manifest['catalog_test_sections_callback'] ?? null;
+        if (!is_callable($callback)) {
+            continue;
+        }
+        $chunk = call_user_func($callback, $dbc, $context);
+        if (is_array($chunk)) {
+            $sections = array_merge($sections, $chunk);
+        }
+    }
+
+    return $sections;
+}
+
+function plugins_catalog_test_round_trip_skip()
+{
+    plugins_bootstrap_all();
+    $ids = [];
+    foreach (plugins_discover() as $manifest) {
+        foreach ($manifest['catalog_test_round_trip_skip'] ?? [] as $id) {
+            $ids[] = (string) $id;
+        }
+    }
+
+    return $ids;
+}
+
 function plugins_migrate_legacy_function_id($fid)
 {
     plugins_bootstrap_all();

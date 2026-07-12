@@ -133,3 +133,30 @@ function track_scale_catalog_definitions()
         ],
     ];
 }
+
+function track_scale_catalog_test_sections($dbc, array $context)
+{
+    $job_a = (string) ($context['job_a'] ?? 'JOB_A');
+    $commodity = (string) ($context['commodity'] ?? '');
+
+    return [
+        [
+            'label' => '[During Operations — Track Scale plugin]',
+            'steps' => [
+                [
+                    'function' => 'calibrate_track_scale',
+                    'params' => ['every_sessions' => '1'],
+                    'description' => 'Test: Calibrate Track Scale (every 1 session)',
+                ],
+                [
+                    'function' => 'track_scale',
+                    'params' => array_filter([
+                        'job' => $job_a,
+                        'commodity' => $commodity,
+                    ]),
+                    'description' => 'Test: Track Scale (' . $job_a . ($commodity !== '' ? ' ' . $commodity : '') . ')',
+                ],
+            ],
+        ],
+    ];
+}

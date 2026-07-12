@@ -35,8 +35,8 @@ function operational_steps_catalog_adder_categories()
 
 function operational_steps_catalog_adder_order()
 {
-    return plugins_catalog_adder_order([
-        'before' => ['generate_orders', 'replenish_coke_orders', 'fill_orders', 'reposition_empties'],
+    $base = [
+        'before' => ['generate_orders', 'fill_orders', 'reposition_empties'],
         'during' => [
             'auto_assign_locals', 'pick_up_cars', 'set_out_cars',
         ],
@@ -49,7 +49,12 @@ function operational_steps_catalog_adder_order()
             'import_data', 'remove_backup', 'wipe_database',
         ],
         'workflow' => ['section_label', 'text_instruction', 'if_then', 'stop'],
-    ]);
+    ];
+    if (defined('STS_CATALOG_CORE_ONLY') && STS_CATALOG_CORE_ONLY) {
+        return $base;
+    }
+
+    return plugins_catalog_adder_order($base);
 }
 
 function operational_steps_catalog_text_param($key, $label, $default = '', $required = false, $placeholder = '')
@@ -195,16 +200,28 @@ function operational_steps_catalog_backup_param($required = true, $default = '')
     ];
 }
 
-/** Resolve backup filename; empty/missing values fall back to catalog default (e.g. hart_seed). */
-function operational_steps_resolve_backup_name($backup_name, $default = 'hart_seed')
+/** First backup file in sts/backups/ (for catalog defaults). */
+function operational_steps_default_backup_name()
+{
+    $files = operational_steps_list_backup_files();
+
+    return $files[0] ?? '';
+}
+
+/** Resolve backup filename; empty/missing values fall back to $default or the first listed backup. */
+function operational_steps_resolve_backup_name($backup_name, $default = null)
 {
     $name = basename(trim((string) $backup_name));
     if ($name === '' || $name === '.' || $name === '..') {
+        if ($default === null) {
+            $default = operational_steps_default_backup_name();
+        }
         $name = basename(trim((string) $default));
     }
     if ($name === '' || $name === '.' || $name === '..') {
-        $name = 'hart_seed';
+        return '';
     }
+
     return $name;
 }
 
@@ -261,7 +278,7 @@ function operational_steps_legacy_editor_dirs()
     return [operational_steps_editor_dir()];
 }
 
-/** Layout-specific catalog function ids migrated on import. */
+/** Obsolete function ids from older saved recipes; migrated on import. */
 function operational_steps_legacy_layout_function_ids()
 {
     return [
@@ -1056,26 +1073,6 @@ function operational_steps_setout_auto_assign_destinations($location)
     return $loc === '' || $loc === 'remainder';
 }
 
-function operational_steps_normalize_replenish_coke_params(array $params)
-{
-    $target_min = trim((string) ($params['target_min'] ?? '6'));
-    $target_max = trim((string) ($params['target_max'] ?? '8'));
-    if ($target_min === '' || !ctype_digit($target_min)) {
-        $target_min = '6';
-    }
-    if ($target_max === '' || !ctype_digit($target_max)) {
-        $target_max = '8';
-    }
-    if ((int) $target_max < (int) $target_min) {
-        $target_max = $target_min;
-    }
-
-    return [
-        'target_min' => $target_min,
-        'target_max' => $target_max,
-    ];
-}
-
 function operational_steps_normalize_generate_orders_params(array $params)
 {
     $normalized = [
@@ -1254,12 +1251,12 @@ function operational_steps_catalog_definitions()
             'adder_group' => 'database',
             'label' => 'Restore Database',
             'gui_template' => 'Restore Database {backup}',
-            'description' => 'Restore STS from a backup file in sts/backups/. Shell: apply_hart_seed.sh for hart_seed.',
+            'description' => 'Restore STS from a backup file in sts/backups/.',
             'runnable' => true,
             'dispatch' => 'restore_database',
             'gui_path' => '/sts/restore_db.php',
             'params' => [
-                operational_steps_catalog_backup_param(true, 'hart_seed'),
+                operational_steps_catalog_backup_param(true, operational_steps_default_backup_name()),
             ],
         ],
         [
@@ -1527,39 +1524,6 @@ function operational_steps_catalog_definitions()
             ],
         ],
         [
-            'id' => 'replenish_coke_orders',
-            'category' => 'operations',
-            'adder' => true,
-            'adder_group' => 'before',
-            'label' => 'Replenish Coke Orders',
-            'gui_template' => 'Replenish Coke Orders (target {target_min}–{target_max})',
-            'description' => 'Count unfilled outbound coke orders (USS/CLEV singles and bulk). When below target minimum, generate single-car COKE-USS / COKE-CLEV orders alternating lanes until the minimum is met (capped at target maximum).',
-            'runnable' => true,
-            'dispatch' => 'replenish_coke_orders',
-            'params' => [
-                [
-                    'key' => 'target_min',
-                    'label' => 'Target minimum',
-                    'type' => 'number',
-                    'default' => '6',
-                    'required' => true,
-                    'min' => 1,
-                    'step' => 1,
-                    'visible_label' => true,
-                ],
-                [
-                    'key' => 'target_max',
-                    'label' => 'Target maximum',
-                    'type' => 'number',
-                    'default' => '8',
-                    'required' => true,
-                    'min' => 1,
-                    'step' => 1,
-                    'visible_label' => true,
-                ],
-            ],
-        ],
-        [
             'id' => 'increment_session',
             'category' => 'database',
             'adder' => true,
@@ -1750,7 +1714,7 @@ function operational_steps_catalog_definitions()
                     'Override Train',
                     '',
                     false,
-                    'Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. D749).'
+                    'Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. LOCAL1).'
                 ),
                 operational_steps_catalog_text_param(
                     'info',
@@ -2002,10 +1966,14 @@ function operational_steps_catalog_definitions()
             'params' => [],
         ],
     ];
+    if (defined('STS_CATALOG_CORE_ONLY') && STS_CATALOG_CORE_ONLY) {
+        return $definitions;
+    }
+
     return array_merge($definitions, plugins_catalog_definitions());
 }
 
-function operational_steps_restore_backup($dbc, $backup_name, $default = 'hart_seed')
+function operational_steps_restore_backup($dbc, $backup_name, $default = null)
 {
     $name = operational_steps_resolve_backup_name($backup_name, $default);
     $path = operational_steps_backups_dir() . '/' . $name;
@@ -3221,7 +3189,10 @@ function operational_steps_normalize_step(array $step)
     }
 
     if ($fid === 'restore_database' && empty($step['params']['backup'])) {
-        $step['params']['backup'] = 'hart_seed';
+        $default_backup = operational_steps_default_backup_name();
+        if ($default_backup !== '') {
+            $step['params']['backup'] = $default_backup;
+        }
     }
     if ($fid === 'pick_up_locals') {
         $fid = 'pick_up_cars';
@@ -3330,9 +3301,6 @@ function operational_steps_normalize_step(array $step)
     }
     if ($fid === 'generate_orders') {
         $params = array_merge($params, operational_steps_normalize_generate_orders_params($params));
-    }
-    if ($fid === 'replenish_coke_orders') {
-        $params = operational_steps_normalize_replenish_coke_params($params);
     }
     if ($fid === 'auto_assign_locals') {
         $params['jobs'] = operational_steps_normalize_auto_assign_jobs($params);
@@ -3796,7 +3764,8 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
     }
     $dispatch = $def['dispatch'] ?? $fid;
     $no_warm_start = array_merge(
-        ['restore_database', 'backup_database', 'generate_orders', 'replenish_coke_orders', 'increment_session', 'fill_orders'],
+        ['restore_database', 'backup_database', 'generate_orders', 'increment_session', 'fill_orders'],
+        plugins_runtime_without_warm_start(),
         plugins_no_warm_start_dispatches()
     );
     if (!function_exists('warm_start_get_session') && !in_array($dispatch, $no_warm_start, true)) {
@@ -3862,18 +3831,6 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
                     }
                 }
             }
-            break;
-        case 'replenish_coke_orders':
-            require_once __DIR__ . '/generate_order_helpers.php';
-            $replenish = operational_steps_normalize_replenish_coke_params($params);
-            $result = array_merge(
-                $result,
-                generate_orders_replenish_coke_orders(
-                    $dbc,
-                    (int) $replenish['target_min'],
-                    (int) $replenish['target_max']
-                )
-            );
             break;
         case 'increment_session':
             require_once __DIR__ . '/generate_order_helpers.php';
@@ -4095,8 +4052,8 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
             $result['path'] = warm_start_backup($dbc, $name);
             break;
         case 'restore_database':
-            $name = operational_steps_resolve_backup_name($params['backup'] ?? '', 'hart_seed');
-            list($ok, $msg) = operational_steps_restore_backup($dbc, $name, 'hart_seed');
+            $name = operational_steps_resolve_backup_name($params['backup'] ?? '');
+            list($ok, $msg) = operational_steps_restore_backup($dbc, $name);
             $result['restored'] = $ok;
             $result['message'] = $msg;
             if (!$ok) {
@@ -4160,18 +4117,7 @@ function operational_steps_format_dispatch_log_line(array $entry)
         }
     }
 
-    if ($dispatch === 'replenish_coke_orders' && array_key_exists('after', $entry)) {
-        $messages[] = sprintf(
-            'Outbound coke orders: %d → %d (target %d–%d).',
-            (int) ($entry['before'] ?? 0),
-            (int) $entry['after'],
-            (int) ($entry['target_min'] ?? 6),
-            (int) ($entry['target_max'] ?? 8)
-        );
-        if (!empty($entry['shipments']) && is_array($entry['shipments'])) {
-            $messages[] = 'Lanes: ' . implode(', ', $entry['shipments']) . '.';
-        }
-    }
+    plugins_append_dispatch_log_messages($dispatch, $entry, $messages);
 
     if ($dispatch === 'increment_session' && isset($entry['session'])) {
         $messages[] = sprintf('Session incremented to %s.', $entry['session']);

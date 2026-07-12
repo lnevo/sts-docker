@@ -31,7 +31,7 @@ components:
             adder_group: database
             label: Restore Database
             gui_template: "Restore Database {backup}"
-            description: "Restore STS from a backup file in sts/backups/. Shell: apply_hart_seed.sh for hart_seed."
+            description: Restore STS from a backup file in sts/backups/.
             runnable: true
             dispatch: restore_database
             gui_path: /sts/restore_db.php
@@ -43,7 +43,7 @@ components:
                 options_from: backups
                 allow_custom: true
                 required: true
-                default: hart_seed
+                default: demo_line
           -
             id: backup_database
             category: database
@@ -363,35 +363,6 @@ components:
                 step: 1
                 visible_label: true
           -
-            id: replenish_coke_orders
-            category: operations
-            adder: true
-            adder_group: before
-            label: Replenish Coke Orders
-            gui_template: "Replenish Coke Orders (target {target_min}–{target_max})"
-            description: "Count unfilled outbound coke orders (USS/CLEV singles and bulk). When below target minimum, generate single-car COKE-USS / COKE-CLEV orders alternating lanes until the minimum is met (capped at target maximum)."
-            runnable: true
-            dispatch: replenish_coke_orders
-            params:
-              -
-                key: target_min
-                label: Target minimum
-                type: number
-                default: 6
-                required: true
-                min: 1
-                step: 1
-                visible_label: true
-              -
-                key: target_max
-                label: Target maximum
-                type: number
-                default: 8
-                required: true
-                min: 1
-                step: 1
-                visible_label: true
-          -
             id: increment_session
             category: database
             adder: true
@@ -915,7 +886,7 @@ components:
                 type: text
                 default: ""
                 required: false
-                placeholder: Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. D749).
+                placeholder: Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. LOCAL1).
                 visible_label: true
               -
                 key: info
@@ -1202,65 +1173,6 @@ components:
             runnable: false
             gui_path: /sts/printable_station_qr_code_report.php
             params: []
-          -
-            id: track_scale
-            category: operations
-            adder: true
-            adder_group: during
-            label: Track Scale
-            gui_template: "Weigh Cars {job}{commodity_suffix}"
-            description: Weigh loaded cars on a job train (or at the scale) for the selected commodity. Uses track scale config when commodity is blank.
-            runnable: true
-            dispatch: track_scale
-            params:
-              -
-                key: job
-                label: Job
-                type: job
-                options_from: jobs
-                allow_custom: true
-                required: false
-                default: ""
-                visible_label: true
-              -
-                key: commodity
-                label: Commodity
-                type: commodity
-                options_from: commodities
-                allow_custom: true
-                required: false
-                default: ""
-                visible_label: true
-          -
-            id: calibrate_track_scale
-            category: operations
-            adder: true
-            adder_group: during
-            label: Calibrate Track Scale
-            gui_template: "Calibrate Track Scale (every {every_sessions} session[s])"
-            description: "Recalibrate the coke track scale. Performs a fresh random calibration when required (first use / out of service) or when the configured number of sessions have elapsed since the last calibration. Set to 1 to calibrate every session (steady ~15% reload routing); higher values let scale drift accumulate so more cars route to reload between calibrations. Run this before the Track Scale weigh step."
-            runnable: true
-            dispatch: calibrate_track_scale
-            params:
-              -
-                key: every_sessions
-                label: Calibrate every N sessions
-                type: number
-                default: 1
-                required: false
-                min: 1
-                step: 1
-                visible_label: true
-          -
-            id: track_scale_gui
-            category: operations
-            adder: false
-            label: Track Scale (STS GUI)
-            gui_template: Track Scale
-            description: "Weigh cars at track scale. GUI: track_scale.php."
-            runnable: false
-            gui_path: /sts/track_scale.php
-            params: []
         adder_functions:
           -
             id: generate_orders
@@ -1318,35 +1230,6 @@ components:
                 default: ""
                 required: false
                 min: 0
-                step: 1
-                visible_label: true
-          -
-            id: replenish_coke_orders
-            category: operations
-            adder: true
-            adder_group: before
-            label: Replenish Coke Orders
-            gui_template: "Replenish Coke Orders (target {target_min}–{target_max})"
-            description: "Count unfilled outbound coke orders (USS/CLEV singles and bulk). When below target minimum, generate single-car COKE-USS / COKE-CLEV orders alternating lanes until the minimum is met (capped at target maximum)."
-            runnable: true
-            dispatch: replenish_coke_orders
-            params:
-              -
-                key: target_min
-                label: Target minimum
-                type: number
-                default: 6
-                required: true
-                min: 1
-                step: 1
-                visible_label: true
-              -
-                key: target_max
-                label: Target maximum
-                type: number
-                default: 8
-                required: true
-                min: 1
                 step: 1
                 visible_label: true
           -
@@ -1745,55 +1628,6 @@ components:
                     options_from: station_locations
                     default: ""
           -
-            id: track_scale
-            category: operations
-            adder: true
-            adder_group: during
-            label: Track Scale
-            gui_template: "Weigh Cars {job}{commodity_suffix}"
-            description: Weigh loaded cars on a job train (or at the scale) for the selected commodity. Uses track scale config when commodity is blank.
-            runnable: true
-            dispatch: track_scale
-            params:
-              -
-                key: job
-                label: Job
-                type: job
-                options_from: jobs
-                allow_custom: true
-                required: false
-                default: ""
-                visible_label: true
-              -
-                key: commodity
-                label: Commodity
-                type: commodity
-                options_from: commodities
-                allow_custom: true
-                required: false
-                default: ""
-                visible_label: true
-          -
-            id: calibrate_track_scale
-            category: operations
-            adder: true
-            adder_group: during
-            label: Calibrate Track Scale
-            gui_template: "Calibrate Track Scale (every {every_sessions} session[s])"
-            description: "Recalibrate the coke track scale. Performs a fresh random calibration when required (first use / out of service) or when the configured number of sessions have elapsed since the last calibration. Set to 1 to calibrate every session (steady ~15% reload routing); higher values let scale drift accumulate so more cars route to reload between calibrations. Run this before the Track Scale weigh step."
-            runnable: true
-            dispatch: calibrate_track_scale
-            params:
-              -
-                key: every_sessions
-                label: Calibrate every N sessions
-                type: number
-                default: 1
-                required: false
-                min: 1
-                step: 1
-                visible_label: true
-          -
             id: load_unload
             category: operations
             adder: true
@@ -1910,7 +1744,7 @@ components:
                 type: text
                 default: ""
                 required: false
-                placeholder: Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. D749).
+                placeholder: Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. LOCAL1).
                 visible_label: true
               -
                 key: info
@@ -1938,7 +1772,7 @@ components:
             adder_group: database
             label: Restore Database
             gui_template: "Restore Database {backup}"
-            description: "Restore STS from a backup file in sts/backups/. Shell: apply_hart_seed.sh for hart_seed."
+            description: Restore STS from a backup file in sts/backups/.
             runnable: true
             dispatch: restore_database
             gui_path: /sts/restore_db.php
@@ -1950,7 +1784,7 @@ components:
                 options_from: backups
                 allow_custom: true
                 required: true
-                default: hart_seed
+                default: demo_line
           -
             id: backup_database
             category: database
@@ -2214,7 +2048,7 @@ components:
               example: "Restore Database {backup}"
             description:
               type: string
-              example: "Restore STS from a backup file in sts/backups/. Shell: apply_hart_seed.sh for hart_seed."
+              example: Restore STS from a backup file in sts/backups/.
             params:
               type: array
               items:
@@ -2227,7 +2061,7 @@ components:
                   options_from: backups
                   allow_custom: true
                   required: true
-                  default: hart_seed
+                  default: demo_line
         backup_database:
           type: object
           required: [id, label, params]
@@ -2786,54 +2620,6 @@ components:
                   default: ""
                   required: false
                   min: 0
-                  step: 1
-                  visible_label: true
-        replenish_coke_orders:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [replenish_coke_orders]
-            label:
-              type: string
-              example: Replenish Coke Orders
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: replenish_coke_orders
-            gui_template:
-              type: string
-              example: "Replenish Coke Orders (target {target_min}–{target_max})"
-            description:
-              type: string
-              example: "Count unfilled outbound coke orders (USS/CLEV singles and bulk). When below target minimum, generate single-car COKE-USS / COKE-CLEV orders alternating lanes until the minimum is met (capped at target maximum)."
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example:
-                -
-                  key: target_min
-                  label: Target minimum
-                  type: number
-                  default: 6
-                  required: true
-                  min: 1
-                  step: 1
-                  visible_label: true
-                -
-                  key: target_max
-                  label: Target maximum
-                  type: number
-                  default: 8
-                  required: true
-                  min: 1
                   step: 1
                   visible_label: true
         increment_session:
@@ -3508,7 +3294,7 @@ components:
                   type: text
                   default: ""
                   required: false
-                  placeholder: Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. D749).
+                  placeholder: Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. LOCAL1).
                   visible_label: true
                 -
                   key: info
@@ -4134,120 +3920,6 @@ components:
             description:
               type: string
               example: Alternate printable station QR layout.
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example: []
-        track_scale:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [track_scale]
-            label:
-              type: string
-              example: Track Scale
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: track_scale
-            gui_template:
-              type: string
-              example: "Weigh Cars {job}{commodity_suffix}"
-            description:
-              type: string
-              example: Weigh loaded cars on a job train (or at the scale) for the selected commodity. Uses track scale config when commodity is blank.
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example:
-                -
-                  key: job
-                  label: Job
-                  type: job
-                  options_from: jobs
-                  allow_custom: true
-                  required: false
-                  default: ""
-                  visible_label: true
-                -
-                  key: commodity
-                  label: Commodity
-                  type: commodity
-                  options_from: commodities
-                  allow_custom: true
-                  required: false
-                  default: ""
-                  visible_label: true
-        calibrate_track_scale:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [calibrate_track_scale]
-            label:
-              type: string
-              example: Calibrate Track Scale
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: calibrate_track_scale
-            gui_template:
-              type: string
-              example: "Calibrate Track Scale (every {every_sessions} session[s])"
-            description:
-              type: string
-              example: "Recalibrate the coke track scale. Performs a fresh random calibration when required (first use / out of service) or when the configured number of sessions have elapsed since the last calibration. Set to 1 to calibrate every session (steady ~15% reload routing); higher values let scale drift accumulate so more cars route to reload between calibrations. Run this before the Track Scale weigh step."
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example:
-                -
-                  key: every_sessions
-                  label: Calibrate every N sessions
-                  type: number
-                  default: 1
-                  required: false
-                  min: 1
-                  step: 1
-                  visible_label: true
-        track_scale_gui:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [track_scale_gui]
-            label:
-              type: string
-              example: Track Scale (STS GUI)
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: false
-            gui_template:
-              type: string
-              example: Track Scale
-            description:
-              type: string
-              example: "Weigh cars at track scale. GUI: track_scale.php."
             params:
               type: array
               items:

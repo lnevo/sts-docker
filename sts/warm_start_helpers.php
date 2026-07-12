@@ -47,7 +47,11 @@ function warm_start_coke_stats_init()
 
 function warm_start_outbound_coke_shipment_codes()
 {
-    return generate_orders_outbound_coke_shipment_codes();
+    if (function_exists('coke_orders_outbound_shipment_codes')) {
+        return coke_orders_outbound_shipment_codes();
+    }
+
+    return [];
 }
 
 /** SQL IN (...) fragment for outbound coke shipment codes. */

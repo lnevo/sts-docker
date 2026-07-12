@@ -8,11 +8,21 @@
  *
  * Default output: operational_steps_catalog.openapi.generated.yaml beside this script.
  * Regenerate after changing catalog params; wired into bin/run_catalog_tests.sh.
+ *
+ * Options:
+ *   --core-only   Emit core catalog only (omit plugin-contributed steps).
  */
 
 declare(strict_types=1);
 
 $sts_dir = __DIR__;
+$core_only = in_array('--core-only', $argv, true);
+if ($core_only) {
+    define('STS_CATALOG_CORE_ONLY', true);
+    $argv = array_values(array_filter($argv, static function ($arg) {
+        return $arg !== '--core-only';
+    }));
+}
 require_once $sts_dir . '/operational_steps_catalog.php';
 
 $out = $argv[1] ?? ($sts_dir . '/operational_steps_catalog.openapi.generated.yaml');
