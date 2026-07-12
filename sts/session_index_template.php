@@ -66,7 +66,6 @@ $selected_style = session_normalize_switchlist_style(
 $overview_nav = [
     ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
     ['href' => '/sts/session.php?session=' . (int) $session, 'label' => 'All-session totals', 'icon' => 'bar-chart-line'],
-    ['href' => '/sts/editor.html', 'label' => 'Session Editor', 'icon' => 'pencil-square'],
     ['href' => '/sts/session-sitemap.html', 'label' => 'Session Site Map', 'icon' => 'diagram-3'],
 ];
 if ($has_switchlists && $session_print_all_rel !== null) {
@@ -97,7 +96,12 @@ if ($session_wb_href !== null) {
 session_render_nav_bar($overview_nav, 'Session ' . (int) $session);
 ?>
   <main>
-  <h1>Session <?php echo (int) $session; ?></h1>
+  <div class="session-topbar">
+    <div class="session-topbar-heading">
+      <h1 style="margin:0;">Session <?php echo (int) $session; ?></h1>
+    </div>
+    <a class="btn-editor-primary" href="/sts/editor.html"><i class="bi bi-pencil-square"></i> Open Session Editor</a>
+  </div>
   <form method="get" class="session-picker session-nav-row waybill-session-nav" action="/sts/session_overview.php" id="session-select-form">
     <label class="session-picker-label" for="session-select">Jump to session</label>
     <div class="session-picker-controls">

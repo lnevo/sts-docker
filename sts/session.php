@@ -75,7 +75,6 @@ $switchlist_styles = session_switchlist_styles();
 session_render_nav_bar([
     ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
     ['href' => session_session_index_href($selected), 'label' => 'Session ' . (int) $selected, 'icon' => 'calendar-event'],
-    ['href' => 'editor.html', 'label' => 'Session Editor', 'icon' => 'pencil-square'],
     ['href' => 'session-sitemap.html', 'label' => 'Session Site Map', 'icon' => 'diagram-3'],
 ], 'All-session totals');
 ?>
