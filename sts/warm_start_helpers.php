@@ -3311,8 +3311,18 @@ function warm_start_run_ck1_scale_ops($dbc)
 
         $target_net = (float) ($profile['target_net_tons'] ?? $profile['load_limit_tons'] ?? 80.0);
         $tare = (float) ($profile['tare_tons'] ?? 27.0);
-        $true_net = track_scale_get_car_true_net($dbc, $marks, $target_net, $config);
-        $weighing = track_scale_build_display_weighing($true_net, $tare, $target_net, $config);
+        // Apply the stored cross-side balance shift so imbalanced coke loads
+        // route to reload, matching the interactive track-scale UI. Fetching
+        // only true_net leaves balance_shift at 0 and suppresses all reloads.
+        $load_state = track_scale_get_car_load_state($dbc, $marks, $target_net, $config);
+        $true_net = (float) $load_state['true_net_tons'];
+        $weighing = track_scale_build_display_weighing(
+            $true_net,
+            $tare,
+            $target_net,
+            $config,
+            (float) ($load_state['balance_shift_tons'] ?? 0.0)
+        );
         track_scale_record_weigh_log($dbc, $marks, $weighing, $config);
 
         $routing = $weighing['routing'] ?? 'outbound';

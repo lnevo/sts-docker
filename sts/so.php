@@ -63,6 +63,13 @@ if ($ext === 'html' || $ext === 'htm') {
     $dir = dirname($rel);
     $dir = ($dir === '.' || $dir === '/') ? '' : $dir;
     $html = file_get_contents($fs);
+    // Waybill index pages bake their prev/next session buttons at generation
+    // time, so early sessions (created before later ones existed) end up with a
+    // stale or missing nav row. Refresh it against the current set of sessions
+    // so navigation is consistent across every session's waybill index.
+    $html = so_refresh_waybill_session_nav($html, $rel);
+    $html = so_refresh_switchlist_print_all_session_nav($html, $rel);
+    $html = so_refresh_switchlist_job_print_all_session_nav($html, $rel);
     // Embedded mode (used by job.php's inline switch-list viewer): drop the
     // top navigation bar since the surrounding page provides navigation and the
     // style selector.
@@ -72,6 +79,115 @@ if ($ext === 'html' || $ext === 'htm') {
     echo so_rewrite_html($html, $dir);
 } else {
     readfile($fs);
+}
+
+/**
+ * Rebuild the prev/next session nav on a waybill index page from the current
+ * set of sessions. Replaces an existing .waybill-session-nav row if present, or
+ * inserts one right after the page <h1> when the original had none (the case
+ * for a session generated while it was the only/last one).
+ */
+function so_refresh_waybill_session_nav($html, $rel)
+{
+    if (!preg_match('#^session_(\d+)/(?:phase_(\d+)/)?waybills/index\.html$#', $rel, $m)) {
+        return $html;
+    }
+    $session_nbr = (int) $m[1];
+    $phase_num = isset($m[2]) && $m[2] !== '' ? (int) $m[2] : null;
+    $nav = session_waybill_session_nav_html($session_nbr, $phase_num);
+    if ($nav === '') {
+        return $html;
+    }
+    // Replace an existing nav row (baked at generation time) if present.
+    if (strpos($html, 'waybill-session-nav') !== false) {
+        return preg_replace_callback(
+            '#<div class="session-nav-row waybill-session-nav">.*?</div>#s',
+            static function () use ($nav) {
+                return $nav;
+            },
+            $html,
+            1
+        );
+    }
+    // Otherwise insert it right after the first heading inside <main>.
+    return preg_replace_callback(
+        '#</h1>#',
+        static function () use ($nav) {
+            return '</h1>' . $nav;
+        },
+        $html,
+        1
+    );
+}
+
+/**
+ * Rebuild the prev/next session nav on a switch-list print-all page from the
+ * current set of sessions (combined or per-style). Replaces an existing row if
+ * present, or inserts one right after the top nav when missing.
+ */
+function so_refresh_switchlist_print_all_session_nav($html, $rel)
+{
+    if (!preg_match('#^session_(\d+)/print_all(?:_([a-z0-9_-]+))?\.html$#', $rel, $m)) {
+        return $html;
+    }
+    $session_nbr = (int) $m[1];
+    $style = isset($m[2]) && $m[2] !== '' ? (string) $m[2] : '';
+    $nav = session_switchlist_print_all_session_nav_html($session_nbr, $style);
+    if ($nav === '') {
+        return $html;
+    }
+    if (strpos($html, 'switchlist-print-all-session-nav') !== false) {
+        return preg_replace_callback(
+            '#<div class="session-nav-row switchlist-print-all-session-nav[^"]*">.*?</div>#s',
+            static function () use ($nav) {
+                return $nav;
+            },
+            $html,
+            1
+        );
+    }
+
+    return preg_replace(
+        '#</nav>#',
+        '</nav>' . $nav,
+        $html,
+        1
+    );
+}
+
+/**
+ * Rebuild prev/next session nav on a per-job switch-list print-all page
+ * (session_N/phase_XX/JOB/print_all.html).
+ */
+function so_refresh_switchlist_job_print_all_session_nav($html, $rel)
+{
+    if (!preg_match('#^session_(\d+)/phase_(\d+)/([^/]+)/print_all\.html$#', $rel, $m)) {
+        return $html;
+    }
+    $session_nbr = (int) $m[1];
+    $phase_num = (int) $m[2];
+    $job = rawurldecode((string) $m[3]);
+    $nav = session_switchlist_job_print_all_session_nav_html($session_nbr, $phase_num, $job);
+    if ($nav === '') {
+        return $html;
+    }
+    if (strpos($html, 'switchlist-job-print-all-session-nav') !== false) {
+        return preg_replace_callback(
+            '#<div class="session-nav-row switchlist-job-print-all-session-nav[^"]*">.*?</div>#s',
+            static function () use ($nav) {
+                return $nav;
+            },
+            $html,
+            1
+        );
+    }
+
+    return preg_replace(
+        '#</nav>#',
+        '</nav>' . $nav,
+        $html,
+        1
+    );
 }
 
 function so_normalize_path($path)

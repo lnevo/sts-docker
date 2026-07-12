@@ -132,6 +132,7 @@ components:
                 default: ""
                 required: false
                 placeholder: uploads/myfile.csv
+                visible_label: true
           -
             id: restart_session
             category: database
@@ -198,6 +199,7 @@ components:
                 default: ""
                 required: true
                 placeholder: STS GUI instruction text
+                visible_label: true
           -
             id: stop
             category: workflow
@@ -349,6 +351,35 @@ components:
                 default: ""
                 required: false
                 min: 0
+                step: 1
+                visible_label: true
+          -
+            id: replenish_coke_orders
+            category: operations
+            adder: true
+            adder_group: before
+            label: Replenish Coke Orders
+            gui_template: "Replenish Coke Orders (target {target_min}–{target_max})"
+            description: "Count unfilled outbound coke orders (USS/CLEV singles and bulk). When below target minimum, generate single-car COKE-USS / COKE-CLEV orders alternating lanes until the minimum is met (capped at target maximum)."
+            runnable: true
+            dispatch: replenish_coke_orders
+            params:
+              -
+                key: target_min
+                label: Target minimum
+                type: number
+                default: 6
+                required: true
+                min: 1
+                step: 1
+                visible_label: true
+              -
+                key: target_max
+                label: Target maximum
+                type: number
+                default: 8
+                required: true
+                min: 1
                 step: 1
                 visible_label: true
           -
@@ -561,12 +592,12 @@ components:
             params:
               -
                 key: jobs
-                label: ""
+                label: Jobs
                 type: jobs_multiselect
                 options_from: jobs
                 required: false
                 default: ""
-                visible_label: false
+                visible_label: true
               -
                 key: station
                 label: Station filter
@@ -575,6 +606,7 @@ components:
                 allow_custom: true
                 required: false
                 default: ""
+                visible_label: true
                 suppress_all_station_option: true
           -
             id: pick_up_cars
@@ -595,6 +627,7 @@ components:
                 allow_custom: true
                 required: false
                 default: ""
+                visible_label: true
               -
                 key: location
                 label: Location (optional)
@@ -603,6 +636,7 @@ components:
                 allow_custom: true
                 required: false
                 default: ""
+                visible_label: true
               -
                 key: car_filters
                 label: Car filters
@@ -683,6 +717,7 @@ components:
                 allow_custom: true
                 required: false
                 default: ""
+                visible_label: true
               -
                 key: location
                 label: Location
@@ -692,6 +727,7 @@ components:
                 suppress_any_option: true
                 required: false
                 default: ""
+                visible_label: true
               -
                 key: car_filters
                 label: Car filters
@@ -837,6 +873,7 @@ components:
                 allow_custom: true
                 required: false
                 default: ""
+                visible_label: true
               -
                 key: commodity
                 label: Commodity
@@ -845,14 +882,35 @@ components:
                 allow_custom: true
                 required: false
                 default: ""
+                visible_label: true
+          -
+            id: calibrate_track_scale
+            category: operations
+            adder: true
+            adder_group: during
+            label: Calibrate Track Scale
+            gui_template: "Calibrate Track Scale (every {every_sessions} session[s])"
+            description: "Recalibrate the coke track scale. Performs a fresh random calibration when required (first use / out of service) or when the configured number of sessions have elapsed since the last calibration. Set to 1 to calibrate every session (steady ~15% reload routing); higher values let scale drift accumulate so more cars route to reload between calibrations. Run this before the Track Scale weigh step."
+            runnable: true
+            dispatch: calibrate_track_scale
+            params:
+              -
+                key: every_sessions
+                label: Calibrate every N sessions
+                type: number
+                default: 1
+                required: false
+                min: 1
+                step: 1
+                visible_label: true
           -
             id: generate_switchlists
             category: reports
             adder: true
             adder_group: reports
             label: Generate Switch Lists
-            gui_template: "Generate Switch Lists {jobs} ({format})"
-            description: Replay the workflow recipe and write switch list HTML for selected job(s) or all.
+            gui_template: "Generate Switch Lists {jobs} ({format}){title_suffix}"
+            description: Write switch list HTML for the current simulator state for selected job(s) or all.
             runnable: true
             dispatch: generate_switchlists
             params:
@@ -862,6 +920,7 @@ components:
                 type: job_or_all
                 default: all
                 required: false
+                visible_label: true
               -
                 key: format
                 label: Style
@@ -889,6 +948,23 @@ components:
                     value: x2010
                     label: X2010
                 default: all
+                visible_label: true
+              -
+                key: title
+                label: Override Train
+                type: text
+                default: ""
+                required: false
+                placeholder: Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. D749).
+                visible_label: true
+              -
+                key: info
+                label: Switch list info
+                type: text
+                default: ""
+                required: false
+                placeholder: "Extra note shown next to the train name on this switch list only (e.g. Inbound, Outbound, Departure). Does not affect consolidation."
+                visible_label: true
           -
             id: generate_waybills
             category: reports
@@ -937,12 +1013,14 @@ components:
                     value: x2010
                     label: X2010
                 default: all
+                visible_label: true
               -
                 key: jobs
                 label: Jobs
                 type: job_or_all
                 default: all
                 required: false
+                visible_label: true
               -
                 key: session
                 label: "Session # (optional)"
@@ -964,6 +1042,7 @@ components:
                 type: job_or_all
                 default: all
                 required: false
+                visible_label: true
           -
             id: rebuild_switchlists_index
             category: switchlists
@@ -994,6 +1073,7 @@ components:
                 allow_custom: true
                 required: false
                 default: all
+                visible_label: true
               -
                 key: job
                 label: Job / train
@@ -1002,6 +1082,7 @@ components:
                 allow_custom: true
                 required: false
                 default: ""
+                visible_label: true
           -
             id: display_switchlists_sts
             category: switchlists
@@ -1222,6 +1303,35 @@ components:
                 step: 1
                 visible_label: true
           -
+            id: replenish_coke_orders
+            category: operations
+            adder: true
+            adder_group: before
+            label: Replenish Coke Orders
+            gui_template: "Replenish Coke Orders (target {target_min}–{target_max})"
+            description: "Count unfilled outbound coke orders (USS/CLEV singles and bulk). When below target minimum, generate single-car COKE-USS / COKE-CLEV orders alternating lanes until the minimum is met (capped at target maximum)."
+            runnable: true
+            dispatch: replenish_coke_orders
+            params:
+              -
+                key: target_min
+                label: Target minimum
+                type: number
+                default: 6
+                required: true
+                min: 1
+                step: 1
+                visible_label: true
+              -
+                key: target_max
+                label: Target maximum
+                type: number
+                default: 8
+                required: true
+                min: 1
+                step: 1
+                visible_label: true
+          -
             id: fill_orders
             category: operations
             adder: true
@@ -1419,12 +1529,12 @@ components:
             params:
               -
                 key: jobs
-                label: ""
+                label: Jobs
                 type: jobs_multiselect
                 options_from: jobs
                 required: false
                 default: ""
-                visible_label: false
+                visible_label: true
               -
                 key: station
                 label: Station filter
@@ -1433,6 +1543,7 @@ components:
                 allow_custom: true
                 required: false
                 default: ""
+                visible_label: true
                 suppress_all_station_option: true
           -
             id: pick_up_cars
@@ -1453,6 +1564,7 @@ components:
                 allow_custom: true
                 required: false
                 default: ""
+                visible_label: true
               -
                 key: location
                 label: Location (optional)
@@ -1461,6 +1573,7 @@ components:
                 allow_custom: true
                 required: false
                 default: ""
+                visible_label: true
               -
                 key: car_filters
                 label: Car filters
@@ -1541,6 +1654,7 @@ components:
                 allow_custom: true
                 required: false
                 default: ""
+                visible_label: true
               -
                 key: location
                 label: Location
@@ -1550,6 +1664,7 @@ components:
                 suppress_any_option: true
                 required: false
                 default: ""
+                visible_label: true
               -
                 key: car_filters
                 label: Car filters
@@ -1630,6 +1745,7 @@ components:
                 allow_custom: true
                 required: false
                 default: ""
+                visible_label: true
               -
                 key: commodity
                 label: Commodity
@@ -1638,6 +1754,27 @@ components:
                 allow_custom: true
                 required: false
                 default: ""
+                visible_label: true
+          -
+            id: calibrate_track_scale
+            category: operations
+            adder: true
+            adder_group: during
+            label: Calibrate Track Scale
+            gui_template: "Calibrate Track Scale (every {every_sessions} session[s])"
+            description: "Recalibrate the coke track scale. Performs a fresh random calibration when required (first use / out of service) or when the configured number of sessions have elapsed since the last calibration. Set to 1 to calibrate every session (steady ~15% reload routing); higher values let scale drift accumulate so more cars route to reload between calibrations. Run this before the Track Scale weigh step."
+            runnable: true
+            dispatch: calibrate_track_scale
+            params:
+              -
+                key: every_sessions
+                label: Calibrate every N sessions
+                type: number
+                default: 1
+                required: false
+                min: 1
+                step: 1
+                visible_label: true
           -
             id: load_unload
             category: operations
@@ -1709,8 +1846,8 @@ components:
             adder: true
             adder_group: reports
             label: Generate Switch Lists
-            gui_template: "Generate Switch Lists {jobs} ({format})"
-            description: Replay the workflow recipe and write switch list HTML for selected job(s) or all.
+            gui_template: "Generate Switch Lists {jobs} ({format}){title_suffix}"
+            description: Write switch list HTML for the current simulator state for selected job(s) or all.
             runnable: true
             dispatch: generate_switchlists
             params:
@@ -1720,6 +1857,7 @@ components:
                 type: job_or_all
                 default: all
                 required: false
+                visible_label: true
               -
                 key: format
                 label: Style
@@ -1747,6 +1885,23 @@ components:
                     value: x2010
                     label: X2010
                 default: all
+                visible_label: true
+              -
+                key: title
+                label: Override Train
+                type: text
+                default: ""
+                required: false
+                placeholder: Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. D749).
+                visible_label: true
+              -
+                key: info
+                label: Switch list info
+                type: text
+                default: ""
+                required: false
+                placeholder: "Extra note shown next to the train name on this switch list only (e.g. Inbound, Outbound, Departure). Does not affect consolidation."
+                visible_label: true
           -
             id: generate_waybills
             category: reports
@@ -1881,6 +2036,7 @@ components:
                 default: ""
                 required: false
                 placeholder: uploads/myfile.csv
+                visible_label: true
           -
             id: remove_backup
             category: database
@@ -1944,6 +2100,7 @@ components:
                 default: ""
                 required: true
                 placeholder: STS GUI instruction text
+                visible_label: true
           -
             id: if_then
             category: workflow
@@ -2207,6 +2364,7 @@ components:
                   default: ""
                   required: false
                   placeholder: uploads/myfile.csv
+                  visible_label: true
         restart_session:
           type: object
           required: [id, label, params]
@@ -2355,6 +2513,7 @@ components:
                   default: ""
                   required: true
                   placeholder: STS GUI instruction text
+                  visible_label: true
         stop:
           type: object
           required: [id, label, params]
@@ -2600,6 +2759,54 @@ components:
                   default: ""
                   required: false
                   min: 0
+                  step: 1
+                  visible_label: true
+        replenish_coke_orders:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [replenish_coke_orders]
+            label:
+              type: string
+              example: Replenish Coke Orders
+            category:
+              type: string
+              example: operations
+            runnable:
+              type: boolean
+              example: true
+            dispatch:
+              type: string
+              example: replenish_coke_orders
+            gui_template:
+              type: string
+              example: "Replenish Coke Orders (target {target_min}–{target_max})"
+            description:
+              type: string
+              example: "Count unfilled outbound coke orders (USS/CLEV singles and bulk). When below target minimum, generate single-car COKE-USS / COKE-CLEV orders alternating lanes until the minimum is met (capped at target maximum)."
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example:
+                -
+                  key: target_min
+                  label: Target minimum
+                  type: number
+                  default: 6
+                  required: true
+                  min: 1
+                  step: 1
+                  visible_label: true
+                -
+                  key: target_max
+                  label: Target maximum
+                  type: number
+                  default: 8
+                  required: true
+                  min: 1
                   step: 1
                   visible_label: true
         increment_session:
@@ -2885,12 +3092,12 @@ components:
               example:
                 -
                   key: jobs
-                  label: ""
+                  label: Jobs
                   type: jobs_multiselect
                   options_from: jobs
                   required: false
                   default: ""
-                  visible_label: false
+                  visible_label: true
                 -
                   key: station
                   label: Station filter
@@ -2899,6 +3106,7 @@ components:
                   allow_custom: true
                   required: false
                   default: ""
+                  visible_label: true
                   suppress_all_station_option: true
         pick_up_cars:
           type: object
@@ -2938,6 +3146,7 @@ components:
                   allow_custom: true
                   required: false
                   default: ""
+                  visible_label: true
                 -
                   key: location
                   label: Location (optional)
@@ -2946,6 +3155,7 @@ components:
                   allow_custom: true
                   required: false
                   default: ""
+                  visible_label: true
                 -
                   key: car_filters
                   label: Car filters
@@ -3045,6 +3255,7 @@ components:
                   allow_custom: true
                   required: false
                   default: ""
+                  visible_label: true
                 -
                   key: location
                   label: Location
@@ -3054,6 +3265,7 @@ components:
                   suppress_any_option: true
                   required: false
                   default: ""
+                  visible_label: true
                 -
                   key: car_filters
                   label: Car filters
@@ -3236,6 +3448,7 @@ components:
                   allow_custom: true
                   required: false
                   default: ""
+                  visible_label: true
                 -
                   key: commodity
                   label: Commodity
@@ -3244,6 +3457,46 @@ components:
                   allow_custom: true
                   required: false
                   default: ""
+                  visible_label: true
+        calibrate_track_scale:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [calibrate_track_scale]
+            label:
+              type: string
+              example: Calibrate Track Scale
+            category:
+              type: string
+              example: operations
+            runnable:
+              type: boolean
+              example: true
+            dispatch:
+              type: string
+              example: calibrate_track_scale
+            gui_template:
+              type: string
+              example: "Calibrate Track Scale (every {every_sessions} session[s])"
+            description:
+              type: string
+              example: "Recalibrate the coke track scale. Performs a fresh random calibration when required (first use / out of service) or when the configured number of sessions have elapsed since the last calibration. Set to 1 to calibrate every session (steady ~15% reload routing); higher values let scale drift accumulate so more cars route to reload between calibrations. Run this before the Track Scale weigh step."
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example:
+                -
+                  key: every_sessions
+                  label: Calibrate every N sessions
+                  type: number
+                  default: 1
+                  required: false
+                  min: 1
+                  step: 1
+                  visible_label: true
         generate_switchlists:
           type: object
           required: [id, label, params]
@@ -3265,10 +3518,10 @@ components:
               example: generate_switchlists
             gui_template:
               type: string
-              example: "Generate Switch Lists {jobs} ({format})"
+              example: "Generate Switch Lists {jobs} ({format}){title_suffix}"
             description:
               type: string
-              example: Replay the workflow recipe and write switch list HTML for selected job(s) or all.
+              example: Write switch list HTML for the current simulator state for selected job(s) or all.
             params:
               type: array
               items:
@@ -3280,6 +3533,7 @@ components:
                   type: job_or_all
                   default: all
                   required: false
+                  visible_label: true
                 -
                   key: format
                   label: Style
@@ -3307,6 +3561,23 @@ components:
                       value: x2010
                       label: X2010
                   default: all
+                  visible_label: true
+                -
+                  key: title
+                  label: Override Train
+                  type: text
+                  default: ""
+                  required: false
+                  placeholder: Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. D749).
+                  visible_label: true
+                -
+                  key: info
+                  label: Switch list info
+                  type: text
+                  default: ""
+                  required: false
+                  placeholder: "Extra note shown next to the train name on this switch list only (e.g. Inbound, Outbound, Departure). Does not affect consolidation."
+                  visible_label: true
         generate_waybills:
           type: object
           required: [id, label, params]
@@ -3394,12 +3665,14 @@ components:
                       value: x2010
                       label: X2010
                   default: all
+                  visible_label: true
                 -
                   key: jobs
                   label: Jobs
                   type: job_or_all
                   default: all
                   required: false
+                  visible_label: true
                 -
                   key: session
                   label: "Session # (optional)"
@@ -3442,6 +3715,7 @@ components:
                   type: job_or_all
                   default: all
                   required: false
+                  visible_label: true
         rebuild_switchlists_index:
           type: object
           required: [id, label, params]
@@ -3510,6 +3784,7 @@ components:
                   allow_custom: true
                   required: false
                   default: all
+                  visible_label: true
                 -
                   key: job
                   label: Job / train
@@ -3518,6 +3793,7 @@ components:
                   allow_custom: true
                   required: false
                   default: ""
+                  visible_label: true
         display_switchlists_sts:
           type: object
           required: [id, label, params]

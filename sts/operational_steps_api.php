@@ -228,8 +228,8 @@ try {
                 'summary' => $lines,
                 'warnings' => $result['warnings'] ?? [],
                 'cycles' => $result['cycles'],
-                'index_url' => '/sts/session.php',
-                'session_url' => $last ? '/sts/' . session_output_url('session_' . $last['session'] . '/index.php') : '/sts/session.php',
+                'index_url' => '/sts/session_overview.php',
+                'session_url' => $last ? '/sts/' . session_output_url('session_' . $last['session'] . '/index.php') : '/sts/session_overview.php',
             ]);
 
         case 'rerender_session_style':
@@ -258,6 +258,31 @@ try {
                 'style' => $style,
                 'skipped' => $already || $skipped,
                 'results' => $results,
+            ]);
+
+        case 'build_print_all_style':
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                operational_steps_api_json(['ok' => false, 'error' => 'POST required'], 405);
+            }
+            require_once __DIR__ . '/session_helpers.php';
+            $body = operational_steps_api_body();
+            $session = (int) ($body['session'] ?? 0);
+            $style = session_normalize_switchlist_style($body['style'] ?? 'mobile');
+            if ($session < 1) {
+                operational_steps_api_json(['ok' => false, 'error' => 'session required'], 400);
+            }
+            $dbc = open_db();
+            $root = session_web_root();
+            $rel = session_build_switchlist_print_all_style($dbc, $session, $style, $root);
+            mysqli_close($dbc);
+            if ($rel === null) {
+                operational_steps_api_json(['ok' => false, 'error' => 'No switch lists to render for this style'], 404);
+            }
+            operational_steps_api_json([
+                'ok' => true,
+                'session' => $session,
+                'style' => $style,
+                'url' => session_output_url($rel),
             ]);
 
         case 'normalize_recipe':
@@ -372,6 +397,7 @@ try {
                 'error' => 'Unknown action',
                 'actions' => [
                     'catalog', 'list_workflows', 'recipe', 'compile', 'save', 'run_switchlists', 'rerender_session_style',
+                    'build_print_all_style',
                     'run_options', 'import_workflow', 'normalize_recipe', 'set_active_workflow', 'delete_workflow', 'download',
                 ],
             ], 400);

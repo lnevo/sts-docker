@@ -3671,8 +3671,19 @@ function track_scale_run_job_weigh($dbc, $job_name, $config = null)
 
         $target_net = (float) ($profile['target_net_tons'] ?? $profile['load_limit_tons'] ?? 80.0);
         $tare = (float) ($profile['tare_tons'] ?? 27.0);
-        $true_net = track_scale_get_car_true_net($dbc, $marks, $target_net, $config);
-        $weighing = track_scale_build_display_weighing($true_net, $tare, $target_net, $config);
+        // Use the full load state (net + cross-side balance shift) so the
+        // automated weigh routes imbalanced loads to reload exactly like the
+        // interactive track-scale UI (track_scale_ajax.php). Fetching only the
+        // net drops balance_shift_tons and makes every car read in-tolerance.
+        $load_state = track_scale_get_car_load_state($dbc, $marks, $target_net, $config);
+        $true_net = (float) $load_state['true_net_tons'];
+        $weighing = track_scale_build_display_weighing(
+            $true_net,
+            $tare,
+            $target_net,
+            $config,
+            (float) ($load_state['balance_shift_tons'] ?? 0.0)
+        );
         track_scale_record_weigh_log($dbc, $marks, $weighing, $config);
 
         $routing = $weighing['routing'] ?? 'outbound';

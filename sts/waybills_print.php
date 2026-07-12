@@ -11,7 +11,7 @@ $leg = (int) ($_GET['leg'] ?? 0);
 $style = trim($_GET['style'] ?? '');
 
 if ($session <= 0 || $job === '') {
-    header('Location: session.php');
+    header('Location: session_overview.php');
     exit;
 }
 

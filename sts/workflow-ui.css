@@ -524,7 +524,7 @@ h2 { margin: 0 0 12px; font-size: 16px; }
   display: grid;
   grid-template-columns: repeat(3, minmax(130px, 1fr));
   gap: 8px 10px;
-  align-items: end;
+  align-items: start;
 }
 .param-filter-locations {
   display: flex;
@@ -547,6 +547,10 @@ h2 { margin: 0 0 12px; font-size: 16px; }
   overflow: visible;
   clip: auto;
   white-space: nowrap;
+  /* Label sits beneath its field for a cleaner, consistent layout. */
+  order: 2;
+  margin-top: 2px;
+  min-height: 0;
 }
 .param-filter-grid .inline-field-labeled .field-select,
 .param-filter-grid .inline-field-labeled .field-input {
@@ -631,6 +635,10 @@ h2 { margin: 0 0 12px; font-size: 16px; }
   clip: auto;
   white-space: nowrap;
   border: 0;
+  /* Render the label below its input instead of above. */
+  order: 2;
+  margin-top: 2px;
+  min-height: 0;
 }
 .row-params .inline-field-labeled .field-select,
 .row-params .inline-field-labeled .field-input {

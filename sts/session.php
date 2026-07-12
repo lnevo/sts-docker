@@ -29,6 +29,7 @@ $has_data = is_dir($dir);
 $phases = $manifest['phases'] ?? [];
 $jobs_meta = $manifest['jobs'] ?? [];
 $jobs = array_keys($jobs_meta);
+$train_groups = session_job_group_map($selected, $manifest, $root);
 $train_counts = [];
 $session_print_all_rel = null;
 if ($jobs) {
@@ -66,22 +67,23 @@ $switchlist_styles = session_switchlist_styles();
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Operating Sessions</title>
+  <title>All-session totals</title>
   <?php echo session_static_head_assets('session-nav.css'); ?>
 </head>
 <body>
 <?php
 session_render_nav_bar([
     ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+    ['href' => session_session_index_href($selected), 'label' => 'Session ' . (int) $selected, 'icon' => 'calendar-event'],
     ['href' => 'editor.html', 'label' => 'Session Editor', 'icon' => 'pencil-square'],
     ['href' => 'session-sitemap.html', 'label' => 'Session Site Map', 'icon' => 'diagram-3'],
-], 'Operating Sessions');
+], 'All-session totals');
 ?>
   <main>
     <div class="session-topbar">
       <div class="session-topbar-heading">
-        <h1>Operating sessions</h1>
-        <p class="muted">Current DB session: <strong><?php echo (int) $current; ?></strong></p>
+        <h1>All-session totals</h1>
+        <p class="muted">Cumulative statistics through session <strong><?php echo (int) $selected; ?></strong> · Current DB session: <strong><?php echo (int) $current; ?></strong></p>
       </div>
       <a class="btn-editor-primary" href="editor.html"><i class="bi bi-pencil-square"></i> Open Session Editor</a>
     </div>
@@ -141,15 +143,21 @@ session_render_nav_bar([
       <h2 style="margin:0 0 10px;">Trains</h2>
       <?php if (count($jobs)): ?>
         <ul class="phase-list train-tiles">
-          <?php foreach ($jobs as $job): ?>
+          <?php foreach ($train_groups as $group_name => $members): ?>
             <?php
-              $tc = $train_counts[$job] ?? ['switchlists' => 0, 'waybills' => 0];
-              $sw = (int) $tc['switchlists'];
-              $wb = (int) $tc['waybills'];
+              $sw = 0;
+              $wb = 0;
+              foreach ($members as $mj) {
+                  $tc = $train_counts[$mj] ?? ['switchlists' => 0, 'waybills' => 0];
+                  $sw += (int) $tc['switchlists'];
+                  $wb += (int) $tc['waybills'];
+              }
+              $primary = $members[0];
+              $tip = ($group_name !== $primary || count($members) > 1) ? implode(', ', $members) : '';
             ?>
             <li>
-              <a href="job.php?session=<?php echo (int) $selected; ?>&amp;job=<?php echo urlencode($job); ?>">
-                <?php echo htmlspecialchars($job); ?>
+              <a href="job.php?session=<?php echo (int) $selected; ?>&amp;job=<?php echo urlencode($primary); ?>&amp;style=<?php echo urlencode($selected_style); ?>"<?php echo $tip !== '' ? ' title="' . htmlspecialchars($tip) . '"' : ''; ?>>
+                <?php echo htmlspecialchars($group_name); ?>
                 <span class="meta"><?php echo $sw . ' switchlist' . ($sw === 1 ? '' : 's') . ' · ' . $wb . ' waybill' . ($wb === 1 ? '' : 's'); ?></span>
               </a>
             </li>

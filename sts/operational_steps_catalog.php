@@ -35,9 +35,10 @@ function operational_steps_catalog_adder_categories()
 function operational_steps_catalog_adder_order()
 {
     return [
-        'before' => ['generate_orders', 'fill_orders', 'reposition_empties'],
+        'before' => ['generate_orders', 'replenish_coke_orders', 'fill_orders', 'reposition_empties'],
         'during' => [
             'auto_assign_locals', 'pick_up_cars', 'set_out_cars', 'track_scale',
+            'calibrate_track_scale',
         ],
         'after' => ['load_unload'],
         'reports' => ['generate_switchlists', 'generate_waybills'],
@@ -60,6 +61,7 @@ function operational_steps_catalog_text_param($key, $label, $default = '', $requ
         'default' => $default,
         'required' => $required,
         'placeholder' => $placeholder,
+        'visible_label' => true,
     ];
 }
 
@@ -73,6 +75,7 @@ function operational_steps_catalog_job_param($required = true, $optional_label =
         'allow_custom' => true,
         'required' => $required,
         'default' => '',
+        'visible_label' => true,
     ];
 }
 
@@ -86,6 +89,7 @@ function operational_steps_catalog_commodity_param($required = false, $label = '
         'allow_custom' => true,
         'required' => $required,
         'default' => '',
+        'visible_label' => true,
     ];
 }
 
@@ -99,6 +103,7 @@ function operational_steps_catalog_location_param($required = true, $label = 'Lo
         'allow_custom' => true,
         'required' => $required && !$optional,
         'default' => '',
+        'visible_label' => true,
     ];
 }
 
@@ -112,6 +117,7 @@ function operational_steps_catalog_station_param($required = false, $label = 'St
         'allow_custom' => true,
         'required' => $required,
         'default' => $default,
+        'visible_label' => true,
     ];
 }
 
@@ -123,6 +129,7 @@ function operational_steps_catalog_job_or_all_param($key = 'jobs', $label = 'Job
         'type' => 'job_or_all',
         'default' => 'all',
         'required' => false,
+        'visible_label' => true,
     ];
 }
 
@@ -147,6 +154,7 @@ function operational_steps_catalog_switchlist_format_param()
         'type' => 'select',
         'options' => operational_steps_catalog_switchlist_format_options(),
         'default' => 'all',
+        'visible_label' => true,
     ];
 }
 
@@ -320,12 +328,12 @@ function operational_steps_catalog_auto_assign_jobs_param()
 {
     return [
         'key' => 'jobs',
-        'label' => '',
+        'label' => 'Jobs',
         'type' => 'jobs_multiselect',
         'options_from' => 'jobs',
         'required' => false,
         'default' => '',
-        'visible_label' => false,
+        'visible_label' => true,
     ];
 }
 
@@ -1047,6 +1055,26 @@ function operational_steps_setout_auto_assign_destinations($location)
     return $loc === '' || $loc === 'remainder';
 }
 
+function operational_steps_normalize_replenish_coke_params(array $params)
+{
+    $target_min = trim((string) ($params['target_min'] ?? '6'));
+    $target_max = trim((string) ($params['target_max'] ?? '8'));
+    if ($target_min === '' || !ctype_digit($target_min)) {
+        $target_min = '6';
+    }
+    if ($target_max === '' || !ctype_digit($target_max)) {
+        $target_max = '8';
+    }
+    if ((int) $target_max < (int) $target_min) {
+        $target_max = $target_min;
+    }
+
+    return [
+        'target_min' => $target_min,
+        'target_max' => $target_max,
+    ];
+}
+
 function operational_steps_normalize_generate_orders_params(array $params)
 {
     $normalized = [
@@ -1481,6 +1509,39 @@ function operational_steps_catalog_definitions()
             ],
         ],
         [
+            'id' => 'replenish_coke_orders',
+            'category' => 'operations',
+            'adder' => true,
+            'adder_group' => 'before',
+            'label' => 'Replenish Coke Orders',
+            'gui_template' => 'Replenish Coke Orders (target {target_min}–{target_max})',
+            'description' => 'Count unfilled outbound coke orders (USS/CLEV singles and bulk). When below target minimum, generate single-car COKE-USS / COKE-CLEV orders alternating lanes until the minimum is met (capped at target maximum).',
+            'runnable' => true,
+            'dispatch' => 'replenish_coke_orders',
+            'params' => [
+                [
+                    'key' => 'target_min',
+                    'label' => 'Target minimum',
+                    'type' => 'number',
+                    'default' => '6',
+                    'required' => true,
+                    'min' => 1,
+                    'step' => 1,
+                    'visible_label' => true,
+                ],
+                [
+                    'key' => 'target_max',
+                    'label' => 'Target maximum',
+                    'type' => 'number',
+                    'default' => '8',
+                    'required' => true,
+                    'min' => 1,
+                    'step' => 1,
+                    'visible_label' => true,
+                ],
+            ],
+        ],
+        [
             'id' => 'increment_session',
             'category' => 'database',
             'adder' => true,
@@ -1622,6 +1683,7 @@ function operational_steps_catalog_definitions()
                     'suppress_any_option' => true,
                     'required' => false,
                     'default' => '',
+                    'visible_label' => true,
                 ],
                 [
                     'key' => 'car_filters',
@@ -1668,18 +1730,55 @@ function operational_steps_catalog_definitions()
             ],
         ],
         [
+            'id' => 'calibrate_track_scale',
+            'category' => 'operations',
+            'adder' => true,
+            'adder_group' => 'during',
+            'label' => 'Calibrate Track Scale',
+            'gui_template' => 'Calibrate Track Scale (every {every_sessions} session[s])',
+            'description' => 'Recalibrate the coke track scale. Performs a fresh random calibration when required (first use / out of service) or when the configured number of sessions have elapsed since the last calibration. Set to 1 to calibrate every session (steady ~15% reload routing); higher values let scale drift accumulate so more cars route to reload between calibrations. Run this before the Track Scale weigh step.',
+            'runnable' => true,
+            'dispatch' => 'calibrate_track_scale',
+            'params' => [
+                [
+                    'key' => 'every_sessions',
+                    'label' => 'Calibrate every N sessions',
+                    'type' => 'number',
+                    'default' => '1',
+                    'required' => false,
+                    'min' => 1,
+                    'step' => 1,
+                    'visible_label' => true,
+                ],
+            ],
+        ],
+        [
             'id' => 'generate_switchlists',
             'category' => 'reports',
             'adder' => true,
             'adder_group' => 'reports',
             'label' => 'Generate Switch Lists',
-            'gui_template' => 'Generate Switch Lists {jobs} ({format})',
+            'gui_template' => 'Generate Switch Lists {jobs} ({format}){title_suffix}',
             'description' => 'Write switch list HTML for the current simulator state for selected job(s) or all.',
             'runnable' => true,
             'dispatch' => 'generate_switchlists',
             'params' => [
                 operational_steps_catalog_job_or_all_param('jobs', 'Job / train'),
                 operational_steps_catalog_switchlist_format_param(),
+                operational_steps_catalog_text_param(
+                    'title',
+                    'Override Train',
+                    '',
+                    false,
+                    'Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. D749).'
+                ),
+                operational_steps_catalog_text_param(
+                    'info',
+                    'Switch list info',
+                    '',
+                    false,
+                    'Extra note shown next to the train name on this switch list only (e.g. Inbound, Outbound, Departure). Does not affect consolidation.'
+                ),
             ],
         ],
         [
@@ -2359,6 +2458,13 @@ function operational_steps_compile_gui(array $def, array $params)
         }
         $merged['jobs'] = $jobs;
         $merged['format'] = operational_steps_normalize_switchlist_format($params['format'] ?? 'all');
+        $title = trim((string) ($params['title'] ?? ''));
+        $info = trim((string) ($params['info'] ?? ''));
+        $suffix = $title !== '' ? ' — ' . $title : '';
+        if ($info !== '') {
+            $suffix .= ' · ' . $info;
+        }
+        $merged['title_suffix'] = $suffix;
     }
     if (($def['id'] ?? '') === 'auto_assign_locals') {
         $merged['jobs'] = operational_steps_normalize_auto_assign_jobs($params);
@@ -3256,6 +3362,9 @@ function operational_steps_normalize_step(array $step)
     if ($fid === 'generate_orders') {
         $params = array_merge($params, operational_steps_normalize_generate_orders_params($params));
     }
+    if ($fid === 'replenish_coke_orders') {
+        $params = operational_steps_normalize_replenish_coke_params($params);
+    }
     if ($fid === 'auto_assign_locals') {
         $params['jobs'] = operational_steps_normalize_auto_assign_jobs($params);
         $station = trim((string) ($params['station'] ?? ''));
@@ -3269,6 +3378,8 @@ function operational_steps_normalize_step(array $step)
         $params['format'] = operational_steps_normalize_switchlist_format($params['format'] ?? 'all');
         $jobs = trim((string) ($params['jobs'] ?? 'all'));
         $params['jobs'] = $jobs !== '' ? $jobs : 'all';
+        $params['title'] = trim((string) ($params['title'] ?? ''));
+        $params['info'] = trim((string) ($params['info'] ?? ''));
     }
     if ($fid === 'track_scale' && !empty($params['commodity'])) {
         $params['commodity'] = strtoupper(trim((string) $params['commodity']));
@@ -3728,7 +3839,7 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
         return ['skipped' => true, 'reason' => 'not runnable'];
     }
     $dispatch = $def['dispatch'] ?? $fid;
-    $no_warm_start = ['track_scale', 'restore_database', 'backup_database', 'generate_orders', 'increment_session', 'fill_orders'];
+    $no_warm_start = ['track_scale', 'restore_database', 'backup_database', 'generate_orders', 'replenish_coke_orders', 'increment_session', 'fill_orders'];
     if (!function_exists('warm_start_get_session') && !in_array($dispatch, $no_warm_start, true)) {
         return ['skipped' => true, 'reason' => 'session runtime unavailable (rebuild sts-docker image; see sts/RUNTIME.md)'];
     }
@@ -3782,6 +3893,18 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
                 }
             }
             break;
+        case 'replenish_coke_orders':
+            require_once __DIR__ . '/generate_order_helpers.php';
+            $replenish = operational_steps_normalize_replenish_coke_params($params);
+            $result = array_merge(
+                $result,
+                generate_orders_replenish_coke_orders(
+                    $dbc,
+                    (int) $replenish['target_min'],
+                    (int) $replenish['target_max']
+                )
+            );
+            break;
         case 'increment_session':
             require_once __DIR__ . '/generate_order_helpers.php';
             $prev = generate_orders_get_session($dbc);
@@ -3803,10 +3926,15 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
                 'shuffle' => false,
             ]);
             $result['filled'] = $fill['filled'];
-            $result['skipped'] = count($fill['skipped']);
+            // "unfilled" (not "skipped"): the count of orders that could not be
+            // filled. The control-flow "skipped" key is a boolean meaning the step
+            // itself did not run; the stats aggregator and run summary drop any
+            // entry whose "skipped" is truthy, so overloading it as an int count
+            // here silently discarded this step's "filled" tally.
+            $result['unfilled'] = count($fill['skipped']);
             $result['filtered_out'] = $fill['filtered_out'];
             if ($fill['filled'] === 0 && count($fill['skipped']) > 0) {
-                $result['skipped_sample'] = array_slice($fill['skipped'], 0, 3);
+                $result['unfilled_sample'] = array_slice($fill['skipped'], 0, 3);
             }
             break;
         case 'reposition_empties':
@@ -3923,6 +4051,28 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
                 $result['weigh'] = track_scale_run_job_weigh($dbc, $job, $ts_config);
             }
             break;
+        case 'calibrate_track_scale':
+            if (!is_readable(__DIR__ . '/track_scale_helpers.php')) {
+                $result['skipped'] = true;
+                $result['reason'] = 'track scale helpers not available (rebuild sts-docker image)';
+                break;
+            }
+            require_once __DIR__ . '/track_scale_helpers.php';
+            require_once __DIR__ . '/warm_start_helpers.php';
+            if (!function_exists('warm_start_maybe_calibrate_scale')) {
+                $result['skipped'] = true;
+                $result['reason'] = 'calibration helper not available';
+                break;
+            }
+            // every_sessions = 1 recalibrates every session (steady ~15% reroute);
+            // higher values let drift accumulate between calibrations so the
+            // out-of-tolerance rate climbs toward the out-of-service threshold.
+            $every = max(1, (int) ($params['every_sessions'] ?? 1));
+            $result['calibration'] = warm_start_maybe_calibrate_scale($dbc, [
+                'scale_calibrate_every_sessions' => $every,
+            ]);
+            $result['every_sessions'] = $every;
+            break;
         case 'load_unload':
             $filters = operational_steps_normalize_load_unload_filters($params);
             $filtered = array_filter($filters);
@@ -3948,15 +4098,21 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
             $phase_dir = session_phase_output_dir($session, $phase_num, $root);
             $recipe = $config['recipe'] ?? null;
             $through_step = (int) ($config['through_step'] ?? 0);
+            $title = trim((string) ($params['title'] ?? ''));
+            $info = trim((string) ($params['info'] ?? ''));
             $result['switchlists'] = master_sw_generate_for_jobs($dbc, $jobs, $phase_dir, $config, [
                 'format' => $format,
                 'recipe' => is_array($recipe) ? $recipe : null,
                 'through_step' => $through_step,
+                'title' => $title,
+                'info' => $info,
             ]);
             session_register_phase($manifest, $phase_num, [
                 'jobs' => $jobs,
                 'format' => $format,
                 'styles' => master_sw_styles_for_format($format),
+                'title' => $title,
+                'info' => $info,
                 'output' => $phase_dir,
             ]);
             session_save_manifest($session, $manifest, $root);
@@ -4021,6 +4177,13 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
             if (!$ok) {
                 return ['error' => $msg, 'function' => $fid];
             }
+            // A restore resets the DB session counter (session_nbr -> 0). Purge
+            // stale per-session output so the cumulative statistics on
+            // session.php start clean for the new campaign instead of rolling up
+            // run_stats left over from a previous one.
+            if (function_exists('session_reset_all_output')) {
+                $result['cleared_sessions'] = session_reset_all_output();
+            }
             break;
         default:
             return ['skipped' => true, 'reason' => 'no handler'];
@@ -4072,15 +4235,28 @@ function operational_steps_format_dispatch_log_line(array $entry)
         }
     }
 
+    if ($dispatch === 'replenish_coke_orders' && array_key_exists('after', $entry)) {
+        $messages[] = sprintf(
+            'Outbound coke orders: %d → %d (target %d–%d).',
+            (int) ($entry['before'] ?? 0),
+            (int) $entry['after'],
+            (int) ($entry['target_min'] ?? 6),
+            (int) ($entry['target_max'] ?? 8)
+        );
+        if (!empty($entry['shipments']) && is_array($entry['shipments'])) {
+            $messages[] = 'Lanes: ' . implode(', ', $entry['shipments']) . '.';
+        }
+    }
+
     if ($dispatch === 'increment_session' && isset($entry['session'])) {
         $messages[] = sprintf('Session incremented to %s.', $entry['session']);
     }
 
     if (array_key_exists('filled', $entry)) {
         $messages[] = sprintf('%d car order(s) auto assigned.', (int) $entry['filled']);
-        $skipped = (int) ($entry['skipped'] ?? 0);
-        if ($skipped > 0) {
-            $messages[] = sprintf('%d order(s) still need manual attention.', $skipped);
+        $unfilled = (int) ($entry['unfilled'] ?? 0);
+        if ($unfilled > 0) {
+            $messages[] = sprintf('%d order(s) still need manual attention.', $unfilled);
         }
     }
 

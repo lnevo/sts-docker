@@ -184,10 +184,10 @@ function session_simulator_run($dbc, array $recipe, array $options = [])
         'on_train_count' => $on_train_count,
         'dashboard' => $dashboard,
         'summary' => $summary,
-        'index_url' => '/sts/session.php',
+        'index_url' => '/sts/session_overview.php',
                 'session_url' => !empty($last['session'])
             ? '/sts/' . session_output_url('session_' . $last['session'] . '/index.php')
-            : '/sts/session.php',
+            : '/sts/session_overview.php',
     ];
 }
 

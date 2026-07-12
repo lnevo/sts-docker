@@ -4,19 +4,27 @@
  * usable as a copied temp/session_N/index.php stub (session derived from GET or
  * from the containing directory name).
  */
-$session = isset($_GET['session'])
-    ? (int) $_GET['session']
-    : (int) preg_replace('/^session_(\d+)$/', '$1', basename(dirname(__FILE__)));
-if ($session < 1) {
-    header('Location: /sts/session.php');
-    exit;
-}
 $sts_dir = __DIR__;
 while ($sts_dir !== '/' && !is_file($sts_dir . '/session_helpers.php')) {
     $sts_dir = dirname($sts_dir);
 }
 require_once $sts_dir . '/session_helpers.php';
 require_once $sts_dir . '/open_db.php';
+
+$session = isset($_GET['session'])
+    ? (int) $_GET['session']
+    : (int) preg_replace('/^session_(\d+)$/', '$1', basename(dirname(__FILE__)));
+if ($session < 1) {
+    // Default session page: fall back to the current DB session so
+    // session_overview.php (no param) lands on the active session's overview.
+    $dbc_default = open_db();
+    $session = (int) session_get_db_session($dbc_default);
+    mysqli_close($dbc_default);
+}
+if ($session < 1) {
+    header('Location: /sts/session.php');
+    exit;
+}
 $root = session_web_root();
 $manifest = session_load_manifest($session, $root);
 session_ensure_output_stubs($session, $manifest, $root);
@@ -33,6 +41,7 @@ $train_counts = [];
 foreach (array_keys($jobs) as $job) {
     $train_counts[$job] = session_train_output_counts($dbc_stats, $session, $job, $root);
 }
+$train_groups = session_job_group_map($session, $manifest ?? null, $root);
 $session_print_all_rel = $jobs ? session_build_switchlist_print_all($dbc_stats, $session, $root) : null;
 mysqli_close($dbc_stats);
 $browser_sessions = session_list_browser_sessions($current_session, $root);
@@ -58,38 +67,55 @@ $selected_style = session_normalize_switchlist_style(
 <?php
 session_render_nav_bar([
     ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
-    ['href' => '/sts/session.php?session=' . (int) $session, 'label' => 'All Sessions', 'icon' => 'collection'],
+    ['href' => '/sts/session.php?session=' . (int) $session, 'label' => 'All-session totals', 'icon' => 'bar-chart-line'],
     ['href' => '/sts/editor.html', 'label' => 'Session Editor', 'icon' => 'pencil-square'],
     ['href' => '/sts/session-sitemap.html', 'label' => 'Session Site Map', 'icon' => 'diagram-3'],
 ], 'Session ' . (int) $session);
 ?>
   <main>
   <h1>Session <?php echo (int) $session; ?></h1>
-  <div class="session-nav-row waybill-session-nav">
-    <?php if ($prev_session !== null): ?>
-      <a class="btn btn-outline-dark" href="/sts/session_overview.php?session=<?php echo (int) $prev_session; ?>"><i class="bi bi-chevron-left"></i> Session <?php echo (int) $prev_session; ?></a>
-    <?php else: ?>
-      <span class="btn btn-outline-dark disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>
-    <?php endif; ?>
-    <?php if ($next_session !== null): ?>
-      <a class="btn btn-outline-dark" href="/sts/session_overview.php?session=<?php echo (int) $next_session; ?>">Session <?php echo (int) $next_session; ?> <i class="bi bi-chevron-right"></i></a>
-    <?php else: ?>
-      <span class="btn btn-outline-dark disabled" aria-disabled="true">Next <i class="bi bi-chevron-right"></i></span>
-    <?php endif; ?>
-  </div>
+  <form method="get" class="session-picker session-nav-row waybill-session-nav" action="/sts/session_overview.php" id="session-select-form">
+    <label class="session-picker-label" for="session-select">Jump to session</label>
+    <div class="session-picker-controls">
+      <?php if ($prev_session !== null): ?>
+        <a class="btn btn-outline-dark btn-sm" href="/sts/session_overview.php?session=<?php echo (int) $prev_session; ?>" title="Session <?php echo (int) $prev_session; ?>"><i class="bi bi-chevron-left"></i></a>
+      <?php else: ?>
+        <span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i></span>
+      <?php endif; ?>
+      <select name="session" id="session-select">
+        <?php foreach ($browser_sessions as $n): ?>
+          <option value="<?php echo (int) $n; ?>"<?php echo $n === $session ? ' selected' : ''; ?>>
+            Session <?php echo (int) $n; ?><?php echo $n === $current_session ? ' (current)' : ''; ?>
+          </option>
+        <?php endforeach; ?>
+      </select>
+      <?php if ($next_session !== null): ?>
+        <a class="btn btn-outline-dark btn-sm" href="/sts/session_overview.php?session=<?php echo (int) $next_session; ?>" title="Session <?php echo (int) $next_session; ?>"><i class="bi bi-chevron-right"></i></a>
+      <?php else: ?>
+        <span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-right"></i></span>
+      <?php endif; ?>
+      <noscript><button type="submit" class="btn btn-outline-dark btn-sm">Go</button></noscript>
+    </div>
+  </form>
   <?php if (count($jobs)): ?>
     <div class="card">
       <h2 style="margin:0 0 10px;">Trains</h2>
       <ul class="phase-list train-tiles">
-        <?php foreach (array_keys($jobs) as $job): ?>
+        <?php foreach ($train_groups as $group_name => $members): ?>
           <?php
-            $tc = $train_counts[$job] ?? ['switchlists' => 0, 'waybills' => 0];
-            $sw = (int) $tc['switchlists'];
-            $wb = (int) $tc['waybills'];
+            $sw = 0;
+            $wb = 0;
+            foreach ($members as $mj) {
+                $tc = $train_counts[$mj] ?? ['switchlists' => 0, 'waybills' => 0];
+                $sw += (int) $tc['switchlists'];
+                $wb += (int) $tc['waybills'];
+            }
+            $primary = $members[0];
+            $tip = ($group_name !== $primary || count($members) > 1) ? implode(', ', $members) : '';
           ?>
           <li>
-            <a href="/sts/job.php?session=<?php echo (int) $session; ?>&amp;job=<?php echo urlencode($job); ?>">
-              <?php echo htmlspecialchars($job); ?>
+            <a href="/sts/job.php?session=<?php echo (int) $session; ?>&amp;job=<?php echo urlencode($primary); ?>&amp;style=<?php echo urlencode($selected_style); ?>"<?php echo $tip !== '' ? ' title="' . htmlspecialchars($tip) . '"' : ''; ?>>
+              <?php echo htmlspecialchars($group_name); ?>
               <span class="meta"><?php echo $sw . ' switchlist' . ($sw === 1 ? '' : 's') . ' · ' . $wb . ' waybill' . ($wb === 1 ? '' : 's'); ?></span>
             </a>
           </li>
@@ -129,5 +155,13 @@ session_render_nav_bar([
 
   <?php echo session_run_stats_updated_html($run_stats); ?>
   </main>
+  <script>
+    (function () {
+      const sessionSelect = document.getElementById('session-select');
+      sessionSelect?.addEventListener('change', function () {
+        document.getElementById('session-select-form')?.submit();
+      });
+    })();
+  </script>
 </body>
 </html>

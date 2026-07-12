@@ -2116,9 +2116,14 @@
           stopEl.max = String(total);
         }
       }
+      const sessionText = this.runOptions?.current_session ?? '—';
       const sumSession = this.el('run-db-session');
       if (sumSession) {
-        sumSession.textContent = this.runOptions?.current_session ?? '—';
+        sumSession.textContent = sessionText;
+      }
+      const navSession = this.el('nav-db-session');
+      if (navSession) {
+        navSession.textContent = sessionText;
       }
       this.syncRunRangeHighlight();
       this.syncStepVisibility();

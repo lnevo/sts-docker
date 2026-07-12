@@ -21,8 +21,8 @@ if (!is_array($recipe)) {
     exit(1);
 }
 
-// Step 9 = index 8 (generate_orders with automatic shipment mix).
-$step9_idx = 8;
+// Step 9 = index 9 (generate_orders automatic shipment mix with seed).
+$step9_idx = 9;
 $default_seeds = [54321, 11111, 22222, 33333, 44444, 55555, 66666, 77777, 88888, 99999, 424242];
 $seeds = [];
 for ($i = 0; $i < $rounds; $i++) {
@@ -80,6 +80,8 @@ function run_round_metrics(array $log)
         'd749_lists' => 0,
         'nvl_lists' => 0,
         'stg_lists' => 0,
+        'weighed' => 0,
+        'reloads' => 0,
     ];
     foreach ($log as $e) {
         $step = (int) ($e['step'] ?? 0);
@@ -111,6 +113,10 @@ function run_round_metrics(array $log)
                 $m['stg_lists']++;
             }
         }
+        if (isset($e['weigh']) && is_array($e['weigh'])) {
+            $m['weighed'] += (int) ($e['weigh']['weighed'] ?? 0);
+            $m['reloads'] += (int) ($e['weigh']['reloads'] ?? 0);
+        }
     }
     return $m;
 }
@@ -119,7 +125,7 @@ echo "Workflow: {$workflow_path}\n";
 echo "Rounds: {$rounds} x {$sessions_per_round} sessions\n";
 echo str_repeat('=', 100) . "\n";
 printf(
-    "%-6s %-8s | %-5s %-5s %-5s | %-8s %-8s %-8s | %-4s %-4s %-4s %-4s | %s\n",
+    "%-6s %-8s | %-5s %-5s %-5s | %-8s %-8s %-8s | %-4s %-4s %-4s %-4s %-4s %-4s | %s\n",
     'Round',
     'Seed',
     'Sc9',
@@ -132,6 +138,8 @@ printf(
     'D749',
     'NVL',
     'STG',
+    'Wgh',
+    'Rld',
     'Notes'
 );
 echo str_repeat('-', 100) . "\n";
@@ -203,10 +211,13 @@ foreach ($seeds as $ri => $seed) {
     if ($d749 < $sessions_per_round * 1.5) {
         $notes[] = 'D749 thin';
     }
+    if ($m['weighed'] < $sessions_per_round * 3) {
+        $notes[] = 'weigh thin';
+    }
     $note = $notes === [] ? 'ok' : implode(', ', $notes);
 
     printf(
-        "%-6d %-8d | %-5d %-5d %-5d | %-8s %-8s %-8d | %-4d %-4d %-4d %-4d | %s\n",
+        "%-6d %-8d | %-5d %-5d %-5d | %-8s %-8s %-8d | %-4d %-4d %-4d %-4d %-4d %-4d | %s\n",
         $round,
         $seed,
         $sc,
@@ -219,6 +230,8 @@ foreach ($seeds as $ri => $seed) {
         $d749,
         $nvl,
         $stg,
+        $m['weighed'],
+        $m['reloads'],
         $note
     );
 
@@ -233,6 +246,8 @@ foreach ($seeds as $ri => $seed) {
         'ck1_lists' => $ck1,
         'd749_lists' => $d749,
         'nvl_lists' => $nvl,
+        'weighed' => $m['weighed'],
+        'reloads' => $m['reloads'],
         'notes' => $note,
     ];
 }

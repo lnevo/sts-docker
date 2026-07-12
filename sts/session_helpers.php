@@ -92,15 +92,83 @@ function session_web_root()
     return session_app_root() . '/temp/sessions';
 }
 
+/** www-data uid/gid for session output dirs (Apache user in the Docker image). */
+function session_output_owner_ids()
+{
+    static $ids = null;
+    if ($ids !== null) {
+        return $ids;
+    }
+    $ids = ['uid' => null, 'gid' => null];
+    if (function_exists('posix_getpwnam')) {
+        $pw = posix_getpwnam('www-data');
+        if (is_array($pw)) {
+            $ids['uid'] = (int) $pw['uid'];
+            $ids['gid'] = (int) $pw['gid'];
+        }
+    }
+
+    return $ids;
+}
+
+/**
+ * Create a session output directory and ensure it is writable by www-data.
+ * When PHP runs as root (docker exec without -u www-data), newly created dirs
+ * are chowned to www-data so the web UI can write switch lists afterward.
+ */
+function session_ensure_writable_dir($path)
+{
+    if ($path === '' || $path === '.' || $path === '/') {
+        throw new InvalidArgumentException('Invalid session output directory: ' . $path);
+    }
+    if (!is_dir($path)) {
+        if (!@mkdir($path, 0775, true) && !is_dir($path)) {
+            throw new RuntimeException('Failed to create directory: ' . $path);
+        }
+    }
+    $owner = session_output_owner_ids();
+    if (function_exists('posix_geteuid') && posix_geteuid() === 0 && $owner['uid'] !== null) {
+        @chown($path, $owner['uid']);
+        @chgrp($path, $owner['gid']);
+        @chmod($path, 0775);
+    }
+    if (!is_writable($path)) {
+        $run_as = 'php';
+        if (function_exists('posix_geteuid') && function_exists('posix_getpwuid')) {
+            $pw = posix_getpwuid(posix_geteuid());
+            if (is_array($pw) && !empty($pw['name'])) {
+                $run_as = $pw['name'];
+            }
+        }
+        $dir_owner = fileowner($path);
+        $dir_owner_name = (string) $dir_owner;
+        if (function_exists('posix_getpwuid')) {
+            $pw = posix_getpwuid($dir_owner);
+            if (is_array($pw) && !empty($pw['name'])) {
+                $dir_owner_name = $pw['name'];
+            }
+        }
+        throw new RuntimeException(
+            'Session output directory is not writable: ' . $path
+            . ' (running as ' . $run_as . ', directory owned by ' . $dir_owner_name . ').'
+            . ' Fix: docker exec -u root sts-docker-web-1'
+            . ' chown -R www-data:www-data /var/www/html/sts/temp/sessions'
+        );
+    }
+
+    return $path;
+}
+
 /** Ensure the writable output root exists. */
 function session_ensure_output_root($root = null)
 {
     $root = $root ?? session_web_root();
-    if (!is_dir($root)) {
-        mkdir($root, 0755, true);
+    $parent = dirname($root);
+    if ($parent !== '' && $parent !== '.' && $parent !== '/' && !is_dir($parent)) {
+        session_ensure_writable_dir($parent);
     }
 
-    return $root;
+    return session_ensure_writable_dir($root);
 }
 
 /**
@@ -195,9 +263,7 @@ function session_load_manifest($session_nbr, $root = null)
 function session_save_manifest($session_nbr, array $manifest, $root = null)
 {
     $dir = session_dir_for($session_nbr, $root);
-    if (!is_dir($dir)) {
-        mkdir($dir, 0755, true);
-    }
+    session_ensure_writable_dir($dir);
     $manifest['session'] = (string) $session_nbr;
     $manifest['updated'] = date('c');
     file_put_contents(session_manifest_path($session_nbr, $root), json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
@@ -949,9 +1015,7 @@ function session_write_session_index($session_nbr, $root = null)
 {
     $root = $root ?? session_web_root();
     $dir = session_dir_for($session_nbr, $root);
-    if (!is_dir($dir)) {
-        mkdir($dir, 0755, true);
-    }
+    session_ensure_writable_dir($dir);
     $template = __DIR__ . '/session_index_template.php';
     if (is_readable($template)) {
         copy($template, $dir . '/index.php');
@@ -1014,21 +1078,127 @@ function session_waybill_session_nav_html($session_nbr, $phase_num = null, $dbc 
     return $html;
 }
 
+/** Relative href from a job print-all page to the same train/phase in another session. */
+function session_switchlist_job_print_all_rel_href($session_nbr, $phase_num, $job)
+{
+    $job = trim((string) $job);
+    if ($job === '') {
+        return '';
+    }
+
+    return '../../../session_' . (int) $session_nbr
+        . '/phase_' . session_phase_pad($phase_num)
+        . '/' . rawurlencode($job)
+        . '/print_all.html';
+}
+
+/** Prev/next session buttons for a per-job switch-list print-all page. */
+function session_switchlist_job_print_all_session_nav_html($session_nbr, $phase_num, $job, $dbc = null, $root = null)
+{
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
+    $phase_num = (int) $phase_num;
+    $job = trim((string) $job);
+    if ($session_nbr < 1 || $phase_num < 1 || $job === '') {
+        return '';
+    }
+    if ($dbc === null) {
+        require_once __DIR__ . '/open_db.php';
+        $dbc = open_db();
+    }
+    $current_db = session_get_db_session($dbc);
+    $sessions = session_list_browser_sessions($current_db, $root);
+    $prev = session_adjacent_session($sessions, $session_nbr, 'prev');
+    $next = session_adjacent_session($sessions, $session_nbr, 'next');
+    if ($prev === null && $next === null) {
+        return '';
+    }
+
+    $html = '<div class="session-nav-row switchlist-job-print-all-session-nav noprint">';
+    if ($prev !== null) {
+        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
+            . htmlspecialchars(session_switchlist_job_print_all_rel_href($prev, $phase_num, $job))
+            . '"><i class="bi bi-chevron-left"></i> Session ' . (int) $prev . '</a>';
+    } else {
+        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>';
+    }
+    if ($next !== null) {
+        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
+            . htmlspecialchars(session_switchlist_job_print_all_rel_href($next, $phase_num, $job))
+            . '">Session ' . (int) $next . ' <i class="bi bi-chevron-right"></i></a>';
+    } else {
+        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true">Next <i class="bi bi-chevron-right"></i></span>';
+    }
+    $html .= '</div>';
+
+    return $html;
+}
+
+/** Relative href from a session print-all page to another session's print-all (same style when set). */
+function session_switchlist_print_all_rel_href($session_nbr, $style = '')
+{
+    $rel = 'session_' . (int) $session_nbr . '/print_all';
+    if ($style !== '') {
+        $rel .= '_' . session_normalize_switchlist_style($style);
+    }
+
+    return '../' . $rel . '.html';
+}
+
+/** Prev/next session buttons for a switch-list print-all page. */
+function session_switchlist_print_all_session_nav_html($session_nbr, $style = '', $dbc = null, $root = null)
+{
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
+    if ($session_nbr < 1) {
+        return '';
+    }
+    if ($dbc === null) {
+        require_once __DIR__ . '/open_db.php';
+        $dbc = open_db();
+    }
+    $current_db = session_get_db_session($dbc);
+    $sessions = session_list_browser_sessions($current_db, $root);
+    $prev = session_adjacent_session($sessions, $session_nbr, 'prev');
+    $next = session_adjacent_session($sessions, $session_nbr, 'next');
+    if ($prev === null && $next === null) {
+        return '';
+    }
+
+    $html = '<div class="session-nav-row switchlist-print-all-session-nav noprint">';
+    if ($prev !== null) {
+        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
+            . htmlspecialchars(session_switchlist_print_all_rel_href($prev, $style))
+            . '"><i class="bi bi-chevron-left"></i> Session ' . (int) $prev . '</a>';
+    } else {
+        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>';
+    }
+    if ($next !== null) {
+        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
+            . htmlspecialchars(session_switchlist_print_all_rel_href($next, $style))
+            . '">Session ' . (int) $next . ' <i class="bi bi-chevron-right"></i></a>';
+    } else {
+        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true">Next <i class="bi bi-chevron-right"></i></span>';
+    }
+    $html .= '</div>';
+
+    return $html;
+}
+
 /** Header nav items for a generated waybill index page. */
 function session_waybill_index_nav_items($session_nbr, $back_href, $back_label)
 {
     $session_nbr = (int) $session_nbr;
-    $all_sessions = $session_nbr >= 1
-        ? '/sts/session.php?session=' . $session_nbr
-        : '/sts/session.php';
-
     $items = [
         ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
-        ['href' => $all_sessions, 'label' => 'All Sessions', 'icon' => 'collection'],
-        ['href' => $back_href, 'label' => $back_label, 'icon' => 'calendar-event'],
     ];
-    if ($session_nbr >= 1) {
-        $items[] = ['href' => '/sts/session_overview.php?session=' . $session_nbr, 'label' => 'Session overview', 'icon' => 'clipboard-data'];
+    // Back navigation goes to the per-session overview (the default session page).
+    // Honor a caller-supplied deeper back link, but treat the legacy totals link
+    // ('All Sessions' -> session.php) as a request for the overview instead.
+    if (!empty($back_href) && trim((string) $back_label) !== '' && $back_label !== 'All Sessions') {
+        $items[] = ['href' => $back_href, 'label' => $back_label, 'icon' => 'calendar-event'];
+    } elseif ($session_nbr >= 1) {
+        $items[] = ['href' => '/sts/session_overview.php?session=' . $session_nbr, 'label' => 'Session ' . $session_nbr, 'icon' => 'calendar-event'];
     }
 
     return $items;
@@ -1039,9 +1209,7 @@ function session_write_empty_waybill_index($out_dir, array $options = [])
     if (is_file(rtrim($out_dir, '/') . '/index.html')) {
         return ['path' => rtrim($out_dir, '/') . '/index.html', 'count' => 0, 'skipped' => true];
     }
-    if (!is_dir($out_dir)) {
-        mkdir($out_dir, 0755, true);
-    }
+    session_ensure_writable_dir($out_dir);
     $title = $options['title'] ?? 'Waybills';
     $back = $options['back_href'] ?? '../session.php';
     $back_label = $options['back_label'] ?? 'All Sessions';
@@ -1091,9 +1259,7 @@ function session_ensure_output_stubs($session_nbr, array $manifest, $root = null
     require_once __DIR__ . '/master_switchlist_helpers.php';
     $root = $root ?? session_web_root();
     $session_dir = session_dir_for($session_nbr, $root);
-    if (!is_dir($session_dir)) {
-        mkdir($session_dir, 0755, true);
-    }
+    session_ensure_writable_dir($session_dir);
 
     // The canonical session page is index.php. A stale/legacy index.html (e.g. the
     // old "HART Switchlists" root stub) would otherwise be reached from links that
@@ -1126,9 +1292,7 @@ function session_ensure_output_stubs($session_nbr, array $manifest, $root = null
             continue;
         }
         $phase_dir = session_phase_output_dir($session_nbr, $phase_num, $root);
-        if (!is_dir($phase_dir)) {
-            mkdir($phase_dir, 0755, true);
-        }
+        session_ensure_writable_dir($phase_dir);
         session_write_empty_waybill_index(session_waybill_dir_for($session_nbr, $phase_num, $root), [
             'title' => 'Waybills — session ' . (int) $session_nbr . ', phase ' . $phase_num,
             'back_href' => '../../index.php',
@@ -1385,11 +1549,33 @@ function session_reset_output($session_nbr, $root = null)
     return $removed;
 }
 
+/**
+ * Purge persisted output for every session (manifests, run-stats + history,
+ * phase output, waybills, caches). Used when the database is reset via
+ * restore_database so the cumulative session statistics start clean for the new
+ * campaign instead of rolling up run_stats left over from a previous one.
+ *
+ * @return list<string> Names of the session directories that were removed.
+ */
+function session_reset_all_output($root = null)
+{
+    $root = $root ?? session_web_root();
+    if (!is_dir($root)) {
+        return [];
+    }
+
+    $removed = [];
+    foreach (glob(rtrim($root, '/') . '/session_*', GLOB_ONLYDIR) ?: [] as $dir) {
+        session_rrmdir($dir);
+        $removed[] = basename($dir);
+    }
+
+    return $removed;
+}
+
 function session_write_waybill_bundle($dbc, $out_dir, array $waybill_numbers, array $options = [])
 {
-    if (!is_dir($out_dir)) {
-        mkdir($out_dir, 0755, true);
-    }
+    session_ensure_writable_dir($out_dir);
     $settings = waybill_print_settings($dbc);
     $written = [];
     $list_items = '';
@@ -1563,9 +1749,7 @@ function session_waybill_store_load($session_nbr, $root = null)
 function session_waybill_store_save($session_nbr, array $store, $root = null)
 {
     $dir = session_waybill_dir_for($session_nbr, null, $root);
-    if (!is_dir($dir)) {
-        mkdir($dir, 0755, true);
-    }
+    session_ensure_writable_dir($dir);
     file_put_contents(session_waybill_store_path($session_nbr, $root), json_encode($store));
 }
 
@@ -1656,9 +1840,7 @@ function session_waybill_rebuild_pages($dbc, $session_nbr, array $store, $root =
     require_once __DIR__ . '/waybill_print_helpers.php';
     $root = $root ?? session_web_root();
     $dir = session_waybill_dir_for($session_nbr, null, $root);
-    if (!is_dir($dir)) {
-        mkdir($dir, 0755, true);
-    }
+    session_ensure_writable_dir($dir);
 
     // Individual snapshot pages + cleanup of stale ones.
     $keep = ['index.html' => true, 'print_all.html' => true];
@@ -2007,11 +2189,13 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
             $jobs = session_resolve_jobs_param($step['params']['jobs'] ?? 'all', $dbc);
             $phase_dir = session_phase_output_dir($session_nbr, $phase_num, $root);
             $fmt = master_sw_normalize_switchlist_format($step['params']['format'] ?? $format);
+            $title = trim((string) ($step['params']['title'] ?? ''));
             $written = master_sw_generate_for_jobs($dbc, $jobs, $phase_dir, $config, [
                 'format' => $fmt,
                 'recipe' => $recipe,
                 'through_step' => $n - 1,
                 'session_override' => $session_nbr,
+                'title' => $title,
             ]);
             session_register_phase($manifest, $phase_num, [
                 'step' => $n,
@@ -2019,6 +2203,7 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
                 'format' => $fmt,
                 'styles' => master_sw_styles_for_format($fmt),
                 'label' => operational_steps_compile_recipe(['steps' => [$step]])[0]['instruction'] ?? 'Generate Switch Lists',
+                'title' => $title,
                 'output' => $phase_dir,
             ]);
             // Snapshot each phase's waybills immediately while the DB still
@@ -2072,6 +2257,43 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
         $log[] = array_merge(['step' => $n], $result);
         $ctx = session_evaluate_context($dbc, $config);
         $pc++;
+    }
+
+    // Reconcile the session waybill count from the final store. generate_waybills
+    // often runs before the switch lists that populate the store (the store keeps
+    // filling as each phase's switch lists are generated), so the count written at
+    // that step is stale — typically 0. Recompute from the accumulated store so the
+    // "Waybills" stat reflects the unique waybill numbers that moved through the
+    // whole session (distinct waybill numbers, not the per-style render variants).
+    $wb_store = session_waybill_store_load($session_nbr, $root);
+    $wb_unique = count($wb_store['order'] ?? []);
+    if ($wb_unique > 0 || isset($manifest['waybills'])) {
+        $manifest['waybills'] = array_merge(
+            is_array($manifest['waybills'] ?? null) ? $manifest['waybills'] : [],
+            [
+                'count' => $wb_unique,
+                'index' => 'waybills/index.html',
+                'print_all' => 'waybills/print_all.html',
+                'updated' => date('c'),
+            ]
+        );
+        if (is_array($manifest['phases'] ?? null)) {
+            foreach ($manifest['phases'] as &$phase_entry) {
+                $pn = (int) ($phase_entry['phase'] ?? 0);
+                if ($pn < 1) {
+                    continue;
+                }
+                $pc_count = session_waybill_phase_count($session_nbr, $pn, $root);
+                if ($pc_count > 0) {
+                    $phase_entry['waybills'] = [
+                        'count' => $pc_count,
+                        'index' => 'waybills/index.html',
+                        'print_all' => 'waybills/print_all.html',
+                    ];
+                }
+            }
+            unset($phase_entry);
+        }
     }
 
     session_save_manifest($session_nbr, $manifest, $root);
@@ -2454,6 +2676,105 @@ function session_train_switchlist_legs($dbc, $session_nbr, $job, $root = null)
     return $legs;
 }
 
+/**
+ * Map of job key => operator-facing train display name for a session, taken
+ * from the workflow's "Generate Switch Lists" Override Train value stored in the
+ * manifest ('title'). Jobs without an Override Train keep their raw key. When a
+ * job's phases carry differing Override Train values they are joined with " / ".
+ *
+ * Consolidation keys on the Override Train value exactly, so every phase/leg that
+ * shares it collapses into one train — with no assumptions about naming (any
+ * direction words live in the separate per-leg "info" field, not here).
+ */
+function session_job_display_map($session_nbr, $manifest = null, $root = null)
+{
+    $root = $root ?? session_web_root();
+    if ($manifest === null) {
+        $manifest = session_load_manifest($session_nbr, $root);
+    }
+    $bases = [];
+    foreach ($manifest['phases'] ?? [] as $phase) {
+        $base = trim((string) ($phase['title'] ?? ''));
+        if ($base === '') {
+            continue;
+        }
+        foreach ($phase['jobs'] ?? [] as $j) {
+            $j = trim((string) $j);
+            if ($j !== '') {
+                $bases[$j][$base] = true;
+            }
+        }
+    }
+    $map = [];
+    foreach (array_keys($manifest['jobs'] ?? []) as $job) {
+        $job = (string) $job;
+        $keys = isset($bases[$job]) ? array_keys($bases[$job]) : [];
+        $map[$job] = count($keys) > 0 ? implode(' / ', $keys) : $job;
+    }
+    // Include any job that only appears in phases (defensive) with a base title.
+    foreach ($bases as $job => $set) {
+        if (!isset($map[$job])) {
+            $keys = array_keys($set);
+            $map[$job] = count($keys) > 0 ? implode(' / ', $keys) : (string) $job;
+        }
+    }
+    return $map;
+}
+
+/** Operator-facing train display name for a single job (see session_job_display_map). */
+function session_job_display_name($session_nbr, $job, $manifest = null, $root = null)
+{
+    $map = session_job_display_map($session_nbr, $manifest, $root);
+    return $map[$job] ?? (string) $job;
+}
+
+/**
+ * Groups of job keys that share the same operator-facing train name, in manifest
+ * order: [ display_name => [job_key, ...], ... ]. Jobs whose overwritten titles
+ * collapse to the same name (e.g. STG-DEMMLER + D749 both "D749") are grouped so
+ * the UI can present a single consolidated train.
+ */
+function session_job_group_map($session_nbr, $manifest = null, $root = null)
+{
+    $root = $root ?? session_web_root();
+    if ($manifest === null) {
+        $manifest = session_load_manifest($session_nbr, $root);
+    }
+    $display = session_job_display_map($session_nbr, $manifest, $root);
+    $groups = [];
+    foreach (array_keys($manifest['jobs'] ?? []) as $job) {
+        $job = (string) $job;
+        $name = $display[$job] ?? $job;
+        $groups[$name][] = $job;
+    }
+    return $groups;
+}
+
+/**
+ * Member job keys that share the given job's display name (always includes the
+ * job itself), in manifest order.
+ */
+function session_train_group_members($session_nbr, $job, $manifest = null, $root = null)
+{
+    $root = $root ?? session_web_root();
+    if ($manifest === null) {
+        $manifest = session_load_manifest($session_nbr, $root);
+    }
+    $display = session_job_display_map($session_nbr, $manifest, $root);
+    $name = $display[(string) $job] ?? (string) $job;
+    $members = [];
+    foreach (array_keys($manifest['jobs'] ?? []) as $j) {
+        $j = (string) $j;
+        if (($display[$j] ?? $j) === $name) {
+            $members[] = $j;
+        }
+    }
+    if (!in_array((string) $job, $members, true)) {
+        $members[] = (string) $job;
+    }
+    return $members;
+}
+
 /** Workflow phases a train runs that have a generated job print_all.html. */
 function session_train_switchlist_phase_links($session_nbr, $job, array $phase_nums, $root = null)
 {
@@ -2540,7 +2861,12 @@ function session_build_switchlist_print_all($dbc, $session_nbr, $root = null)
             if ($meta === null) {
                 continue;
             }
-            $table_name = $meta['table_name'];
+            $phase_title = trim((string) ($phase['title'] ?? ''));
+            if ($phase_title === '') {
+                $phase_title = master_sw_switchlist_title_from_cache($phase_dir, $job, $session_nbr);
+            }
+            $phase_info = trim((string) ($phase['info'] ?? ''));
+            $display_train = master_sw_display_train_name($meta['table_name'], ['title' => $phase_title, 'info' => $phase_info]);
             $total = count($sections);
             for ($i = 0; $i < $total; $i++) {
                 $phases_html .= master_sw_render_print_all_phase_body(
@@ -2548,7 +2874,7 @@ function session_build_switchlist_print_all($dbc, $session_nbr, $root = null)
                     $sections[$i],
                     $i + 1,
                     $total,
-                    $table_name
+                    $display_train
                 );
                 $phase_count++;
             }
@@ -2561,29 +2887,230 @@ function session_build_switchlist_print_all($dbc, $session_nbr, $root = null)
     }
 
     $rel = 'session_' . $session_nbr . '/print_all.html';
+
+    // Style dropdown: the combined view is style-agnostic (one consolidated
+    // table). Selecting a style renders a per-style combined print-all
+    // (print_all_<style>.html) that stitches each train/phase's real switch list
+    // in that layout, generated on demand and cached (see
+    // session_build_switchlist_print_all_style + the build_print_all_style API).
+    [$style_cluster, $style_script] = session_print_all_style_controls($session_nbr, '');
+    $nav_html = session_nav_bar_html([
+        ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+        ['href' => '/sts/session_overview.php?session=' . $session_nbr, 'label' => 'Session ' . $session_nbr, 'icon' => 'calendar-event'],
+    ], 'Print all switch lists · combined · ' . count($trains) . ' train(s) · ' . $phase_count . ' phase(s)');
+    $nav_html = str_replace('</div></div></nav>', $style_cluster . '</div></div></nav>', $nav_html);
+    $session_nav = session_switchlist_print_all_session_nav_html($session_nbr, '', $dbc, $root);
+
     $html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
         . '<meta name="viewport" content="width=device-width, initial-scale=1">'
         . '<title>Session ' . (int) $session_nbr . ' — print all switch lists</title>'
         . master_sw_render_head_assets()
         . '</head><body>'
-        . session_nav_bar_html([
-            ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
-            ['href' => '/sts/session.php?session=' . $session_nbr, 'label' => 'All Sessions', 'icon' => 'collection'],
-            ['href' => '/sts/session_overview.php?session=' . $session_nbr, 'label' => 'Session ' . $session_nbr, 'icon' => 'calendar-event'],
-        ], 'Print all switch lists · ' . count($trains) . ' train(s) · ' . $phase_count . ' phase(s)')
+        . $nav_html
+        . $session_nav
         . '<div class="page">'
         . '<div class="noprint" style="margin-bottom:12px;">'
         . '<button onclick="window.print()">PRINT ALL SWITCH LISTS</button>'
-        . '<p style="margin:8px 0 0; color:#555; font-size:14px;">Each phase starts on a new printed page.</p>'
+        . '<p style="margin:8px 0 0; color:#555; font-size:14px;">Combined view. Pick a style above to print every switch list in that layout — each starts on a new page.</p>'
         . '</div>'
         . $phases_html
-        . '</div></body></html>';
+        . '</div>'
+        . $style_script
+        . '</body></html>';
 
     $fs = session_output_fs_path($rel, $root);
     $dir = dirname($fs);
-    if (!is_dir($dir)) {
-        mkdir($dir, 0755, true);
+    session_ensure_writable_dir($dir);
+    if (file_put_contents($fs, $html) === false) {
+        return null;
     }
+
+    return $rel;
+}
+
+/**
+ * Nav-bar style dropdown + script shared by the combined print-all
+ * (print_all.html) and the per-style print-all pages (print_all_<style>.html).
+ * Selecting a style POSTs to the build_print_all_style API, which renders/caches
+ * the per-style combined document and returns its URL to navigate to.
+ *
+ * @return array{0:string,1:string} [cluster_html, script_html]
+ */
+function session_print_all_style_controls($session_nbr, $selected_style)
+{
+    $selected_style = $selected_style === '' ? '' : session_normalize_switchlist_style($selected_style);
+    $options = '';
+    foreach (session_switchlist_styles() as $key => $label) {
+        $sel = ($selected_style !== '' && $key === $selected_style) ? ' selected' : '';
+        $options .= '<option value="' . htmlspecialchars($key, ENT_QUOTES) . '"' . $sel . '>'
+            . htmlspecialchars($label) . '</option>';
+    }
+    if ($selected_style === '') {
+        // Combined (style-agnostic) landing view: show a non-selectable prompt so
+        // the dropdown doesn't imply one of the styles is already applied.
+        $options = '<option value="" selected disabled>Combined</option>' . $options;
+    }
+    $cluster = '<div class="d-flex align-items-center gap-2 ms-auto">'
+        . '<label for="sw-style-select" class="text-white-50 small mb-0">Style</label>'
+        . '<select id="sw-style-select" class="form-select form-select-sm" style="width:auto;">'
+        . $options . '</select>'
+        . '<span id="sw-style-status" class="text-white-50 small"></span></div>';
+    $script = '<script>(function(){'
+        . 'var el=document.getElementById("sw-style-select");if(!el)return;'
+        . 'var st=document.getElementById("sw-style-status");'
+        . 'var sid=' . (int) $session_nbr . ';'
+        . 'el.addEventListener("change",function(){var style=el.value;if(!style)return;'
+        . 'el.disabled=true;if(st)st.textContent="Rendering\u2026";'
+        . 'fetch("/sts/operational_steps_api.php?action=build_print_all_style",{method:"POST",'
+        . 'headers:{"Content-Type":"application/json"},body:JSON.stringify({session:sid,style:style})})'
+        . '.then(function(r){return r.json();})'
+        . '.then(function(d){if(!d.ok||!d.url)throw new Error(d.error||"Render failed");window.location.href=d.url;})'
+        . '.catch(function(e){el.disabled=false;if(st)st.textContent=String(e.message||e);});'
+        . '});})();</script>';
+
+    return [$cluster, $script];
+}
+
+/**
+ * Extract the inner HTML of the `.page` content wrapper from a generated
+ * switch-list file, dropping any `.noprint` chrome (PRINT button, style nav).
+ * Used to stitch per-phase per-style switch lists into a combined print-all
+ * document without re-implementing each style's layout.
+ */
+function session_extract_switchlist_page_html($html)
+{
+    if (!is_string($html) || trim($html) === '') {
+        return '';
+    }
+    $doc = new DOMDocument();
+    $prev = libxml_use_internal_errors(true);
+    // Prefix an XML encoding hint so loadHTML treats the bytes as UTF-8.
+    $doc->loadHTML('<?xml encoding="utf-8" ?>' . $html);
+    libxml_clear_errors();
+    libxml_use_internal_errors($prev);
+
+    $xpath = new DOMXPath($doc);
+    $pages = $xpath->query('//div[contains(concat(" ", normalize-space(@class), " "), " page ")]');
+    if ($pages === false || $pages->length === 0) {
+        return '';
+    }
+    $page = $pages->item(0);
+
+    // Remove .noprint chrome inside the page (PRINT button, etc.).
+    $noprints = $xpath->query('.//*[contains(concat(" ", normalize-space(@class), " "), " noprint ")]', $page);
+    if ($noprints !== false) {
+        $remove = [];
+        foreach ($noprints as $node) {
+            $remove[] = $node;
+        }
+        foreach ($remove as $node) {
+            if ($node->parentNode) {
+                $node->parentNode->removeChild($node);
+            }
+        }
+    }
+
+    $inner = '';
+    foreach ($page->childNodes as $child) {
+        $inner .= $doc->saveHTML($child);
+    }
+
+    return $inner;
+}
+
+/**
+ * Build (and cache) a combined print-all document for a single switch-list style:
+ * session_N/print_all_<style>.html. Each train/phase's switch list is stitched in
+ * the requested layout, one per printed page. The per-phase switch-list files are
+ * (re)generated in that style first (idempotent), then their `.page` bodies are
+ * concatenated. Returns the relative output path, or null when nothing rendered.
+ */
+function session_build_switchlist_print_all_style($dbc, $session_nbr, $style, $root = null)
+{
+    require_once __DIR__ . '/master_switchlist_helpers.php';
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
+    $style = session_normalize_switchlist_style($style);
+
+    // Ensure the per-phase switch lists exist in this style (idempotent — skips
+    // phases already rendered in the style).
+    session_rerender_session_style($dbc, $session_nbr, $style, $root);
+    $manifest = session_load_manifest($session_nbr, $root);
+
+    $phases_html = '';
+    $phase_count = 0;
+    $trains = [];
+    foreach ($manifest['phases'] ?? [] as $phase) {
+        $pnum = (int) ($phase['phase'] ?? 0);
+        if ($pnum < 1) {
+            continue;
+        }
+        $phase_dir = session_phase_output_dir($session_nbr, $pnum, $root);
+        foreach ($phase['jobs'] ?? [] as $job) {
+            $job = trim((string) $job);
+            if ($job === '') {
+                continue;
+            }
+            $sections = master_sw_load_sections_cache($phase_dir, $job, $session_nbr);
+            if (!is_array($sections) || count($sections) === 0) {
+                continue;
+            }
+            $total = count($sections);
+            for ($i = 0; $i < $total; $i++) {
+                $work_leg = $i + 1;
+                $leg_rel = session_switchlist_work_phase_rel($session_nbr, $pnum, $job, $work_leg, $style);
+                $leg_fs = session_output_fs_path($leg_rel, $root);
+                if (!is_file($leg_fs)) {
+                    continue;
+                }
+                $body = session_extract_switchlist_page_html((string) file_get_contents($leg_fs));
+                if (trim($body) === '') {
+                    continue;
+                }
+                // The extracted per-style body already includes the switch-list
+                // header (train title, phase band, table). Wrap for page breaks only.
+                $phases_html .= '<section class="print-all-phase">' . $body . '</section>';
+                $phase_count++;
+            }
+            $trains[$job] = true;
+        }
+    }
+
+    if ($phases_html === '') {
+        return null;
+    }
+
+    $rel = 'session_' . $session_nbr . '/print_all_' . $style . '.html';
+    [$style_cluster, $style_script] = session_print_all_style_controls($session_nbr, $style);
+    $nav_html = session_nav_bar_html([
+        ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+        ['href' => '/sts/session_overview.php?session=' . $session_nbr, 'label' => 'Session ' . $session_nbr, 'icon' => 'calendar-event'],
+        ['href' => session_output_url('session_' . $session_nbr . '/print_all.html'), 'label' => 'Combined', 'icon' => 'grid-3x3-gap'],
+    ], 'Print all · ' . master_sw_style_label($style) . ' · ' . count($trains) . ' train(s) · ' . $phase_count . ' phase(s)');
+    $nav_html = str_replace('</div></div></nav>', $style_cluster . '</div></div></nav>', $nav_html);
+    $session_nav = session_switchlist_print_all_session_nav_html($session_nbr, $style, $dbc, $root);
+
+    $style_label = master_sw_style_label($style);
+    $html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
+        . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        . '<title>Session ' . $session_nbr . ' — print all (' . htmlspecialchars($style_label) . ')</title>'
+        . master_sw_render_head_assets()
+        . '</head><body>'
+        . $nav_html
+        . $session_nav
+        . '<div class="page">'
+        . '<div class="noprint" style="margin-bottom:12px;">'
+        . '<button onclick="window.print()">PRINT ALL SWITCH LISTS</button>'
+        . '<p style="margin:8px 0 0; color:#555; font-size:14px;">Style: ' . htmlspecialchars($style_label)
+        . '. Each switch list starts on a new printed page.</p>'
+        . '</div>'
+        . $phases_html
+        . '</div>'
+        . $style_script
+        . '</body></html>';
+
+    $fs = session_output_fs_path($rel, $root);
+    session_ensure_writable_dir(dirname($fs));
     if (file_put_contents($fs, $html) === false) {
         return null;
     }

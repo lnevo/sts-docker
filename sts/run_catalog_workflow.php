@@ -15,12 +15,27 @@ require_once __DIR__ . '/open_db.php';
 require_once __DIR__ . '/session_helpers.php';
 require_once __DIR__ . '/operational_steps_catalog.php';
 
-$defaultJson = __DIR__ . '/backups/session_editor/WORKFLOW_TEST_ALL_TYPES.recipe.json';
-$jsonPath = $argv[1] ?? $defaultJson;
+// Default to the editor's ACTIVE saved workflow (the one the UI runs), so this
+// CLI drives the same recipe as the app instead of the catalog test fixture.
+$editorDir = operational_steps_editor_dir();
+$activeFile = operational_steps_active_workflow($editorDir);
+$defaultJson = $activeFile !== ''
+    ? operational_steps_workflow_path($editorDir, $activeFile)
+    : ($editorDir . '/WORKFLOW_TEST_ALL_TYPES.recipe.json');
+
+$arg = $argv[1] ?? '';
+if ($arg === '') {
+    $jsonPath = $defaultJson;
+} elseif (is_file($arg)) {
+    $jsonPath = $arg;
+} else {
+    // Treat a bare name as a workflow file inside the editor dir.
+    $jsonPath = operational_steps_workflow_path($editorDir, $arg);
+}
 
 if (!is_file($jsonPath)) {
     fwrite(STDERR, "Workflow JSON not found: {$jsonPath}\n");
-    fwrite(STDERR, "Usage: php run_catalog_workflow.php [workflow.json]\n");
+    fwrite(STDERR, "Usage: php run_catalog_workflow.php [workflow.json | workflow-name | (blank = active workflow)]\n");
     exit(1);
 }
 
@@ -68,6 +83,40 @@ echo "  Phases:   " . ($result['phases'] ?? 0) . "\n";
 echo "  Control:  {$control}\n";
 echo "  Dispatch: {$dispatched}\n";
 echo "  Skipped:  {$skipped}\n";
+
+// Per-phase switch-list summary (job + car count) so the caller can see empty
+// phases at a glance instead of inspecting temp/sessions by hand.
+$phaseLines = [];
+foreach ($result['log'] ?? [] as $entry) {
+    // Only generate_switchlists log entries carry a 'written' job list; skip
+    // generate_waybills (which also records a phase but no switch-list output).
+    if (!is_array($entry) || !isset($entry['phase']) || !array_key_exists('written', $entry)) {
+        continue;
+    }
+    $cars = 0;
+    foreach ((array) ($entry['written'] ?? []) as $w) {
+        if (is_array($w)) {
+            $cars += (int) ($w['cars'] ?? 0);
+        }
+    }
+    $jobs = [];
+    foreach ((array) ($entry['written'] ?? []) as $w) {
+        if (is_array($w) && isset($w['job'])) {
+            $jobs[] = $w['job'];
+        }
+    }
+    $phaseLines[] = sprintf(
+        "  phase %-2s (step %-3s) %-14s %d car(s)%s",
+        $entry['phase'],
+        $entry['step'] ?? '?',
+        implode(',', $jobs),
+        $cars,
+        $cars === 0 ? '  <== EMPTY' : ''
+    );
+}
+if ($phaseLines) {
+    echo "Switch-list phases:\n" . implode("\n", $phaseLines) . "\n";
+}
 
 if ($errors) {
     echo "  Errors:   " . count($errors) . "\n";

@@ -229,9 +229,9 @@ function waybill_print_render_body($dbc, $waybill_number, array $settings = null
         $from_station = waybill_print_apply_rpt_station($from_station, $from['rpt_station']);
         $html .= '<table style="width: ' . htmlspecialchars($print_width) . ';">
 <tr style="font: normal 15px Verdana, Arial, sans-serif;"><td style="text-align: center;" colspan="2">
-<h1 style="font-family: Times New Roman, Times, serif;">' . htmlspecialchars($rr_name) . '</h1><h2>COMPANY MEMO</h2></td></tr>
-<tr><td>FROM:<br /><br /><hr />TO C&E No.<br /><br /><hr />OPERATING SESSION: ' . htmlspecialchars($os_number) . '</td></tr>
-<tr><td>REPOSITION THE FOLLOWING EMPTY CAR<br /><br />FOR LOADING AT ' . htmlspecialchars($from_station) . ' / ' . htmlspecialchars($from_loc)
+<h2 style="font-family: Times New Roman, Times, serif;">' . htmlspecialchars($rr_name) . '</h2><h3>COMPANY MEMO</h3></td></tr>
+<tr style="font: normal 10px Verdana, Arial, sans-serif;"><td>FROM:<br /><br /><hr />TO C&E No.<br /><br /><hr />OPERATING SESSION: ' . htmlspecialchars($os_number) . '</td></tr>
+<tr style="font: normal 10px Verdana, Arial, sans-serif;"><td>REPOSITION THE FOLLOWING EMPTY CAR<br /><br />FOR LOADING AT ' . htmlspecialchars($from_station) . ' / ' . htmlspecialchars($from_loc)
             . '<br /><br />CAR INITIALS AND NUMBER: ' . htmlspecialchars($reporting_marks) . ' KIND: ' . htmlspecialchars($car_code)
             . '<br /><br />LOCATED AT: ' . htmlspecialchars($row['current_station'] ?? '') . ' / ' . htmlspecialchars($current_loc) . '</td></tr>
 </table><br />';

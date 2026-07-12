@@ -130,7 +130,7 @@
         <a href="index.html" class="btn btn-outline-light btn-sm me-2">
           <i class="bi bi-house"></i> STS Main Menu
         </a>
-        <a href="session.php" class="btn btn-outline-light btn-sm me-2" data-session-link="session.php?session={n}">
+        <a href="session_overview.php" class="btn btn-outline-light btn-sm me-2" data-session-link="session_overview.php?session={n}">
           <i class="bi bi-collection"></i> Sessions
         </a>
         <a href="editor.html" class="btn btn-outline-light btn-sm me-2">
@@ -179,12 +179,12 @@
             <span class="sitemap-subhead">Entry points</span>
             <ul>
               <li>
-                <a href="session.php" data-session-link="session.php?session={n}">Operating Sessions</a>
-                <span class="sitemap-path">session.php — session picker, trains, statistics</span>
+                <a href="session_overview.php" data-session-link="session_overview.php?session={n}">Session overview</a>
+                <span class="sitemap-path">session_overview.php?session=N — default session page: trains &amp; consolidated views</span>
               </li>
               <li>
-                <a href="session_overview.php" data-session-link="session_overview.php?session={n}">Session overview</a>
-                <span class="sitemap-path">session_overview.php?session=N — trains &amp; consolidated views</span>
+                <a href="session.php" data-session-link="session.php?session={n}">All-session totals</a>
+                <span class="sitemap-path">session.php — session picker + cumulative statistics across sessions</span>
               </li>
               <li>
                 <a href="editor.html">Session Editor</a>
@@ -312,16 +312,16 @@
           <td colspan="3">
             <span class="sitemap-subhead">Typical path</span>
             <p style="margin-bottom:0.75rem;">
-              <a href="session.php">Operating Sessions</a>
-              → <a href="session_overview.php" data-session-link="session_overview.php?session={n}">Session overview</a>
+              <a href="session_overview.php" data-session-link="session_overview.php?session={n}">Session overview</a>
               → <a href="job.php" data-session-link="job.php?session={n}&amp;job=CK1">Train view</a>
-              → switch list (embedded or open) + waybills for that phase
+              → switch list (embedded or open) + waybills for that phase.
+              The overview links out to <a href="session.php" data-session-link="session.php?session={n}">All-session totals</a>.
             </p>
             <span class="sitemap-subhead">Header links (most session pages)</span>
             <ul style="margin-bottom:0;">
               <li><strong>STS Main Menu</strong> → <code>/sts/index.html</code></li>
-              <li><strong>All Sessions</strong> → <code>session.php?session=N</code></li>
-              <li><strong>Session N</strong> → <code>session_overview.php?session=N</code></li>
+              <li><strong>Session N</strong> → <code>session_overview.php?session=N</code> (back to the overview)</li>
+              <li><strong>All-session totals</strong> (on the overview) → <code>session.php?session=N</code></li>
               <li><strong>All waybills</strong> → session or job-scoped waybill index</li>
               <li><strong>All switch lists</strong> (job.php) → that train&rsquo;s switch list index</li>
             </ul>

@@ -7,7 +7,7 @@
  */
 $session = (int) ($_GET['session'] ?? 0);
 if ($session < 1) {
-    header('Location: session.php');
+    header('Location: session_overview.php');
     exit;
 }
 header('Location: session_overview.php?session=' . $session, true, 301);

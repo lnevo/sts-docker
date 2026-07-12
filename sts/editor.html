@@ -14,10 +14,11 @@
     <div class="container-fluid">
       <div class="d-flex flex-wrap align-items-center gap-2 w-100">
         <a href="/sts/index.html" class="btn btn-outline-light btn-sm"><i class="bi bi-house"></i> STS Main Menu</a>
-        <a href="/sts/session.php" class="btn btn-outline-light btn-sm"><i class="bi bi-collection"></i> Sessions</a>
+        <a href="/sts/session_overview.php" class="btn btn-outline-light btn-sm"><i class="bi bi-collection"></i> Sessions</a>
         <a href="session-sitemap.html" class="btn btn-outline-light btn-sm"><i class="bi bi-diagram-3"></i> Session Site Map</a>
         <a id="workflow-download" href="#" download class="btn btn-outline-light btn-sm"><i class="bi bi-filetype-json"></i> Download JSON</a>
-        <span class="navbar-text ms-auto text-white-50 small">Session Editor</span>
+        <span class="navbar-text ms-auto"><span class="badge bg-light text-dark">DB Session <strong id="nav-db-session">—</strong></span></span>
+        <span class="navbar-text text-white-50 small">Session Editor</span>
       </div>
     </div>
   </nav>
@@ -60,7 +61,7 @@
         Use <strong>Goto section</strong> to skip forward over steps (e.g. skip setup on repeat sessions).
         Use simulator <strong>Repeat</strong> to run a section multiple times. Switch-list format is set on each
         <em>Generate Switch Lists</em> step. DB session: <strong id="run-db-session">—</strong>.
-        View output in <a href="/sts/session.php">Sessions</a> after a run.
+        View output in <a href="/sts/session_overview.php">Sessions</a> after a run.
       </p>
       <div class="run-bar">
         <label class="run-field run-field-wide">
@@ -136,7 +137,7 @@
       </div>
     </div>
   </div>
-  <script src="workflow-shared.js?v=72"></script>
+  <script src="workflow-shared.js?v=73"></script>
   <script>
 (function () {
   const W = WorkflowUI;
