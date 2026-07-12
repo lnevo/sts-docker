@@ -33,7 +33,15 @@ if ($action === '' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $dbc = open_db();
-track_scale_sync_session_calibration($dbc);
+
+// Calibration sync is a mutating operation (session/seed drift init, resets,
+// unlocks). Read-only endpoints must not trigger it so polling the scale never
+// changes state. The GUI page runs the sync once on load, and each write action
+// below still syncs before mutating.
+$track_scale_read_only_actions = ['cars_at_scale', 'calibration_state'];
+if (!in_array($action, $track_scale_read_only_actions, true)) {
+    track_scale_sync_session_calibration($dbc);
+}
 
 try {
     switch ($action) {

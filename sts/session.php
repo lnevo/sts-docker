@@ -116,6 +116,7 @@ session_render_nav_bar([
       <form method="get" class="session-picker session-picker-footer" action="session.php" id="session-select-form">
         <label class="session-picker-label" for="session-select">Jump to session</label>
         <div class="session-picker-controls">
+          <?php echo session_picker_skip_link('rw', $selected, $sessions, 'session.php?session='); ?>
           <?php if ($prev_session !== null): ?>
             <a class="btn btn-outline-dark btn-sm" href="session.php?session=<?php echo (int) $prev_session; ?>" title="Session <?php echo (int) $prev_session; ?>"><i class="bi bi-chevron-left"></i></a>
           <?php else: ?>
@@ -133,6 +134,7 @@ session_render_nav_bar([
           <?php else: ?>
             <span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-right"></i></span>
           <?php endif; ?>
+          <?php echo session_picker_skip_link('ff', $selected, $sessions, 'session.php?session='); ?>
           <noscript><button type="submit" class="btn btn-outline-dark btn-sm">Go</button></noscript>
         </div>
       </form>

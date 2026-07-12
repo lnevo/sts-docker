@@ -155,6 +155,11 @@ function catalog_test_matrix_sections($dbc = null)
                     'description' => 'Test: Set Out Cars (all locals)',
                 ],
                 [
+                    'function' => 'calibrate_track_scale',
+                    'params' => ['every_sessions' => '1'],
+                    'description' => 'Test: Calibrate Track Scale (every 1 session)',
+                ],
+                [
                     'function' => 'track_scale',
                     'params' => array_filter([
                         'job' => $job_a,

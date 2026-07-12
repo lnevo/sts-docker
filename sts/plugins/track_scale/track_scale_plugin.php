@@ -70,6 +70,15 @@ function track_scale_plugin_guess_weigh_cars($text)
     return null;
 }
 
+function track_scale_plugin_guess_calibrate($text)
+{
+    if (stripos((string) $text, 'Calibrate Track Scale') !== false) {
+        return 'calibrate_track_scale';
+    }
+
+    return null;
+}
+
 function track_scale_catalog_definitions()
 {
     return [

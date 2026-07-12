@@ -45,6 +45,7 @@ return [
     ],
 
     'import_text_guessers' => [
+        'track_scale_plugin_guess_calibrate',
         'track_scale_plugin_guess_weigh_cars',
     ],
 

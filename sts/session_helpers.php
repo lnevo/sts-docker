@@ -82,14 +82,16 @@ function session_app_root()
 
 /**
  * Writable filesystem root for generated session output (switch lists, waybills,
- * manifests). Uses sts/temp/sessions; sts/temp is owned by www-data in the Docker
- * image, so this subdirectory is created on demand and stays writable.
- * Per-session output lives at sts/temp/sessions/session_N/... and phase output at
- * sts/temp/sessions/session_N/phase_PP/... .
+ * manifests). Uses sts/backups/session_state/sessions: sts/backups is the
+ * host-mounted sts-backups volume (~/sts/sts-backups), so session state persists
+ * across container recreation without adding another volume. www-data owns the
+ * mount inside the container, so this subdirectory is created on demand and stays
+ * writable. Per-session output lives at sts/backups/session_state/sessions/
+ * session_N/... and phase output at .../session_N/phase_PP/... .
  */
 function session_web_root()
 {
-    return session_app_root() . '/temp/sessions';
+    return session_app_root() . '/backups/session_state/sessions';
 }
 
 /** www-data uid/gid for session output dirs (Apache user in the Docker image). */
@@ -152,7 +154,7 @@ function session_ensure_writable_dir($path)
             'Session output directory is not writable: ' . $path
             . ' (running as ' . $run_as . ', directory owned by ' . $dir_owner_name . ').'
             . ' Fix: docker exec -u root sts-docker-web-1'
-            . ' chown -R www-data:www-data /var/www/html/sts/temp/sessions'
+            . ' chown -R www-data:www-data /var/www/html/sts/backups/session_state'
         );
     }
 
@@ -1930,7 +1932,7 @@ function session_write_waybill_bundle($dbc, $out_dir, array $waybill_numbers, ar
         file_put_contents($out_dir . '/' . $file, $page);
         $written[] = $waybill_number;
         $body = waybill_print_render_body($dbc, $waybill_number, $settings);
-        $bundle_sheets .= '<div class="waybill-sheet">' . $body . '</div>';
+        $bundle_sheets .= waybill_print_wrap_sheets($body);
         $list_items .= '<li><a href="' . htmlspecialchars($file) . '">' . htmlspecialchars($waybill_number) . '</a></li>';
     }
 
@@ -2098,7 +2100,7 @@ function session_waybill_render_single_page($session_nbr, $waybill_number, $body
         . waybill_print_page_styles() . '</style></head><body>'
         . '<div class="noprint"><button type="button" onclick="window.print()">Print</button>'
         . ' &nbsp; <a href="index.html">Waybill list</a><br /><br /></div>'
-        . '<div class="waybill-sheet">' . $body . '</div></body></html>';
+        . waybill_print_wrap_sheets($body) . '</body></html>';
 }
 
 function session_waybill_render_index_page($session_nbr, $title, array $numbers, array $store, array $options = [])
@@ -2143,7 +2145,7 @@ function session_waybill_render_print_all_page($session_nbr, $title, array $numb
     foreach ($numbers as $num) {
         $body = $store['bodies'][$num] ?? '';
         if ($body !== '') {
-            $sheets .= '<div class="waybill-sheet">' . $body . '</div>';
+            $sheets .= waybill_print_wrap_sheets($body);
             $count++;
         }
     }
@@ -2840,6 +2842,59 @@ function session_adjacent_session(array $sessions, $current, $direction)
     }
 
     return null;
+}
+
+/**
+ * First and last session numbers in the browser session list.
+ *
+ * @param list<int> $sessions
+ * @return array{0: ?int, 1: ?int}
+ */
+function session_edge_sessions(array $sessions)
+{
+    if ($sessions === []) {
+        return [null, null];
+    }
+    $ints = array_map('intval', $sessions);
+
+    return [min($ints), max($ints)];
+}
+
+/**
+ * RW (first) or FF (last) skip control for session picker navigation.
+ *
+ * @param 'rw'|'ff'|'first'|'last' $kind
+ * @param list<int>              $sessions
+ */
+function session_picker_skip_link($kind, $selected, array $sessions, $href_base, $extra_query = '')
+{
+    list($first, $last) = session_edge_sessions($sessions);
+    if ($kind === 'rw' || $kind === 'first') {
+        $target = $first;
+        $icon = 'skip-start-fill';
+        $title = $target !== null ? 'First session (' . $target . ')' : 'First session';
+    } else {
+        $target = $last;
+        $icon = 'skip-end-fill';
+        $title = $target !== null ? 'Last session (' . $target . ')' : 'Last session';
+    }
+    $icon_html = '<i class="bi bi-' . $icon . '"></i>';
+
+    if ($target === null || (int) $selected === (int) $target) {
+        return '<span class="btn btn-outline-dark btn-sm session-skip-btn disabled" aria-disabled="true" title="'
+            . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '">' . $icon_html . '</span>';
+    }
+
+    $href = $href_base . (int) $target;
+    $extra_query = trim((string) $extra_query);
+    if ($extra_query !== '') {
+        $href .= (strpos($extra_query, '?') === 0 ? '' : (strpos($href, '?') !== false ? '&' : '?'))
+            . ltrim($extra_query, '?&');
+    }
+
+    return '<a class="btn btn-outline-dark btn-sm session-skip-btn" href="'
+        . htmlspecialchars($href, ENT_QUOTES, 'UTF-8') . '" title="'
+        . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '">' . $icon_html . '</a>';
 }
 
 function session_phase_pad($phase_num)

@@ -1,7 +1,12 @@
 <?php
 require __DIR__ . '/track_scale_helpers.php';
+require_once dirname(__DIR__, 2) . '/open_db.php';
 track_scale_session_init();
 $config = track_scale_load_config();
+// Sync calibration once on page load so the AJAX read endpoints
+// (cars_at_scale / calibration_state) can stay side-effect free.
+$track_scale_dbc = open_db();
+track_scale_sync_session_calibration($track_scale_dbc);
 $track_scale_ui = [
     'siteLabel' => track_scale_site_label($config),
     'routedTrainsLabel' => track_scale_routed_trains_label($config),

@@ -282,6 +282,60 @@ function waybill_print_render_body($dbc, $waybill_number, array $settings = null
     return $html;
 }
 
+/**
+ * Split a rendered waybill body into standalone document sections so each can be
+ * wrapped in its own `.waybill-sheet` and thus print on its own page.
+ *
+ * A body for a car that must be repositioned first contains two documents — the
+ * empty-car-assignment / company-memo reposition section and the loaded freight
+ * waybill — joined at a `<div class="waybill-break-before">…</div>` boundary.
+ * Nested `page-break-before` inside a single sheet is honored inconsistently by
+ * print engines, so we hoist each document to a sibling sheet and rely on the
+ * (reliable) per-sheet `page-break-after`. Single-document bodies return as-is.
+ */
+function waybill_print_split_documents($body)
+{
+    $body = (string) $body;
+    $open = '<div class="waybill-break-before">';
+    $pos = strpos($body, $open);
+    if ($pos === false) {
+        return [$body];
+    }
+
+    $preamble = substr($body, 0, $pos);
+    $rest = substr($body, $pos + strlen($open));
+    // The break-before wrapper is the final element, so its closing tag is the
+    // last </div> in the string (the freight table's own inner <div> closes
+    // earlier). Drop just that wrapper close.
+    $close_pos = strrpos($rest, '</div>');
+    if ($close_pos !== false) {
+        $rest = substr($rest, 0, $close_pos) . substr($rest, $close_pos + strlen('</div>'));
+    }
+
+    $parts = [];
+    if (trim($preamble) !== '') {
+        $parts[] = $preamble;
+    }
+    if (trim($rest) !== '') {
+        $parts[] = $rest;
+    }
+
+    return $parts !== [] ? $parts : [$body];
+}
+
+/**
+ * Wrap a rendered body's document section(s) in one `.waybill-sheet` each, so
+ * every waybill document prints on its own page.
+ */
+function waybill_print_wrap_sheets($body)
+{
+    $out = '';
+    foreach (waybill_print_split_documents($body) as $doc) {
+        $out .= '<div class="waybill-sheet">' . $doc . '</div>';
+    }
+    return $out;
+}
+
 function waybill_print_safe_filename($waybill_number)
 {
     return preg_replace('/[^a-zA-Z0-9._-]+/', '_', $waybill_number);
@@ -315,7 +369,7 @@ function waybill_print_render_page($dbc, $waybill_number, array $options = [])
     }
     return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>'
         . htmlspecialchars($title) . '</title><style>' . waybill_print_page_styles() . '</style></head><body>'
-        . $controls . '<div class="waybill-sheet">' . $body . '</div></body></html>';
+        . $controls . waybill_print_wrap_sheets($body) . '</body></html>';
 }
 
 function waybill_print_render_bundle_page($title, $sheets_html, array $options = [])

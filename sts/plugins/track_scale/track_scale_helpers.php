@@ -3393,7 +3393,7 @@ function track_scale_prepare_car_for_assign($dbc, $car, $config = null)
 
 function track_scale_assign_car($dbc, $waybill_number, $car_id, $config = null)
 {
-    require_once __DIR__ . '/fill_order_helpers.php';
+    require_once dirname(__DIR__, 2) . '/fill_order_helpers.php';
 
     $config = $config ?? track_scale_load_config();
     $waybill_number = trim((string) $waybill_number);

@@ -3,9 +3,10 @@
  * Session Output server.
  *
  * Generated operating-session files (switch lists, waybills, print bundles) are
- * written to sts/temp (owned by www-data so the web server can create them).
- * This script streams those files to the browser through a clean URL so the
- * temp/ location is never exposed:
+ * written under sts/backups/session_state (the host-mounted sts-backups volume,
+ * owned by www-data so the web server can create them and so state persists
+ * across container recreation). This script streams those files to the browser
+ * through a clean URL so the physical storage location is never exposed:
  *
  *   so.php?f=session_3/phase_01/CK1/phase_01_mobile.html
  *
@@ -88,6 +89,7 @@ if ($ext === 'html' || $ext === 'htm') {
     // so navigation is consistent across every session's waybill index.
     $html = so_refresh_waybill_session_nav($html, $rel);
     $html = so_refresh_waybill_print_all_session_nav($html, $rel);
+    $html = so_inject_waybill_memo_filter($html, $rel);
     $html = so_refresh_switchlist_print_all_session_nav($html, $rel);
     $html = so_refresh_switchlist_job_print_all_session_nav($html, $rel);
     $html = so_refresh_switchlist_train_print_all_session_nav($html, $rel);
@@ -245,6 +247,65 @@ function so_refresh_waybill_print_all_session_nav($html, $rel)
     }
 
     return preg_replace('#</h1>#', '</h1>' . $nav, $html, 1);
+}
+
+/**
+ * Add a "Hide company memos" checkbox to a waybills print-all page so operators
+ * can print the freight waybills without the empty-repositioning company memos.
+ *
+ * Injected at serve time (rather than baked at generation) so it works on every
+ * previously generated page without regeneration. The filter is client-side:
+ * memo blocks are the tables headed "COMPANY MEMO". A sheet that is memo-only is
+ * hidden entirely; a sheet that pairs a memo with a freight waybill keeps the
+ * freight (and drops the now-needless page break before it). The preference is
+ * remembered in localStorage so it carries across sessions.
+ */
+function so_inject_waybill_memo_filter($html, $rel)
+{
+    if (!preg_match('#^session_(\d+)/(?:phase_\d+/)?waybills/[^/]*print_all\.html$#', $rel)) {
+        return $html;
+    }
+    if (strpos($html, 'wb-hide-memos') !== false) {
+        return $html; // already injected
+    }
+
+    $checkbox = '<label class="noprint wb-memo-filter" style="display:inline-flex;align-items:center;gap:6px;'
+        . 'margin-left:10px;font:14px system-ui,-apple-system,\'Segoe UI\',Roboto,sans-serif;">'
+        . '<input type="checkbox" id="wb-hide-memos"> Hide company memos</label>';
+    $html = preg_replace(
+        '#(<div class="noprint waybill-print-controls">.*?)(</div>)#s',
+        '$1' . $checkbox . '$2',
+        $html,
+        1
+    );
+
+    $style = '<style>'
+        . '.waybill-print.hide-memos .wb-memo-block{display:none!important}'
+        . '.waybill-print.hide-memos .wb-memo-only{display:none!important}'
+        . '.waybill-print.hide-memos .waybill-break-before{page-break-before:auto!important;break-before:auto!important;margin-top:0!important}'
+        . '</style>';
+
+    $script = '<script>(function(){'
+        . 'var wrap=document.querySelector(".waybill-print");'
+        . 'var cb=document.getElementById("wb-hide-memos");'
+        . 'if(!wrap||!cb){return;}'
+        . 'wrap.querySelectorAll(".waybill-sheet").forEach(function(sheet){'
+        . 'var memoTable=null,hasFreight=false;'
+        . 'sheet.querySelectorAll("h3").forEach(function(h){'
+        . 'var t=(h.textContent||"").trim().toUpperCase();'
+        . 'if(t==="COMPANY MEMO"){var p=h.closest("table");'
+        . 'while(p&&p.parentElement){var up=p.parentElement.closest("table");if(!up||!sheet.contains(up)){break;}p=up;}'
+        . 'memoTable=p;}else if(t==="FREIGHT WAYBILL"){hasFreight=true;}});'
+        . 'if(memoTable){memoTable.classList.add("wb-memo-block");'
+        . 'sheet.classList.add(hasFreight?"wb-has-memo":"wb-memo-only");}});'
+        . 'var KEY="wbHideMemos";'
+        . 'try{cb.checked=localStorage.getItem(KEY)==="1";}catch(e){}'
+        . 'function apply(){wrap.classList.toggle("hide-memos",cb.checked);'
+        . 'try{localStorage.setItem(KEY,cb.checked?"1":"0");}catch(e){}}'
+        . 'cb.addEventListener("change",apply);apply();'
+        . '})();</script>';
+
+    return str_replace('</body>', $style . $script . '</body>', $html);
 }
 
 /**

@@ -230,6 +230,26 @@ function plugins_catalog_adder_order(array $order)
     return $order;
 }
 
+/**
+ * All dispatch ids handled by plugins (via dispatch_handlers). Lets tooling
+ * treat plugin-dispatched steps as valid without a case in
+ * operational_steps_dispatch_step().
+ *
+ * @return list<string>
+ */
+function plugins_dispatch_ids()
+{
+    plugins_bootstrap_all();
+    $ids = [];
+    foreach (plugins_discover() as $manifest) {
+        foreach (array_keys($manifest['dispatch_handlers'] ?? []) as $dispatch) {
+            $ids[] = (string) $dispatch;
+        }
+    }
+
+    return array_values(array_unique($ids));
+}
+
 function plugins_no_warm_start_dispatches()
 {
     plugins_bootstrap_all();
@@ -290,7 +310,8 @@ function plugins_apply_gui_label_merge(array $def, array $params, array &$merged
         }
         $hook = $hooks[$step_id];
         if (is_callable($hook)) {
-            call_user_func($hook, $params, $merged);
+            // Call directly (not call_user_func) so by-reference params bind.
+            $hook($params, $merged);
         }
     }
 }
@@ -306,7 +327,8 @@ function plugins_normalize_step_params($fid, array &$params)
         }
         $hook = $hooks[$fid];
         if (is_callable($hook)) {
-            call_user_func($hook, $params);
+            // Call directly (not call_user_func) so by-reference params bind.
+            $hook($params);
         }
     }
 }

@@ -80,7 +80,7 @@ $missing = [];
 foreach ($numbers as $num) {
     $body = $store['bodies'][$num] ?? '';
     if (trim((string) $body) !== '') {
-        $sheets .= '<div class="waybill-sheet">' . $body . '</div>';
+        $sheets .= waybill_print_wrap_sheets($body);
     } else {
         $missing[] = $num;
     }

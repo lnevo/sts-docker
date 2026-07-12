@@ -265,6 +265,10 @@ a.btn-editor-primary i {
   font-size: 14px;
   min-width: 180px;
 }
+.session-skip-btn {
+  padding-left: 8px;
+  padding-right: 8px;
+}
 
 .job-session-current {
   font-weight: 600;

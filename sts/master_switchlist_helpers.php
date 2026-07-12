@@ -1555,9 +1555,9 @@ function master_sw_render_print_all_phase_body($dbc, array $section, $phase_inde
     $total = $loads + $empties;
     $special = '';
     if (count($special_instructions) > 0) {
-        $special .= '<h3>Special Instructions</h3>';
+        $special .= '<h3 style="margin-bottom: 4px;">Special Instructions</h3>';
         foreach ($special_instructions as $si) {
-            $special .= '<p style="font-size: 10px;">'
+            $special .= '<p style="font-size: 10px; margin: 0 0 2px;">'
                 . htmlspecialchars($si[0]) . ' (' . htmlspecialchars($si[1]) . ') '
                 . htmlspecialchars($si[2]) . '</p>';
         }
@@ -1882,9 +1882,9 @@ function master_sw_render_special_instructions_block(array $special_instructions
     if (count($special_instructions) === 0) {
         return '';
     }
-    $html = '<p style="page-break-after: always;">&nbsp;</p><h3>Special Instructions</h3>';
+    $html = '<p style="page-break-after: always;">&nbsp;</p><h3 style="margin-bottom: 4px;">Special Instructions</h3>';
     foreach ($special_instructions as $si) {
-        $html .= '<p style="font-size: 10px;">'
+        $html .= '<p style="font-size: 10px; margin: 0 0 2px;">'
             . htmlspecialchars($si[0]) . ' (' . htmlspecialchars($si[1]) . ') '
             . htmlspecialchars($si[2]) . '</p>';
     }
@@ -2580,9 +2580,9 @@ Total cars: <?= (int) $total ?>
 </table>
 <?php if (count($special_instructions) > 0) { ?>
 <p style="page-break-after: always;">&nbsp;</p>
-<h3>Special Instructions</h3>
+<h3 style="margin-bottom: 4px;">Special Instructions</h3>
 <?php foreach ($special_instructions as $si) { ?>
-<p style="font-size: 10px;"><?= htmlspecialchars($si[0]) ?> (<?= htmlspecialchars($si[1]) ?>) <?= htmlspecialchars($si[2]) ?></p>
+<p style="font-size: 10px; margin: 0 0 2px;"><?= htmlspecialchars($si[0]) ?> (<?= htmlspecialchars($si[1]) ?>) <?= htmlspecialchars($si[2]) ?></p>
 <?php } ?>
 <?php } ?>
 <?php if (is_array($nav)) { ?>
