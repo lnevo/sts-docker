@@ -2006,11 +2006,38 @@ function session_waybill_render_print_all_page($session_nbr, $title, array $numb
     $index_file = (string) ($options['index_file'] ?? 'index.html');
     $basename = (string) ($options['print_all_basename'] ?? 'print_all.html');
     $phase_num = array_key_exists('phase_num', $options) ? $options['phase_num'] : null;
+    $train_job = trim((string) ($options['train_job'] ?? ''));
 
     // Shared top nav: STS Main Menu, back to the session overview, and the matching
-    // waybill list (index) for this scope.
+    // waybill list (index) for this scope. Per-train pages also link back to that
+    // train's switch-list print-all and the session-wide switch-list / waybill bundles.
     $nav_items = session_waybill_index_nav_items($session_nbr, $back_href, $back_label);
     $nav_items[] = ['href' => $index_file, 'label' => 'Waybill list', 'icon' => 'file-text'];
+    if ($train_job !== '') {
+        $train_sw_primary = session_train_print_all_primary_job($session_nbr, $train_job, $options['root'] ?? null);
+        $nav_items[] = [
+            'href' => '../train_' . rawurlencode($train_sw_primary) . '.print_all.html',
+            'label' => 'Train switch lists',
+            'icon' => 'printer',
+        ];
+        $nav_items[] = [
+            'href' => '/sts/job.php?session=' . $session_nbr . '&job=' . rawurlencode($train_job),
+            'label' => 'Train Overview',
+            'icon' => 'list-check',
+        ];
+    }
+    $nav_items[] = [
+        'href' => '../print_all.html',
+        'label' => 'Session switch lists',
+        'icon' => 'list-task',
+    ];
+    if ($basename !== 'print_all.html') {
+        $nav_items[] = [
+            'href' => 'print_all.html',
+            'label' => 'Session waybills',
+            'icon' => 'files',
+        ];
+    }
     $nav_html = session_nav_bar_html($nav_items, $title . ' · print all');
 
     // Prev/next session nav (same scope), refreshed at serve time by so.php.
@@ -2159,6 +2186,7 @@ function session_waybill_rebuild_pages($dbc, $session_nbr, array $store, $root =
                 'back_label' => 'Session ' . (int) $session_nbr,
                 'index_file' => $jfile . '.index.html',
                 'print_all_basename' => $jfile . '.print_all.html',
+                'train_job' => $job,
                 'phase_num' => 0,
                 'dbc' => $dbc,
                 'root' => $root,
@@ -3053,6 +3081,19 @@ function session_train_group_members($session_nbr, $job, $manifest = null, $root
         $members[] = (string) $job;
     }
     return $members;
+}
+
+/**
+ * Primary job key for a train's consolidated switch-list print-all file
+ * (train_<primary>.print_all.html). Member jobs in a consolidated group all
+ * resolve to the same primary so cross-links from per-member waybill pages land
+ * on the correct train bundle.
+ */
+function session_train_print_all_primary_job($session_nbr, $job, $root = null)
+{
+    $members = session_train_group_members($session_nbr, $job, null, $root);
+
+    return $members[0] ?? (string) $job;
 }
 
 /**
