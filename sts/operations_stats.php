@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/track_scale_helpers.php';
+require_once __DIR__ . '/plugins/plugins.php';
 require_once __DIR__ . '/drop_down_list_functions.php';
 
 function operations_get_stats($dbc)
@@ -15,7 +15,6 @@ function operations_get_stats($dbc)
         'organize_by_job' => 0,
         'organize_at_station' => 0,
         'organize_unique' => 0,
-        'scale_to_weigh' => 0,
     ];
 
     $queries = [
@@ -71,7 +70,7 @@ function operations_get_stats($dbc)
     $stats['organize_by_job'] = organize_total_cars_by_job($dbc);
     $stats['organize_at_station'] = organize_total_cars_at_locations($dbc);
     $stats['organize_unique'] = organize_total_unique_cars($dbc);
-    $stats['scale_to_weigh'] = track_scale_count_weighable_cars($dbc);
+    plugins_apply_stats($dbc, $stats);
 
     return $stats;
 }
@@ -81,7 +80,7 @@ function operations_get_stats($dbc)
  */
 function operations_dashboard_condition_variables()
 {
-    return [
+    return array_merge([
         ['key' => 'session_nbr', 'label' => 'Session number'],
         ['key' => 'session_is_odd', 'label' => 'Session is odd (1=yes)'],
         ['key' => 'session_is_even', 'label' => 'Session is even (1=yes)'],
@@ -92,9 +91,8 @@ function operations_dashboard_condition_variables()
         ['key' => 'pending_pickup', 'label' => 'Pending pickup'],
         ['key' => 'organize_unique', 'label' => 'Organize cars'],
         ['key' => 'pending_setout', 'label' => 'Pending set-out'],
-        ['key' => 'scale_to_weigh', 'label' => 'Cars to weigh'],
         ['key' => 'load_unload_pending', 'label' => 'Load/unload pending'],
-    ];
+    ], plugins_condition_variables());
 }
 
 function operations_dashboard_condition_label($key)

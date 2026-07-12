@@ -277,6 +277,12 @@ h2 { margin: 0 0 12px; font-size: 16px; }
   margin-top: 12px;
   margin-bottom: 0;
 }
+.run-complete-actions {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 
 /* Category legend + row colors */
 .legend {

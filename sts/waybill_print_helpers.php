@@ -238,8 +238,16 @@ function waybill_print_render_body($dbc, $waybill_number, array $settings = null
     }
 
     if (strpos($waybill_number, 'E') === false) {
+        // A loaded waybill may be preceded by an empty-car-assignment or
+        // company-memo reposition section (built above). When it is, force the
+        // freight waybill onto its own page so the memo and the load don't
+        // share — and overflow — a single printed sheet.
+        $needs_break = ($html !== '');
         $from_station = waybill_print_apply_rpt_station($from_station, $from['rpt_station']);
         $to_station = waybill_print_apply_rpt_station($to_station, $to['rpt_station']);
+        if ($needs_break) {
+            $html .= '<div class="waybill-break-before">';
+        }
         $html .= '<table style="width: ' . htmlspecialchars($print_width) . ';">
 <tr style="font: normal 15px Verdana, Arial, sans-serif;"><td style="text-align: center;" colspan="2">
 <h2 style="font-family: Times New Roman, Times, serif;">' . htmlspecialchars($rr_name) . '</h2>
@@ -266,6 +274,9 @@ function waybill_print_render_body($dbc, $waybill_number, array $settings = null
 <td>DESCRIPTION OF ARTICLES<br /><br />' . htmlspecialchars($consignment) . '</td>
 <td>COMMODITY CODE: ' . htmlspecialchars($commodity_code) . '</td></tr>
 </table>';
+        if ($needs_break) {
+            $html .= '</div>';
+        }
     }
 
     return $html;
@@ -282,8 +293,10 @@ function waybill_print_page_styles()
         . 'table{border-collapse:collapse}tr{vertical-align:top}'
         . 'th,td{border:1px solid black;padding:10px}'
         . '.waybill-sheet{margin-bottom:32px}'
+        . '.waybill-break-before{margin-top:32px}'
         . '@media print{.noprint{display:none!important}.waybill-sheet{page-break-after:always;break-after:page}'
-        . '.waybill-sheet:last-child{page-break-after:auto;break-after:auto}}';
+        . '.waybill-sheet:last-child{page-break-after:auto;break-after:auto}'
+        . '.waybill-break-before{page-break-before:always;break-before:page;margin-top:0}}';
 }
 
 function waybill_print_render_page($dbc, $waybill_number, array $options = [])

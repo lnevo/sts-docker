@@ -6,6 +6,7 @@
 require_once __DIR__ . '/session_runtime.php';
 session_runtime_bootstrap();
 require_once __DIR__ . '/operations_train_car_filters.php';
+require_once __DIR__ . '/plugins/plugins.php';
 
 function operational_steps_catalog_categories()
 {
@@ -34,11 +35,10 @@ function operational_steps_catalog_adder_categories()
 
 function operational_steps_catalog_adder_order()
 {
-    return [
+    return plugins_catalog_adder_order([
         'before' => ['generate_orders', 'replenish_coke_orders', 'fill_orders', 'reposition_empties'],
         'during' => [
-            'auto_assign_locals', 'pick_up_cars', 'set_out_cars', 'track_scale',
-            'calibrate_track_scale',
+            'auto_assign_locals', 'pick_up_cars', 'set_out_cars',
         ],
         'after' => ['load_unload'],
         'reports' => ['generate_switchlists', 'generate_waybills'],
@@ -49,7 +49,7 @@ function operational_steps_catalog_adder_order()
             'import_data', 'remove_backup', 'wipe_database',
         ],
         'workflow' => ['section_label', 'text_instruction', 'if_then', 'stop'],
-    ];
+    ]);
 }
 
 function operational_steps_catalog_text_param($key, $label, $default = '', $required = false, $placeholder = '')
@@ -279,8 +279,9 @@ function operational_steps_legacy_layout_function_ids()
 
 function operational_steps_migrate_legacy_function_id($fid, $instruction = '')
 {
-    if ($fid === 'weigh_ck1') {
-        return 'track_scale';
+    $plugin_fid = plugins_migrate_legacy_function_id($fid);
+    if ($plugin_fid !== null) {
+        return $plugin_fid;
     }
     if ($fid === 'assign_ck1_reload') {
         return 'auto_assign_locals';
@@ -1245,7 +1246,7 @@ function operational_steps_fetch_dynamic_options($dbc)
 
 function operational_steps_catalog_definitions()
 {
-    return [
+    $definitions = [
         [
             'id' => 'restore_database',
             'category' => 'database',
@@ -1732,44 +1733,6 @@ function operational_steps_catalog_definitions()
             ],
         ],
         [
-            'id' => 'track_scale',
-            'category' => 'operations',
-            'adder' => true,
-            'adder_group' => 'during',
-            'label' => 'Track Scale',
-            'gui_template' => 'Weigh Cars {job}{commodity_suffix}',
-            'description' => 'Weigh loaded cars on a job train (or at the scale) for the selected commodity. Uses track scale config when commodity is blank.',
-            'runnable' => true,
-            'dispatch' => 'track_scale',
-            'params' => [
-                operational_steps_catalog_job_param(false),
-                operational_steps_catalog_commodity_param(false),
-            ],
-        ],
-        [
-            'id' => 'calibrate_track_scale',
-            'category' => 'operations',
-            'adder' => true,
-            'adder_group' => 'during',
-            'label' => 'Calibrate Track Scale',
-            'gui_template' => 'Calibrate Track Scale (every {every_sessions} session[s])',
-            'description' => 'Recalibrate the coke track scale. Performs a fresh random calibration when required (first use / out of service) or when the configured number of sessions have elapsed since the last calibration. Set to 1 to calibrate every session (steady ~15% reload routing); higher values let scale drift accumulate so more cars route to reload between calibrations. Run this before the Track Scale weigh step.',
-            'runnable' => true,
-            'dispatch' => 'calibrate_track_scale',
-            'params' => [
-                [
-                    'key' => 'every_sessions',
-                    'label' => 'Calibrate every N sessions',
-                    'type' => 'number',
-                    'default' => '1',
-                    'required' => false,
-                    'min' => 1,
-                    'step' => 1,
-                    'visible_label' => true,
-                ],
-            ],
-        ],
-        [
             'id' => 'generate_switchlists',
             'category' => 'reports',
             'adder' => true,
@@ -1873,17 +1836,6 @@ function operational_steps_catalog_definitions()
             'description' => 'Reports → Switch Lists for current job assignments.',
             'runnable' => false,
             'gui_path' => '/sts/display_switchlist.php',
-            'params' => [],
-        ],
-        [
-            'id' => 'track_scale_gui',
-            'category' => 'operations',
-            'adder' => false,
-            'label' => 'Track Scale (STS GUI)',
-            'gui_template' => 'Track Scale',
-            'description' => 'Weigh cars at track scale. GUI: track_scale.php.',
-            'runnable' => false,
-            'gui_path' => '/sts/track_scale.php',
             'params' => [],
         ],
         [
@@ -2050,6 +2002,7 @@ function operational_steps_catalog_definitions()
             'params' => [],
         ],
     ];
+    return array_merge($definitions, plugins_catalog_definitions());
 }
 
 function operational_steps_restore_backup($dbc, $backup_name, $default = 'hart_seed')
@@ -2462,12 +2415,7 @@ function operational_steps_compile_gui(array $def, array $params)
     } else {
         $merged['location_suffix'] = !empty($merged['location']) ? $merged['location'] : '';
     }
-    if (($def['id'] ?? '') === 'track_scale') {
-        $job = trim($params['job'] ?? '');
-        $merged['job'] = $job !== '' ? $job : 'train';
-        $commodity = trim($params['commodity'] ?? '');
-        $merged['commodity_suffix'] = $commodity !== '' ? ' (' . $commodity . ')' : '';
-    }
+    plugins_apply_gui_label_merge($def, $params, $merged);
     if (($def['id'] ?? '') === 'generate_switchlists') {
         $jobs = trim((string) ($params['jobs'] ?? 'all'));
         if ($jobs === '') {
@@ -2973,8 +2921,9 @@ function operational_steps_guess_function($instruction)
     if (stripos($s, 'Load/Unload') !== false) {
         return 'load_unload';
     }
-    if (stripos($s, 'Weigh Cars') !== false) {
-        return 'track_scale';
+    $plugin_guess = plugins_guess_function_id_from_text($s);
+    if ($plugin_guess !== null) {
+        return $plugin_guess;
     }
     if (stripos($s, 'reload/outbound') !== false) {
         return 'auto_assign_locals';
@@ -3401,9 +3350,7 @@ function operational_steps_normalize_step(array $step)
         $params['title'] = trim((string) ($params['title'] ?? ''));
         $params['info'] = trim((string) ($params['info'] ?? ''));
     }
-    if ($fid === 'track_scale' && !empty($params['commodity'])) {
-        $params['commodity'] = strtoupper(trim((string) $params['commodity']));
-    }
+    plugins_normalize_step_params($fid, $params);
     if ($fid === 'set_out_cars') {
         $loc = operational_steps_normalize_setout_location($params['location'] ?? '');
         if ($loc === '') {
@@ -3836,17 +3783,6 @@ function operational_steps_save_recipe($switchlists_dir, array $recipe, $workflo
     ];
 }
 
-function operational_steps_track_scale_config(array $params = [])
-{
-    require_once __DIR__ . '/track_scale_helpers.php';
-    $config = track_scale_load_config();
-    $commodity = strtoupper(trim((string) ($params['commodity'] ?? '')));
-    if ($commodity !== '') {
-        $config['commodity_code'] = $commodity;
-    }
-    return $config;
-}
-
 function operational_steps_dispatch_step($dbc, array $step, array $config = [])
 {
     $catalog = operational_steps_catalog_by_id();
@@ -3859,7 +3795,10 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
         return ['skipped' => true, 'reason' => 'not runnable'];
     }
     $dispatch = $def['dispatch'] ?? $fid;
-    $no_warm_start = ['track_scale', 'restore_database', 'backup_database', 'generate_orders', 'replenish_coke_orders', 'increment_session', 'fill_orders'];
+    $no_warm_start = array_merge(
+        ['restore_database', 'backup_database', 'generate_orders', 'replenish_coke_orders', 'increment_session', 'fill_orders'],
+        plugins_no_warm_start_dispatches()
+    );
     if (!function_exists('warm_start_get_session') && !in_array($dispatch, $no_warm_start, true)) {
         return ['skipped' => true, 'reason' => 'session runtime unavailable (rebuild sts-docker image; see sts/RUNTIME.md)'];
     }
@@ -3869,6 +3808,11 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
         ? warm_start_default_fractions($config)
         : [];
     $result = ['function' => $fid, 'dispatch' => $dispatch];
+
+    $plugin_result = plugins_try_dispatch($dbc, $dispatch, $step, $def, $params, $config, $result);
+    if (is_array($plugin_result)) {
+        return $plugin_result;
+    }
 
     switch ($dispatch) {
         case 'staging_job':
@@ -4053,51 +3997,6 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
             if (operational_steps_train_car_filters_active($filters)) {
                 $result['car_filters'] = array_filter($filters);
             }
-            break;
-        case 'track_scale':
-            $job = strtoupper(trim($params['job'] ?? ''));
-            if ($job === '') {
-                $result['skipped'] = true;
-                $result['reason'] = 'missing job param';
-                break;
-            }
-            if (!is_readable(__DIR__ . '/track_scale_helpers.php')) {
-                $result['skipped'] = true;
-                $result['reason'] = 'track scale helpers not available (rebuild sts-docker image)';
-                break;
-            }
-            require_once __DIR__ . '/track_scale_helpers.php';
-            $ts_config = operational_steps_track_scale_config($params);
-            $result['commodity'] = (string) ($ts_config['commodity_code'] ?? '');
-            if (function_exists('warm_start_run_job_track_scale')) {
-                $result['weigh'] = warm_start_run_job_track_scale($dbc, $job, array_merge($config, [
-                    'track_scale_config' => $ts_config,
-                ]));
-            } else {
-                $result['weigh'] = track_scale_run_job_weigh($dbc, $job, $ts_config);
-            }
-            break;
-        case 'calibrate_track_scale':
-            if (!is_readable(__DIR__ . '/track_scale_helpers.php')) {
-                $result['skipped'] = true;
-                $result['reason'] = 'track scale helpers not available (rebuild sts-docker image)';
-                break;
-            }
-            require_once __DIR__ . '/track_scale_helpers.php';
-            require_once __DIR__ . '/warm_start_helpers.php';
-            if (!function_exists('warm_start_maybe_calibrate_scale')) {
-                $result['skipped'] = true;
-                $result['reason'] = 'calibration helper not available';
-                break;
-            }
-            // every_sessions = 1 recalibrates every session (steady ~15% reroute);
-            // higher values let drift accumulate between calibrations so the
-            // out-of-tolerance rate climbs toward the out-of-service threshold.
-            $every = max(1, (int) ($params['every_sessions'] ?? 1));
-            $result['calibration'] = warm_start_maybe_calibrate_scale($dbc, [
-                'scale_calibrate_every_sessions' => $every,
-            ]);
-            $result['every_sessions'] = $every;
             break;
         case 'load_unload':
             $filters = operational_steps_normalize_load_unload_filters($params);

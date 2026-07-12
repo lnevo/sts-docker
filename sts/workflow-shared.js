@@ -85,6 +85,34 @@
       node.textContent = typeof msg === 'string' ? msg : JSON.stringify(msg, null, 2);
     },
 
+    clearRunCompleteActions() {
+      const node = this.el('run-complete-actions');
+      if (!node) return;
+      node.textContent = '';
+      node.hidden = true;
+    },
+
+    showRunCompleteActions(result) {
+      const node = this.el('run-complete-actions');
+      if (!node) return;
+      node.textContent = '';
+      const sessions = (result.sessions && result.sessions.length)
+        ? result.sessions
+        : (result.session ? [result.session] : []);
+      const latest = sessions.length ? sessions[sessions.length - 1] : '';
+      const href = latest
+        ? ('/sts/session_overview.php?session=' + encodeURIComponent(latest))
+        : (result.index_url || '/sts/session_overview.php');
+      const link = document.createElement('a');
+      link.className = 'btn btn-dark btn-sm';
+      link.href = href;
+      link.textContent = latest
+        ? ('View session ' + latest + ' overview')
+        : 'View session overview';
+      node.appendChild(link);
+      node.hidden = false;
+    },
+
     buildCatalogMap() {
       this.catalogMap = {};
       (this.catalog.functions || []).concat(this.catalog.adder_functions || []).forEach((f) => {
@@ -2147,6 +2175,7 @@
       if (stop < start) {
         throw new Error('Stop step must be at or after start step');
       }
+      this.clearRunCompleteActions();
       this.setStatus(
         repeat > 1 ? ('Running ' + repeat + ' cycles (steps ' + start + '–' + stop + ')…') : ('Running steps ' + start + '–' + stop + '…'),
         'info'
@@ -2181,6 +2210,7 @@
         'Complete — session ' + (d.session || (d.sessions || []).join(', ') || ''),
         'ok'
       );
+      this.showRunCompleteActions(d);
       this.runOptions = await this.simulatorApi('run_options');
       this.syncRunDefaults();
       return d;

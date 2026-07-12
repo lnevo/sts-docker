@@ -7,7 +7,7 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
   <link rel="stylesheet" href="session-nav.css">
-  <link rel="stylesheet" href="workflow-ui.css?v=47">
+  <link rel="stylesheet" href="workflow-ui.css?v=48">
 </head>
 <body>
   <nav class="navbar navbar-dark noprint" style="background-color: #343a40;">
@@ -93,6 +93,7 @@
       </div>
       <pre class="log" id="log">Run output appears here.</pre>
       <div id="status" class="status info">Loading…</div>
+      <div id="run-complete-actions" class="run-complete-actions" hidden></div>
     </div>
 
     <div class="panel">
@@ -137,7 +138,7 @@
       </div>
     </div>
   </div>
-  <script src="workflow-shared.js?v=73"></script>
+  <script src="workflow-shared.js?v=74"></script>
   <script>
 (function () {
   const W = WorkflowUI;

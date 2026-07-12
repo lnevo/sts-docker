@@ -2220,13 +2220,15 @@ function session_waybill_render_print_all_page($session_nbr, $title, array $numb
     // Waybill sheet formatting is scoped under .waybill-print so it doesn't
     // override the shared nav-bar chrome from session_static_head_assets().
     $scoped_styles = '.waybill-print .waybill-sheet{margin-bottom:32px}'
+        . '.waybill-print .waybill-break-before{margin-top:32px}'
         . '.waybill-print table{border-collapse:collapse;font:normal 18px Verdana,Arial,sans-serif}'
         . '.waybill-print tr{vertical-align:top}'
         . '.waybill-print th,.waybill-print td{border:1px solid #000;padding:10px}'
         . '.waybill-print-controls{margin:0 0 16px}'
         . '@media print{nav,.noprint{display:none!important}'
         . '.waybill-print .waybill-sheet{page-break-after:always;break-after:page}'
-        . '.waybill-print .waybill-sheet:last-child{page-break-after:auto;break-after:auto}}';
+        . '.waybill-print .waybill-sheet:last-child{page-break-after:auto;break-after:auto}'
+        . '.waybill-print .waybill-break-before{page-break-before:always;break-before:page;margin-top:0}}';
 
     return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
         . '<title>' . htmlspecialchars($title) . ' — print all</title>'

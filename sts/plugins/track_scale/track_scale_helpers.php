@@ -10,8 +10,9 @@ function track_scale_data_dir()
         return rtrim($dir, '/\\');
     }
 
-    $mounted = __DIR__ . '/backups/track_scale';
-    $repo = dirname(__DIR__, 2) . '/sts-backups/track_scale';
+    $sts_root = dirname(__DIR__, 2);
+    $mounted = $sts_root . '/backups/track_scale';
+    $repo = dirname(__DIR__, 4) . '/sts-backups/track_scale';
     if (is_dir($repo) && (
         is_readable($repo . '/track_scale_config.json')
         || is_readable($repo . '/car_card_roster.csv')

@@ -15,6 +15,18 @@ require_once __DIR__ . '/drop_down_list_functions.php';
 require_once __DIR__ . '/backup_tables.php';
 require_once __DIR__ . '/generate_order_helpers.php';
 
+function warm_start_track_scale_available()
+{
+    if (!function_exists('plugins_require_helper')) {
+        $plugins = __DIR__ . '/plugins/plugins.php';
+        if (is_readable($plugins)) {
+            require_once $plugins;
+        }
+    }
+
+    return function_exists('plugins_require_helper') && plugins_require_helper('track_scale');
+}
+
 function warm_start_coke_stats_reset()
 {
     return [
@@ -257,10 +269,9 @@ function warm_start_count_shenango_pickup_for_ck1($dbc)
 
 function warm_start_count_loaded_coke_at_shenango($dbc)
 {
-    if (!is_readable(__DIR__ . '/track_scale_helpers.php')) {
+    if (!warm_start_track_scale_available()) {
         return 0;
     }
-    require_once __DIR__ . '/track_scale_helpers.php';
     $config = track_scale_load_config();
 
     $rs = mysqli_query(
@@ -868,20 +879,18 @@ function warm_start_locals_secured($dbc, $config = [], $session_snapshot = null)
 
 function warm_start_ck1_reload_shipment_codes($dbc)
 {
-    if (!is_readable(__DIR__ . '/track_scale_helpers.php')) {
+    if (!warm_start_track_scale_available()) {
         return ['COKE-RELOAD-SHEN'];
     }
-    require_once __DIR__ . '/track_scale_helpers.php';
     $config = track_scale_load_config();
     return track_scale_shipment_codes_for_routing('reload', $config);
 }
 
 function warm_start_ck1_assign_reload_cars_on_train($dbc)
 {
-    if (!is_readable(__DIR__ . '/track_scale_helpers.php')) {
+    if (!warm_start_track_scale_available()) {
         return 0;
     }
-    require_once __DIR__ . '/track_scale_helpers.php';
 
     $config = track_scale_load_config();
     $ck1_id = warm_start_job_id($dbc, 'CK1');
@@ -923,7 +932,9 @@ function warm_start_ck1_setout_train_cars_for_shipments($dbc, $location_id, arra
     if ($location_id <= 0 || count($shipment_codes) === 0) {
         return 0;
     }
-    require_once __DIR__ . '/track_scale_helpers.php';
+    if (!warm_start_track_scale_available()) {
+        return 0;
+    }
     $config = track_scale_load_config();
     $ck1_id = warm_start_job_id($dbc, 'CK1');
     if ($ck1_id <= 0) {
@@ -959,10 +970,9 @@ function warm_start_ck1_setout_train_cars_for_shipments($dbc, $location_id, arra
 
 function warm_start_ck1_assign_reload_at_south($dbc)
 {
-    if (!is_readable(__DIR__ . '/track_scale_helpers.php')) {
+    if (!warm_start_track_scale_available()) {
         return 0;
     }
-    require_once __DIR__ . '/track_scale_helpers.php';
 
     $config = track_scale_load_config();
     $ck1_id = warm_start_job_id($dbc, 'CK1');
@@ -1009,10 +1019,9 @@ function warm_start_ck1_assign_reload_at_south($dbc)
 
 function warm_start_ck1_assign_outbound_at_south($dbc)
 {
-    if (!is_readable(__DIR__ . '/track_scale_helpers.php')) {
+    if (!warm_start_track_scale_available()) {
         return 0;
     }
-    require_once __DIR__ . '/track_scale_helpers.php';
 
     $config = track_scale_load_config();
     $ck1_id = warm_start_job_id($dbc, 'CK1');
@@ -1129,9 +1138,14 @@ function warm_start_run_ck1_session_ops($dbc, $config = [])
         warm_start_ck1_setout_train_to_location($dbc, $spot_id);
     }
 
-    warm_start_maybe_calibrate_scale($dbc, $config);
+    if (function_exists('track_scale_maybe_calibrate_scale')) {
+        track_scale_maybe_calibrate_scale($dbc, $config);
+    }
 
-    $weigh = warm_start_run_ck1_scale_ops($dbc);
+    $weigh = ['weighed' => 0, 'reloads' => 0, 'outbound_assignments' => 0];
+    if (function_exists('track_scale_run_ck1_scale_ops')) {
+        $weigh = track_scale_run_ck1_scale_ops($dbc);
+    }
     $stats['weighed'] = (int) ($weigh['weighed'] ?? 0);
     $stats['reloads'] = (int) ($weigh['reloads'] ?? 0);
     $stats['outbound'] = (int) ($weigh['outbound_assignments'] ?? 0);
@@ -2236,7 +2250,10 @@ function warm_start_begin_ck1_test_session($dbc, $fractions, $label, $max_unfill
 
     $ck1_assigned = warm_start_auto_assign_job_at_station($dbc, 'CK1', 12, 1.0);
     $ck1_picked = warm_start_pickup_job($dbc, 'CK1');
-    $calibration = warm_start_maybe_calibrate_scale($dbc, $config);
+    $calibration = ['calibrated' => false, 'skipped' => true];
+    if (function_exists('track_scale_maybe_calibrate_scale')) {
+        $calibration = track_scale_maybe_calibrate_scale($dbc, $config);
+    }
 
     $ck1_id = warm_start_job_id($dbc, 'CK1');
     $rs = mysqli_query(
@@ -2270,8 +2287,8 @@ function warm_start_begin_ck1_test_session($dbc, $fractions, $label, $max_unfill
     if ($on_train < $min_on_train) {
         $weigh['success'] = false;
         $weigh['errors'][] = "CK1 has {$on_train} outbound coke on train (need >= {$min_on_train})";
-    } elseif ($weigh_required) {
-        $weigh = warm_start_run_ck1_scale_ops($dbc);
+    } elseif ($weigh_required && function_exists('track_scale_run_ck1_scale_ops')) {
+        $weigh = track_scale_run_ck1_scale_ops($dbc);
         warm_start_log(
             "Session {$session}{$suffix}: weighed={$weigh['weighed']} outbound={$weigh['outbound_assignments']} "
             . "reloads={$weigh['reloads']}"
@@ -3119,12 +3136,11 @@ function warm_start_load_unload($dbc, $fraction = 1.0, array $filters = [])
  */
 function warm_start_ck1_ensure_coke_on_train($dbc, $fraction = 1.0)
 {
-    if (!is_readable(__DIR__ . '/track_scale_helpers.php')) {
+    if (!warm_start_track_scale_available()) {
         $assigned = warm_start_auto_assign_job_at_station($dbc, 'CK1', 12, $fraction);
         $picked = warm_start_pickup_job($dbc, 'CK1');
         return ['assigned' => $assigned, 'picked_up' => $picked];
     }
-    require_once __DIR__ . '/track_scale_helpers.php';
 
     $config = track_scale_load_config();
     $job_id = warm_start_job_id($dbc, 'CK1');
@@ -3170,230 +3186,11 @@ function warm_start_ck1_ensure_coke_on_train($dbc, $fraction = 1.0)
     return ['assigned' => $assigned, 'picked_up' => $picked];
 }
 
-/**
- * Simulate track-scale calibration (test car at zero on all sensors).
- */
-function warm_start_simulate_scale_calibration($dbc)
-{
-    if (!is_readable(__DIR__ . '/track_scale_helpers.php')) {
-        return false;
-    }
-    require_once __DIR__ . '/track_scale_helpers.php';
-
-    track_scale_sync_session_calibration($dbc);
-    if (track_scale_is_calibration_locked($dbc)) {
-        return false;
-    }
-
-    track_scale_session_init();
-    track_scale_reset_calibration();
-    foreach (track_scale_sensor_positions() as $position) {
-        $_SESSION['track_scale']['sensor_errors'][$position] = 0.0;
-        $_SESSION['track_scale']['sensor_adjustments'][$position] = 0.0;
-        track_scale_mark_sensor_weighed($position);
-    }
-
-    $result = track_scale_save_calibration($dbc);
-    return !empty($result['success']);
-}
-
-/**
- * Calibrate when required (first use / OOS) or when sessions since last cal exceed threshold.
- */
-function warm_start_maybe_calibrate_scale($dbc, $config = [])
-{
-    if (!is_readable(__DIR__ . '/track_scale_helpers.php')) {
-        return ['calibrated' => false, 'skipped' => true];
-    }
-    require_once __DIR__ . '/track_scale_helpers.php';
-
-    track_scale_sync_session_calibration($dbc);
-    if (track_scale_is_calibration_locked($dbc)) {
-        return ['calibrated' => false, 'skipped' => true, 'reason' => 'already_locked'];
-    }
-
-    $every = (int) ($config['scale_calibrate_every_sessions'] ?? 3);
-    $sessions_since = track_scale_sessions_since_calibration($dbc);
-    $needs = track_scale_requires_calibration_init($dbc)
-        || track_scale_is_out_of_service($dbc)
-        || $sessions_since >= $every;
-
-    if (!$needs) {
-        return ['calibrated' => false, 'skipped' => true, 'sessions_since' => $sessions_since];
-    }
-
-    $ok = warm_start_simulate_scale_calibration($dbc);
-    return [
-        'calibrated' => $ok,
-        'sessions_since' => $sessions_since,
-    ];
-}
-
-/**
- * CK1 step 95: weigh coke cars on the train after pickup, before destination setouts.
- */
-function warm_start_run_ck1_scale_ops($dbc)
-{
-    $fail = function (array $stats, string $error) {
-        $stats['success'] = false;
-        $stats['errors'][] = $error;
-        return $stats;
-    };
-
-    $stats = [
-        'weighed' => 0,
-        'reloads' => 0,
-        'outbound_assignments' => 0,
-        'candidates' => 0,
-        'errors' => [],
-        'success' => true,
-    ];
-
-    if (!is_readable(__DIR__ . '/track_scale_helpers.php')) {
-        return $fail($stats, 'track_scale_helpers.php not found');
-    }
-    require_once __DIR__ . '/track_scale_helpers.php';
-
-    $config = track_scale_load_config();
-    $ck1_id = warm_start_job_id($dbc, 'CK1');
-    if ($ck1_id <= 0) {
-        return $fail($stats, 'CK1 job not found');
-    }
-
-    if (track_scale_is_out_of_service($dbc, $config) && !track_scale_is_calibration_locked($dbc)) {
-        return $fail($stats, 'track scale out of service');
-    }
-
-    $coke_stats = &warm_start_coke_stats();
-    $scale_loc_id = track_scale_loading_location_id($dbc, $config);
-
-    $rs = mysqli_query(
-        $dbc,
-        'SELECT cars.id AS car_id
-         FROM cars
-         WHERE cars.status IN ("Loaded", "Loading", "Ordered")
-           AND (
-             (cars.handled_by_job_id = "' . (int) $ck1_id . '" AND cars.current_location_id = 0)
-             OR cars.current_location_id = "' . (int) $scale_loc_id . '"
-           )
-         ORDER BY cars.id'
-    );
-    $candidates = [];
-    while ($row = mysqli_fetch_array($rs)) {
-        $car_id = (int) $row['car_id'];
-        if (!track_scale_car_in_coke_fleet($dbc, $car_id, $config)) {
-            continue;
-        }
-        $car = track_scale_get_car_by_id($dbc, $car_id);
-        if ($car === null) {
-            continue;
-        }
-        if ($car['status'] === 'Loading') {
-            mysqli_query($dbc, 'UPDATE cars SET status = "Loaded" WHERE id = "' . $car_id . '"');
-            $car['status'] = 'Loaded';
-        }
-        if (strcasecmp((string) ($car['status'] ?? ''), 'Ordered') === 0
-            && track_scale_car_in_coke_fleet($dbc, $car_id, $config)) {
-            mysqli_query($dbc, 'UPDATE cars SET status = "Loaded" WHERE id = "' . $car_id . '"');
-            $car['status'] = 'Loaded';
-        }
-        if (!track_scale_car_has_load($car)) {
-            continue;
-        }
-        $candidates[] = $car_id;
-    }
-    $stats['candidates'] = count($candidates);
-
-    foreach ($candidates as $car_id) {
-        $car = track_scale_get_car_by_id($dbc, $car_id);
-        if ($car === null) {
-            continue;
-        }
-        $on_ck1_train = (int) ($car['handled_by_job_id'] ?? 0) === $ck1_id
-            && (int) ($car['current_location_id'] ?? 0) === 0;
-        $at_scale = (int) ($car['current_location_id'] ?? 0) === (int) $scale_loc_id;
-        if (!$on_ck1_train && !$at_scale) {
-            continue;
-        }
-
-        $marks = $car['reporting_marks'] ?? '';
-        $profile = track_scale_profile_for_marks($marks, $config);
-        if (!empty($profile['tare_only'])) {
-            continue;
-        }
-
-        if (!track_scale_car_weighable($car, $dbc, $config)) {
-            $stats = $fail($stats, track_scale_weighable_car_error($car, $config));
-            continue;
-        }
-
-        $target_net = (float) ($profile['target_net_tons'] ?? $profile['load_limit_tons'] ?? 80.0);
-        $tare = (float) ($profile['tare_tons'] ?? 27.0);
-        // Apply the stored cross-side balance shift so imbalanced coke loads
-        // route to reload, matching the interactive track-scale UI. Fetching
-        // only true_net leaves balance_shift at 0 and suppresses all reloads.
-        $load_state = track_scale_get_car_load_state($dbc, $marks, $target_net, $config);
-        $true_net = (float) $load_state['true_net_tons'];
-        $weighing = track_scale_build_display_weighing(
-            $true_net,
-            $tare,
-            $target_net,
-            $config,
-            (float) ($load_state['balance_shift_tons'] ?? 0.0)
-        );
-        track_scale_record_weigh_log($dbc, $marks, $weighing, $config);
-
-        $routing = $weighing['routing'] ?? 'outbound';
-        if (warm_start_car_has_routing_order($dbc, $car_id, $routing, $config)) {
-            $stats['weighed']++;
-            $coke_stats['weighed']++;
-            if ($routing === 'reload') {
-                $stats['reloads']++;
-                $coke_stats['reloads']++;
-            } else {
-                $stats['outbound_assignments']++;
-                $coke_stats['outbound_assignments']++;
-            }
-            continue;
-        }
-
-        $waybill = warm_start_pick_coke_waybill($dbc, $car_id, $routing, $config);
-        if ($waybill === null) {
-            $stats = $fail($stats, "No waybill for {$marks} (routing={$routing})");
-            continue;
-        }
-
-        $assign = track_scale_assign_car($dbc, $waybill, (string) $car_id, $config);
-        if (empty($assign['success'])) {
-            $message = $assign['message'] ?? 'assign failed';
-            $stats = $fail($stats, "Assign failed for {$marks}: {$message}");
-            continue;
-        }
-
-        $stats['weighed']++;
-        $coke_stats['weighed']++;
-        if ($routing === 'reload') {
-            $stats['reloads']++;
-            $coke_stats['reloads']++;
-        } else {
-            $stats['outbound_assignments']++;
-            $coke_stats['outbound_assignments']++;
-        }
-    }
-
-    if ($stats['candidates'] > 0 && $stats['weighed'] === 0) {
-        $stats = $fail($stats, $stats['candidates'] . ' coke car(s) on CK1 but none weighed/assigned');
-    }
-
-    return $stats;
-}
-
 function warm_start_car_has_routing_order($dbc, $car_id, $routing, $config)
 {
-    if (!is_readable(__DIR__ . '/track_scale_helpers.php')) {
+    if (!warm_start_track_scale_available()) {
         return false;
     }
-    require_once __DIR__ . '/track_scale_helpers.php';
 
     $active = track_scale_get_car_active_order($dbc, $car_id);
     if ($active === null) {

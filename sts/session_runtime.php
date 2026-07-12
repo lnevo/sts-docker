@@ -14,6 +14,12 @@ function session_runtime_bootstrap()
     }
     $bootstrapped = true;
 
+    $plugins = __DIR__ . '/plugins/plugins.php';
+    if (is_readable($plugins)) {
+        require_once $plugins;
+        plugins_bootstrap_all();
+    }
+
     $warm = __DIR__ . '/warm_start_helpers.php';
     if (is_readable($warm)) {
         require_once $warm;

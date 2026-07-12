@@ -11,9 +11,10 @@ The Docker image copies all of `sts/` to `/var/www/html/sts/`. After `docker com
 | Simulator API | `simulator_api.php`, `session_simulator_helpers.php` |
 | Recipe runner | `session_helpers.php`, `session_run_recipe()` |
 | Dispatch | `operational_steps_dispatch_step()` in catalog |
-| Bootstrap | `session_runtime.php` → `warm_start_helpers.php`, `session_simulator_ops.php` |
+| Bootstrap | `session_runtime.php` → `plugins/plugins.php`, `warm_start_helpers.php`, `session_simulator_ops.php` |
 | Orders | `generate_order_helpers.php`, `fill_order_helpers.php` |
-| Track scale | `track_scale.php`, `track_scale_helpers.php`, `track_scale_ajax.php` |
+| Plugins | `plugins/plugins.php` — addon registry (operations buttons, catalog steps, dispatch) |
+| Track scale (addon) | `plugins/track_scale/` — GUI + workflow weigh/calibrate steps (`track_scale.php` stub at sts root) |
 | Switch lists | `master_switchlist_helpers.php`, `generate_master_switchlists.php` |
 
 Recipe CSVs live on the **`sts-backups`** bind mount (`backups/session_editor/`), not in the image.
