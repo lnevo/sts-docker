@@ -1779,6 +1779,100 @@ function session_reset_output($session_nbr, $root = null)
 }
 
 /**
+ * Slot key identifying a logical switch-list phase independent of the volatile
+ * recipe step number: the trains it covers plus the operator-facing title/info.
+ * Two generations of e.g. the "CK1 Inbound" phase share this key even when the
+ * recipe step index shifted between runs, so they collapse to one slot.
+ */
+function session_phase_slot_key(array $phase)
+{
+    $jobs = array_values(array_filter(array_map('trim', (array) ($phase['jobs'] ?? []))));
+    sort($jobs, SORT_NATURAL | SORT_FLAG_CASE);
+
+    return implode(',', $jobs)
+        . '|' . trim((string) ($phase['title'] ?? ''))
+        . '|' . trim((string) ($phase['info'] ?? ''));
+}
+
+/**
+ * Compact a session's generated output to exactly one phase per logical slot
+ * (see session_phase_slot_key), keeping the most recent generation of each.
+ *
+ * This is the root-cause fix for accumulation: when the same session is
+ * regenerated repeatedly (e.g. a simulator replaying the recipe), every run used
+ * to append fresh phases, inflating the manifest and leaving stale phase_NN
+ * directories and cached print-all bundles behind. Compacting after each run (and
+ * as a one-time cleanup) keeps the manifest, the on-disk phase directories, and
+ * every derived count in lockstep with a single clean generation.
+ *
+ * Mutates $manifest in place (phases + jobs). Does NOT save it — callers persist.
+ *
+ * @return array{removed_phases:int, removed_dirs:list<string>}
+ */
+function session_compact_session_output(array &$manifest, $session_nbr, $root = null)
+{
+    $root = $root ?? session_web_root();
+    $phases = is_array($manifest['phases'] ?? null) ? $manifest['phases'] : [];
+
+    // Keep the LAST occurrence of each slot (most recently generated wins).
+    $latest = [];
+    foreach ($phases as $phase) {
+        if (!is_array($phase) || (int) ($phase['phase'] ?? 0) < 1) {
+            continue;
+        }
+        $latest[session_phase_slot_key($phase)] = $phase;
+    }
+    $survivors = array_values($latest);
+    usort($survivors, static function ($a, $b) {
+        return (int) ($a['phase'] ?? 0) <=> (int) ($b['phase'] ?? 0);
+    });
+
+    $removed_phases = count($phases) - count($survivors);
+
+    // Rebuild phases + jobs map from survivors.
+    $manifest['phases'] = $survivors;
+    $keep_nums = [];
+    $jobs = [];
+    foreach ($survivors as $phase) {
+        $pn = (int) $phase['phase'];
+        $keep_nums[$pn] = true;
+        foreach ((array) ($phase['jobs'] ?? []) as $job) {
+            $job = trim((string) $job);
+            if ($job === '') {
+                continue;
+            }
+            if (!isset($jobs[$job])) {
+                $jobs[$job] = ['phases' => []];
+            }
+            if (!in_array($pn, $jobs[$job]['phases'], true)) {
+                $jobs[$job]['phases'][] = $pn;
+            }
+        }
+    }
+    $manifest['jobs'] = $jobs;
+
+    // Delete phase_NN directories no longer referenced by the surviving manifest.
+    $dir = session_dir_for($session_nbr, $root);
+    $removed_dirs = [];
+    foreach (glob($dir . '/phase_*', GLOB_ONLYDIR) ?: [] as $phase_dir) {
+        if (preg_match('/phase_(\d+)$/', $phase_dir, $m) && !isset($keep_nums[(int) $m[1]])) {
+            session_rrmdir($phase_dir);
+            $removed_dirs[] = basename($phase_dir);
+        }
+    }
+
+    // Drop cached print-all bundles so they rebuild from the compacted manifest.
+    foreach (array_merge(
+        glob($dir . '/print_all*.html') ?: [],
+        glob($dir . '/train_*.print_all*.html') ?: []
+    ) as $bundle) {
+        @unlink($bundle);
+    }
+
+    return ['removed_phases' => $removed_phases, 'removed_dirs' => $removed_dirs];
+}
+
+/**
  * Purge persisted output for every session (manifests, run-stats + history,
  * phase output, waybills, caches). Used when the database is reset via
  * restore_database so the cumulative session statistics start clean for the new
@@ -2140,9 +2234,9 @@ function session_waybill_render_print_all_page($session_nbr, $title, array $numb
         . '<style>' . $scoped_styles . '</style>'
         . '</head><body>'
         . $nav_html
-        . '<main><h1>' . htmlspecialchars($title) . '</h1>'
+        . '<main><div class="noprint"><h1>' . htmlspecialchars($title) . '</h1>'
         . $session_nav
-        . '<p class="muted">' . $count . ' waybill' . ($count === 1 ? '' : 's') . ' · each prints on its own page.</p>'
+        . '<p class="muted">' . $count . ' waybill' . ($count === 1 ? '' : 's') . ' · each prints on its own page.</p></div>'
         . $controls
         . '<div class="waybill-print">' . ($sheets !== '' ? $sheets : '<div class="card"><p>No waybills to print.</p></div>') . '</div>'
         . '</main>'
@@ -2442,9 +2536,13 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
         : ($from_step <= 1);
     $reset_applied_for = null;
     $phase_num = count($manifest['phases'] ?? []);
+    // Every session this run touches (a single run can advance through several
+    // sessions via begin_session). All of them are compacted at the end so no
+    // session is left with accumulated phases just because it wasn't the last.
+    $touched_sessions = [(int) $session_nbr => true];
 
     $sync_output_session = function () use (
-        $dbc, $root, $reset_output, &$session_nbr, &$manifest, &$phase_num, &$reset_applied_for
+        $dbc, $root, $reset_output, &$session_nbr, &$manifest, &$phase_num, &$reset_applied_for, &$touched_sessions
     ) {
         $live = function_exists('warm_start_get_session')
             ? (int) warm_start_get_session($dbc)
@@ -2454,6 +2552,7 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
             $manifest = session_load_manifest($session_nbr, $root);
             $phase_num = count($manifest['phases'] ?? []);
         }
+        $touched_sessions[(int) $session_nbr] = true;
         if ($reset_output && $reset_applied_for !== (int) $session_nbr) {
             session_reset_output($session_nbr, $root);
             $manifest['phases'] = [];
@@ -2666,7 +2765,23 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
         }
     }
 
+    // Collapse any accumulated duplicate phases (from repeated regeneration)
+    // down to the latest per logical slot, and purge the orphaned phase
+    // directories + stale print-all bundles. Done for every session this run
+    // touched so none is left inflated, keeping each manifest and every derived
+    // count consistent with a single clean generation.
+    session_compact_session_output($manifest, $session_nbr, $root);
     session_save_manifest($session_nbr, $manifest, $root);
+    foreach (array_keys($touched_sessions) as $ts) {
+        if ((int) $ts === (int) $session_nbr || (int) $ts < 1) {
+            continue;
+        }
+        $tm = session_load_manifest($ts, $root);
+        if (!empty($tm['phases'])) {
+            session_compact_session_output($tm, $ts, $root);
+            session_save_manifest($ts, $tm, $root);
+        }
+    }
     // Persist run stats after the manifest write so phase/waybill data is on
     // disk first; persist reloads the manifest and adds run_stats. Doing this
     // after session_save_manifest avoids the final save wiping run_stats.
@@ -3215,13 +3330,10 @@ function session_latest_token_phases(array $manifest)
         if ((int) ($phase['phase'] ?? 0) < 1) {
             continue;
         }
-        $jobs = array_values(array_filter(array_map('trim', (array) ($phase['jobs'] ?? []))));
-        $key = implode(',', $jobs)
-            . '|' . (string) ($phase['step'] ?? '')
-            . '|' . (string) ($phase['title'] ?? '')
-            . '|' . (string) ($phase['info'] ?? '');
-        // Later (more recent) entries overwrite earlier ones for the same slot.
-        $latest[$key] = $phase;
+        // Key on the logical slot (trains + title/info), NOT the recipe step
+        // number, which can shift between runs and otherwise splits the same
+        // phase into two "tokens". Later entries overwrite earlier ones.
+        $latest[session_phase_slot_key($phase)] = $phase;
     }
     $result = array_values($latest);
     usort($result, static function ($a, $b) {

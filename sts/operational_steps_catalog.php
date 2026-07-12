@@ -4521,6 +4521,12 @@ function operational_steps_run_switchlists_web($dbc, $format = 'all', array $job
         'styles' => master_sw_styles_for_format($format),
         'output' => $out,
     ]);
+    // Collapse accumulated duplicate phases (same slot regenerated) and purge the
+    // orphaned phase dirs + stale bundles so this direct path can't inflate the
+    // manifest either.
+    if (function_exists('session_compact_session_output')) {
+        session_compact_session_output($manifest, $session, $root);
+    }
     session_save_manifest($session, $manifest, $root);
     return [
         'session' => $session,

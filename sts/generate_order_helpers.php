@@ -183,10 +183,21 @@ function generate_orders_count_unfilled($dbc)
     return (int) ($row['c'] ?? 0);
 }
 
-/** Outbound coke shipment codes (singles + bulk lanes). */
+/** Outbound coke shipment codes (singles + bulk lanes). Single source for replenish + warm-start. */
 function generate_orders_outbound_coke_shipment_codes()
 {
     return ['COKE-USS', 'COKE-CLEV', 'COKE-USS-BULK', 'COKE-CLEV-BULK'];
+}
+
+/** Single-car outbound coke lanes used by replenish (non-BULK codes). */
+function generate_orders_outbound_coke_single_lane_codes()
+{
+    return array_values(array_filter(
+        generate_orders_outbound_coke_shipment_codes(),
+        static function ($code) {
+            return stripos((string) $code, '-BULK') === false;
+        }
+    ));
 }
 
 /** Count unfilled car orders for outbound coke shipments. */
@@ -235,7 +246,10 @@ function generate_orders_replenish_coke_orders($dbc, $target_min = 6, $target_ma
         ];
     }
 
-    $alternate = ['COKE-USS', 'COKE-CLEV'];
+    $alternate = generate_orders_outbound_coke_single_lane_codes();
+    if ($alternate === []) {
+        $alternate = generate_orders_outbound_coke_shipment_codes();
+    }
     $generated = 0;
     $shipments_used = [];
 

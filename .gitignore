@@ -35,3 +35,9 @@ Temporary Items
 *.icloud
 
 # End of https://www.toptal.com/developers/gitignore/api/macos
+
+### Project ###
+# Simulator-specific benchmark/diagnostic scratch scripts.
+# These are one-off harnesses and must not be deployed with the app.
+# Finalized diagnostics live in the sts-docker-helpers repo (diagnostics/).
+sts/_*.php

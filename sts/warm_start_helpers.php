@@ -2,11 +2,18 @@
 /**
  * Simulate several operating sessions to produce a balanced warm-start state.
  * Uses the same fill / reposition / assign / pickup / setout / load-unload rules as STS ops pages.
+ *
+ * NOTE: This module encodes HART-specific operating-session choreography (job names,
+ * interchange station IDs, coke shipment lanes). The workflow editor and catalog
+ * dispatch path are generic; warm-start simulation is a deployment scenario layer.
+ * Prefer workflow JSON + seed config for operator-defined steps; keep layout-specific
+ * branching here until a scenario-definition format replaces inline literals.
  */
 
 require_once __DIR__ . '/fill_order_helpers.php';
 require_once __DIR__ . '/drop_down_list_functions.php';
 require_once __DIR__ . '/backup_tables.php';
+require_once __DIR__ . '/generate_order_helpers.php';
 
 function warm_start_coke_stats_reset()
 {
@@ -28,7 +35,18 @@ function warm_start_coke_stats_init()
 
 function warm_start_outbound_coke_shipment_codes()
 {
-    return ['COKE-USS', 'COKE-CLEV', 'COKE-USS-BULK', 'COKE-CLEV-BULK'];
+    return generate_orders_outbound_coke_shipment_codes();
+}
+
+/** SQL IN (...) fragment for outbound coke shipment codes. */
+function warm_start_outbound_coke_shipment_codes_sql_in($dbc)
+{
+    $codes = warm_start_outbound_coke_shipment_codes();
+    $parts = [];
+    foreach ($codes as $code) {
+        $parts[] = '"' . mysqli_real_escape_string($dbc, $code) . '"';
+    }
+    return implode(', ', $parts);
 }
 
 function warm_start_is_outbound_coke_shipment($shipment_code)
@@ -280,7 +298,7 @@ function warm_start_count_ck1_on_train($dbc)
          WHERE cars.handled_by_job_id = "' . (int) $ck1_id . '"
            AND cars.current_location_id = 0
            AND cars.status = "Loaded"
-           AND shipments.code IN ("COKE-USS", "COKE-CLEV", "COKE-USS-BULK", "COKE-CLEV-BULK")'
+           AND shipments.code IN (' . warm_start_outbound_coke_shipment_codes_sql_in($dbc) . ')'
     );
     return (int) mysqli_fetch_array($rs)['c'];
 }
@@ -2230,7 +2248,7 @@ function warm_start_begin_ck1_test_session($dbc, $fractions, $label, $max_unfill
          WHERE cars.handled_by_job_id = "' . (int) $ck1_id . '"
            AND cars.current_location_id = 0
            AND cars.status = "Loaded"
-           AND shipments.code IN ("COKE-USS", "COKE-CLEV", "COKE-USS-BULK", "COKE-CLEV-BULK")'
+           AND shipments.code IN (' . warm_start_outbound_coke_shipment_codes_sql_in($dbc) . ')'
     );
     $on_train = (int) mysqli_fetch_array($rs)['c'];
 
@@ -3740,7 +3758,7 @@ function warm_start_summarize($dbc)
          WHERE cars.handled_by_job_id = "' . (int) $ck1_id . '"
            AND cars.current_location_id = 0
            AND cars.status = "Loaded"
-           AND shipments.code IN ("COKE-USS", "COKE-CLEV", "COKE-USS-BULK", "COKE-CLEV-BULK")'
+           AND shipments.code IN (' . warm_start_outbound_coke_shipment_codes_sql_in($dbc) . ')'
     );
     $summary['ck1_outbound_on_train'] = (int) mysqli_fetch_array($rs)['c'];
 

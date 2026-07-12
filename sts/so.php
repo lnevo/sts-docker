@@ -123,12 +123,28 @@ function so_print_all_bundle_stale($rel, $fs)
     if (!is_file($fs)) {
         return false;
     }
-    $manifest = session_dir_for((int) $m[1]) . '/manifest.json';
-    if (!is_file($manifest)) {
-        return false;
+    $session_dir = session_dir_for((int) $m[1]);
+    $bundle_mtime = filemtime($fs);
+
+    $manifest = $session_dir . '/manifest.json';
+    if (is_file($manifest) && filemtime($manifest) > $bundle_mtime) {
+        return true;
     }
 
-    return filemtime($manifest) > filemtime($fs);
+    // Per-style bundles (…print_all_<style>.html) stitch the per-leg switch-list
+    // files rendered in that style. A rendering-engine change re-renders those
+    // per-leg files but leaves the manifest untouched, so also rebuild when any
+    // constituent per-leg file is newer than the cached bundle.
+    if (preg_match('#print_all_([a-z0-9]+)\.html$#', $rel, $sm)) {
+        $style = $sm[1];
+        foreach (glob($session_dir . '/phase_*/*/phase_*_' . $style . '.html') ?: [] as $leg) {
+            if (filemtime($leg) > $bundle_mtime) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 function so_build_print_all_on_demand($rel)

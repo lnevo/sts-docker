@@ -59,6 +59,7 @@ function master_sw_switchlist_sql($job_id, $table_name)
                  cars.reporting_marks AS reporting_marks,
                  car_codes.code AS car_code,
                  cars.status AS status,
+                 cars.remarks AS remarks,
                  commodities.code AS consignment,
                  shipments.consignment AS consignment_id,
                  car_orders.waybill_number AS waybill_number,
@@ -92,6 +93,7 @@ function master_sw_switchlist_sql($job_id, $table_name)
                  cars.reporting_marks AS reporting_marks,
                  car_codes.code AS car_code,
                  cars.status AS status,
+                 cars.remarks AS remarks,
                  "" AS consignment,
                  0 AS consignment_id,
                  car_orders.waybill_number AS waybill_number,
@@ -2082,57 +2084,298 @@ function master_sw_render_wo($dbc, $job_name, array $sections, $output_path, arr
     return master_sw_write_html_file($output_path, ob_get_clean());
 }
 
+/**
+ * Maximum visual "lines" of content that fit in the data area of one A5 landscape
+ * page for the x2010 (Pacific National Train Consist Form) layout. Ported from
+ * printable_switchlist_x2010.php. Each row is at least 2 lines (station + code);
+ * rows with special instructions count as more.
+ */
+if (!defined('MASTER_SW_X2010_LINES_PER_PAGE')) {
+    define('MASTER_SW_X2010_LINES_PER_PAGE', 22);
+}
+
+/** Estimate how many printed lines an x2010 data row consumes (ports count_row_lines). */
+function master_sw_x2010_count_row_lines(array $row)
+{
+    $current_loc_lines = ((int) ($row['current_location_id'] ?? 0) > 0) ? 2 : 1;
+    $dest_lines = 2;
+
+    $spec_instr = trim((string) ($row['special_instructions'] ?? ''));
+    $loc_remarks = trim((string) ($row['location_remarks'] ?? ''));
+    $show_spec = ($spec_instr !== '' && strtolower($spec_instr) !== 'n/a');
+    $show_loc_rem = ($loc_remarks !== '' && strtolower($loc_remarks) !== 'n/a');
+    $contents_lines = 1;
+    if ($show_spec) {
+        $contents_lines += max(1, (int) ceil(mb_strlen($spec_instr) / 18));
+    }
+    if ($show_loc_rem) {
+        $contents_lines += max(1, (int) ceil(mb_strlen($loc_remarks) / 18));
+    }
+
+    return max($current_loc_lines, $dest_lines, $contents_lines);
+}
+
+/** Pick the operator logo file for an x2010 form from the raw job table name. */
+function master_sw_x2010_logo_file($table_name)
+{
+    $operator_number = $table_name[2] ?? 'x';
+    $logo = match ($operator_number) {
+        '0' => 'railcorp',
+        '2' => 'pn',
+        '8' => 'arg',
+        '5' => 'sct',
+        '4' => 'ssr',
+        'n' => 'manildra',
+        default => 'nswgr',
+    };
+    // The nswgr asset uses a hyphen; the rest use "_logo.jpg".
+    $file = ($logo === 'nswgr') ? 'nswgr-logo.jpg' : ($logo . '_logo.jpg');
+
+    return '/sts/images/' . $file;
+}
+
+/** Emit one x2010 page header (logo / title / serial + blank consist detail rows). */
+function master_sw_x2010_page_header($logo_src, $train_no, $serial_number, $page_num, $page_count)
+{
+    print '<table class="detail-table">';
+    print '<tr>';
+    print '<td style="width:30%; padding:4px;"><img class="logo-img" src="' . htmlspecialchars($logo_src) . '" alt="Operator Logo" style="height:52px; width:auto;" onerror="this.style.display=\'none\'"></td>';
+    print '<td style="width:45%; text-align:center; padding:4px; vertical-align:middle;"><h2 class="form-title" style="margin:0;">Train Consist Form x 2010</h2></td>';
+    print '<td style="width:25%; padding:4px; position:relative;">';
+    print '<div style="position:absolute; bottom:4px; left:4px;" class="page-info">PAGE ' . (int) $page_num . ' OF ' . (int) $page_count . '</div>';
+    print '<div style="position:absolute; bottom:4px; right:4px;" class="serial-number">' . htmlspecialchars($serial_number) . '</div>';
+    print '</td>';
+    print '</tr>';
+    print '</table>';
+
+    print '<table class="detail-table">';
+    print '<tr>';
+    print '<td style="width:10%;">Train No.<br/><b>' . htmlspecialchars($train_no) . '</b></td>';
+    print '<td style="width:10%;">Date</td>';
+    print '<td style="width:10%;">Dept Time</td>';
+    print '<td style="width:15%;">Origin</td>';
+    print '<td style="width:16%;">Destination</td>';
+    print '<td style="width:14%;">Driver Name</td>';
+    print '<td style="width:13%;">Time on Duty</td>';
+    print '<td style="width:12%;">Depot</td>';
+    print '</tr>';
+    print '</table>';
+
+    print '<table class="detail-table">';
+    print '<tr>';
+    print '<td style="width:30%;">Train Radio Number</td>';
+    print '<td style="width:15%;">Unit No.</td>';
+    print '<td style="width:16%;">P.M. Date Due</td>';
+    print '<td style="width:14%;">Driver Name</td>';
+    print '<td style="width:13%;">Time on Duty</td>';
+    print '<td style="width:12%;">Depot</td>';
+    print '</tr>';
+    print '</table>';
+
+    print '<table class="detail-table">';
+    print '<tr>';
+    print '<td style="width:30%;">Mobile Number</td>';
+    print '<td style="width:45%;">Brake Certificate No.</td>';
+    print '<td style="width:25%;">Train Type</td>';
+    print '</tr>';
+    print '</table>';
+}
+
+/** Emit the x2010 data-table column group + header row. */
+function master_sw_x2010_table_head()
+{
+    print '<table class="data-table">';
+    print '<colgroup>';
+    print '<col style="width:6%">';
+    print '<col style="width:7%">';
+    print '<col style="width:10%">';
+    print '<col style="width:2%">';
+    print '<col style="width:2%">';
+    print '<col style="width:7%">';
+    print '<col style="width:5%">';
+    print '<col style="width:5%">';
+    print '<col style="width:18%">';
+    print '<col style="width:19%">';
+    print '<col style="width:19%">';
+    print '</colgroup>';
+    print '<thead><tr>';
+    print '<th>Sl.<br/>No</th>';
+    print '<th>Wagon Class</th>';
+    print '<th>Wagon or Locomotive<br/>Number</th>';
+    print '<th>CL</th>';
+    print '<th>Sta</th>';
+    print '<th>DG</th>';
+    print '<th>Gross<br/>Mass</th>';
+    print '<th>Length<br/>Metres</th>';
+    print '<th>Current Location</th>';
+    print '<th>Destination</th>';
+    print '<th>Contents<br/><span style="font-weight:normal;font-size:0.85em;">&#9873; Routing</span></th>';
+    print '</tr></thead>';
+    print '<tbody>';
+}
+
 function master_sw_render_x2010($dbc, $job_name, array $sections, $output_path, array $options = [])
 {
     ob_start();
     $shell = master_sw_render_phase_shell_start($dbc, $job_name, 'x2010', $options);
-    $serial_number = sprintf('%06d', random_int(1, 999999));
-    ?>
-<div class="noprint"><button onclick="window.print()">PRINT</button></div>
-<div style="font-family: Arial, sans-serif; width:100%; max-width:1200px;">
-  <h2 style="text-align:center;">Train Consist Form x 2010</h2>
-  <p style="text-align:right;color:red;"><?= htmlspecialchars($serial_number) ?></p>
-  <table style="width:100%; border-collapse:collapse; border:1px solid black; font-size:12px;">
-    <tr style="background:#f5f5f5;">
-      <th style="border:1px solid black; padding:5px;">Sl.<br>No</th>
-      <th style="border:1px solid black; padding:5px;">Wagon Class</th>
-      <th style="border:1px solid black; padding:5px;">Wagon or Locomotive<br>Number</th>
-      <th style="border:1px solid black; padding:5px;">Destination</th>
-      <th style="border:1px solid black; padding:5px;">Consignee</th>
-      <th style="border:1px solid black; padding:5px;">Contents or Fuel<br>Reading</th>
-    </tr>
-<?php
-    $row_num = 1;
+    $table_name = (string) ($shell['meta']['table_name'] ?? $job_name);
+    $train_no = trim(explode('|', $table_name)[0]);
+    $logo_src = master_sw_x2010_logo_file($table_name);
+    $serial_base = random_int(1, 999999);
+
+    // Flatten every work-leg section's cars into one continuous consist, matching
+    // the single-form layout of the original printable_switchlist_x2010.php.
+    $cars = [];
     foreach ($sections as $section) {
-        foreach ($section['cars'] as $row) {
-            $destination = ($row['status'] === 'Loaded')
-                ? (string) ($row['unloading_station'] ?? '')
-                : (string) ($row['loading_station'] ?? '');
-            $contents = ($row['status'] === 'Loaded')
-                ? 'L-' . (string) ($row['consignment'] ?? '')
-                : 'E';
-            echo '<tr>';
-            echo '<td style="border:1px solid black; padding:5px; text-align:center;">' . $row_num . '</td>';
-            echo '<td style="border:1px solid black; padding:5px;">' . htmlspecialchars(substr((string) ($row['car_code'] ?? ''), 0, 4)) . '</td>';
-            echo '<td style="border:1px solid black; padding:5px;">' . htmlspecialchars((string) ($row['reporting_marks'] ?? '')) . '</td>';
-            echo '<td style="border:1px solid black; padding:5px;">' . htmlspecialchars($destination) . '</td>';
-            echo '<td style="border:1px solid black; padding:5px;">' . htmlspecialchars((string) ($row['consignment'] ?? '')) . '</td>';
-            echo '<td style="border:1px solid black; padding:5px;">' . htmlspecialchars($contents) . '</td>';
-            echo '</tr>';
+        foreach ($section['cars'] ?? [] as $row) {
+            if (is_array($row)) {
+                $cars[] = $row;
+            }
+        }
+    }
+
+    // First pass: line-based pagination to get the true page count.
+    $row_lines = [];
+    $page_count = 1;
+    $lines_on_page = 0;
+    foreach ($cars as $idx => $row) {
+        $rl = master_sw_x2010_count_row_lines($row);
+        $row_lines[$idx] = $rl;
+        if ($lines_on_page > 0 && $lines_on_page + $rl > MASTER_SW_X2010_LINES_PER_PAGE) {
+            $page_count++;
+            $lines_on_page = $rl;
+        } else {
+            $lines_on_page += $rl;
+        }
+    }
+    $page_count = max(1, $page_count);
+    ?>
+<style>
+  .x2010-form { font: normal 14px 'Arial Narrow', Arial, sans-serif; width:100%; max-width:1200px; margin-bottom:40px; }
+  .x2010-form .detail-table { width:100%; border-collapse:collapse; border:1px solid black; margin-top:-1px; }
+  .x2010-form .detail-table td { border:1px solid black; padding:4px 5px; font-size:12px; height:2.8em; vertical-align:top; }
+  .x2010-form .form-title { font-size:16px; }
+  .x2010-form .serial-number { color:red; font-size:20px; font-weight:bold; text-align:right; }
+  .x2010-form .page-info { font-size:12px; text-align:left; }
+  .x2010-form .data-table { width:100%; border-collapse:collapse; border:1px solid black; margin-top:-1px; font-size:12px; }
+  .x2010-form .data-table th { border:1px solid black; padding:4px 5px; background-color:#1e4d78; color:white;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .x2010-form .data-table td { border:1px solid black; padding:4px 5px; text-align:center; vertical-align:top; }
+  .x2010-form .data-table tbody tr:nth-child(even) td { background-color:#d0e8ff;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .x2010-form .data-table tbody td:nth-child(1) { font-weight:bold; }
+  .x2010-form .data-table tbody td:nth-child(3) { font-weight:bold; }
+  .x2010-form .x2010-flag { color:#b30000; font-size:0.85em; }
+  .x2010-page-break { page-break-before:always; break-before:page; padding-top:3mm; }
+  @media print {
+    @page { size:A5 landscape; }
+    .x2010-form { max-width:100% !important; margin-bottom:0 !important; }
+    .x2010-form .logo-img { height:32px !important; width:auto !important; }
+    .x2010-form h2.form-title { font-size:10pt !important; margin:1px 0 !important; }
+    .x2010-form .serial-number { font-size:11pt !important; }
+    .x2010-form .detail-table td { font-size:7pt !important; padding:1px 3px !important; line-height:1.2 !important; }
+    .x2010-form .data-table th, .x2010-form .data-table td { font-size:8pt !important; padding:2px 4px !important; line-height:1.3 !important; }
+  }
+</style>
+<div class="noprint"><button onclick="window.print()">PRINT</button></div>
+<div class="x2010-form">
+<?php
+    if (count($cars) === 0) {
+        print '<p style="font-family:Verdana;">No switchlist found for ' . htmlspecialchars($train_no) . '</p>';
+    } else {
+        $row_num = 1;
+        $page_num = 0;
+        $lines_on_current_page = 0;
+        foreach ($cars as $idx => $row) {
+            $rl = $row_lines[$idx] ?? master_sw_x2010_count_row_lines($row);
+
+            // Start a new page at row 1, or when adding this row overflows the budget.
+            if ($row_num === 1 || $lines_on_current_page + $rl > MASTER_SW_X2010_LINES_PER_PAGE) {
+                if ($row_num > 1) {
+                    print '</tbody></table></div>';
+                }
+                $page_num++;
+                $break_class = ($page_num > 1) ? ' x2010-page-break' : '';
+                print '<div class="x2010-page' . $break_class . '">';
+                master_sw_x2010_page_header(
+                    $logo_src,
+                    $train_no,
+                    sprintf('%06d', $serial_base + $page_num - 1),
+                    $page_num,
+                    $page_count
+                );
+                master_sw_x2010_table_head();
+                $lines_on_current_page = 0;
+            }
+            $lines_on_current_page += $rl;
+
+            $marks = (string) ($row['reporting_marks'] ?? '');
+            $ends_alpha = $marks !== '' && ctype_alpha($marks[strlen($marks) - 1]);
+            $wagon_number = $ends_alpha ? preg_replace('/[a-zA-Z\-]+$/', '', $marks) : $marks;
+            $check_letter = $ends_alpha ? $marks[strlen($marks) - 1] : '';
+            $car_code = (string) ($row['car_code'] ?? '');
+            $status = (string) ($row['status'] ?? '');
+            $sta = ($status === 'Loaded') ? 'L' : 'E';
+            $dg = ($car_code === 'ATMF' || $car_code === 'NTAF') ? 'Y-Petroleum' : '';
+
+            // Length: HART stores a car description like "Hopper 40ft" in remarks;
+            // surface the trailing measurement token when present (gross mass is
+            // not tracked for HART, so that column stays blank like a blank form).
+            $length = '';
+            $remarks = trim((string) ($row['remarks'] ?? ''));
+            if ($remarks !== '' && preg_match('/(\d+(?:\.\d+)?)\s*(m|ft)\b/i', $remarks, $lm)) {
+                $length = $lm[1] . strtolower($lm[2]);
+            }
+
+            $spec_instr = trim((string) ($row['special_instructions'] ?? ''));
+            $show_spec = ($spec_instr !== '' && strtolower($spec_instr) !== 'n/a');
+            $spec_flag = $show_spec
+                ? '<br><span class="x2010-flag">&#9873; ' . htmlspecialchars($spec_instr) . '</span>'
+                : '';
+            $loc_remarks = trim((string) ($row['location_remarks'] ?? ''));
+            $show_loc_rem = ($loc_remarks !== '' && strtolower($loc_remarks) !== 'n/a');
+            $loc_flag = $show_loc_rem
+                ? '<br><span class="x2010-flag">&#9873; ' . htmlspecialchars($loc_remarks) . '</span>'
+                : '';
+
+            $current_location = ((int) ($row['current_location_id'] ?? 0) > 0)
+                ? '<b>' . htmlspecialchars((string) ($row['current_station'] ?? '')) . '</b><br>' . htmlspecialchars((string) ($row['current_location'] ?? ''))
+                : 'In Train';
+
+            if ($status === 'Empty' || $status === 'Ordered') {
+                if ((int) ($row['consignment_id'] ?? 0) <= 0) {
+                    $dest = '<b>' . htmlspecialchars((string) ($row['unloading_station'] ?? '')) . '</b><br>' . htmlspecialchars((string) ($row['unloading_location'] ?? ''));
+                } else {
+                    $dest = '<b>' . htmlspecialchars((string) ($row['loading_station'] ?? '')) . '</b><br>' . htmlspecialchars((string) ($row['loading_location'] ?? ''));
+                }
+            } else {
+                $dest = '<b>' . htmlspecialchars((string) ($row['unloading_station'] ?? '')) . '</b><br>' . htmlspecialchars((string) ($row['unloading_location'] ?? ''));
+            }
+
+            $contents = ($status === 'Loaded')
+                ? htmlspecialchars((string) ($row['consignment'] ?? '')) . $spec_flag . $loc_flag
+                : $spec_flag . $loc_flag;
+
+            print '<tr>';
+            print '<td>' . $row_num . '</td>';
+            print '<td>' . htmlspecialchars(substr($car_code, 0, 4)) . '</td>';
+            print '<td>' . htmlspecialchars($wagon_number) . '</td>';
+            print '<td>' . htmlspecialchars($check_letter) . '</td>';
+            print '<td>' . $sta . '</td>';
+            print '<td style="white-space:nowrap;">' . htmlspecialchars($dg) . '</td>';
+            print '<td></td>';
+            print '<td>' . htmlspecialchars($length) . '</td>';
+            print '<td>' . $current_location . '</td>';
+            print '<td>' . $dest . '</td>';
+            print '<td>' . $contents . '</td>';
+            print '</tr>';
             $row_num++;
         }
-    }
-    while ($row_num <= 16) {
-        echo '<tr><td style="border:1px solid black; padding:5px; text-align:center;">' . $row_num . '</td>';
-        for ($i = 0; $i < 5; $i++) {
-            echo '<td style="border:1px solid black; padding:5px;">&nbsp;</td>';
+        if ($row_num > 1) {
+            print '</tbody></table></div>';
         }
-        echo '</tr>';
-        $row_num++;
     }
     ?>
-  </table>
-  <p><b>Train:</b> <?= htmlspecialchars($shell['table_name']) ?> · <b>Session:</b> <?= htmlspecialchars($shell['session_nbr']) ?></p>
 </div>
 <?php
     master_sw_render_phase_shell_end($shell);
