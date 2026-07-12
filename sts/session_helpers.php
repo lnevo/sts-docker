@@ -1008,27 +1008,54 @@ function session_nav_bar_html(array $links, $trail = '', $extra_class = 'noprint
     if ($extra_class !== '') {
         $class .= ' ' . $extra_class;
     }
-    $html = '<nav class="' . $class . '" style="background-color: #343a40;">';
-    $html .= '<div class="container-fluid"><div class="d-flex flex-wrap align-items-center gap-2 w-100">';
+    // Split into left- and right-aligned groups. Links flagged 'right' => true are
+    // rendered at the right edge of the bar (after the trail text).
+    $left = [];
+    $right = [];
     foreach ($links as $link) {
+        if (!empty($link['right'])) {
+            $right[] = $link;
+        } else {
+            $left[] = $link;
+        }
+    }
+
+    $render_link = static function (array $link, $with_spacer) {
         $href = trim((string) ($link['href'] ?? ''));
         $label = trim((string) ($link['label'] ?? ''));
         if ($href === '' || $label === '') {
-            continue;
+            return '';
         }
         $icon = trim((string) ($link['icon'] ?? session_nav_icon_for_label($label)));
         $btn_class = 'btn btn-outline-light btn-sm';
+        if ($with_spacer) {
+            $btn_class .= ' ms-auto';
+        }
         if (!empty($link['active'])) {
             $btn_class .= ' active';
         }
-        $html .= '<a href="' . htmlspecialchars($href) . '" class="' . $btn_class . '">';
+        $out = '<a href="' . htmlspecialchars($href) . '" class="' . $btn_class . '">';
         if ($icon !== '') {
-            $html .= '<i class="bi bi-' . htmlspecialchars($icon) . '"></i> ';
+            $out .= '<i class="bi bi-' . htmlspecialchars($icon) . '"></i> ';
         }
-        $html .= htmlspecialchars($label) . '</a>';
+        return $out . htmlspecialchars($label) . '</a>';
+    };
+
+    $html = '<nav class="' . $class . '" style="background-color: #343a40;">';
+    $html .= '<div class="container-fluid"><div class="d-flex flex-wrap align-items-center gap-2 w-100">';
+    // The ms-auto spacer goes on the first element after the left group: the trail
+    // if present, otherwise the first right-aligned link.
+    $spacer_used = false;
+    foreach ($left as $link) {
+        $html .= $render_link($link, false);
     }
     if ($trail !== '') {
-        $html .= '<span class="navbar-text ms-auto text-white-50 small">' . htmlspecialchars($trail) . '</span>';
+        $html .= '<span class="navbar-text text-white-50 small ms-auto">' . htmlspecialchars($trail) . '</span>';
+        $spacer_used = true;
+    }
+    foreach ($right as $link) {
+        $html .= $render_link($link, !$spacer_used);
+        $spacer_used = true;
     }
     $html .= '</div></div></nav>';
 

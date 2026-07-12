@@ -66,7 +66,6 @@ $selected_style = session_normalize_switchlist_style(
 $overview_nav = [
     ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
     ['href' => '/sts/session.php?session=' . (int) $session, 'label' => 'All-session totals', 'icon' => 'bar-chart-line'],
-    ['href' => '/sts/session-sitemap.html', 'label' => 'Session Site Map', 'icon' => 'diagram-3'],
 ];
 if ($has_switchlists && $session_print_all_rel !== null) {
     $overview_nav[] = [
@@ -82,6 +81,12 @@ if ($session_wb_href !== null) {
         'icon' => 'files',
     ];
 }
+$overview_nav[] = [
+    'href' => '/sts/session-sitemap.html',
+    'label' => 'Site Map',
+    'icon' => 'diagram-3',
+    'right' => true,
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">

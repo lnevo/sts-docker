@@ -125,16 +125,13 @@
 <body onload="get_session_nbr();">
   <nav class="navbar navbar-dark navbar-sitemap noprint">
     <div class="container-fluid">
-      <span class="navbar-brand"><i class="bi bi-diagram-3"></i> Session Site Map</span>
+      <span class="navbar-brand"><i class="bi bi-diagram-3"></i> Site Map</span>
       <div>
         <a href="index.html" class="btn btn-outline-light btn-sm me-2">
           <i class="bi bi-house"></i> STS Main Menu
         </a>
         <a href="session_overview.php" class="btn btn-outline-light btn-sm me-2" data-session-link="session_overview.php?session={n}">
           <i class="bi bi-collection"></i> Sessions
-        </a>
-        <a href="editor.html" class="btn btn-outline-light btn-sm me-2">
-          <i class="bi bi-pencil-square"></i> Session Editor
         </a>
         <a href="index-t.html" class="btn btn-outline-light btn-sm">
           <i class="bi bi-diagram-3"></i> STS Site Map
@@ -160,15 +157,15 @@
 
     <h1 class="sitemap-title">Operating Session Browser<span id="session_number"></span></h1>
     <p class="sitemap-note">
-      Layout-owner navigation for browsing generated switch lists and waybills by operating session.
-      Links below use the <strong>current DB session</strong> when available.
-      Generated HTML is served through <code>so.php</code> so <code>temp/</code> never appears in URLs.
+      Browse generated switch lists and waybills by operating session. Links use the
+      <strong>current DB session</strong> when available; generated HTML is served through
+      <code>so.php</code>. Requests for a session beyond the current one redirect to the latest overview.
     </p>
 
     <table class="table table-bordered sitemap-table">
       <thead>
         <tr>
-          <th scope="col">Session Browser</th>
+          <th scope="col">Sessions</th>
           <th scope="col">Trains &amp; Switch Lists</th>
           <th scope="col">Waybills</th>
         </tr>
@@ -176,126 +173,81 @@
       <tbody>
         <tr>
           <td>
-            <span class="sitemap-subhead">Entry points</span>
+            <span class="sitemap-subhead">Pages</span>
             <ul>
               <li>
                 <a href="session_overview.php" data-session-link="session_overview.php?session={n}">Session overview</a>
-                <span class="sitemap-path">session_overview.php?session=N — default session page: trains &amp; consolidated views</span>
+                <span class="sitemap-path">trains, style picker, Open Session Editor</span>
               </li>
               <li>
                 <a href="session.php" data-session-link="session.php?session={n}">All-session totals</a>
-                <span class="sitemap-path">session.php — session picker + cumulative statistics across sessions</span>
-              </li>
-              <li>
-                <a href="editor.html">Session Editor</a>
-                <span class="sitemap-path">editor.html — workflow builder &amp; simulator</span>
+                <span class="sitemap-path">session picker + cumulative statistics</span>
               </li>
             </ul>
 
-            <span class="sitemap-subhead">Session panel (quick links)</span>
+            <span class="sitemap-subhead">Session bundles</span>
             <ul>
               <li>
-                <a href="session_overview.php" data-session-link="session_overview.php?session={n}">Session overview</a>
+                <a href="so.php" data-session-link="so.php?f=session_{n}/print_all.html">Session switch lists</a>
+                <span class="sitemap-path">all trains, all phases · style dropdown</span>
               </li>
               <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/print_all.html">Print all switch lists</a>
-                <span class="sitemap-path">session_N/print_all.html — all trains, all phases</span>
-              </li>
-              <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/waybills/index.html">All waybills</a>
-                <span class="sitemap-path">session_N/waybills/index.html</span>
-              </li>
-              <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/waybills/print_all.html">Print all waybills</a>
-                <span class="sitemap-path">session_N/waybills/print_all.html</span>
+                <a href="so.php" data-session-link="so.php?f=session_{n}/waybills/print_all.html">Session waybills</a>
               </li>
             </ul>
-
-            <span class="sitemap-subhead">Browse limits</span>
-            <ul>
-              <li>Only sessions <strong>1 through the current DB session</strong> appear in pickers</li>
-              <li>Session 0 is excluded from browsing</li>
-            </ul>
+            <p class="sitemap-note" style="margin-bottom:0;">Pickers list sessions 1 – current only.</p>
           </td>
 
           <td>
-            <span class="sitemap-subhead">Per train (interactive)</span>
+            <span class="sitemap-subhead">Train view (interactive)</span>
             <ul>
               <li>
-                <a href="job.php" data-session-link="job.php?session={n}&amp;job=CK1">Train view</a>
-                <span class="sitemap-path">job.php?session=N&amp;job=JOB — embedded switch list, phase nav, style picker</span>
+                <a href="job.php" data-session-link="job.php?session={n}&amp;job=CK1">Train Overview</a>
+                <span class="sitemap-path">job.php — embedded switch lists, phase nav, style picker, reload</span>
               </li>
-              <li>
-                Prev / next session (same train) — on the train view page
-              </li>
-              <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/phase_02/CK1/index.html">Train switch list index</a>
-                <span class="sitemap-path">phase_PP/JOB/index.html — work-leg links to job.php</span>
-              </li>
+              <li>Prev / next session follow the same train by name</li>
             </ul>
 
-            <span class="sitemap-subhead">Individual switch lists (generated)</span>
+            <span class="sitemap-subhead">Print</span>
             <ul>
               <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/phase_02/CK1/phase_01_mobile.html">Switch list page</a>
-                <span class="sitemap-path">phase_PP/JOB/phase_LL_STYLE.html — mobile, half, full, dmp, wo, x2010</span>
-              </li>
-              <li>Embedded in job.php iframe (<code>&amp;embed=1</code> strips nav)</li>
-              <li>Style dropdown on job.php and on generated switch list pages</li>
-            </ul>
-
-            <span class="sitemap-subhead">Print switch lists</span>
-            <ul>
-              <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/phase_02/CK1/print_all.html">Print all (one train)</a>
-                <span class="sitemap-path">phase_PP/JOB/print_all.html</span>
+                <a href="so.php" data-session-link="so.php?f=session_{n}/train_CK1.print_all.html">Train switch lists</a>
+                <span class="sitemap-path">train_JOB.print_all.html — one train, every phase</span>
               </li>
               <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/print_all.html">Print all (session)</a>
+                <a href="so.php" data-session-link="so.php?f=session_{n}/print_all.html">Session switch lists</a>
                 <span class="sitemap-path">session_N/print_all.html</span>
               </li>
             </ul>
+
+            <span class="sitemap-subhead">Styles</span>
+            <ul style="margin-bottom:0;">
+              <li>mobile, half, full, dmp, wo, x2010 — rendered on demand</li>
+            </ul>
           </td>
 
           <td>
-            <span class="sitemap-subhead">Session scope</span>
-            <ul>
-              <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/waybills/index.html">Waybill index</a>
-                <span class="sitemap-path">session_N/waybills/index.html — prev/next session nav</span>
-              </li>
-              <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/waybills/print_all.html">Print all waybills</a>
-              </li>
-              <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/waybills/006-M01.html">Single waybill</a>
-                <span class="sitemap-path">session_N/waybills/{waybill}.html — frozen snapshot</span>
-              </li>
-            </ul>
-
             <span class="sitemap-subhead">Train scope</span>
             <ul>
               <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/waybills/job_CK1.index.html">Job waybill index</a>
-                <span class="sitemap-path">waybills/job_JOB.index.html</span>
+                <a href="so.php" data-session-link="so.php?f=session_{n}/waybills/job_CK1.print_all.html">Train waybills</a>
+                <span class="sitemap-path">waybills/job_JOB.print_all.html — links back to train switch lists</span>
               </li>
               <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/waybills/job_CK1.print_all.html">Print all (job)</a>
+                <a href="so.php" data-session-link="so.php?f=session_{n}/waybills/job_CK1.index.html">Train waybill index</a>
               </li>
-              <li>Linked from job.php header — <strong>All waybills</strong></li>
             </ul>
 
-            <span class="sitemap-subhead">Phase + train scope</span>
+            <span class="sitemap-subhead">Session scope</span>
             <ul>
               <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/waybills/phase_02_CK1.index.html">Phase waybill index</a>
-                <span class="sitemap-path">waybills/phase_PP_JOB.index.html</span>
+                <a href="so.php" data-session-link="so.php?f=session_{n}/waybills/print_all.html">Session waybills</a>
               </li>
               <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/waybills/phase_02_CK1.print_all.html">Print all (phase + train)</a>
+                <a href="so.php" data-session-link="so.php?f=session_{n}/waybills/index.html">Session waybill index</a>
               </li>
-              <li>Waybills on job.php match cars on the active switch list</li>
             </ul>
+            <p class="sitemap-note" style="margin-bottom:0;">Waybills on the train view match the cars on the active switch list.</p>
           </td>
         </tr>
       </tbody>
@@ -304,7 +256,7 @@
     <table class="table table-bordered sitemap-table mt-4">
       <thead>
         <tr>
-          <th scope="col" colspan="3">Navigation flow</th>
+          <th scope="col" colspan="3">Navigation</th>
         </tr>
       </thead>
       <tbody>
@@ -313,17 +265,15 @@
             <span class="sitemap-subhead">Typical path</span>
             <p style="margin-bottom:0.75rem;">
               <a href="session_overview.php" data-session-link="session_overview.php?session={n}">Session overview</a>
-              → <a href="job.php" data-session-link="job.php?session={n}&amp;job=CK1">Train view</a>
-              → switch list (embedded or open) + waybills for that phase.
-              The overview links out to <a href="session.php" data-session-link="session.php?session={n}">All-session totals</a>.
+              → <a href="job.php" data-session-link="job.php?session={n}&amp;job=CK1">Train Overview</a>
+              → switch list + matching waybills. Print bundles cross-link to each other and to the session bundles.
             </p>
-            <span class="sitemap-subhead">Header links (most session pages)</span>
+            <span class="sitemap-subhead">Header links</span>
             <ul style="margin-bottom:0;">
-              <li><strong>STS Main Menu</strong> → <code>/sts/index.html</code></li>
-              <li><strong>Session N</strong> → <code>session_overview.php?session=N</code> (back to the overview)</li>
-              <li><strong>All-session totals</strong> (on the overview) → <code>session.php?session=N</code></li>
-              <li><strong>All waybills</strong> → session or job-scoped waybill index</li>
-              <li><strong>All switch lists</strong> (job.php) → that train&rsquo;s switch list index</li>
+              <li><strong>STS Main Menu</strong>, <strong>Session N</strong>, and <strong>Site Map</strong> (top-right) on every session page</li>
+              <li><strong>Session switch lists / Session waybills</strong> — session-wide print bundles</li>
+              <li><strong>Train switch lists / Train waybills / Train Overview</strong> — on train print bundles</li>
+              <li>Prev / next session buttons on every print bundle (built on demand)</li>
             </ul>
           </td>
         </tr>
