@@ -175,8 +175,9 @@ function session_ensure_output_root($root = null)
 
 /**
  * Public browser URL for a generated session output file. Files physically live
- * under sts/temp (writable by www-data), but are served to the browser through
- * so.php, so the temp/ path never appears in a URL. Example:
+ * under sts/backups/session_state/sessions (see session_web_root(); writable by
+ * www-data), but are served to the browser through so.php, so the storage path
+ * never appears in a URL. Example:
  *   session_output_url('session_3/phase_01/CK1/phase_01_mobile.html')
  *   => 'so.php?f=session_3/phase_01/CK1/phase_01_mobile.html'
  */
@@ -221,13 +222,18 @@ function session_redirect_if_beyond_current($session_nbr, $dbc = null, $exit = t
     return $current;
 }
 
-/** Strip a leading temp/ from a URL path to get the output-relative segment. */
+/**
+ * Normalize an output-relative segment. Also strips a leading legacy `temp/`
+ * prefix so any old baked link (from before session output moved to
+ * backups/session_state/sessions) still resolves. Current output never carries
+ * a temp/ prefix.
+ */
 function session_output_rel_strip($href)
 {
     return ltrim(preg_replace('#^temp/#', '', (string) $href), '/');
 }
 
-/** Absolute filesystem path for session output (relative segment without temp/). */
+/** Absolute filesystem path for session output (output-relative segment). */
 function session_output_fs_path($relative_path, $root = null)
 {
     $root = $root ?? session_web_root();
@@ -237,7 +243,7 @@ function session_output_fs_path($relative_path, $root = null)
 
 /**
  * Relative ../ chain from a generated file's directory up to /sts/, computed from
- * the file's PUBLIC path (session_N/...), not its physical temp/ path, so nav
+ * the file's PUBLIC path (session_N/...), not its physical storage path, so nav
  * links in static output resolve correctly under the rewritten URLs.
  */
 function session_relative_prefix_from_app($dir)
@@ -4147,4 +4153,611 @@ function session_manifest_has_switchlists(array $manifest, $session_nbr, $root =
 
     $legacy = session_dir_for($session_nbr, $root) . '/index.html';
     return is_file($legacy) && filesize($legacy) > 400;
+}
+
+/**
+ * Featured station names pinned to the top of a session station report (display
+ * order). Layouts may override via warm_start_station_report_featured().
+ *
+ * @return list<string>
+ */
+function session_station_report_featured_stations()
+{
+    if (function_exists('warm_start_station_report_featured')) {
+        return warm_start_station_report_featured();
+    }
+
+    return [];
+}
+
+/** True when a cached station_report.html should be rebuilt. */
+function session_station_report_stale($session_nbr, $report_fs, $root = null)
+{
+    if (!is_file($report_fs)) {
+        return true;
+    }
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
+    $mtime = (int) filemtime($report_fs);
+    $manifest = session_dir_for($session_nbr, $root) . '/manifest.json';
+    if (is_file($manifest) && filemtime($manifest) > $mtime) {
+        return true;
+    }
+    foreach (glob(session_dir_for($session_nbr, $root) . '/phase_*/*_master.json') ?: [] as $master) {
+        if (filemtime($master) > $mtime) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Destination location id for a switch-list car row (pickup target track).
+ *
+ * @param array<string,mixed> $car
+ * @param array<string,int>   $code_to_loc
+ */
+function session_station_report_dest_loc(array $car, array $code_to_loc)
+{
+    $status = (string) ($car['status'] ?? '');
+    if ($status === 'Ordered') {
+        $code = (string) ($car['loading_location'] ?? '');
+    } elseif (in_array($status, ['Loading', 'Loaded', 'Unloading'], true)) {
+        $code = (string) ($car['unloading_location'] ?? '');
+    } else {
+        $code = '';
+    }
+
+    return $code !== '' ? ($code_to_loc[$code] ?? 0) : 0;
+}
+
+/**
+ * Resting location id at the start of session N (0 when unknown/off-layout).
+ *
+ * @param array<int,array<int,int>>     $obs
+ * @param array<int,int>                $s1only_dest
+ * @param array<string,mixed>           $car
+ */
+function session_station_report_start_loc($cid, $session, array $obs, array $s1only_dest, array $car)
+{
+    if (isset($obs[$cid][$session])) {
+        return $obs[$cid][$session];
+    }
+    if (isset($obs[$cid])) {
+        $later = array_filter(array_keys($obs[$cid]), static fn($n) => $n > $session);
+        if ($later) {
+            return $obs[$cid][min($later)];
+        }
+        if (!empty($s1only_dest[$cid])) {
+            return $s1only_dest[$cid];
+        }
+    }
+
+    return (int) ($car['current'] ?? 0) > 0 ? (int) $car['current'] : 0;
+}
+
+/**
+ * Load/status at the start of session N.
+ *
+ * @param array<int,array<int,string>>  $obs_status
+ * @param array<string,mixed>           $car
+ */
+function session_station_report_start_status($cid, $session, array $obs_status, array $car)
+{
+    if (isset($obs_status[$cid][$session])) {
+        return $obs_status[$cid][$session];
+    }
+    if (isset($obs_status[$cid])) {
+        $later = array_filter(array_keys($obs_status[$cid]), static fn($n) => $n > $session);
+        if ($later) {
+            return $obs_status[$cid][min($later)];
+        }
+    }
+
+    return (string) ($car['live_status'] ?? '');
+}
+
+/**
+ * Assemble per-car rows for the start-of-session station report.
+ *
+ * @return array{by_station: array<string,list<array>>, station_order: list<string>, total: int}|null
+ */
+function session_station_report_data($dbc, $session_nbr, $root = null)
+{
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
+    if ($session_nbr < 1 || !is_dir(session_dir_for($session_nbr, $root))) {
+        return null;
+    }
+
+    $locations = [];
+    $code_to_loc = [];
+    $rs = mysqli_query($dbc, 'SELECT id, code, station FROM locations');
+    while ($row = mysqli_fetch_assoc($rs)) {
+        $id = (int) $row['id'];
+        $locations[$id] = ['code' => (string) $row['code'], 'station_id' => (int) $row['station']];
+        $code_to_loc[(string) $row['code']] = $id;
+    }
+
+    $stations = [];
+    $rs = mysqli_query($dbc, 'SELECT id, station, sort_seq FROM routing');
+    while ($row = mysqli_fetch_assoc($rs)) {
+        $stations[(int) $row['id']] = ['name' => (string) $row['station'], 'sort' => (int) $row['sort_seq']];
+    }
+
+    $cars = [];
+    $by_marks = [];
+    $rs = mysqli_query(
+        $dbc,
+        'SELECT cars.id AS id, cars.reporting_marks AS marks, cars.current_location_id AS cur,
+                cars.status AS live_status, cc.code AS car_code,
+                homeloc.code AS home_code, homest.station AS home_station
+         FROM cars
+         LEFT JOIN car_codes cc ON cc.id = cars.car_code_id
+         LEFT JOIN locations homeloc ON homeloc.id = cars.home_location
+         LEFT JOIN routing homest ON homest.id = homeloc.station'
+    );
+    while ($row = mysqli_fetch_assoc($rs)) {
+        $cid = (int) $row['id'];
+        $cars[$cid] = [
+            'marks' => (string) $row['marks'],
+            'car_code' => (string) ($row['car_code'] ?? ''),
+            'current' => (int) $row['cur'],
+            'live_status' => (string) ($row['live_status'] ?? ''),
+            'home' => $row['home_station'] !== null && $row['home_station'] !== ''
+                ? (string) $row['home_station'] : (string) ($row['home_code'] ?? ''),
+        ];
+        $by_marks[(string) $row['marks']] = $cid;
+    }
+
+    $obs = [];
+    $obs_status = [];
+    $session_work = [];
+    $pre_dest = [];
+
+    $sess_dirs = [];
+    foreach (glob($root . '/session_*', GLOB_ONLYDIR) ?: [] as $d) {
+        if (preg_match('#/session_(\d+)$#', $d, $m)) {
+            $sess_dirs[(int) $m[1]] = $d;
+        }
+    }
+    ksort($sess_dirs);
+
+    foreach ($sess_dirs as $sn => $dir) {
+        $files = glob($dir . '/phase_*/*_master.json') ?: [];
+        sort($files);
+        foreach ($files as $f) {
+            $d = json_decode((string) file_get_contents($f), true);
+            if (!is_array($d) || empty($d['sections'])) {
+                continue;
+            }
+            $job = (string) ($d['job'] ?? '');
+            foreach ($d['sections'] as $sec) {
+                foreach (($sec['cars'] ?? []) as $car) {
+                    $marks = (string) ($car['reporting_marks'] ?? ($car[0] ?? ''));
+                    if ($marks === '' || !isset($by_marks[$marks])) {
+                        continue;
+                    }
+                    $cid = $by_marks[$marks];
+                    $loc = (int) ($car['current_location_id'] ?? ($car[14] ?? 0));
+                    $status = (string) ($car['status'] ?? ($car[2] ?? ''));
+                    if (!isset($obs[$cid][$sn]) && $loc > 0) {
+                        $obs[$cid][$sn] = $loc;
+                    }
+                    if (!isset($obs_status[$cid][$sn]) && $status !== '') {
+                        $obs_status[$cid][$sn] = $status;
+                    }
+                    if ($sn === $session_nbr && !isset($session_work[$cid])) {
+                        $session_work[$cid] = [
+                            'job' => $job,
+                            'dest_loc' => session_station_report_dest_loc($car, $code_to_loc),
+                        ];
+                    }
+                    if ($sn < $session_nbr) {
+                        $dest = session_station_report_dest_loc($car, $code_to_loc);
+                        if ($dest > 0) {
+                            $pre_dest[$cid] = $dest;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    $featured = session_station_report_featured_stations();
+    $by_station = [];
+    foreach ($cars as $cid => $car) {
+        $loc_id = session_station_report_start_loc($cid, $session_nbr, $obs, $pre_dest, $car);
+        $loc = $locations[$loc_id] ?? null;
+        $loc_code = $loc['code'] ?? ($loc_id > 0 ? 'loc#' . $loc_id : '');
+        $st = $loc ? ($stations[$loc['station_id']] ?? null) : null;
+        $station_name = $loc_code === '' ? 'On train / off-layout' : ($st['name'] ?? 'Unknown station');
+        $sort = $st['sort'] ?? 99999;
+        $status = session_station_report_start_status($cid, $session_nbr, $obs_status, $car);
+
+        $stays = !isset($session_work[$cid]);
+        if ($stays) {
+            $action = '—';
+        } else {
+            $w = $session_work[$cid];
+            $dest = $w['dest_loc'] ? ($locations[$w['dest_loc']]['code'] ?? '') : '';
+            $action = 'Pick up · ' . ($w['job'] ?: '?') . ($dest !== '' ? ' → ' . $dest : '');
+        }
+
+        $by_station[$station_name][] = [
+            'sort' => $sort,
+            'loc' => $loc_code,
+            'marks' => $car['marks'],
+            'car_code' => $car['car_code'],
+            'status' => $status,
+            'home' => $car['home'],
+            'action' => $action,
+            'stays' => $stays,
+        ];
+    }
+
+    foreach ($by_station as &$rows) {
+        usort($rows, static fn($a, $b) => [$a['loc'], $a['marks']] <=> [$b['loc'], $b['marks']]);
+    }
+    unset($rows);
+
+    $station_order = [];
+    foreach ($featured as $f) {
+        if (isset($by_station[$f])) {
+            $station_order[] = $f;
+        }
+    }
+    $rest = [];
+    foreach ($by_station as $name => $rows) {
+        if (!in_array($name, $station_order, true)) {
+            $rest[$name] = $rows[0]['sort'] ?? 99999;
+        }
+    }
+    asort($rest);
+    foreach (array_keys($rest) as $name) {
+        $station_order[] = $name;
+    }
+
+    return [
+        'by_station' => $by_station,
+        'station_order' => $station_order,
+        'featured' => $featured,
+        'total' => count($cars),
+    ];
+}
+
+/** HTML for a load-status badge (mirrors display_station_report.php styling). */
+function session_station_report_status_html($status)
+{
+    $status = trim((string) $status);
+    if ($status === '') {
+        return '';
+    }
+    $cls = 'status-' . strtolower(preg_replace('/[^a-z0-9]+/i', '-', $status));
+
+    return '<span class="' . htmlspecialchars($cls, ENT_QUOTES) . '">'
+        . htmlspecialchars($status, ENT_QUOTES) . '</span>';
+}
+
+/**
+ * Render the station report HTML for a session.
+ *
+ * @param array{by_station: array, station_order: list<string>, featured: list<string>, total: int} $data
+ */
+function session_station_report_render_html($session_nbr, array $data)
+{
+    $session_nbr = (int) $session_nbr;
+    $by_station = $data['by_station'];
+    $station_order = $data['station_order'];
+    $featured = $data['featured'];
+    $total = (int) $data['total'];
+    $session_nav = (string) ($data['session_nav'] ?? '');
+    $generated_at = date('M j, Y g:i A');
+
+    // Distinct load statuses (for the status filter dropdown), in a friendly order.
+    $status_rank = ['Loaded' => 0, 'Empty' => 1, 'Ordered' => 2, 'Loading' => 3, 'Unloading' => 4];
+    $statuses = [];
+    foreach ($by_station as $rows) {
+        foreach ($rows as $r) {
+            $s = trim((string) $r['status']);
+            if ($s !== '') {
+                $statuses[$s] = true;
+            }
+        }
+    }
+    $statuses = array_keys($statuses);
+    usort($statuses, static function ($a, $b) use ($status_rank) {
+        return [$status_rank[$a] ?? 99, $a] <=> [$status_rank[$b] ?? 99, $b];
+    });
+
+    ob_start();
+    ?><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Station Car Report — Start of Session <?= $session_nbr ?></title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background:#f8f9fa; }
+  main { max-width: 1100px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+  h1 { font-size: 1.5rem; font-weight: 600; }
+  .subtitle { color:#6c757d; }
+  .station-card { background:#fff; border-radius:.5rem; box-shadow:0 2px 6px rgba(0,0,0,.08); margin-bottom:1.25rem; overflow:hidden; }
+  .station-head { display:flex; justify-content:space-between; align-items:center;
+    padding:.7rem 1rem; font-weight:600; color:#fff;
+    background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); }
+  .station-head .count { font-weight:500; font-size:.9rem; opacity:.9; }
+  .featured .station-head { background:linear-gradient(135deg,#0d6efd 0%,#0a58ca 100%); }
+  table { margin:0; }
+  th { font-size:.75rem; text-transform:uppercase; letter-spacing:.03em; color:#495057; }
+  td, th { padding:.4rem .75rem !important; vertical-align:middle; }
+  .track { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.85rem; color:#0a58ca; }
+  .marks { font-weight:600; }
+  .stay { color:#198754; font-weight:500; }
+  .act { color:#b02a37; }
+  .legend { font-size:.85rem; color:#6c757d; }
+  .status-empty { display:inline-block; background:#ffeaa7; color:#333; padding:2px 8px; border-radius:3px; font-weight:600; font-size:.8rem; }
+  .status-loaded { display:inline-block; background:#a8e6cf; color:#333; padding:2px 8px; border-radius:3px; font-weight:600; font-size:.8rem; }
+  .status-loading { display:inline-block; background:#74b9ff; color:#fff; padding:2px 8px; border-radius:3px; font-weight:600; font-size:.8rem; }
+  .status-unloading { display:inline-block; background:#fab1a0; color:#fff; padding:2px 8px; border-radius:3px; font-weight:600; font-size:.8rem; }
+  .status-ordered { display:inline-block; background:#dfe6e9; color:#333; padding:2px 8px; border-radius:3px; font-weight:600; font-size:.8rem; }
+  .station-report-navbar { background:linear-gradient(135deg,#0d6efd 0%,#0a58ca 100%); }
+  .station-report-navbar .btn-outline-light { border-color:rgba(255,255,255,.65); }
+  .session-nav-row { display:flex; align-items:center; flex-wrap:wrap; gap:.4rem; margin-bottom:1.1rem; }
+  .station-report-nav-label { font-size:.75rem; text-transform:uppercase; letter-spacing:.03em; color:#6c757d; font-weight:600; margin-right:.15rem; }
+  .station-report-jump { max-width:230px; }
+  .station-report-session-current { font-weight:600; color:#495057; }
+  .srp-filters { display:flex; flex-wrap:wrap; gap:.6rem; align-items:flex-end; background:#fff;
+    border-radius:.5rem; box-shadow:0 2px 6px rgba(0,0,0,.08); padding:.85rem 1rem; margin-bottom:1.25rem; }
+  .srp-filters .field { display:flex; flex-direction:column; gap:.2rem; }
+  .srp-filters label { font-size:.7rem; text-transform:uppercase; letter-spacing:.03em; color:#6c757d; font-weight:600; }
+  .srp-filters input, .srp-filters select { border:1.5px solid #dee2e6; border-radius:.375rem; padding:.35rem .6rem; font-size:.9rem; min-height:38px; }
+  .srp-filters input[type=search] { min-width:220px; }
+  .srp-filters .grow { flex:1 1 220px; }
+  .srp-filters .btn-clear { align-self:flex-end; }
+  .srp-empty { color:#6c757d; font-style:italic; padding:.5rem .25rem; }
+  .srp-summary { font-size:.85rem; color:#6c757d; margin:-.5rem 0 1rem; }
+  tr.srp-hidden, .station-card.srp-hidden { display:none; }
+  @media print { body{background:#fff;} .station-card{box-shadow:none;border:1px solid #ccc;} .noprint{display:none;} .srp-filters{display:none;} }
+</style>
+</head>
+<body>
+<nav class="navbar navbar-dark station-report-navbar noprint">
+  <div class="container-fluid">
+    <div class="d-flex flex-wrap align-items-center gap-2 w-100">
+      <a class="btn btn-outline-light btn-sm" href="/sts/index.html"><i class="bi bi-house"></i> STS Main Menu</a>
+      <a class="btn btn-outline-light btn-sm" href="index.php"><i class="bi bi-arrow-left"></i> Session <?= $session_nbr ?></a>
+      <button type="button" class="btn btn-outline-light btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
+      <a class="btn btn-outline-light btn-sm ms-auto" href="/sts/session-sitemap.html"><i class="bi bi-diagram-3"></i> Site Map</a>
+    </div>
+  </div>
+</nav>
+<main>
+  <h1>Station Car Report — Start of Session <?= $session_nbr ?></h1>
+  <p class="subtitle">Where every car was staged before Session <?= $session_nbr ?> work began, reconstructed from the switch-list archives. <?= $total ?> cars total. Generated <?= htmlspecialchars($generated_at, ENT_QUOTES) ?>.</p>
+  <p class="legend"><span class="stay">—</span> = stays put (not on a Session <?= $session_nbr ?> switch list) &nbsp;·&nbsp; <span class="act">Pick up · JOB → DEST</span> = handled on a Session <?= $session_nbr ?> switch list.</p>
+  <?= $session_nav ?>
+  <div class="srp-filters noprint">
+    <div class="field grow">
+      <label for="srp-search">Search</label>
+      <input type="search" id="srp-search" placeholder="Reporting marks, car code, track…">
+    </div>
+    <div class="field">
+      <label for="srp-station">Station</label>
+      <select id="srp-station">
+        <option value="">All stations</option>
+<?php foreach ($station_order as $name): ?>
+        <option value="<?= htmlspecialchars($name, ENT_QUOTES) ?>"><?= htmlspecialchars($name, ENT_QUOTES) ?></option>
+<?php endforeach; ?>
+      </select>
+    </div>
+    <div class="field">
+      <label for="srp-status">Status</label>
+      <select id="srp-status">
+        <option value="">Any status</option>
+<?php foreach ($statuses as $s): ?>
+        <option value="<?= htmlspecialchars($s, ENT_QUOTES) ?>"><?= htmlspecialchars($s, ENT_QUOTES) ?></option>
+<?php endforeach; ?>
+      </select>
+    </div>
+    <div class="field">
+      <label for="srp-handling">Handling</label>
+      <select id="srp-handling">
+        <option value="">All cars</option>
+        <option value="stay">Staying only</option>
+        <option value="work">On a switch list</option>
+      </select>
+    </div>
+    <button type="button" id="srp-clear" class="btn btn-sm btn-outline-secondary btn-clear">Clear</button>
+  </div>
+  <p class="srp-summary noprint" id="srp-summary"></p>
+<?php foreach ($station_order as $name):
+    $rows = $by_station[$name];
+    $is_featured = in_array($name, $featured, true);
+    $stays = count(array_filter($rows, static fn($r) => $r['stays']));
+?>
+  <div class="station-card<?= $is_featured ? ' featured' : '' ?>" data-station="<?= htmlspecialchars($name, ENT_QUOTES) ?>">
+    <div class="station-head">
+      <span><i class="bi bi-geo-alt"></i> <?= htmlspecialchars($name, ENT_QUOTES) ?></span>
+      <span class="count" data-total="<?= count($rows) ?>" data-stays="<?= $stays ?>"><?= count($rows) ?> car<?= count($rows) === 1 ? '' : 's' ?> · <?= $stays ?> staying</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover">
+        <thead><tr>
+          <th>Track</th><th>Reporting Marks</th><th>Car Code</th><th>Status</th><th>Home</th><th>Session <?= $session_nbr ?> action</th>
+        </tr></thead>
+        <tbody>
+<?php foreach ($rows as $r):
+    $search = strtolower(trim($r['marks'] . ' ' . $r['car_code'] . ' ' . $r['loc'] . ' ' . $r['action']));
+?>
+          <tr data-search="<?= htmlspecialchars($search, ENT_QUOTES) ?>" data-status="<?= htmlspecialchars($r['status'], ENT_QUOTES) ?>" data-handling="<?= $r['stays'] ? 'stay' : 'work' ?>">
+            <td class="track"><?= htmlspecialchars($r['loc'], ENT_QUOTES) ?></td>
+            <td class="marks"><?= htmlspecialchars($r['marks'], ENT_QUOTES) ?></td>
+            <td><?= htmlspecialchars($r['car_code'], ENT_QUOTES) ?></td>
+            <td><?= session_station_report_status_html($r['status']) ?></td>
+            <td><?= htmlspecialchars($r['home'], ENT_QUOTES) ?></td>
+            <td class="<?= $r['stays'] ? 'stay' : 'act' ?>"><?= htmlspecialchars($r['action'], ENT_QUOTES) ?></td>
+          </tr>
+<?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  </div>
+<?php endforeach; ?>
+</main>
+<script>
+(function () {
+  var search = document.getElementById('srp-search');
+  var station = document.getElementById('srp-station');
+  var status = document.getElementById('srp-status');
+  var handling = document.getElementById('srp-handling');
+  var clear = document.getElementById('srp-clear');
+  var summary = document.getElementById('srp-summary');
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.station-card'));
+
+  function apply() {
+    var q = (search.value || '').trim().toLowerCase();
+    var st = station.value || '';
+    var stat = status.value || '';
+    var hand = handling.value || '';
+    var shownCars = 0, shownStations = 0;
+
+    cards.forEach(function (card) {
+      var cardStation = card.getAttribute('data-station');
+      var rows = Array.prototype.slice.call(card.querySelectorAll('tbody tr'));
+      var visible = 0;
+      rows.forEach(function (row) {
+        var ok = true;
+        if (q && row.getAttribute('data-search').indexOf(q) === -1) { ok = false; }
+        if (ok && stat && row.getAttribute('data-status') !== stat) { ok = false; }
+        if (ok && hand && row.getAttribute('data-handling') !== hand) { ok = false; }
+        row.classList.toggle('srp-hidden', !ok);
+        if (ok) { visible++; }
+      });
+      var stationHidden = (st && cardStation !== st) || visible === 0;
+      card.classList.toggle('srp-hidden', stationHidden);
+      var countEl = card.querySelector('.count');
+      if (countEl) {
+        var total = countEl.getAttribute('data-total');
+        countEl.textContent = (visible === Number(total))
+          ? (total + ' car' + (total === '1' ? '' : 's') + ' · ' + countEl.getAttribute('data-stays') + ' staying')
+          : ('showing ' + visible + ' of ' + total);
+      }
+      if (!stationHidden) { shownStations++; shownCars += visible; }
+    });
+
+    var filtered = q || st || stat || hand;
+    summary.textContent = filtered
+      ? ('Showing ' + shownCars + ' car' + (shownCars === 1 ? '' : 's') + ' across ' + shownStations + ' station' + (shownStations === 1 ? '' : 's') + '.')
+      : '';
+  }
+
+  [search, station, status, handling].forEach(function (el) {
+    el.addEventListener('input', apply);
+    el.addEventListener('change', apply);
+  });
+  clear.addEventListener('click', function () {
+    search.value = ''; station.value = ''; status.value = ''; handling.value = '';
+    apply();
+  });
+  apply();
+})();
+</script>
+</body>
+</html>
+<?php
+    return (string) ob_get_clean();
+}
+
+/** Relative href from session_N/ to another session's station report. */
+function session_station_report_rel_href($session_nbr)
+{
+    return '../session_' . (int) $session_nbr . '/station_report.html';
+}
+
+/**
+ * Full session picker for a station report page: skip-to-first, prev, a jump
+ * dropdown, next, skip-to-last — mirroring the session overview picker. Nav hrefs
+ * use the relative "../session_N/station_report.html" form so so.php rewrites them
+ * to flow through the output server; the dropdown navigates via inline JS (not an
+ * href/src attribute, so it is left untouched by so.php's link rewriting).
+ */
+function session_station_report_session_nav_html($session_nbr, $dbc = null, $root = null)
+{
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
+    if ($session_nbr < 1) {
+        return '';
+    }
+    if ($dbc === null) {
+        require_once __DIR__ . '/open_db.php';
+        $dbc = open_db();
+    }
+    $current_db = (int) session_get_db_session($dbc);
+    $sessions = session_list_browser_sessions($current_db, $root);
+    $prev = session_adjacent_session($sessions, $session_nbr, 'prev');
+    $next = session_adjacent_session($sessions, $session_nbr, 'next');
+    list($first, $last) = session_edge_sessions($sessions);
+
+    $edge_btn = static function ($target, $icon, $title) {
+        if ($target === null) {
+            return '<span class="btn btn-outline-primary btn-sm disabled" aria-disabled="true"><i class="bi bi-'
+                . $icon . '"></i></span>';
+        }
+
+        return '<a class="btn btn-outline-primary btn-sm" href="'
+            . htmlspecialchars(session_station_report_rel_href($target)) . '" title="'
+            . htmlspecialchars($title, ENT_QUOTES) . '"><i class="bi bi-' . $icon . '"></i></a>';
+    };
+
+    $skip_first = ($first !== null && (int) $first !== $session_nbr) ? $first : null;
+    $skip_last = ($last !== null && (int) $last !== $session_nbr) ? $last : null;
+
+    $html = '<div class="session-nav-row station-report-session-nav noprint">';
+    $html .= '<span class="station-report-nav-label">Session</span>';
+    $html .= $edge_btn($skip_first, 'skip-start-fill', $skip_first !== null ? 'First session (' . (int) $skip_first . ')' : 'First session');
+    $html .= $edge_btn($prev, 'chevron-left', $prev !== null ? 'Session ' . (int) $prev : 'Previous');
+    $html .= '<select class="form-select form-select-sm station-report-jump" aria-label="Jump to session" '
+        . 'onchange="if(this.value){window.location.href=\'so.php?f=session_\'+this.value+\'/station_report.html\';}">';
+    foreach ($sessions as $n) {
+        $n = (int) $n;
+        $html .= '<option value="' . $n . '"' . ($n === $session_nbr ? ' selected' : '') . '>'
+            . 'Session ' . $n . ($n === $current_db ? ' (current)' : '') . '</option>';
+    }
+    $html .= '</select>';
+    $html .= $edge_btn($next, 'chevron-right', $next !== null ? 'Session ' . (int) $next : 'Next');
+    $html .= $edge_btn($skip_last, 'skip-end-fill', $skip_last !== null ? 'Last session (' . (int) $skip_last . ')' : 'Last session');
+    $html .= '</div>';
+
+    return $html;
+}
+
+/**
+ * Build (and cache) the start-of-session station car report. Reconstructs car
+ * positions and load status from switch-list archives (read-only). Returns the
+ * relative output path, or null when the session directory does not exist.
+ */
+function session_build_station_report($dbc, $session_nbr, $root = null)
+{
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
+    $data = session_station_report_data($dbc, $session_nbr, $root);
+    if ($data === null) {
+        return null;
+    }
+
+    $data['session_nav'] = session_station_report_session_nav_html($session_nbr, $dbc, $root);
+
+    $rel = 'session_' . $session_nbr . '/station_report.html';
+    $fs = session_output_fs_path($rel, $root);
+    session_ensure_writable_dir(dirname($fs));
+    $html = session_station_report_render_html($session_nbr, $data);
+    if (file_put_contents($fs, $html) === false) {
+        return null;
+    }
+
+    return $rel;
 }

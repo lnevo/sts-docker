@@ -1,7 +1,8 @@
 <?php
 /**
  * Per-session overview view. Rendered by session_overview.php?session=N and also
- * usable as a copied temp/session_N/index.php stub (session derived from GET or
+ * usable as a copied session_N/index.php stub under the session output root
+ * (session derived from GET or
  * from the containing directory name).
  */
 $sts_dir = __DIR__;
@@ -66,6 +67,10 @@ $session_wb_href = is_file(session_output_fs_path($session_wb_print_rel, $root))
     : ($has_session_waybills
         ? session_output_url($session_wb_index_rel)
         : null);
+$station_report_rel = 'session_' . (int) $session . '/station_report.html';
+$station_report_href = is_dir(session_dir_for($session, $root))
+    ? session_output_url($station_report_rel)
+    : null;
 $overview_nav = [
     ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
     ['href' => '/sts/session.php?session=' . (int) $session, 'label' => 'All-session totals', 'icon' => 'bar-chart-line'],
@@ -82,6 +87,13 @@ if ($session_wb_href !== null) {
         'href' => $session_wb_href,
         'label' => 'Session waybills',
         'icon' => 'files',
+    ];
+}
+if ($station_report_href !== null) {
+    $overview_nav[] = [
+        'href' => $station_report_href,
+        'label' => 'Station report',
+        'icon' => 'geo-alt',
     ];
 }
 $overview_nav[] = [

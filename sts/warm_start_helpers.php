@@ -27,6 +27,12 @@ function warm_start_track_scale_available()
     return function_exists('plugins_require_helper') && plugins_require_helper('track_scale');
 }
 
+/** Station names pinned to the top of per-session station reports (HART layout). */
+function warm_start_station_report_featured()
+{
+    return ['Shenango Coke Works', 'Demmler Yard', 'Scully Yard', 'Neville Island'];
+}
+
 function warm_start_coke_stats_reset()
 {
     return [

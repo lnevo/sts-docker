@@ -85,7 +85,7 @@ echo "  Dispatch: {$dispatched}\n";
 echo "  Skipped:  {$skipped}\n";
 
 // Per-phase switch-list summary (job + car count) so the caller can see empty
-// phases at a glance instead of inspecting temp/sessions by hand.
+// phases at a glance instead of inspecting the session output tree by hand.
 $phaseLines = [];
 foreach ($result['log'] ?? [] as $entry) {
     // Only generate_switchlists log entries carry a 'written' job list; skip
