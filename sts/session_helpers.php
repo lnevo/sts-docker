@@ -4481,29 +4481,29 @@ function session_station_report_render_html($session_nbr, array $data)
 <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background:#f8f9fa; }
-  main { max-width: 1100px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
-  h1 { font-size: 1.5rem; font-weight: 600; }
-  .subtitle { color:#6c757d; }
-  .station-card { background:#fff; border-radius:.5rem; box-shadow:0 2px 6px rgba(0,0,0,.08); margin-bottom:1.25rem; overflow:hidden; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background:#f8f9fa; font-size:13px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 1rem 1rem 2.5rem; }
+  h1 { font-size: 1.15rem; font-weight: 600; margin-bottom:.5rem; }
+  .subtitle { color:#6c757d; font-size:.8rem; margin-bottom:.5rem; }
+  .station-card { background:#fff; border-radius:.5rem; box-shadow:0 2px 6px rgba(0,0,0,.08); margin-bottom:1rem; overflow:hidden; }
   .station-head { display:flex; justify-content:space-between; align-items:center;
-    padding:.7rem 1rem; font-weight:600; color:#fff;
+    padding:.5rem .85rem; font-weight:600; font-size:.9rem; color:#fff;
     background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); }
-  .station-head .count { font-weight:500; font-size:.9rem; opacity:.9; }
+  .station-head .count { font-weight:500; font-size:.8rem; opacity:.9; }
   .featured .station-head { background:linear-gradient(135deg,#0d6efd 0%,#0a58ca 100%); }
-  table { margin:0; }
-  th { font-size:.75rem; text-transform:uppercase; letter-spacing:.03em; color:#495057; }
-  td, th { padding:.4rem .75rem !important; vertical-align:middle; }
-  .track { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.85rem; color:#0a58ca; }
+  table { margin:0; font-size:.8rem; }
+  th { font-size:.68rem; text-transform:uppercase; letter-spacing:.03em; color:#495057; }
+  td, th { padding:.3rem .6rem !important; vertical-align:middle; }
+  .track { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.78rem; color:#0a58ca; }
   .marks { font-weight:600; }
   .stay { color:#198754; font-weight:500; }
   .act { color:#b02a37; }
-  .legend { font-size:.85rem; color:#6c757d; }
-  .status-empty { display:inline-block; background:#ffeaa7; color:#333; padding:2px 8px; border-radius:3px; font-weight:600; font-size:.8rem; }
-  .status-loaded { display:inline-block; background:#a8e6cf; color:#333; padding:2px 8px; border-radius:3px; font-weight:600; font-size:.8rem; }
-  .status-loading { display:inline-block; background:#74b9ff; color:#fff; padding:2px 8px; border-radius:3px; font-weight:600; font-size:.8rem; }
-  .status-unloading { display:inline-block; background:#fab1a0; color:#fff; padding:2px 8px; border-radius:3px; font-weight:600; font-size:.8rem; }
-  .status-ordered { display:inline-block; background:#dfe6e9; color:#333; padding:2px 8px; border-radius:3px; font-weight:600; font-size:.8rem; }
+  .legend { font-size:.78rem; color:#6c757d; }
+  .status-empty { display:inline-block; background:#ffeaa7; color:#333; padding:1px 6px; border-radius:3px; font-weight:600; font-size:.72rem; }
+  .status-loaded { display:inline-block; background:#a8e6cf; color:#333; padding:1px 6px; border-radius:3px; font-weight:600; font-size:.72rem; }
+  .status-loading { display:inline-block; background:#74b9ff; color:#fff; padding:1px 6px; border-radius:3px; font-weight:600; font-size:.72rem; }
+  .status-unloading { display:inline-block; background:#fab1a0; color:#fff; padding:1px 6px; border-radius:3px; font-weight:600; font-size:.72rem; }
+  .status-ordered { display:inline-block; background:#dfe6e9; color:#333; padding:1px 6px; border-radius:3px; font-weight:600; font-size:.72rem; }
   .station-report-navbar { background:linear-gradient(135deg,#0d6efd 0%,#0a58ca 100%); }
   .station-report-navbar .btn-outline-light { border-color:rgba(255,255,255,.65); }
   .session-nav-row { display:flex; align-items:center; flex-wrap:wrap; gap:.4rem; margin-bottom:1.1rem; }
@@ -4521,7 +4521,7 @@ function session_station_report_render_html($session_nbr, array $data)
   .srp-empty { color:#6c757d; font-style:italic; padding:.5rem .25rem; }
   .srp-summary { font-size:.85rem; color:#6c757d; margin:-.5rem 0 1rem; }
   tr.srp-hidden, .station-card.srp-hidden { display:none; }
-  @media print { body{background:#fff;} .station-card{box-shadow:none;border:1px solid #ccc;} .noprint{display:none;} .srp-filters{display:none;} }
+  @media print { body{background:#fff;} .station-card{box-shadow:none;border:1px solid #ccc;} .noprint{display:none;} .srp-filters{display:none;} h1{margin:0;} }
 </style>
 </head>
 <body>
@@ -4529,7 +4529,7 @@ function session_station_report_render_html($session_nbr, array $data)
   <div class="container-fluid">
     <div class="d-flex flex-wrap align-items-center gap-2 w-100">
       <a class="btn btn-outline-light btn-sm" href="/sts/index.html"><i class="bi bi-house"></i> STS Main Menu</a>
-      <a class="btn btn-outline-light btn-sm" href="index.php"><i class="bi bi-arrow-left"></i> Session <?= $session_nbr ?></a>
+      <a class="btn btn-outline-light btn-sm" href="index.php"><i class="bi bi-calendar-event"></i> Session <?= $session_nbr ?></a>
       <button type="button" class="btn btn-outline-light btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
       <a class="btn btn-outline-light btn-sm ms-auto" href="/sts/session-sitemap.html"><i class="bi bi-diagram-3"></i> Site Map</a>
     </div>
@@ -4537,8 +4537,8 @@ function session_station_report_render_html($session_nbr, array $data)
 </nav>
 <main>
   <h1>Station Car Report — Start of Session <?= $session_nbr ?></h1>
-  <p class="subtitle">Where every car was staged before Session <?= $session_nbr ?> work began, reconstructed from the switch-list archives. <?= $total ?> cars total. Generated <?= htmlspecialchars($generated_at, ENT_QUOTES) ?>.</p>
-  <p class="legend"><span class="stay">—</span> = stays put (not on a Session <?= $session_nbr ?> switch list) &nbsp;·&nbsp; <span class="act">Pick up · JOB → DEST</span> = handled on a Session <?= $session_nbr ?> switch list.</p>
+  <p class="subtitle noprint">Where every car was staged before Session <?= $session_nbr ?> work began, reconstructed from the switch-list archives. <?= $total ?> cars total. Generated <?= htmlspecialchars($generated_at, ENT_QUOTES) ?>.</p>
+  <p class="legend noprint"><span class="stay">—</span> = stays put (not on a Session <?= $session_nbr ?> switch list) &nbsp;·&nbsp; <span class="act">Pick up · JOB → DEST</span> = handled on a Session <?= $session_nbr ?> switch list.</p>
   <?= $session_nav ?>
   <div class="srp-filters noprint">
     <div class="field grow">
