@@ -48,10 +48,13 @@ $fs = session_output_fs_path($rel);
 // navigation never dead-ends on "Not found". Also rebuild when the session's
 // manifest is newer than the cached bundle, so a bundle always reflects the
 // current "latest generation token" even while a session is being (re)generated.
-if (!is_file($fs) || so_print_all_bundle_stale($rel, $fs) || so_station_report_stale($rel, $fs)) {
+if (!is_file($fs) || so_print_all_bundle_stale($rel, $fs) || so_station_report_stale($rel, $fs) || so_wheel_report_stale($rel, $fs)) {
     $built = so_build_print_all_on_demand($rel);
     if ($built === null) {
         $built = so_build_station_report_on_demand($rel);
+    }
+    if ($built === null) {
+        $built = so_build_wheel_report_on_demand($rel);
     }
     if ($built !== null) {
         $fs = session_output_fs_path($built);
@@ -97,6 +100,7 @@ if ($ext === 'html' || $ext === 'htm') {
     $html = so_refresh_switchlist_job_print_all_session_nav($html, $rel);
     $html = so_refresh_switchlist_train_print_all_session_nav($html, $rel);
     $html = so_refresh_station_report_session_nav($html, $rel);
+    $html = so_refresh_wheel_report_session_nav($html, $rel);
     // Embedded mode (used by job.php's inline switch-list viewer): drop the
     // top navigation bar since the surrounding page provides navigation and the
     // style selector.
@@ -173,6 +177,31 @@ function so_build_station_report_on_demand($rel)
     require_once __DIR__ . '/open_db.php';
     $dbc = open_db();
     $built = session_build_station_report($dbc, (int) $m[1]);
+    mysqli_close($dbc);
+
+    return $built;
+}
+
+function so_wheel_report_stale($rel, $fs)
+{
+    if (!preg_match('#^session_(\d+)/wheel_report\.html$#', $rel, $m)) {
+        return false;
+    }
+    if (!is_file($fs)) {
+        return false;
+    }
+
+    return session_wheel_report_stale((int) $m[1], $fs);
+}
+
+function so_build_wheel_report_on_demand($rel)
+{
+    if (!preg_match('#^session_(\d+)/wheel_report\.html$#', $rel, $m)) {
+        return null;
+    }
+    require_once __DIR__ . '/open_db.php';
+    $dbc = open_db();
+    $built = session_build_wheel_report($dbc, (int) $m[1]);
     mysqli_close($dbc);
 
     return $built;
@@ -462,6 +491,28 @@ function so_refresh_station_report_session_nav($html, $rel)
 
     return preg_replace(
         '#<div class="session-nav-row station-report-session-nav[^"]*">.*?</div>#s',
+        $nav,
+        $html,
+        1
+    );
+}
+
+/** Same idea as so_refresh_station_report_session_nav(), for wheel reports. */
+function so_refresh_wheel_report_session_nav($html, $rel)
+{
+    if (!preg_match('#^session_(\d+)/wheel_report\.html$#', $rel, $m)) {
+        return $html;
+    }
+    if (strpos($html, 'wheel-report-session-nav') === false) {
+        return $html;
+    }
+    $nav = session_wheel_report_session_nav_html((int) $m[1]);
+    if ($nav === '') {
+        return $html;
+    }
+
+    return preg_replace(
+        '#<div class="session-nav-row wheel-report-session-nav[^"]*">.*?</div>#s',
         $nav,
         $html,
         1

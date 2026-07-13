@@ -71,6 +71,10 @@ $station_report_rel = 'session_' . (int) $session . '/station_report.html';
 $station_report_href = is_dir(session_dir_for($session, $root))
     ? session_output_url($station_report_rel)
     : null;
+$wheel_report_rel = 'session_' . (int) $session . '/wheel_report.html';
+$wheel_report_href = is_dir(session_dir_for($session, $root))
+    ? session_output_url($wheel_report_rel)
+    : null;
 $overview_nav = [
     ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
     ['href' => '/sts/session.php?session=' . (int) $session, 'label' => 'All-session totals', 'icon' => 'bar-chart-line'],
@@ -94,6 +98,13 @@ if ($station_report_href !== null) {
         'href' => $station_report_href,
         'label' => 'Station report',
         'icon' => 'geo-alt',
+    ];
+}
+if ($wheel_report_href !== null) {
+    $overview_nav[] = [
+        'href' => $wheel_report_href,
+        'label' => 'Wheel report',
+        'icon' => 'list-ol',
     ];
 }
 $overview_nav[] = [
