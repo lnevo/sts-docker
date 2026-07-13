@@ -4521,7 +4521,17 @@ function session_station_report_render_html($session_nbr, array $data)
   .srp-empty { color:#6c757d; font-style:italic; padding:.5rem .25rem; }
   .srp-summary { font-size:.85rem; color:#6c757d; margin:-.5rem 0 1rem; }
   tr.srp-hidden, .station-card.srp-hidden { display:none; }
-  @media print { body{background:#fff;} .station-card{box-shadow:none;border:1px solid #ccc;} .noprint{display:none;} .srp-filters{display:none;} h1{margin:0;} }
+  @media print {
+    body{background:#fff;}
+    .station-card{box-shadow:none;border:1px solid #ccc;}
+    .noprint{display:none;}
+    .srp-filters{display:none;}
+    h1{margin:0;}
+    .station-head, .featured .station-head,
+    .status-empty, .status-loaded, .status-loading, .status-unloading, .status-ordered {
+      -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact;
+    }
+  }
 </style>
 </head>
 <body>
