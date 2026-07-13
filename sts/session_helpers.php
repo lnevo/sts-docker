@@ -5247,7 +5247,7 @@ function session_wheel_report_render_html($session_nbr, array $data)
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Wheel Report — End of Session <?= $session_nbr ?></title>
+<title>Wheel Report — Start of Session <?= $session_nbr ?></title>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
 <style>
@@ -5317,8 +5317,8 @@ function session_wheel_report_render_html($session_nbr, array $data)
   </div>
 </nav>
 <main>
-  <h1>Wheel Report — End of Session <?= $session_nbr ?></h1>
-  <p class="subtitle noprint">Cars assigned to each train/job at the end of Session <?= $session_nbr ?><?= $is_live ? ' (live database snapshot)' : ', reconstructed from switch-list archives' ?>. <?= $total ?> car<?= $total === 1 ? '' : 's' ?> across <?= $train_count ?> train<?= $train_count === 1 ? '' : 's' ?>. Generated <?= htmlspecialchars($generated_at, ENT_QUOTES) ?>.</p>
+  <h1>Wheel Report — Start of Session <?= $session_nbr ?></h1>
+  <p class="subtitle noprint">Cars assigned to each train/job at the start of Session <?= $session_nbr ?><?= $is_live ? ' (live database snapshot)' : ', reconstructed from switch-list archives' ?>. <?= $total ?> car<?= $total === 1 ? '' : 's' ?> across <?= $train_count ?> train<?= $train_count === 1 ? '' : 's' ?>. Generated <?= htmlspecialchars($generated_at, ENT_QUOTES) ?>.</p>
   <?= $session_nav ?>
 <?php if ($train_count === 0): ?>
   <div class="no-cars">No cars were assigned to any train at the start of Session <?= $session_nbr ?>.</div>
