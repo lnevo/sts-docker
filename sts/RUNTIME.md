@@ -14,7 +14,7 @@ The Docker image copies all of `sts/` to `/var/www/html/sts/`. After `docker com
 | Bootstrap | `session_runtime.php` → `plugins/plugins.php`, `warm_start_helpers.php`, `session_simulator_ops.php` |
 | Orders | `generate_order_helpers.php`, `fill_order_helpers.php`, `drain_unfilled_orders.php` (Cancel Orders) |
 | Plugins | `plugins/plugins.php` — addon registry (operations buttons, catalog steps, dispatch) |
-| Track scale (addon) | `plugins/track_scale/` — GUI + workflow weigh/calibrate steps (`track_scale.php` stub at sts root) |
+| Track scale (addon) | Not on this branch (`workflow-editor`). Present on `active` / `track-scale` as `plugins/track_scale/`. Recipe weigh/calibrate steps skip when the plugin is absent. |
 | Coke orders (addon) | `plugins/coke_orders/` — outbound coke order replenishment catalog step |
 | Switch lists | `master_switchlist_helpers.php`, `generate_master_switchlists.php` |
 
