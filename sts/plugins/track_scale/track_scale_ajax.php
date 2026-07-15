@@ -222,12 +222,12 @@ try {
             $position = track_scale_normalize_position($raw_position);
             $active_position = track_scale_get_scale_car_position();
             if ($active_position === null) {
-                track_scale_json_error('Mark which sensor the scale car is on before weighing');
+                track_scale_json_error('Place the scale car on a sensor before locking it');
             }
             if (!track_scale_test_car_at_scale($dbc, $config)) {
                 $scale_location = track_scale_loading_location_code($config);
                 track_scale_json_error(
-                    'Scale test car must be at ' . $scale_location . ' to weigh sensors',
+                    'Scale test car must be at ' . $scale_location . ' to lock sensors',
                     403
                 );
             }
@@ -236,7 +236,28 @@ try {
                     'Scale car is marked at the ' . $active_position . ' sensor — move the car or update the position'
                 );
             }
-            track_scale_mark_sensor_weighed($position);
+            track_scale_mark_sensor_locked($position);
+            echo json_encode([
+                'success' => true,
+                'calibration' => track_scale_build_calibration_readings($config, $dbc),
+            ]);
+            break;
+
+        case 'calibrate_unlock':
+            $lock_error = track_scale_require_calibration_unlocked($dbc);
+            if ($lock_error !== null) {
+                track_scale_json_error($lock_error);
+            }
+            $body = track_scale_read_json_body();
+            $raw_position = trim((string) ($body['position'] ?? ''));
+            if ($raw_position === '') {
+                track_scale_json_error('Missing sensor position');
+            }
+            $position = track_scale_normalize_position($raw_position);
+            if (!track_scale_sensor_is_locked($position)) {
+                track_scale_json_error('Sensor is already unlocked');
+            }
+            track_scale_unlock_sensor($position);
             echo json_encode([
                 'success' => true,
                 'calibration' => track_scale_build_calibration_readings($config, $dbc),
@@ -244,10 +265,8 @@ try {
             break;
 
         case 'calibrate_set_position':
-            $lock_error = track_scale_require_calibration_unlocked($dbc);
-            if ($lock_error !== null) {
-                track_scale_json_error($lock_error);
-            }
+            // Placement is allowed after save so meters can reflect car position;
+            // adjustments remain blocked separately.
             $body = track_scale_read_json_body();
             $position = $body['position'] ?? null;
             if ($position !== null && $position !== '') {
@@ -258,7 +277,10 @@ try {
                         403
                     );
                 }
-                track_scale_set_scale_car_position(track_scale_normalize_position($position));
+                $normalized = track_scale_normalize_position($position);
+                track_scale_set_scale_car_position($normalized);
+                // Placing takes the initial reading (all pads update); lock is separate.
+                track_scale_mark_sensor_weighed($normalized);
             } else {
                 track_scale_set_scale_car_position(null);
             }
@@ -291,7 +313,10 @@ try {
                 );
             }
             if (!track_scale_sensor_has_reading($sensor)) {
-                track_scale_json_error('Weigh the scale car at this sensor before adjusting');
+                track_scale_json_error('Place the scale car at this sensor before adjusting');
+            }
+            if (track_scale_sensor_is_locked($sensor)) {
+                track_scale_json_error('This sensor is locked — move to another sensor to continue calibration');
             }
             if (array_key_exists('adjustment_tons', $body) && $body['adjustment_tons'] !== null && $body['adjustment_tons'] !== '') {
                 $adjustment = track_scale_set_sensor_adjustment_tons(
@@ -335,7 +360,10 @@ try {
                 );
             }
             if (!track_scale_sensor_has_reading($sensor)) {
-                track_scale_json_error('Weigh the scale car at this sensor before resetting adjustment');
+                track_scale_json_error('Place the scale car at this sensor before resetting adjustment');
+            }
+            if (track_scale_sensor_is_locked($sensor)) {
+                track_scale_json_error('This sensor is locked — adjustment can no longer be changed');
             }
             $adjustment = track_scale_reset_sensor_adjustment($sensor, $config);
             echo json_encode([
@@ -368,7 +396,10 @@ try {
                 );
             }
             if (!track_scale_sensor_has_reading($sensor)) {
-                track_scale_json_error('Weigh the scale car at this sensor before changing fine tune');
+                track_scale_json_error('Place the scale car at this sensor before changing fine tune');
+            }
+            if (track_scale_sensor_is_locked($sensor)) {
+                track_scale_json_error('This sensor is locked — fine tune can no longer be changed');
             }
             track_scale_set_sensor_fine_tune($sensor, $enabled);
             echo json_encode([

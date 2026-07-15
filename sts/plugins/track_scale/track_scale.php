@@ -7,6 +7,20 @@ $config = track_scale_load_config();
 // (cars_at_scale / calibration_state) can stay side-effect free.
 $track_scale_dbc = open_db();
 track_scale_sync_session_calibration($track_scale_dbc);
+// Fresh calibration UI: car at the scale spot does not count as placed on a sensor.
+if (!track_scale_is_calibration_locked($track_scale_dbc)) {
+    $track_scale_any_weighed = false;
+    foreach (track_scale_sensor_positions() as $track_scale_pos) {
+        if (track_scale_sensor_has_reading($track_scale_pos)) {
+            $track_scale_any_weighed = true;
+            break;
+        }
+    }
+    if (!$track_scale_any_weighed) {
+        track_scale_set_scale_car_position(null);
+        track_scale_clear_sensor_locks();
+    }
+}
 $track_scale_ui = [
     'siteLabel' => track_scale_site_label($config),
     'routedTrainsLabel' => track_scale_routed_trains_label($config),
@@ -45,6 +59,10 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
             font-weight: 700;
             line-height: 1.1;
             letter-spacing: 0.06em;
+        }
+        .scale-display.is-settling .value {
+            transition: none;
+            opacity: 0.92;
         }
         .scale-display .unit {
             font-size: 1rem;
@@ -110,7 +128,8 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
         /* Status banners: full width across top of the LED panel, right-justified */
         .scale-display.out-of-service .scale-led-wrap,
         .scale-display.out-of-range .scale-led-wrap,
-        .scale-display.is-ready .scale-led-wrap {
+        .scale-display.is-ready .scale-led-wrap,
+        .scale-display.is-weighing .scale-led-wrap {
             left: 0.65rem;
             right: 0.65rem;
             top: 0.55rem;
@@ -120,12 +139,16 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
         }
         .scale-display.out-of-service .scale-led-label.oos-label,
         .scale-display.out-of-range .scale-led-label.fail-label,
-        .scale-display.is-ready .scale-led-label.ready-label {
+        .scale-display.is-ready .scale-led-label.ready-label,
+        .scale-display.is-weighing .scale-led-label.weighing-label {
             display: block;
             width: 100%;
             text-align: right;
             white-space: nowrap;
             letter-spacing: 0.12em;
+        }
+        .scale-led-label.weighing-label {
+            color: #ffd666;
         }
         .scale-display.out-of-range .scale-led-label.fail-label {
             letter-spacing: 0.06em;
@@ -338,6 +361,10 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
             min-height: 4rem;
             padding-top: 0.85rem;
             padding-bottom: 0.85rem;
+            /* Match LEFT / CENTER / RIGHT title type */
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
         }
         /* Left / Center / Right labels sit at the bottom of each panel */
         .sensor-card > .sensor-card-heading {
@@ -345,6 +372,11 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
             margin-top: auto;
             margin-bottom: 0 !important;
             text-align: center;
+        }
+        .sensor-card .sensor-card-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
         }
         .sensor-card .scale-display {
             padding: 0.75rem 1rem;
@@ -391,15 +423,22 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
             opacity: 0.45;
         }
         .sensor-card .cal-position-btn.active,
-        .sensor-card .cal-position-btn.cal-weigh-phase {
+        .sensor-card .cal-position-btn.cal-lock-phase {
             background-color: #0d6efd;
             border-color: #0d6efd;
             color: #fff;
         }
-        .sensor-card .cal-position-btn.cal-weigh-phase:hover:not(:disabled) {
+        .sensor-card .cal-position-btn.cal-lock-phase:hover:not(:disabled) {
             background-color: #0b5ed7;
             border-color: #0a58ca;
             color: #fff;
+        }
+        .sensor-card .cal-position-btn.cal-locked-phase,
+        .sensor-card .cal-position-btn.cal-locked-phase:disabled {
+            background-color: #198754;
+            border-color: #198754;
+            color: #fff;
+            opacity: 1;
         }
         .sensor-card .sensor-title-short {
             display: none;
@@ -449,7 +488,9 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
                 margin-bottom: 0.35rem !important;
             }
             .cal-sensor-row .sensor-card .cal-position-btn {
-                font-size: 0.72rem;
+                font-size: 0.78rem;
+                font-weight: 700;
+                letter-spacing: 0.04em;
                 padding: 0.7rem 0.25rem;
                 min-height: 4.3rem;
                 margin-bottom: 0 !important;
@@ -677,7 +718,8 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
         }
         body.track-scale-accessible .btn.cal-position-btn,
         body.track-scale-accessible .btn.cal-weigh-btn {
-            font-size: 1.15rem;
+            font-size: 1.25rem;
+            font-weight: 700;
             min-height: 6rem;
             padding-top: 1.3rem;
             padding-bottom: 1.3rem;
@@ -1172,9 +1214,13 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
             padding-right: 0.7rem;
         }
         body.track-scale-accessible .sensor-card .cal-position-btn {
-            font-size: 1.2rem;
+            font-size: 1.25rem;
+            font-weight: 700;
             min-height: 6.5rem;
             padding: 1.5rem 0.85rem;
+        }
+        body.track-scale-accessible .sensor-card .sensor-card-title {
+            font-size: 1.25rem;
         }
         body.track-scale-accessible #calSaveBtn,
         body.track-scale-accessible #calResetBtn,
@@ -1313,7 +1359,7 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
         <div class="row g-3 mb-2 scale-top-row">
             <div class="col-md-6">
                 <div class="scale-display h-100">
-                    <div class="label">Gross weight (3-sensor avg)</div>
+                    <div class="label">Adjusted Gross Weight</div>
                     <div><span class="value" id="displayGross">0.00</span> <span class="unit">tons</span></div>
                     <div class="small mt-2" style="color:#6bdc6b;" id="sensorBreakdown"></div>
                 </div>
@@ -1443,7 +1489,7 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
                 </div>
             </div>
             <div class="card-body p-0">
-                <div id="carsListEmpty" class="p-3 text-muted d-none">No cars at the scale or on a <?= htmlspecialchars(strtolower($track_scale_ui['routedTrainsLabel'])) ?> train right now.</div>
+                <div id="carsListEmpty" class="p-3 text-muted d-none">No cars at the scale or in a train right now.</div>
                 <div id="carsListError" class="alert alert-danger m-3 d-none" role="alert"></div>
                 <div class="list-group list-group-flush" id="carsList"></div>
             </div>
@@ -1458,10 +1504,9 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
                     <div class="scale-led" id="calAverageLed" data-state="off" title="Calibration alignment"></div>
                     <span class="scale-led-label d-none" id="calAverageLedLabel"></span>
                 </div>
-                <div class="label">Average of 3 sensors</div>
+                <div class="label">Adjusted weight</div>
                 <div><span class="value" id="calAverageDisplay">—</span> <span class="unit">tons</span></div>
                 <div class="small mt-2" style="color:#6bdc6b;">
-                    Expected test car: <span id="calExpected">30.00</span> t &nbsp;|&nbsp;
                     Average adjustment: <span id="calAverageAdjustment">—</span> t
                     <span class="text-muted" id="calAverageMeta"></span>
                 </div>
@@ -1477,7 +1522,7 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
                 </p>
                 <div class="cal-track-wrap" id="calTrackWrap">
                     <div class="cal-track-rail">
-                        <div class="cal-track-car position-left" id="calTrackCar">
+                        <div class="cal-track-car d-none" id="calTrackCar">
                             <img id="calTestCarPhoto" alt="Scale test car" class="d-none">
                             <span class="cal-track-car-placeholder d-none" id="calTestCarPhotoPlaceholder">Test car</span>
                         </div>
@@ -1493,8 +1538,8 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
                             </div>
                             <div class="small mb-2 sensor-error-line">Error: <span id="sensorError-left">—</span> t</div>
                             <div class="small text-muted mb-2 sensor-adj-line" id="sensorAdj-left">adj 0.00</div>
-                            <button type="button" class="btn btn-outline-primary btn-sm w-100 mb-2 cal-position-btn" data-sensor="left">
-                                <i class="bi bi-truck"></i> Place Car
+                            <button type="button" class="btn btn-outline-primary w-100 mb-2 cal-position-btn" data-sensor="left">
+                                <i class="bi bi-truck"></i> Place Car Here
                             </button>
                         </div>
                     </div>
@@ -1507,8 +1552,8 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
                             </div>
                             <div class="small mb-2 sensor-error-line">Error: <span id="sensorError-center">—</span> t</div>
                             <div class="small text-muted mb-2 sensor-adj-line" id="sensorAdj-center">adj 0.00</div>
-                            <button type="button" class="btn btn-outline-primary btn-sm w-100 mb-2 cal-position-btn" data-sensor="center">
-                                <i class="bi bi-truck"></i> Place Car
+                            <button type="button" class="btn btn-outline-primary w-100 mb-2 cal-position-btn" data-sensor="center">
+                                <i class="bi bi-truck"></i> Place Car Here
                             </button>
                         </div>
                     </div>
@@ -1521,8 +1566,8 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
                             </div>
                             <div class="small mb-2 sensor-error-line">Error: <span id="sensorError-right">—</span> t</div>
                             <div class="small text-muted mb-2 sensor-adj-line" id="sensorAdj-right">adj 0.00</div>
-                            <button type="button" class="btn btn-outline-primary btn-sm w-100 mb-2 cal-position-btn" data-sensor="right">
-                                <i class="bi bi-truck"></i> Place Car
+                            <button type="button" class="btn btn-outline-primary w-100 mb-2 cal-position-btn" data-sensor="right">
+                                <i class="bi bi-truck"></i> Place Car Here
                             </button>
                         </div>
                     </div>
@@ -1701,6 +1746,205 @@ function applyReadingDisplays(reading) {
             breakdownEl.textContent = '';
         }
     }
+}
+
+const SCALE_SETTLE_MS = 3000;
+/** Calibration place-settle is shorter (smaller car / tighter UI feedback). */
+const SCALE_SETTLE_CAL_MS = 2000;
+/** Changes/sec at the start of settle (mild flicker — not too top-heavy). */
+const SCALE_SETTLE_RATE_START = 5;
+/** Changes/sec near the end (slow stabilizing ticks). */
+const SCALE_SETTLE_RATE_END = 1;
+/** Small up/down band around the final weight (tons). */
+const SCALE_SETTLE_AMP_TONS = 0.35;
+let scaleSettleGen = 0;
+let scaleSettleTimer = null;
+let calPlaceBusy = false;
+let lastCalibrationSnapshot = null;
+
+function abortScaleSettle() {
+    scaleSettleGen += 1;
+    if (scaleSettleTimer) {
+        clearTimeout(scaleSettleTimer);
+        scaleSettleTimer = null;
+    }
+    document.querySelectorAll('.scale-display.is-settling').forEach(el => {
+        el.classList.remove('is-settling');
+    });
+}
+
+/** Ease-in quad: 0 → 1 — gentler than cubic so early ticks aren’t too dense. */
+function settleEaseInQuad(t) {
+    const x = Math.min(1, Math.max(0, t));
+    return x * x;
+}
+
+/**
+ * Natural stabilize curve: dense ticks early, sparse at the end.
+ * Integrates rate from rateStart → rateEnd along an ease-in over durationMs.
+ */
+function buildSettleStepDelays(options) {
+    options = options || {};
+    const durationMs = Math.max(200, Number(options.durationMs) || SCALE_SETTLE_MS);
+    const rateStart = Math.max(1, Number(options.rateStart) || SCALE_SETTLE_RATE_START);
+    const rateEnd = Math.max(0.5, Number(options.rateEnd) || SCALE_SETTLE_RATE_END);
+    const durationSec = durationMs / 1000;
+    const delays = [];
+    let tSec = 0;
+    // Cap steps so a bad curve can't spawn hundreds of updates.
+    const maxSteps = 40;
+    while (tSec < durationSec - 0.001 && delays.length < maxSteps) {
+        const u = tSec / durationSec;
+        const eased = settleEaseInQuad(u);
+        const rate = rateStart + (rateEnd - rateStart) * eased;
+        const dt = 1 / Math.max(0.5, rate);
+        const remaining = durationSec - tSec;
+        const step = Math.min(dt, remaining);
+        delays.push(step * 1000);
+        tSec += step;
+    }
+    return delays;
+}
+
+function paintWeighSettleDisplays(gross, net, sensors) {
+    const grossEl = document.getElementById('displayGross');
+    const netEl = document.getElementById('displayNet');
+    if (grossEl) grossEl.textContent = fmt(gross);
+    if (netEl) netEl.textContent = fmt(net);
+    const breakdownEl = document.getElementById('sensorBreakdown');
+    if (!breakdownEl) return;
+    if (sensors && sensors.length) {
+        breakdownEl.textContent = sensors
+            .map(s => s.position.charAt(0).toUpperCase() + ': ' + fmt(s.display_tons))
+            .join(' · ');
+    } else {
+        breakdownEl.textContent = '';
+    }
+}
+
+function paintCalSettleDisplays(gross, sensors) {
+    const avgEl = document.getElementById('calAverageDisplay');
+    if (avgEl) avgEl.textContent = fmt(gross);
+    (sensors || []).forEach(s => {
+        const pos = s.position;
+        const el = document.getElementById('sensorDisplay-' + pos);
+        if (el) el.textContent = fmt(s.display_tons);
+    });
+    const central = document.getElementById('calCentralReading');
+    if (central && sensors && sensors.length) {
+        const active = sensors.find(s => {
+            const card = document.getElementById('sensorCard-' + s.position);
+            return card && card.classList.contains('car-at-position');
+        }) || sensors[0];
+        if (active) central.textContent = fmt(active.display_tons);
+    }
+}
+
+/**
+ * Start near the target weight, then discrete up/down steps, then lock.
+ * Returns false if aborted (another settle / car change).
+ */
+function runScaleSettle(options) {
+    options = options || {};
+    abortScaleSettle();
+    const gen = scaleSettleGen;
+    const durationMs = Number(options.durationMs) > 0 ? Number(options.durationMs) : SCALE_SETTLE_MS;
+    const rateStart = Number(options.rateStart) > 0 ? Number(options.rateStart) : SCALE_SETTLE_RATE_START;
+    const rateEnd = Number(options.rateEnd) > 0 ? Number(options.rateEnd) : SCALE_SETTLE_RATE_END;
+    const stepDelays = buildSettleStepDelays({ durationMs, rateStart, rateEnd });
+    const bounceCount = stepDelays.length;
+    const targetGross = Number(options.targetGross);
+    const targetNet = Number(options.targetNet);
+    const safeGross = Number.isFinite(targetGross) ? targetGross : 0;
+    const safeNet = Number.isFinite(targetNet) ? targetNet : 0;
+    const sensorTargets = Array.isArray(options.sensorTargets) ? options.sensorTargets : null;
+    const amp0 = Number.isFinite(Number(options.amplitudeTons))
+        ? Math.max(0.05, Number(options.amplitudeTons))
+        : SCALE_SETTLE_AMP_TONS;
+    const paint = typeof options.paint === 'function' ? options.paint : paintWeighSettleDisplays;
+    const settleSelector = options.settleSelector || '#weighPanel .scale-top-row .scale-display';
+    // Alternate above/below the target; exact target after the bounce series.
+    const signs = [];
+    let sign = Math.random() < 0.5 ? -1 : 1;
+    for (let i = 0; i < bounceCount; i++) {
+        signs.push(sign);
+        sign *= -1;
+    }
+
+    if (options.showNet !== false && options.mode !== 'calibrate') {
+        setNetReadingVisible(true);
+    }
+    document.querySelectorAll(settleSelector).forEach(el => {
+        el.classList.add('is-settling');
+    });
+
+    return new Promise(resolve => {
+        function finish(ok) {
+            scaleSettleTimer = null;
+            document.querySelectorAll(settleSelector).forEach(el => {
+                el.classList.remove('is-settling');
+            });
+            resolve(ok);
+        }
+
+        function showStep(index) {
+            if (gen !== scaleSettleGen) {
+                finish(false);
+                return;
+            }
+            if (index >= bounceCount) {
+                paint(safeGross, safeNet, sensorTargets);
+                finish(gen === scaleSettleGen);
+                return;
+            }
+            const t = bounceCount <= 1 ? 1 : (index / (bounceCount - 1));
+            // Amplitude eases out with the same curve so wobble dies as ticks slow.
+            const damp = 1 - settleEaseInQuad(t);
+            const offset = signs[index] * amp0 * Math.max(0.08, damp);
+            const gross = Math.max(0, safeGross + offset);
+            const net = Math.max(0, safeNet + offset * 0.9);
+            let sensors = null;
+            if (sensorTargets && sensorTargets.length) {
+                sensors = sensorTargets.map((s, idx) => {
+                    const target = Number(s.display_tons);
+                    const safe = Number.isFinite(target) ? target : 0;
+                    const sOff = signs[index] * amp0 * damp * (0.75 + (idx % 3) * 0.08);
+                    return {
+                        position: s.position,
+                        display_tons: Math.max(0, safe + sOff),
+                    };
+                });
+            }
+            paint(gross, net, sensors);
+            const delay = stepDelays[index] != null ? stepDelays[index] : 100;
+            scaleSettleTimer = setTimeout(() => showStep(index + 1), delay);
+        }
+
+        showStep(0);
+    });
+}
+
+async function runCalibrationPlaceSettle(calibration) {
+    if (!calibration) return true;
+    const avg = calibration.average && calibration.average.display_tons != null
+        ? Number(calibration.average.display_tons)
+        : Number(calibration.expected_tons) || 0;
+    const sensors = (calibration.sensors || [])
+        .filter(s => s && s.has_reading && s.display_tons != null)
+        .map(s => ({ position: s.position, display_tons: Number(s.display_tons) }));
+    setCalAverageLed('weighing', 'WEIGHING...');
+    return runScaleSettle({
+        mode: 'calibrate',
+        targetGross: avg,
+        targetNet: avg,
+        sensorTargets: sensors,
+        amplitudeTons: 0.35,
+        durationMs: SCALE_SETTLE_CAL_MS,
+        rateStart: SCALE_SETTLE_RATE_START,
+        rateEnd: SCALE_SETTLE_RATE_END,
+        settleSelector: '#calibratePanel .scale-display',
+        paint: (gross, _net, stepSensors) => paintCalSettleDisplays(gross, stepSensors),
+    });
 }
 
 async function restoreWeighSession(carId) {
@@ -2095,6 +2339,7 @@ function setWeightLed(state, label) {
         fail: 'BALANCE - FAIL',
         off: '',
         oos: 'OUT OF SERVICE',
+        weighing: 'WEIGHING...',
     };
     const text = label != null && label !== '' ? label : (labels[state] || '');
     ledLabel.textContent = text;
@@ -2102,13 +2347,15 @@ function setWeightLed(state, label) {
     ledLabel.classList.toggle('oos-label', state === 'oos');
     ledLabel.classList.toggle('fail-label', state === 'fail');
     ledLabel.classList.toggle('ready-label', state === 'ok');
+    ledLabel.classList.toggle('weighing-label', state === 'weighing');
     panel.classList.toggle('out-of-range', state === 'fail');
     panel.classList.toggle('out-of-service', state === 'oos');
+    panel.classList.toggle('is-weighing', state === 'weighing');
 }
 
 function weighFailureLedLabel(reading) {
     const reason = String((reading && reading.failure_reason) || '').toLowerCase();
-    if (reason === 'overloaded') return 'OVERLOADED - FAIL';
+    if (reason === 'overloaded') return 'LIMIT - FAIL';
     if (reason === 'imbalanced' || reason === 'underweight') return 'BALANCE - FAIL';
     return 'BALANCE - FAIL';
 }
@@ -2183,15 +2430,22 @@ function setCalAverageLed(state, labelText) {
     if (!panel || !label) return;
     state = state || 'off';
     if (led) led.dataset.state = state;
-    const text = labelText || '';
+    const defaults = {
+        ok: 'READY',
+        oos: 'OUT OF SERVICE',
+        weighing: 'WEIGHING...',
+    };
+    const text = labelText != null && labelText !== '' ? labelText : (defaults[state] || '');
     label.textContent = text;
     label.classList.toggle('d-none', !text);
     label.classList.toggle('oos-label', state === 'oos');
     label.classList.toggle('ready-label', state === 'ok');
     label.classList.toggle('fail-label', state === 'fail');
+    label.classList.toggle('weighing-label', state === 'weighing');
     panel.classList.toggle('out-of-service', state === 'oos');
     panel.classList.toggle('is-ready', state === 'ok');
     panel.classList.toggle('out-of-range', state === 'fail');
+    panel.classList.toggle('is-weighing', state === 'weighing');
 }
 
 function assignedOrderMessage(car) {
@@ -2289,6 +2543,7 @@ async function selectCar(carId) {
     if (currentCar && currentCar.id && currentReading) {
         snapshotWeighSession(currentCar.id);
     }
+    abortScaleSettle();
     selectedCarId = carId;
     hideWeighActionButtons();
     document.querySelectorAll('.car-list-item').forEach(el => {
@@ -2575,29 +2830,61 @@ async function openManualReassign() {
 }
 
 document.getElementById('weighBtn').addEventListener('click', async () => {
-    if (!currentCar || document.getElementById('weighBtn').disabled) return;
+    const weighBtn = document.getElementById('weighBtn');
+    if (!currentCar || !weighBtn || weighBtn.disabled) return;
+    const weighedCarId = currentCar.id;
+    weighBtn.disabled = true;
+    const resultEl = document.getElementById('weighResult');
+    if (resultEl) {
+        resultEl.innerHTML = '<span class="text-muted"><i class="bi bi-hourglass-split"></i> Weighing...</span>';
+    }
+    setWeightLed('weighing', 'WEIGHING...');
+    hideWeighActionButtons();
+    hideOrderSection();
+
     const data = await apiPost('weigh', { reporting_marks: currentCar.reporting_marks });
     if (!data.success) {
-        document.getElementById('weighResult').innerHTML =
-            `<span class="text-danger">${data.error || 'Weigh failed'}</span>`;
+        abortScaleSettle();
+        setWeightLed('off');
+        if (resultEl) {
+            resultEl.innerHTML =
+                `<span class="text-danger">${data.error || 'Weigh failed'}</span>`;
+        }
+        weighBtn.disabled = !scaleInService;
         return;
     }
 
-    currentReading = data.reading;
-    currentRouting = data.reading.routing;
-    applyReadingDisplays(data.reading);
+    const reading = data.reading;
+    const settled = await runScaleSettle({
+        targetGross: reading.gross_tons,
+        targetNet: reading.net_tons,
+        sensorTargets: reading.sensor_readings || null,
+        showNet: true,
+        amplitudeTons: 0.35,
+        durationMs: SCALE_SETTLE_MS,
+        rateStart: SCALE_SETTLE_RATE_START,
+        rateEnd: SCALE_SETTLE_RATE_END,
+    });
+    if (!settled || !currentCar || currentCar.id !== weighedCarId) {
+        weighBtn.disabled = !scaleInService;
+        return;
+    }
 
-    const resultEl = document.getElementById('weighResult');
-    if (data.reading.test_car_weigh) {
+    currentReading = reading;
+    currentRouting = reading.routing;
+    applyReadingDisplays(reading);
+
+    if (reading.test_car_weigh) {
         resultEl.innerHTML =
             '<span class="text-muted"><i class="bi bi-info-circle"></i> Scale test car — gross is tare weight only.</span>';
         setWeightLed('off');
         document.getElementById('orderSection').classList.add('d-none');
         hideWeighActionButtons();
+        weighBtn.disabled = !scaleInService;
         snapshotWeighSession(currentCar.id);
         return;
     }
-    if (data.reading.unloaded_weigh) {
+    if (reading.unloaded_weigh) {
         resultEl.innerHTML =
             '<span class="text-muted"><i class="bi bi-info-circle"></i> Empty car — gross is unloaded (tare) weight only.</span>';
         setWeightLed('off');
@@ -2608,26 +2895,27 @@ document.getElementById('weighBtn').addEventListener('click', async () => {
             data.next_car,
             { keepVisible: currentCar.weigh_source === 'in_train' }
         );
+        weighBtn.disabled = !scaleInService;
         snapshotWeighSession(currentCar.id);
         return;
     }
 
-    const inTol = data.reading.in_tolerance;
-    setWeightLed(inTol ? 'ok' : 'fail', inTol ? 'PASS' : weighFailureLedLabel(data.reading));
+    const inTol = reading.in_tolerance;
+    setWeightLed(inTol ? 'ok' : 'fail', inTol ? 'PASS' : weighFailureLedLabel(reading));
     showTrainNavButtons(
         data.prev_car,
         data.next_car,
         { keepVisible: currentCar.weigh_source === 'in_train' }
     );
-    if (!shouldShowAssignAfterWeigh(currentCar, data.reading)) {
+    if (!shouldShowAssignAfterWeigh(currentCar, reading)) {
         let baseMsg;
         if (!inTol) {
-            if (String(data.reading.failure_reason || '').toLowerCase() === 'overloaded') {
+            if (String(reading.failure_reason || '').toLowerCase() === 'overloaded') {
                 baseMsg =
-                    `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Overloaded — net ${fmt(data.reading.net_tons)} t exceeds load limit ${fmt(data.reading.target_net_tons)} t.</div>`;
+                    `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Overloaded — net ${fmt(reading.net_tons)} t exceeds load limit ${fmt(reading.target_net_tons)} t.</div>`;
             } else {
                 baseMsg =
-                    `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Imbalanced — left/right differ by ${fmt(data.reading.delta_tons)} t.</div>`;
+                    `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Imbalanced — left/right differ by ${fmt(reading.delta_tons)} t.</div>`;
             }
             const assigned = assignedOrderMessage(currentCar);
             if (assigned) {
@@ -2637,32 +2925,34 @@ document.getElementById('weighBtn').addEventListener('click', async () => {
             baseMsg = assignedOrderMessage(currentCar)
                 || '<span class="text-muted">Weigh complete — load balanced on assigned order.</span>';
         }
-        const reassignHint = shouldOfferReassignButton(currentCar, data.reading)
+        const reassignHint = shouldOfferReassignButton(currentCar, reading)
             ? ' <span class="text-muted">Use <strong>Reassign Order</strong> to change destination.</span>'
             : '';
         resultEl.innerHTML = baseMsg + reassignHint;
         hideOrderSection();
-        if (shouldOfferReassignButton(currentCar, data.reading)) {
+        if (shouldOfferReassignButton(currentCar, reading)) {
             showReassignButton();
         } else {
             hideReassignButton();
         }
+        weighBtn.disabled = !scaleInService;
         snapshotWeighSession(currentCar.id);
         return;
     }
     hideReassignButton();
     if (inTol) {
         resultEl.innerHTML =
-            `<span class="routing-outbound"><i class="bi bi-check-circle"></i> Left/right sensors within ±${fmt(data.reading.tolerance_tons)} t — assign to outbound coke order.</span>`;
-    } else if (String(data.reading.failure_reason || '').toLowerCase() === 'overloaded') {
+            `<span class="routing-outbound"><i class="bi bi-check-circle"></i> Left/right sensors within ±${fmt(reading.tolerance_tons)} t — assign to outbound coke order.</span>`;
+    } else if (String(reading.failure_reason || '').toLowerCase() === 'overloaded') {
         resultEl.innerHTML =
-            `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Overloaded — net ${fmt(data.reading.net_tons)} t exceeds load limit ${fmt(data.reading.target_net_tons)} t — assign to coke reload.</div>`;
+            `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Overloaded — net ${fmt(reading.net_tons)} t exceeds load limit ${fmt(reading.target_net_tons)} t.</div>`;
     } else {
         resultEl.innerHTML =
-            `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Imbalanced — left/right differ by ${fmt(data.reading.delta_tons)} t.</div>`;
+            `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Imbalanced — left/right differ by ${fmt(reading.delta_tons)} t.</div>`;
     }
 
     await loadOrders(currentRouting);
+    weighBtn.disabled = !scaleInService;
     snapshotWeighSession(currentCar.id);
 });
 
@@ -2863,22 +3153,27 @@ document.getElementById('assignBtn').addEventListener('click', async () => {
 
 function updateCalTrackCar(position) {
     const trackCar = document.getElementById('calTrackCar');
-    const active = position && SENSOR_POSITIONS.includes(position) ? position : 'left';
+    if (!trackCar) return;
     SENSOR_POSITIONS.forEach(pos => {
         trackCar.classList.remove('position-' + pos);
     });
+    const active = position && SENSOR_POSITIONS.includes(position) ? position : null;
+    if (!active) {
+        trackCar.classList.add('d-none');
+        return;
+    }
     trackCar.classList.remove('d-none');
     trackCar.classList.add('position-' + active);
 }
 
 function renderCalibration(cal) {
     if (!cal) return;
+    lastCalibrationSnapshot = cal;
 
     updateCalibrationMeta(cal);
 
     const calibrationLocked = !!cal.calibration_locked;
 
-    document.getElementById('calExpected').textContent = fmt(cal.expected_tons);
     if (cal.test_car) {
         const tc = cal.test_car;
         if (tc.reporting_marks) {
@@ -2910,9 +3205,9 @@ function renderCalibration(cal) {
     const scaleLocation = cal.scale_location || TRACK_SCALE_UI.scaleLocation || '';
 
     if (testCarAtScale) {
-        updateCalTrackCar(cal.scale_car_position || 'left');
+        updateCalTrackCar(cal.scale_car_position || null);
     } else {
-        document.getElementById('calTrackCar').classList.add('d-none');
+        updateCalTrackCar(null);
     }
 
     let activeSensor = null;
@@ -2920,9 +3215,11 @@ function renderCalibration(cal) {
         const pos = sensor.position;
         const card = document.getElementById('sensorCard-' + pos);
         const carHere = testCarAtScale && !!sensor.car_at_position;
+        const sensorLocked = !!sensor.is_locked;
         card.classList.toggle('car-at-position', carHere);
         card.classList.toggle('adjustment-locked', !!sensor.adjustment_locked);
-        card.classList.toggle('calibrated', !!sensor.is_zero);
+        // Green when saved, session-locked, or currently zeroed.
+        card.classList.toggle('calibrated', calibrationLocked || sensorLocked || !!sensor.is_zero);
 
         const badge = document.getElementById('sensorCarHere-' + pos);
         if (badge) {
@@ -2930,22 +3227,44 @@ function renderCalibration(cal) {
         }
 
         const posBtn = card.querySelector('.cal-position-btn');
-        posBtn.classList.toggle('active', carHere);
-        posBtn.classList.toggle('cal-weigh-phase', carHere);
-        posBtn.classList.toggle('btn-primary', carHere);
-        posBtn.classList.toggle('btn-outline-primary', !carHere);
-        posBtn.dataset.phase = carHere ? 'weigh' : 'place';
-        posBtn.disabled = !testCarAtScale || calibrationLocked;
-        posBtn.innerHTML = carHere
-            ? '<i class="bi bi-speedometer"></i> Weigh'
-            : '<i class="bi bi-truck"></i> Place Car';
-        posBtn.setAttribute('aria-label', carHere
-            ? ('Weigh test car on ' + pos + ' sensor')
-            : ('Place test car on ' + pos + ' sensor'));
+        posBtn.classList.remove('cal-weigh-phase', 'cal-lock-phase', 'cal-locked-phase');
+        // After save: place only. Open cal: Place → Lock/Unlock (allowed even with error).
+        let phase = 'place';
+        if (!calibrationLocked) {
+            if (sensorLocked) {
+                phase = 'locked';
+            } else if (carHere) {
+                phase = 'lock';
+            }
+        }
+        posBtn.classList.toggle('active', carHere && phase !== 'locked');
+        posBtn.classList.toggle('cal-lock-phase', phase === 'lock');
+        posBtn.classList.toggle('cal-locked-phase', phase === 'locked');
+        posBtn.classList.toggle('btn-primary', phase === 'lock' || (phase === 'place' && carHere));
+        posBtn.classList.toggle('btn-outline-primary', phase === 'place' && !carHere);
+        posBtn.classList.toggle('btn-success', phase === 'locked');
+        posBtn.dataset.phase = phase;
+        posBtn.dataset.carHere = carHere ? '1' : '0';
+        posBtn.disabled = !testCarAtScale || calPlaceBusy;
+        if (phase === 'locked') {
+            if (carHere) {
+                posBtn.innerHTML = '<i class="bi bi-unlock"></i> Unlock Sensor';
+                posBtn.setAttribute('aria-label', 'Unlock ' + pos + ' sensor');
+            } else {
+                posBtn.innerHTML = '<i class="bi bi-lock-fill"></i> Locked';
+                posBtn.setAttribute('aria-label', 'Place car on locked ' + pos + ' sensor');
+            }
+        } else if (phase === 'lock') {
+            posBtn.innerHTML = '<i class="bi bi-lock"></i> Lock Sensor';
+            posBtn.setAttribute('aria-label', 'Lock ' + pos + ' sensor');
+        } else {
+            posBtn.innerHTML = '<i class="bi bi-truck"></i> Place Car Here';
+            posBtn.setAttribute('aria-label', 'Place car on ' + pos + ' sensor');
+        }
 
         const weighBtn = card.querySelector('.cal-weigh-btn');
         if (weighBtn) {
-            weighBtn.disabled = !carHere || calibrationLocked;
+            weighBtn.disabled = !carHere || calibrationLocked || sensorLocked;
         }
 
         document.getElementById('sensorDisplay-' + pos).textContent =
@@ -2992,11 +3311,11 @@ function renderCalibration(cal) {
                 ? fmt(cal.average.adjustment_tons)
                 : '—';
         document.getElementById('calAverageMeta').textContent =
-            `(${cal.average.sensor_count || 0} of 3 sensors weighed)`;
+            `(${cal.average.sensor_count || 0} of 3 sensors in average)`;
     } else {
         document.getElementById('calAverageDisplay').textContent = '—';
         document.getElementById('calAverageAdjustment').textContent = '—';
-        document.getElementById('calAverageMeta').textContent = '(weigh each position to build average)';
+        document.getElementById('calAverageMeta').textContent = '(zero and lock each sensor — average moves toward expected)';
     }
 
     syncCalReadyUi(cal, activeSensor);
@@ -3108,11 +3427,10 @@ function syncCalCentralControls(sensor, testCarAtScale, calibrationLocked) {
     sensorEl.textContent = sensor.position ? String(sensor.position).toUpperCase() : '—';
     syncCalErrorStat(sensor);
     if (readingEl) {
-        // Freeze the panel reading at the raw weighed value; sensor LEDs track adjustment.
+        // Live pad reading (includes position shift + noise); adjustment is separate.
         if (sensor.has_reading
-            && sensor.display_tons !== null && sensor.display_tons !== undefined
-            && sensor.adjustment_tons !== null && sensor.adjustment_tons !== undefined) {
-            readingEl.textContent = fmt(Number(sensor.display_tons) - Number(sensor.adjustment_tons));
+            && sensor.display_tons !== null && sensor.display_tons !== undefined) {
+            readingEl.textContent = fmt(Number(sensor.display_tons));
         } else {
             readingEl.textContent = '—';
         }
@@ -3147,28 +3465,80 @@ function setCalActionError(message) {
     if (wrap) wrap.hidden = false;
 }
 
-async function placeCalCar(position) {
-    const setData = await apiPost('calibrate_set_position', { position });
-    if (!setData.success) {
-        setCalActionError(setData.error || 'Could not place car');
-        return;
-    }
-    renderCalibration(setData.calibration);
+function setCalPlaceButtonsBusy(busy) {
+    calPlaceBusy = !!busy;
+    const atScale = lastCalibrationSnapshot
+        ? (lastCalibrationSnapshot.test_car_at_scale !== false)
+        : true;
+    document.querySelectorAll('.cal-position-btn').forEach(btn => {
+        btn.disabled = busy || !atScale;
+    });
 }
 
+async function placeCalCar(position, options) {
+    options = options || {};
+    const keepLocked = options.keepLocked === true;
+    const autoLock = options.autoLock === true;
+    if (calPlaceBusy) return false;
+    setCalPlaceButtonsBusy(true);
+    try {
+        const setData = await apiPost('calibrate_set_position', { position });
+        if (!setData.success) {
+            setCalActionError(setData.error || 'Could not place car');
+            return false;
+        }
+        // Show placed state first, then settle meters at the new pad loads.
+        renderCalibration(setData.calibration);
+        const settled = await runCalibrationPlaceSettle(setData.calibration);
+        if (!settled) return false;
+
+        let calibration = setData.calibration;
+        if (autoLock && !keepLocked) {
+            const lockData = await apiPost('calibrate_read', { position });
+            if (!lockData.success) {
+                setCalActionError(lockData.error || 'Could not lock sensor');
+                renderCalibration(setData.calibration);
+                return false;
+            }
+            calibration = lockData.calibration;
+        }
+        renderCalibration(calibration);
+        return true;
+    } finally {
+        calPlaceBusy = false;
+        if (lastCalibrationSnapshot) {
+            renderCalibration(lastCalibrationSnapshot);
+        } else {
+            setCalPlaceButtonsBusy(false);
+        }
+    }
+}
+
+async function lockCalSensor(position) {
+    if (calPlaceBusy) return false;
+    const lockData = await apiPost('calibrate_read', { position });
+    if (!lockData.success) {
+        setCalActionError(lockData.error || 'Could not lock sensor');
+        return false;
+    }
+    renderCalibration(lockData.calibration);
+    return true;
+}
+
+async function unlockCalSensor(position) {
+    if (calPlaceBusy) return false;
+    const unlockData = await apiPost('calibrate_unlock', { position });
+    if (!unlockData.success) {
+        setCalActionError(unlockData.error || 'Could not unlock sensor');
+        return false;
+    }
+    renderCalibration(unlockData.calibration);
+    return true;
+}
+
+/** @deprecated alias — Lock Sensor is calibrate_read */
 async function weighCalPosition(position) {
-    const weighData = await apiPost('calibrate_read', { position });
-    if (!weighData.success) {
-        setCalActionError(weighData.error || 'Weigh failed');
-        return;
-    }
-    renderCalibration(weighData.calibration);
-}
-
-/** @deprecated kept for any leftover callers — prefer phase-specific helpers */
-async function placeCarAndWeigh(position) {
-    await placeCalCar(position);
-    await weighCalPosition(position);
+    return lockCalSensor(position);
 }
 
 async function adjustSensor(sensor, direction, fineTune) {
@@ -3235,12 +3605,22 @@ async function resetSensorAdjustment(sensor) {
 
 document.querySelectorAll('.cal-position-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-        if (btn.disabled) return;
+        if (btn.disabled || calPlaceBusy) return;
         const position = btn.dataset.sensor;
-        if (btn.dataset.phase === 'weigh' || btn.classList.contains('cal-weigh-phase')) {
-            weighCalPosition(position);
+        const phase = btn.dataset.phase;
+        const carHere = btn.dataset.carHere === '1';
+        if (phase === 'locked') {
+            if (carHere) {
+                unlockCalSensor(position);
+            } else {
+                // Relocate onto a locked pad — keep the lock after settle.
+                placeCalCar(position, { keepLocked: true });
+            }
+        } else if (phase === 'lock') {
+            // Allowed even when residual error is still present.
+            lockCalSensor(position);
         } else {
-            placeCalCar(position);
+            placeCalCar(position, { autoLock: false, keepLocked: false });
         }
     });
 });

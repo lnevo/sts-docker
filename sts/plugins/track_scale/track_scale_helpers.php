@@ -39,7 +39,7 @@ function track_scale_default_config()
         'routing_tolerance_tons' => 5.0,
         'loading_location_code' => 'SOUTH-SCALE',
         'site_label' => '',
-        'routed_trains_label' => 'Scale-area trains',
+        'routed_trains_label' => 'Trains',
         'outbound_loading_location_code' => 'NORTH',
         'reload_loading_location_code' => 'SOUTH-SCALE',
         'api_base_url' => '/sts/api/index.php',
@@ -91,6 +91,12 @@ function track_scale_default_config()
                 'left' => -0.50,
                 'center' => 0.0,
                 'right' => 0.50,
+            ],
+            // Apparent pad loads when the test car sits on one sensor (not balanced).
+            'load_share' => [
+                'left' => ['left' => 1.00, 'center' => 0.52, 'right' => 0.18],
+                'center' => ['left' => 0.72, 'center' => 1.00, 'right' => 0.72],
+                'right' => ['left' => 0.18, 'center' => 0.52, 'right' => 1.00],
             ],
             'test_car_reporting_marks' => 'COST1',
             'test_car_tare_tons' => 40.0,
@@ -927,6 +933,7 @@ function track_scale_sync_session_calibration($dbc)
                 $_SESSION['track_scale']['sensor_adjustments'][$position] = (float) $cal['sensor_adjustments'][$position];
             }
             $_SESSION['track_scale']['sensor_weighed'][$position] = true;
+            $_SESSION['track_scale']['sensor_locked'][$position] = true;
         }
         return;
     }
@@ -1005,6 +1012,11 @@ function track_scale_sync_session_calibration($dbc)
 
     $_SESSION['track_scale']['synced_session_number'] = $session_number;
     $_SESSION['track_scale']['sensor_weighed'] = [
+        'left' => false,
+        'center' => false,
+        'right' => false,
+    ];
+    $_SESSION['track_scale']['sensor_locked'] = [
         'left' => false,
         'center' => false,
         'right' => false,
@@ -1492,8 +1504,14 @@ function track_scale_session_init()
                 'center' => 0.0,
                 'right' => 0.0,
             ],
-            'scale_car_position' => 'left',
+            // Null = car spotted at scale but not yet placed on a sensor.
+            'scale_car_position' => null,
             'sensor_weighed' => [
+                'left' => false,
+                'center' => false,
+                'right' => false,
+            ],
+            'sensor_locked' => [
                 'left' => false,
                 'center' => false,
                 'right' => false,
@@ -1508,10 +1526,17 @@ function track_scale_session_init()
         ];
     }
     if (!array_key_exists('scale_car_position', $_SESSION['track_scale'])) {
-        $_SESSION['track_scale']['scale_car_position'] = 'left';
+        $_SESSION['track_scale']['scale_car_position'] = null;
     }
     if (!isset($_SESSION['track_scale']['sensor_weighed'])) {
         $_SESSION['track_scale']['sensor_weighed'] = [
+            'left' => false,
+            'center' => false,
+            'right' => false,
+        ];
+    }
+    if (!isset($_SESSION['track_scale']['sensor_locked'])) {
+        $_SESSION['track_scale']['sensor_locked'] = [
             'left' => false,
             'center' => false,
             'right' => false,
@@ -1668,8 +1693,13 @@ function track_scale_reset_calibration()
         'center' => 0.0,
         'right' => 0.0,
     ];
-    $_SESSION['track_scale']['scale_car_position'] = 'left';
+    $_SESSION['track_scale']['scale_car_position'] = null;
     $_SESSION['track_scale']['sensor_weighed'] = [
+        'left' => false,
+        'center' => false,
+        'right' => false,
+    ];
+    $_SESSION['track_scale']['sensor_locked'] = [
         'left' => false,
         'center' => false,
         'right' => false,
@@ -1707,7 +1737,7 @@ function track_scale_calibration_ready_to_save($config = null)
     track_scale_session_init();
 
     foreach (track_scale_sensor_positions() as $position) {
-        if (!track_scale_sensor_has_reading($position)) {
+        if (!track_scale_sensor_is_locked($position)) {
             return false;
         }
 
@@ -1727,8 +1757,7 @@ function track_scale_get_scale_car_position()
     track_scale_session_init();
     $position = $_SESSION['track_scale']['scale_car_position'] ?? null;
     if ($position === null || $position === '') {
-        $_SESSION['track_scale']['scale_car_position'] = 'left';
-        return 'left';
+        return null;
     }
     return track_scale_normalize_position($position);
 }
@@ -1737,7 +1766,7 @@ function track_scale_set_scale_car_position($position)
 {
     track_scale_session_init();
     if ($position === null || $position === '') {
-        $_SESSION['track_scale']['scale_car_position'] = 'left';
+        $_SESSION['track_scale']['scale_car_position'] = null;
         return;
     }
     $_SESSION['track_scale']['scale_car_position'] = track_scale_normalize_position($position);
@@ -1755,6 +1784,71 @@ function track_scale_mark_sensor_weighed($position)
     track_scale_session_init();
     $position = track_scale_normalize_position($position);
     $_SESSION['track_scale']['sensor_weighed'][$position] = true;
+}
+
+function track_scale_sensor_is_locked($position)
+{
+    track_scale_session_init();
+    $position = track_scale_normalize_position($position);
+    return !empty($_SESSION['track_scale']['sensor_locked'][$position]);
+}
+
+function track_scale_mark_sensor_locked($position)
+{
+    track_scale_session_init();
+    $position = track_scale_normalize_position($position);
+    $_SESSION['track_scale']['sensor_weighed'][$position] = true;
+    $_SESSION['track_scale']['sensor_locked'][$position] = true;
+}
+
+function track_scale_unlock_sensor($position)
+{
+    track_scale_session_init();
+    $position = track_scale_normalize_position($position);
+    $_SESSION['track_scale']['sensor_locked'][$position] = false;
+}
+
+function track_scale_clear_sensor_locks()
+{
+    track_scale_session_init();
+    $_SESSION['track_scale']['sensor_locked'] = [
+        'left' => false,
+        'center' => false,
+        'right' => false,
+    ];
+}
+
+function track_scale_calibration_load_share($active_position, $config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    $active_position = track_scale_normalize_position($active_position);
+    $defaults = [
+        'left' => ['left' => 1.00, 'center' => 0.52, 'right' => 0.18],
+        'center' => ['left' => 0.72, 'center' => 1.00, 'right' => 0.72],
+        'right' => ['left' => 0.18, 'center' => 0.52, 'right' => 1.00],
+    ];
+    $configured = ($config['calibration']['load_share'] ?? [])[$active_position] ?? null;
+    $share = $defaults[$active_position] ?? $defaults['center'];
+    if (is_array($configured)) {
+        foreach (track_scale_sensor_positions() as $position) {
+            if (array_key_exists($position, $configured) && is_numeric($configured[$position])) {
+                $share[$position] = (float) $configured[$position];
+            }
+        }
+    }
+    return $share;
+}
+
+function track_scale_calibration_true_gross_for_sensor($sensor_position, $active_position, $expected, $config = null, $balanced_idle = false)
+{
+    $config = $config ?? track_scale_load_config();
+    if ($active_position === null || $active_position === '') {
+        return $balanced_idle ? (float) $expected : 0.0;
+    }
+    $share = track_scale_calibration_load_share($active_position, $config);
+    $sensor_position = track_scale_normalize_position($sensor_position);
+    $factor = (float) ($share[$sensor_position] ?? 0.0);
+    return (float) $expected * max(0.0, $factor);
 }
 
 function track_scale_is_test_car_marks($reporting_marks, $config = null)
@@ -1787,15 +1881,22 @@ function track_scale_average_sensor_display_tons($true_gross, $config = null)
     return track_scale_round(array_sum($values) / count($values), $config);
 }
 
-function track_scale_build_calibration_sensor_reading($position, $expected_gross, $config = null)
+function track_scale_build_calibration_sensor_reading($position, $expected_gross, $config = null, $active_position = null, $balanced_idle = false)
 {
     $config = $config ?? track_scale_load_config();
     $position = track_scale_normalize_position($position);
     $error = track_scale_get_sensor_error($position, $config);
     $adjustment = track_scale_get_sensor_adjustment($position);
     $residual_error = track_scale_round($error + $adjustment, $config);
-    // Corrected live reading so the sensor LED tracks adjustment (eye focus).
-    $display = track_scale_round((float) $expected_gross + $residual_error, $config);
+    $true_gross = track_scale_calibration_true_gross_for_sensor(
+        $position,
+        $active_position,
+        $expected_gross,
+        $config,
+        $balanced_idle
+    );
+    // Static per calibration step: updates only when car moves or adjustment changes.
+    $display = track_scale_round($true_gross + $residual_error, $config);
 
     return [
         'position' => $position,
@@ -1805,6 +1906,7 @@ function track_scale_build_calibration_sensor_reading($position, $expected_gross
         'sensor_error_tons' => track_scale_round($error, $config),
         'adjustment_tons' => track_scale_round($adjustment, $config),
         'is_zero' => abs($residual_error) < 0.005,
+        'load_gross_tons' => track_scale_round($true_gross, $config),
     ];
 }
 
@@ -1910,15 +2012,25 @@ function track_scale_build_calibration_readings($config = null, $dbc = null)
     $expected = track_scale_test_car_expected_gross($config);
     $active_position = track_scale_get_scale_car_position();
     $test_car_at_scale = ($dbc !== null) && track_scale_test_car_at_scale($dbc, $config);
+    $car_placed = $test_car_at_scale && $active_position !== null;
 
     $calibration_locked = ($dbc !== null) && track_scale_is_calibration_locked($dbc);
 
     $sensors = [];
     $average_adjustment_values = [];
     $average_corrected_values = [];
+    $balanced_idle = $calibration_locked && !$car_placed;
     foreach (track_scale_sensor_positions() as $position) {
-        $car_at_position = $test_car_at_scale && ($active_position === $position);
-        $has_reading = track_scale_sensor_has_reading($position) || $calibration_locked;
+        $car_at_position = $car_placed && ($active_position === $position);
+        $visited = track_scale_sensor_has_reading($position);
+        $session_locked = track_scale_sensor_is_locked($position);
+        // Saved calibration counts all pads locked; otherwise use per-pad session locks.
+        $is_locked = $calibration_locked || $session_locked;
+        // Pads update whenever the car is placed; after save, idle scale stays balanced.
+        $has_reading = $car_placed
+            || $balanced_idle
+            || $visited
+            || $session_locked;
         $adjustment = track_scale_round(track_scale_get_sensor_adjustment($position), $config);
 
         $fine_tune = track_scale_get_sensor_fine_tune($position);
@@ -1928,7 +2040,7 @@ function track_scale_build_calibration_readings($config = null, $dbc = null)
             $sensor_error = track_scale_round(track_scale_get_sensor_error($position, $config), $config);
             $sensors[] = [
                 'position' => $position,
-                'display_tons' => $calibration_locked ? null : track_scale_round(0.0, $config),
+                'display_tons' => track_scale_round(0.0, $config),
                 'expected_tons' => track_scale_round($expected, $config),
                 'error_tons' => null,
                 'sensor_error_tons' => $sensor_error,
@@ -1936,6 +2048,7 @@ function track_scale_build_calibration_readings($config = null, $dbc = null)
                 'fine_tune' => $fine_tune,
                 'adjust_step_tons' => track_scale_round($adjust_step, $config),
                 'is_zero' => false,
+                'is_locked' => false,
                 'has_reading' => false,
                 'car_at_position' => $car_at_position,
                 'adjustment_locked' => true,
@@ -1943,15 +2056,35 @@ function track_scale_build_calibration_readings($config = null, $dbc = null)
             continue;
         }
 
-        $reading = track_scale_build_calibration_sensor_reading($position, $expected, $config);
+        $share_position = $car_placed ? $active_position : ($balanced_idle ? null : $position);
+        $reading = track_scale_build_calibration_sensor_reading(
+            $position,
+            $expected,
+            $config,
+            $share_position,
+            $balanced_idle
+        );
         $reading['has_reading'] = true;
+        $reading['is_locked'] = $is_locked;
         $reading['car_at_position'] = $car_at_position;
-        $reading['adjustment_locked'] = $calibration_locked || !$car_at_position;
+        // Frozen when saved, session-locked, or car is not on this pad.
+        $reading['adjustment_locked'] = $calibration_locked || $session_locked || !$car_at_position;
         $reading['fine_tune'] = $fine_tune;
         $reading['adjust_step_tons'] = track_scale_round($adjust_step, $config);
+        // Calibration progress reading: expected + residual (ignores pad load-share skew).
+        $reading['calibrated_tons'] = track_scale_round(
+            (float) $expected + (float) $reading['error_tons'],
+            $config
+        );
         $sensors[] = $reading;
-        $average_adjustment_values[] = $reading['adjustment_tons'];
-        $average_corrected_values[] = $reading['display_tons'];
+        // Average tracks locked pads, the active pad, or the saved scale.
+        $include_in_average = $session_locked
+            || $car_at_position
+            || ($calibration_locked && $has_reading);
+        if ($include_in_average) {
+            $average_adjustment_values[] = $reading['adjustment_tons'];
+            $average_corrected_values[] = $reading['calibrated_tons'];
+        }
     }
 
     $average = null;
@@ -1984,8 +2117,8 @@ function track_scale_build_calibration_readings($config = null, $dbc = null)
         ];
     }
 
-    $calibrated_sensors = array_filter($sensors, function ($sensor) {
-        return !empty($sensor['has_reading']);
+    $locked_sensors = array_filter($sensors, function ($sensor) {
+        return !empty($sensor['is_locked']);
     });
 
     return [
@@ -1998,8 +2131,9 @@ function track_scale_build_calibration_readings($config = null, $dbc = null)
             : track_scale_test_car_info($config),
         'sensors' => $sensors,
         'average' => $average,
-        'all_calibrated' => count($calibrated_sensors) === 3
-            && !in_array(false, array_column($calibrated_sensors, 'is_zero'), true),
+        'all_calibrated' => $calibration_locked
+            || (count($locked_sensors) === 3
+                && !in_array(false, array_column($locked_sensors, 'is_zero'), true)),
         'calibration_locked' => $calibration_locked,
         'calibrated_this_session' => $calibration_locked,
         'calibration_saved_at' => $dbc !== null
@@ -2318,7 +2452,7 @@ function track_scale_routed_trains_label($config = null)
 {
     $config = $config ?? track_scale_load_config();
     $label = trim((string) ($config['routed_trains_label'] ?? ''));
-    return $label !== '' ? $label : 'Scale-area trains';
+    return $label !== '' ? $label : 'Trains';
 }
 
 function track_scale_loading_location_code($config = null)
@@ -2385,17 +2519,12 @@ function track_scale_job_ids_for_scale_trains($dbc, $config = null)
         return $cache;
     }
 
-    $routing_ids = track_scale_job_ids_for_south_yard_routing($dbc, $config);
-    if (count($routing_ids) === 0) {
-        $cache = [];
-        return $cache;
-    }
-
-    $ids_sql = implode(', ', array_map('intval', $routing_ids));
+    // Any job that currently has cars in train — no south-yard / scale-area
+    // station filter. Locals like D749 can weigh cars already on the train.
     $sql = 'SELECT DISTINCT cars.handled_by_job_id AS job_id
             FROM cars
             WHERE cars.current_location_id = 0
-              AND cars.handled_by_job_id IN (' . $ids_sql . ')
+              AND cars.handled_by_job_id > 0
               AND cars.status != "Unavailable"';
 
     $job_ids = [];
@@ -2451,6 +2580,8 @@ function track_scale_job_ids_for_south_yard_routing($dbc, $config = null)
 
 function track_scale_car_in_south_yard_train($car, $dbc, $config = null)
 {
+    // Name is historical: any car currently in a train is weigh-eligible.
+    // (Previously limited to jobs whose schedule included the scale station.)
     if (!is_array($car)) {
         return false;
     }
@@ -2466,7 +2597,7 @@ function track_scale_car_in_south_yard_train($car, $dbc, $config = null)
         return false;
     }
 
-    return in_array($job_id, track_scale_job_ids_for_south_yard_routing($dbc, $config), true);
+    return true;
 }
 
 function track_scale_car_weighable($car, $dbc, $config = null)
@@ -2492,7 +2623,7 @@ function track_scale_weighable_car_error($car, $config = null)
     }
 
     return 'Car must be at ' . $scale_location
-        . ' or on a train routed to the scale area to weigh (currently at ' . $current . ')';
+        . ' or in a train to weigh (currently at ' . $current . ')';
 }
 
 function track_scale_car_at_scale($car, $config = null)
@@ -2682,10 +2813,6 @@ function track_scale_get_cars_at_scale($dbc, $config = null, $filter = null)
     $config = $config ?? track_scale_load_config();
     $filter = trim((string) ($filter ?? ''));
     $location_code = mysqli_real_escape_string($dbc, track_scale_loading_location_code($config));
-    $job_ids = track_scale_job_ids_for_south_yard_routing($dbc, $config);
-    $job_filter = count($job_ids) > 0
-        ? ' AND cars.handled_by_job_id IN (' . implode(', ', array_map('intval', $job_ids)) . ')'
-        : ' AND 1 = 0';
 
     $cars = [];
 
@@ -2712,7 +2839,8 @@ function track_scale_get_cars_at_scale($dbc, $config = null, $filter = null)
     }
 
     if ($filter === '' || ($filter !== 'scale' && ctype_digit($filter))) {
-        $train_filter = $job_filter;
+        // In-train cars from any job (optional single-job filter from the UI).
+        $train_filter = '';
         if ($filter !== '' && $filter !== 'scale') {
             $train_filter = ' AND cars.handled_by_job_id = ' . (int) $filter;
         }
