@@ -43,7 +43,7 @@ components:
                 options_from: backups
                 allow_custom: true
                 required: true
-                default: demo_line
+                default: db_session_1
           -
             id: backup_database
             category: database
@@ -564,8 +564,8 @@ components:
             adder: true
             adder_group: during
             label: Assign Cars
-            gui_template: "Assign Cars {jobs} {station}"
-            description: Assign eligible cars to selected job(s)/train(s). Hold Ctrl/Cmd to select multiple. Optional station filter limits picks to one yard.
+            gui_template: "Assign Cars {jobs} {station} {destination}"
+            description: Assign eligible cars to selected job(s)/train(s). Hold Ctrl/Cmd to select multiple. Optional station filter limits to cars currently at one yard; optional destination filter limits to cars bound for a station/location (same tokens as Pickup final dest). Prefer destination-scoped assigns + Pick Up all over filtered pickups.
             runnable: true
             dispatch: auto_assign_locals
             gui_path: /sts/auto_assign.php
@@ -585,6 +585,44 @@ components:
                 options_from: stations
                 allow_custom: true
                 required: false
+                default: ""
+                visible_label: true
+                suppress_all_station_option: true
+              -
+                key: destination
+                label: Destination filter
+                type: station_location
+                options_from: station_locations
+                required: false
+                default: ""
+                visible_label: true
+          -
+            id: release_yard_cars
+            category: operations
+            adder: true
+            adder_group: during
+            label: Release Yard Assignments
+            gui_template: "Release Yard Assignments {job} {station}"
+            description: Clear job assignment for cars still sitting in a yard (not on the train). Use after a selective pick-up so the leave-yard switch list only shows lifted cars.
+            runnable: true
+            dispatch: release_yard_cars
+            params:
+              -
+                key: job
+                label: Job
+                type: job
+                options_from: jobs
+                allow_custom: true
+                required: true
+                default: ""
+                visible_label: true
+              -
+                key: station
+                label: Yard station
+                type: station
+                options_from: stations
+                allow_custom: true
+                required: true
                 default: ""
                 visible_label: true
                 suppress_all_station_option: true
@@ -685,7 +723,7 @@ components:
             adder_group: during
             label: Set Out Cars
             gui_template: "Set Out Cars {job} {location}"
-            description: Set out cars from a job train. Choose Final Destination to assign each car to its loading or unloading location (same as Assign on set_out.php). Pick a yard to set out all matching train cars there. Optional car filters match the Set Out Cars page. Leave job and location blank for all locals.
+            description: Set out cars from a job train. Choose Final Destination to spot each car at its loading or unloading location. Or pick a station / station-location to spot matching train cars there. Optional car filters match the Set Out Cars page. Leave job and location blank for all locals.
             runnable: true
             dispatch: set_out_cars
             params:
@@ -700,7 +738,7 @@ components:
                 visible_label: true
               -
                 key: location
-                label: Location
+                label: Set out at
                 type: setout_location
                 options_from: setout_locations
                 allow_custom: true
@@ -1173,6 +1211,94 @@ components:
             runnable: false
             gui_path: /sts/printable_station_qr_code_report.php
             params: []
+          -
+            id: replenish_coke_orders
+            category: operations
+            adder: true
+            adder_group: before
+            label: Replenish Coke Orders
+            gui_template: "Replenish Coke Orders (target {target_min}–{target_max})"
+            description: "Count unfilled outbound coke orders (USS/CLEV singles and bulk). When below target minimum, generate single-car COKE-USS / COKE-CLEV orders alternating lanes until the minimum is met (capped at target maximum)."
+            runnable: true
+            dispatch: replenish_coke_orders
+            params:
+              -
+                key: target_min
+                label: Target minimum
+                type: number
+                default: 6
+                required: true
+                min: 1
+                step: 1
+                visible_label: true
+              -
+                key: target_max
+                label: Target maximum
+                type: number
+                default: 8
+                required: true
+                min: 1
+                step: 1
+                visible_label: true
+          -
+            id: track_scale
+            category: operations
+            adder: true
+            adder_group: during
+            label: Track Scale
+            gui_template: "Weigh Cars {job}{commodity_suffix}"
+            description: Weigh loaded cars on a job train (or at the scale) for the selected commodity. Uses track scale config when commodity is blank.
+            runnable: true
+            dispatch: track_scale
+            params:
+              -
+                key: job
+                label: Job
+                type: job
+                options_from: jobs
+                allow_custom: true
+                required: false
+                default: ""
+                visible_label: true
+              -
+                key: commodity
+                label: Commodity
+                type: commodity
+                options_from: commodities
+                allow_custom: true
+                required: false
+                default: ""
+                visible_label: true
+          -
+            id: calibrate_track_scale
+            category: operations
+            adder: true
+            adder_group: during
+            label: Calibrate Track Scale
+            gui_template: "Calibrate Track Scale (every {every_sessions} session[s])"
+            description: "Recalibrate the coke track scale. Performs a fresh random calibration when required (first use / out of service) or when the configured number of sessions have elapsed since the last calibration. Set to 1 to calibrate every session (steady ~15% reload routing); higher values let scale drift accumulate so more cars route to reload between calibrations. Run this before the Track Scale weigh step."
+            runnable: true
+            dispatch: calibrate_track_scale
+            params:
+              -
+                key: every_sessions
+                label: Calibrate every N sessions
+                type: number
+                default: 1
+                required: false
+                min: 1
+                step: 1
+                visible_label: true
+          -
+            id: track_scale_gui
+            category: operations
+            adder: false
+            label: Track Scale (STS GUI)
+            gui_template: Track Scale
+            description: "Weigh cars at track scale. GUI: track_scale.php."
+            runnable: false
+            gui_path: /sts/track_scale.php
+            params: []
         adder_functions:
           -
             id: generate_orders
@@ -1417,13 +1543,42 @@ components:
                       - 1
                     default: ""
           -
+            id: replenish_coke_orders
+            category: operations
+            adder: true
+            adder_group: before
+            label: Replenish Coke Orders
+            gui_template: "Replenish Coke Orders (target {target_min}–{target_max})"
+            description: "Count unfilled outbound coke orders (USS/CLEV singles and bulk). When below target minimum, generate single-car COKE-USS / COKE-CLEV orders alternating lanes until the minimum is met (capped at target maximum)."
+            runnable: true
+            dispatch: replenish_coke_orders
+            params:
+              -
+                key: target_min
+                label: Target minimum
+                type: number
+                default: 6
+                required: true
+                min: 1
+                step: 1
+                visible_label: true
+              -
+                key: target_max
+                label: Target maximum
+                type: number
+                default: 8
+                required: true
+                min: 1
+                step: 1
+                visible_label: true
+          -
             id: auto_assign_locals
             category: operations
             adder: true
             adder_group: during
             label: Assign Cars
-            gui_template: "Assign Cars {jobs} {station}"
-            description: Assign eligible cars to selected job(s)/train(s). Hold Ctrl/Cmd to select multiple. Optional station filter limits picks to one yard.
+            gui_template: "Assign Cars {jobs} {station} {destination}"
+            description: Assign eligible cars to selected job(s)/train(s). Hold Ctrl/Cmd to select multiple. Optional station filter limits to cars currently at one yard; optional destination filter limits to cars bound for a station/location (same tokens as Pickup final dest). Prefer destination-scoped assigns + Pick Up all over filtered pickups.
             runnable: true
             dispatch: auto_assign_locals
             gui_path: /sts/auto_assign.php
@@ -1443,6 +1598,44 @@ components:
                 options_from: stations
                 allow_custom: true
                 required: false
+                default: ""
+                visible_label: true
+                suppress_all_station_option: true
+              -
+                key: destination
+                label: Destination filter
+                type: station_location
+                options_from: station_locations
+                required: false
+                default: ""
+                visible_label: true
+          -
+            id: release_yard_cars
+            category: operations
+            adder: true
+            adder_group: during
+            label: Release Yard Assignments
+            gui_template: "Release Yard Assignments {job} {station}"
+            description: Clear job assignment for cars still sitting in a yard (not on the train). Use after a selective pick-up so the leave-yard switch list only shows lifted cars.
+            runnable: true
+            dispatch: release_yard_cars
+            params:
+              -
+                key: job
+                label: Job
+                type: job
+                options_from: jobs
+                allow_custom: true
+                required: true
+                default: ""
+                visible_label: true
+              -
+                key: station
+                label: Yard station
+                type: station
+                options_from: stations
+                allow_custom: true
+                required: true
                 default: ""
                 visible_label: true
                 suppress_all_station_option: true
@@ -1543,7 +1736,7 @@ components:
             adder_group: during
             label: Set Out Cars
             gui_template: "Set Out Cars {job} {location}"
-            description: Set out cars from a job train. Choose Final Destination to assign each car to its loading or unloading location (same as Assign on set_out.php). Pick a yard to set out all matching train cars there. Optional car filters match the Set Out Cars page. Leave job and location blank for all locals.
+            description: Set out cars from a job train. Choose Final Destination to spot each car at its loading or unloading location. Or pick a station / station-location to spot matching train cars there. Optional car filters match the Set Out Cars page. Leave job and location blank for all locals.
             runnable: true
             dispatch: set_out_cars
             params:
@@ -1558,7 +1751,7 @@ components:
                 visible_label: true
               -
                 key: location
-                label: Location
+                label: Set out at
                 type: setout_location
                 options_from: setout_locations
                 allow_custom: true
@@ -1627,6 +1820,55 @@ components:
                     type: station_location
                     options_from: station_locations
                     default: ""
+          -
+            id: track_scale
+            category: operations
+            adder: true
+            adder_group: during
+            label: Track Scale
+            gui_template: "Weigh Cars {job}{commodity_suffix}"
+            description: Weigh loaded cars on a job train (or at the scale) for the selected commodity. Uses track scale config when commodity is blank.
+            runnable: true
+            dispatch: track_scale
+            params:
+              -
+                key: job
+                label: Job
+                type: job
+                options_from: jobs
+                allow_custom: true
+                required: false
+                default: ""
+                visible_label: true
+              -
+                key: commodity
+                label: Commodity
+                type: commodity
+                options_from: commodities
+                allow_custom: true
+                required: false
+                default: ""
+                visible_label: true
+          -
+            id: calibrate_track_scale
+            category: operations
+            adder: true
+            adder_group: during
+            label: Calibrate Track Scale
+            gui_template: "Calibrate Track Scale (every {every_sessions} session[s])"
+            description: "Recalibrate the coke track scale. Performs a fresh random calibration when required (first use / out of service) or when the configured number of sessions have elapsed since the last calibration. Set to 1 to calibrate every session (steady ~15% reload routing); higher values let scale drift accumulate so more cars route to reload between calibrations. Run this before the Track Scale weigh step."
+            runnable: true
+            dispatch: calibrate_track_scale
+            params:
+              -
+                key: every_sessions
+                label: Calibrate every N sessions
+                type: number
+                default: 1
+                required: false
+                min: 1
+                step: 1
+                visible_label: true
           -
             id: load_unload
             category: operations
@@ -1784,7 +2026,7 @@ components:
                 options_from: backups
                 allow_custom: true
                 required: true
-                default: demo_line
+                default: db_session_1
           -
             id: backup_database
             category: database
@@ -2061,7 +2303,7 @@ components:
                   options_from: backups
                   allow_custom: true
                   required: true
-                  default: demo_line
+                  default: db_session_1
         backup_database:
           type: object
           required: [id, label, params]
@@ -2894,10 +3136,10 @@ components:
               example: auto_assign_locals
             gui_template:
               type: string
-              example: "Assign Cars {jobs} {station}"
+              example: "Assign Cars {jobs} {station} {destination}"
             description:
               type: string
-              example: Assign eligible cars to selected job(s)/train(s). Hold Ctrl/Cmd to select multiple. Optional station filter limits picks to one yard.
+              example: Assign eligible cars to selected job(s)/train(s). Hold Ctrl/Cmd to select multiple. Optional station filter limits to cars currently at one yard; optional destination filter limits to cars bound for a station/location (same tokens as Pickup final dest). Prefer destination-scoped assigns + Pick Up all over filtered pickups.
             params:
               type: array
               items:
@@ -2918,6 +3160,63 @@ components:
                   options_from: stations
                   allow_custom: true
                   required: false
+                  default: ""
+                  visible_label: true
+                  suppress_all_station_option: true
+                -
+                  key: destination
+                  label: Destination filter
+                  type: station_location
+                  options_from: station_locations
+                  required: false
+                  default: ""
+                  visible_label: true
+        release_yard_cars:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [release_yard_cars]
+            label:
+              type: string
+              example: Release Yard Assignments
+            category:
+              type: string
+              example: operations
+            runnable:
+              type: boolean
+              example: true
+            dispatch:
+              type: string
+              example: release_yard_cars
+            gui_template:
+              type: string
+              example: "Release Yard Assignments {job} {station}"
+            description:
+              type: string
+              example: Clear job assignment for cars still sitting in a yard (not on the train). Use after a selective pick-up so the leave-yard switch list only shows lifted cars.
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example:
+                -
+                  key: job
+                  label: Job
+                  type: job
+                  options_from: jobs
+                  allow_custom: true
+                  required: true
+                  default: ""
+                  visible_label: true
+                -
+                  key: station
+                  label: Yard station
+                  type: station
+                  options_from: stations
+                  allow_custom: true
+                  required: true
                   default: ""
                   visible_label: true
                   suppress_all_station_option: true
@@ -3054,7 +3353,7 @@ components:
               example: "Set Out Cars {job} {location}"
             description:
               type: string
-              example: Set out cars from a job train. Choose Final Destination to assign each car to its loading or unloading location (same as Assign on set_out.php). Pick a yard to set out all matching train cars there. Optional car filters match the Set Out Cars page. Leave job and location blank for all locals.
+              example: Set out cars from a job train. Choose Final Destination to spot each car at its loading or unloading location. Or pick a station / station-location to spot matching train cars there. Optional car filters match the Set Out Cars page. Leave job and location blank for all locals.
             params:
               type: array
               items:
@@ -3071,7 +3370,7 @@ components:
                   visible_label: true
                 -
                   key: location
-                  label: Location
+                  label: Set out at
                   type: setout_location
                   options_from: setout_locations
                   allow_custom: true
@@ -3920,6 +4219,168 @@ components:
             description:
               type: string
               example: Alternate printable station QR layout.
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example: []
+        replenish_coke_orders:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [replenish_coke_orders]
+            label:
+              type: string
+              example: Replenish Coke Orders
+            category:
+              type: string
+              example: operations
+            runnable:
+              type: boolean
+              example: true
+            dispatch:
+              type: string
+              example: replenish_coke_orders
+            gui_template:
+              type: string
+              example: "Replenish Coke Orders (target {target_min}–{target_max})"
+            description:
+              type: string
+              example: "Count unfilled outbound coke orders (USS/CLEV singles and bulk). When below target minimum, generate single-car COKE-USS / COKE-CLEV orders alternating lanes until the minimum is met (capped at target maximum)."
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example:
+                -
+                  key: target_min
+                  label: Target minimum
+                  type: number
+                  default: 6
+                  required: true
+                  min: 1
+                  step: 1
+                  visible_label: true
+                -
+                  key: target_max
+                  label: Target maximum
+                  type: number
+                  default: 8
+                  required: true
+                  min: 1
+                  step: 1
+                  visible_label: true
+        track_scale:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [track_scale]
+            label:
+              type: string
+              example: Track Scale
+            category:
+              type: string
+              example: operations
+            runnable:
+              type: boolean
+              example: true
+            dispatch:
+              type: string
+              example: track_scale
+            gui_template:
+              type: string
+              example: "Weigh Cars {job}{commodity_suffix}"
+            description:
+              type: string
+              example: Weigh loaded cars on a job train (or at the scale) for the selected commodity. Uses track scale config when commodity is blank.
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example:
+                -
+                  key: job
+                  label: Job
+                  type: job
+                  options_from: jobs
+                  allow_custom: true
+                  required: false
+                  default: ""
+                  visible_label: true
+                -
+                  key: commodity
+                  label: Commodity
+                  type: commodity
+                  options_from: commodities
+                  allow_custom: true
+                  required: false
+                  default: ""
+                  visible_label: true
+        calibrate_track_scale:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [calibrate_track_scale]
+            label:
+              type: string
+              example: Calibrate Track Scale
+            category:
+              type: string
+              example: operations
+            runnable:
+              type: boolean
+              example: true
+            dispatch:
+              type: string
+              example: calibrate_track_scale
+            gui_template:
+              type: string
+              example: "Calibrate Track Scale (every {every_sessions} session[s])"
+            description:
+              type: string
+              example: "Recalibrate the coke track scale. Performs a fresh random calibration when required (first use / out of service) or when the configured number of sessions have elapsed since the last calibration. Set to 1 to calibrate every session (steady ~15% reload routing); higher values let scale drift accumulate so more cars route to reload between calibrations. Run this before the Track Scale weigh step."
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example:
+                -
+                  key: every_sessions
+                  label: Calibrate every N sessions
+                  type: number
+                  default: 1
+                  required: false
+                  min: 1
+                  step: 1
+                  visible_label: true
+        track_scale_gui:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [track_scale_gui]
+            label:
+              type: string
+              example: Track Scale (STS GUI)
+            category:
+              type: string
+              example: operations
+            runnable:
+              type: boolean
+              example: false
+            gui_template:
+              type: string
+              example: Track Scale
+            description:
+              type: string
+              example: "Weigh cars at track scale. GUI: track_scale.php."
             params:
               type: array
               items:

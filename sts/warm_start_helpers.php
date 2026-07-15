@@ -480,6 +480,33 @@ function warm_start_assign_cars_to_job($dbc, $job_name, array $car_ids)
     return $assigned;
 }
 
+/**
+ * Release job assignment for cars still sitting in a yard (not on the train).
+ * Used after a selective pick-up so a leave-yard switch list only shows cars
+ * actually lifted — leftovers (e.g. McKees Rocks-bound for STG) do not appear.
+ */
+function warm_start_release_job_cars_at_station($dbc, $job_name, $station_id)
+{
+    $job_id = warm_start_job_id($dbc, $job_name);
+    $station_id = (int) $station_id;
+    if ($job_id <= 0 || $station_id <= 0) {
+        return 0;
+    }
+    if (!mysqli_query(
+        $dbc,
+        'UPDATE cars
+         INNER JOIN locations loc ON loc.id = cars.current_location_id
+         SET cars.handled_by_job_id = 0,
+             cars.position = 0
+         WHERE cars.handled_by_job_id = "' . (int) $job_id . '"
+           AND cars.current_location_id > 0
+           AND loc.station = "' . $station_id . '"'
+    )) {
+        return 0;
+    }
+    return (int) mysqli_affected_rows($dbc);
+}
+
 function warm_start_assign_eligible_at_pickup_station($dbc, $job_name, $pickup_station)
 {
     $job_name_esc = mysqli_real_escape_string($dbc, $job_name);

@@ -21,6 +21,7 @@
     hideNonExecute: false,
     executionPathSteps: null,
     dirty: false,
+    previewMode: false,
 
     el(id) { return document.getElementById(id); },
 
@@ -1464,6 +1465,11 @@
       this.syncRunDefaults();
       this.syncEditorSectionSelect();
       this.syncStepVisibility();
+      if (this.previewMode) {
+        this.runSections = this.buildRunSections();
+        this.renderStepsPreview();
+        this.syncPreviewUi();
+      }
     },
 
     isExecutableStep(step) {
@@ -2214,6 +2220,95 @@
       this.runOptions = await this.simulatorApi('run_options');
       this.syncRunDefaults();
       return d;
+    },
+
+    /**
+     * In-page recipe summary (compiled command + remarks), shown in place of
+     * the Steps editor. Toggle with Preview / Edit — no pop-up window.
+     */
+    togglePreview() {
+      if (this.previewMode) this.hidePreview();
+      else this.showPreview();
+    },
+
+    showPreview() {
+      this.syncAllStepsFromDom();
+      this.runSections = this.buildRunSections();
+      this.previewMode = true;
+      this.renderStepsPreview();
+      this.syncPreviewUi();
+    },
+
+    hidePreview() {
+      this.previewMode = false;
+      this.syncPreviewUi();
+    },
+
+    syncPreviewUi() {
+      const previewing = !!this.previewMode;
+      const scroll = this.el('steps-scroll');
+      const preview = this.el('steps-preview');
+      const title = this.el('steps-panel-title');
+      const btn = this.el('btn-preview');
+      const printBtn = this.el('btn-preview-print');
+      const editNav = this.el('steps-edit-nav');
+      const editInsert = this.el('steps-edit-insert');
+      const addBtn = this.el('btn-add');
+      const reloadBtn = this.el('btn-reload');
+      if (scroll) scroll.hidden = previewing;
+      if (preview) preview.hidden = !previewing;
+      if (title) title.textContent = previewing ? 'Preview' : 'Steps';
+      if (btn) {
+        btn.textContent = previewing ? 'Edit' : 'Preview';
+        btn.title = previewing ? 'Return to the step editor' : 'Show clean command summary';
+        btn.classList.toggle('btn-dark', previewing);
+        btn.classList.toggle('btn-outline-dark', !previewing);
+      }
+      if (printBtn) printBtn.hidden = !previewing;
+      if (editNav) editNav.hidden = previewing;
+      if (editInsert) editInsert.hidden = previewing;
+      if (addBtn) addBtn.hidden = previewing;
+      if (reloadBtn) reloadBtn.hidden = previewing;
+      document.body.classList.toggle('workflow-preview-mode', previewing);
+    },
+
+    renderStepsPreview() {
+      const host = this.el('steps-preview');
+      if (!host) return;
+      const steps = Array.isArray(this.recipe.steps) ? this.recipe.steps : [];
+      const name = (this.recipe.name || this.activeWorkflow || 'workflow').trim() || 'workflow';
+      const file = (this.activeWorkflow || '').trim();
+      const esc = (s) => this.escapeHtml(s);
+
+      let body = '';
+      if (!steps.length) {
+        body = '<p class="wf-preview-empty">No steps in this workflow.</p>';
+      } else {
+        body = '<ol class="wf-preview-steps">';
+        steps.forEach((step, idx) => {
+          const n = idx + 1;
+          const disabled = step && Object.prototype.hasOwnProperty.call(step, 'enabled') && !step.enabled;
+          const cmd = (this.compileOne(step, idx) || step?.function || '—').trim();
+          const remarks = (this.rowRemarksText(step) || '').trim();
+          body += '<li class="' + (disabled ? 'disabled' : '') + '">'
+            + '<div class="wf-preview-cmd"><span class="wf-preview-num">' + n + '.</span> '
+            + esc(cmd)
+            + (disabled ? ' <span class="wf-preview-tag">(disabled)</span>' : '')
+            + '</div>';
+          if (remarks) {
+            body += '<div class="wf-preview-remarks">remarks: ' + esc(remarks) + '</div>';
+          }
+          body += '</li>';
+        });
+        body += '</ol>';
+      }
+
+      host.innerHTML = '<div class="wf-preview-meta">'
+        + esc(name)
+        + ' · ' + steps.length + ' step' + (steps.length === 1 ? '' : 's')
+        + (file ? (' · ' + esc(file)) : '')
+        + '</div>'
+        + body;
     },
   };
 

@@ -7,7 +7,7 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
   <link rel="stylesheet" href="session-nav.css">
-  <link rel="stylesheet" href="workflow-ui.css?v=48">
+  <link rel="stylesheet" href="workflow-ui.css?v=49">
 </head>
 <body>
   <nav class="navbar navbar-dark noprint" style="background-color: #343a40;">
@@ -96,11 +96,11 @@
       <div id="run-complete-actions" class="run-complete-actions" hidden></div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="steps-panel">
       <div class="actions-bar">
         <div class="steps-heading">
-          <h2 style="margin:0;">Steps <span id="step-count"></span></h2>
-          <div class="section-jump">
+          <h2 style="margin:0;"><span id="steps-panel-title">Steps</span> <span id="step-count"></span></h2>
+          <div class="section-jump" id="steps-edit-nav">
             <label class="section-jump-label">
               <span class="inline-lbl">Section</span>
               <select id="editor-section" class="field-select" disabled>
@@ -115,7 +115,7 @@
           </div>
         </div>
         <div class="toolbar">
-          <div class="insert-controls">
+          <div class="insert-controls" id="steps-edit-insert">
             <label class="insert-label">
               <span class="inline-lbl">Insert</span>
               <select id="insert-mode" class="field-select">
@@ -131,20 +131,25 @@
           </div>
           <button type="button" class="btn btn-outline-dark btn-sm" id="btn-add">+ Add step</button>
           <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-reload">Reload</button>
+          <button type="button" class="btn btn-outline-dark btn-sm" id="btn-preview" title="Toggle clean command summary">Preview</button>
+          <button type="button" class="btn btn-outline-dark btn-sm noprint" id="btn-preview-print" hidden><i class="bi bi-printer"></i> Print</button>
         </div>
       </div>
       <div id="steps-scroll" class="steps-scroll">
         <div id="steps-list" class="steps-list"></div>
       </div>
+      <div id="steps-preview" class="steps-preview" hidden></div>
     </div>
   </div>
-  <script src="workflow-shared.js?v=74"></script>
+  <script src="workflow-shared.js?v=76"></script>
   <script>
 (function () {
   const W = WorkflowUI;
 
   W.el('btn-add').addEventListener('click', () => W.addStep());
   W.el('btn-save').addEventListener('click', () => W.saveRecipe().catch((e) => W.setStatus(e.message, 'err')));
+  W.el('btn-preview')?.addEventListener('click', () => W.togglePreview());
+  W.el('btn-preview-print')?.addEventListener('click', () => window.print());
   W.el('btn-import').addEventListener('click', () => W.promptImportWorkflow());
   W.el('workflow-import-file')?.addEventListener('change', (e) => {
     const file = e.target.files?.[0];

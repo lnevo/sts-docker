@@ -37,7 +37,13 @@ if ($jobs) {
     foreach ($jobs as $job) {
         $train_counts[$job] = session_train_output_counts($dbc_trains, $selected, $job, $root);
     }
-    $session_print_all_rel = session_build_switchlist_print_all($dbc_trains, $selected, $root);
+    $archived_only = session_is_archived_output_only($selected);
+    $candidate = 'session_' . (int) $selected . '/print_all.html';
+    if ($archived_only && is_file(session_output_fs_path($candidate, $root))) {
+        $session_print_all_rel = $candidate;
+    } elseif (!$archived_only) {
+        $session_print_all_rel = session_build_switchlist_print_all($dbc_trains, $selected, $root);
+    }
     mysqli_close($dbc_trains);
 }
 $selected_manifest_stats = $manifest['run_stats'] ?? [];
@@ -125,7 +131,13 @@ session_render_nav_bar([
           <select name="session" id="session-select">
             <?php foreach ($sessions as $n): ?>
               <option value="<?php echo (int) $n; ?>"<?php echo $n === $selected ? ' selected' : ''; ?>>
-                Session <?php echo (int) $n; ?><?php echo $n === $current ? ' (current)' : ''; ?>
+                Session <?php echo (int) $n; ?><?php
+                  if ($n === $current) {
+                      echo ' (current)';
+                  } elseif ($n > $current) {
+                      echo ' (archived)';
+                  }
+                ?>
               </option>
             <?php endforeach; ?>
           </select>
@@ -138,6 +150,7 @@ session_render_nav_bar([
           <noscript><button type="submit" class="btn btn-outline-dark btn-sm">Go</button></noscript>
         </div>
       </form>
+      <?php echo session_browse_archived_controls_html(); ?>
     </div>
 
     <div class="card">

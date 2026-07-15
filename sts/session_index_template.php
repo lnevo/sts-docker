@@ -26,9 +26,10 @@ if ($session < 1) {
     header('Location: /sts/session.php');
     exit;
 }
-// A rewound DB may make this session number a "future" one; if so, redirect to
-// the current session's overview instead of showing an empty/stale page.
+// A rewound DB may make this session number a "future" one; when archived
+// browse is enabled we extract rewind_archive output and show it read-only.
 session_redirect_if_beyond_current($session);
+$archived_output_only = session_is_archived_output_only($session);
 $root = session_web_root();
 $manifest = session_load_manifest($session, $root);
 session_ensure_output_stubs($session, $manifest, $root);
@@ -52,7 +53,17 @@ foreach (array_keys($jobs) as $job) {
     $train_counts[$job] = session_train_output_counts($dbc_stats, $session, $job, $root);
 }
 $train_groups = session_job_group_map($session, $manifest ?? null, $root);
-$session_print_all_rel = $jobs ? session_build_switchlist_print_all($dbc_stats, $session, $root) : null;
+$session_print_all_rel = null;
+if ($jobs) {
+    $candidate = 'session_' . (int) $session . '/print_all.html';
+    if ($archived_output_only) {
+        if (is_file(session_output_fs_path($candidate, $root))) {
+            $session_print_all_rel = $candidate;
+        }
+    } else {
+        $session_print_all_rel = session_build_switchlist_print_all($dbc_stats, $session, $root);
+    }
+}
 mysqli_close($dbc_stats);
 $browser_sessions = session_list_browser_sessions($current_session, $root);
 $prev_session = session_adjacent_session($browser_sessions, $session, 'prev');
@@ -127,6 +138,7 @@ $overview_nav[] = [
 session_render_nav_bar($overview_nav, 'Session ' . (int) $session);
 ?>
   <main>
+  <?php echo session_archived_view_banner_html($session, $current_session); ?>
   <div class="session-topbar">
     <div class="session-topbar-heading">
       <h1 style="margin:0;">Session <?php echo (int) $session; ?></h1>
@@ -145,7 +157,13 @@ session_render_nav_bar($overview_nav, 'Session ' . (int) $session);
       <select name="session" id="session-select">
         <?php foreach ($browser_sessions as $n): ?>
           <option value="<?php echo (int) $n; ?>"<?php echo $n === $session ? ' selected' : ''; ?>>
-            Session <?php echo (int) $n; ?><?php echo $n === $current_session ? ' (current)' : ''; ?>
+            Session <?php echo (int) $n; ?><?php
+              if ($n === $current_session) {
+                  echo ' (current)';
+              } elseif ($n > $current_session) {
+                  echo ' (archived)';
+              }
+            ?>
           </option>
         <?php endforeach; ?>
       </select>
@@ -158,6 +176,7 @@ session_render_nav_bar($overview_nav, 'Session ' . (int) $session);
       <noscript><button type="submit" class="btn btn-outline-dark btn-sm">Go</button></noscript>
     </div>
   </form>
+  <?php echo session_browse_archived_controls_html(); ?>
   <?php if (count($jobs)): ?>
     <div class="card">
       <div class="job-switchlist-controls" style="margin:0 0 10px;">

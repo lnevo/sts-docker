@@ -1000,3 +1000,77 @@ pre.log {
   white-space: pre-wrap;
   margin: 0;
 }
+
+/* ── In-page workflow Preview (replaces Steps editor) ── */
+.steps-preview {
+  padding: 0.5rem 0.25rem 1.5rem;
+}
+.wf-preview-meta {
+  color: #666;
+  font-size: 0.85rem;
+  margin: 0 0 1rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid #ddd;
+}
+.wf-preview-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.wf-preview-steps li {
+  margin: 0 0 0.85rem;
+  padding: 0;
+}
+.wf-preview-cmd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #111;
+}
+.wf-preview-num {
+  display: inline-block;
+  min-width: 2.2em;
+  color: #555;
+}
+.wf-preview-remarks {
+  margin: 0.15rem 0 0 2.2em;
+  color: #444;
+  font-size: 13px;
+}
+.wf-preview-tag {
+  color: #888;
+  font-size: 12px;
+  font-family: inherit;
+}
+.wf-preview-steps li.disabled .wf-preview-cmd { color: #888; }
+.wf-preview-steps li.disabled .wf-preview-remarks { color: #999; }
+.wf-preview-empty { color: #666; }
+
+@media print {
+  body.workflow-preview-mode nav,
+  body.workflow-preview-mode .subtitle,
+  body.workflow-preview-mode .workflow-bar,
+  body.workflow-preview-mode #simulator,
+  body.workflow-preview-mode .noprint,
+  body.workflow-preview-mode #btn-preview,
+  body.workflow-preview-mode #btn-preview-print,
+  body.workflow-preview-mode #btn-add,
+  body.workflow-preview-mode #btn-reload {
+    display: none !important;
+  }
+  body.workflow-preview-mode .page {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+  body.workflow-preview-mode .panel {
+    border: none;
+    box-shadow: none;
+    padding: 0;
+  }
+  body.workflow-preview-mode .actions-bar {
+    border: none;
+    margin-bottom: 0.5rem;
+  }
+}

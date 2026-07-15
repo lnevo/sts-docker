@@ -48,9 +48,16 @@ foreach ($train_members as $member_job) {
         $legs[] = $leg;
     }
 }
-usort($legs, static function ($a, $b) {
-    return [(int) $a['workflow_phase'], (int) $a['work_leg']]
-        <=> [(int) $b['workflow_phase'], (int) $b['work_leg']];
+// Rank by manifest/operational order, not phase_NN folder numbers (a
+// reconstructed Outbound can live in a higher-numbered folder than Return).
+$phase_rank = session_phase_display_rank($manifest);
+usort($legs, static function ($a, $b) use ($phase_rank) {
+    $wa = (int) $a['workflow_phase'];
+    $wb = (int) $b['workflow_phase'];
+    $ra = $phase_rank[$wa] ?? $wa;
+    $rb = $phase_rank[$wb] ?? $wb;
+
+    return [$ra, (int) $a['work_leg']] <=> [$rb, (int) $b['work_leg']];
 });
 // Build/cache this train's all-phases print-all switch list while the DB handle
 // is open (the "Train switch lists" nav target below).

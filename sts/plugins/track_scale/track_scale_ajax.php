@@ -294,7 +294,11 @@ try {
             if (!track_scale_sensor_has_reading($sensor)) {
                 track_scale_json_error('Weigh the scale car at this sensor before adjusting');
             }
-            $adjustment = track_scale_adjust_sensor($sensor, $direction, $config);
+            $use_fine = null;
+            if (array_key_exists('fine_tune', $body)) {
+                $use_fine = !empty($body['fine_tune']);
+            }
+            $adjustment = track_scale_adjust_sensor($sensor, $direction, $config, $use_fine);
             echo json_encode([
                 'success' => true,
                 'sensor' => $sensor,

@@ -1449,10 +1449,17 @@ function track_scale_get_adjust_step($position, $config = null)
     return (float) ($cal['adjust_step_tons'] ?? 0.1);
 }
 
-function track_scale_adjust_sensor($position, $direction, $config = null)
+function track_scale_adjust_sensor($position, $direction, $config = null, $use_fine = null)
 {
     $config = $config ?? track_scale_load_config();
-    $step = track_scale_get_adjust_step($position, $config);
+    $cal = $config['calibration'] ?? [];
+    if ($use_fine === true) {
+        $step = (float) ($cal['fine_adjust_step_tons'] ?? 0.01);
+    } elseif ($use_fine === false) {
+        $step = (float) ($cal['adjust_step_tons'] ?? 0.1);
+    } else {
+        $step = track_scale_get_adjust_step($position, $config);
+    }
     $current = track_scale_get_sensor_adjustment($position);
     if ($direction === 'down') {
         $current -= $step;
@@ -1636,12 +1643,13 @@ function track_scale_build_calibration_sensor_reading($position, $expected_gross
     $position = track_scale_normalize_position($position);
     $error = track_scale_get_sensor_error($position, $config);
     $adjustment = track_scale_get_sensor_adjustment($position);
-    $raw_display = track_scale_round((float) $expected_gross + $error, $config);
     $residual_error = track_scale_round($error + $adjustment, $config);
+    // Corrected live reading so the sensor LED tracks adjustment (eye focus).
+    $display = track_scale_round((float) $expected_gross + $residual_error, $config);
 
     return [
         'position' => $position,
-        'display_tons' => $raw_display,
+        'display_tons' => $display,
         'expected_tons' => track_scale_round($expected_gross, $config),
         'error_tons' => $residual_error,
         'sensor_error_tons' => track_scale_round($error, $config),
@@ -1780,10 +1788,7 @@ function track_scale_build_calibration_readings($config = null, $dbc = null)
         $reading['adjust_step_tons'] = track_scale_round($adjust_step, $config);
         $sensors[] = $reading;
         $average_adjustment_values[] = $reading['adjustment_tons'];
-        $average_corrected_values[] = track_scale_round(
-            $reading['display_tons'] + $reading['adjustment_tons'],
-            $config
-        );
+        $average_corrected_values[] = $reading['display_tons'];
     }
 
     $average = null;

@@ -212,6 +212,12 @@ function session_redirect_if_beyond_current($session_nbr, $dbc = null, $exit = t
     }
     $current = (int) session_get_db_session($dbc);
     if ($current >= 1 && $session_nbr > $current) {
+        if (session_browse_archived_enabled()) {
+            session_ensure_archived_session_extracted($session_nbr);
+            if (is_dir(session_dir_for($session_nbr))) {
+                return $current;
+            }
+        }
         if ($exit) {
             header('Location: /sts/session_overview.php?session=' . $current);
             exit;
@@ -220,6 +226,148 @@ function session_redirect_if_beyond_current($session_nbr, $dbc = null, $exit = t
     }
 
     return $current;
+}
+
+/** True when the operator has opted in to browsing archived session output. */
+function session_browse_archived_enabled()
+{
+    if (isset($_GET['archive'])) {
+        return (string) $_GET['archive'] !== '' && (string) $_GET['archive'] !== '0';
+    }
+
+    return !empty($_COOKIE['sts_browse_archived']) && (string) $_COOKIE['sts_browse_archived'] !== '0';
+}
+
+/**
+ * Directory where rewind_session.sh archives removed session output trees.
+ * Sits alongside session_state under sts/backups/.
+ */
+function session_rewind_archive_dir($root = null)
+{
+    $root = $root ?? session_web_root();
+
+    return dirname(dirname($root)) . '/rewind_archive';
+}
+
+/**
+ * Session numbers whose output was archived to rewind_archive/session_N_*.tar.gz
+ * (present on disk even when the live session_state/session_N tree was removed).
+ *
+ * @return list<int>
+ */
+function session_archived_output_numbers($root = null)
+{
+    $dir = session_rewind_archive_dir($root);
+    if (!is_dir($dir)) {
+        return [];
+    }
+    $nums = [];
+    foreach (glob($dir . '/session_*.tar.gz') ?: [] as $f) {
+        if (preg_match('#/session_(\d+)_#', $f, $m)) {
+            $nums[] = (int) $m[1];
+        }
+    }
+    sort($nums, SORT_NUMERIC);
+
+    return array_values(array_unique($nums));
+}
+
+/**
+ * Extract a rewind-archived session output tree back into session_state/sessions
+ * so so.php can serve it. Idempotent when the folder already exists. Returns
+ * false when no matching tarball is found.
+ */
+function session_ensure_archived_session_extracted($session_nbr, $root = null)
+{
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
+    if ($session_nbr < 1) {
+        return false;
+    }
+    if (is_dir(session_dir_for($session_nbr, $root))) {
+        return true;
+    }
+    $matches = glob(session_rewind_archive_dir($root) . '/session_' . $session_nbr . '_*.tar.gz') ?: [];
+    if (!$matches) {
+        return false;
+    }
+    usort($matches, static function ($a, $b) {
+        return filemtime($b) <=> filemtime($a);
+    });
+    $tarball = $matches[0];
+    $dest = session_ensure_output_root($root);
+    try {
+        $phar = new PharData($tarball);
+        $phar->extractTo($dest, null, true);
+    } catch (Throwable $e) {
+        return false;
+    }
+
+    return is_dir(session_dir_for($session_nbr, $root));
+}
+
+/**
+ * True when a session's generated output is being viewed from archives while the
+ * live DB is still at an earlier session (read-only paperwork browse).
+ */
+function session_is_archived_output_only($session_nbr, $dbc = null)
+{
+    $session_nbr = (int) $session_nbr;
+    if ($session_nbr < 1 || !session_browse_archived_enabled()) {
+        return false;
+    }
+    if ($dbc === null) {
+        require_once __DIR__ . '/open_db.php';
+        $dbc = open_db();
+    }
+    $current = (int) session_get_db_session($dbc);
+
+    return $session_nbr > $current;
+}
+
+/** Warning banner for pages showing archived session output (DB is behind). */
+function session_archived_view_banner_html($session_nbr, $current_session)
+{
+    $session_nbr = (int) $session_nbr;
+    $current_session = (int) $current_session;
+    if ($session_nbr <= $current_session) {
+        return '';
+    }
+
+    return '<div class="session-archived-banner noprint" role="status">'
+        . 'Viewing <strong>archived</strong> session ' . $session_nbr . ' output. '
+        . 'The live database is at session ' . $current_session . ' — switch lists and waybills here are historical paperwork only.'
+        . '</div>';
+}
+
+/**
+ * Checkbox + script to toggle archived-session browsing (cookie-backed).
+ * Shown on session overview / totals pickers after a DB rewind.
+ */
+function session_browse_archived_controls_html()
+{
+    $checked = session_browse_archived_enabled();
+    $archived = session_archived_output_numbers();
+    if (!$archived) {
+        return '';
+    }
+    $list = implode(', ', array_map(static function ($n) {
+        return (string) (int) $n;
+    }, $archived));
+
+    return '<div class="session-browse-archived-controls noprint">'
+        . '<label class="session-browse-archived-label">'
+        . '<input type="checkbox" id="sts-browse-archived"' . ($checked ? ' checked' : '') . '> '
+        . 'Show archived sessions</label>'
+        . '<span class="text-muted small"> (rewind archive: ' . htmlspecialchars($list) . ')</span>'
+        . '</div>'
+        . '<script>(function(){'
+        . 'var cb=document.getElementById("sts-browse-archived");'
+        . 'if(!cb)return;'
+        . 'cb.addEventListener("change",function(){'
+        . 'if(cb.checked){document.cookie="sts_browse_archived=1;path=/sts;max-age=31536000";}'
+        . 'else{document.cookie="sts_browse_archived=0;path=/sts;max-age=0";}'
+        . 'location.reload();});})();</script>';
 }
 
 /**
@@ -645,14 +793,27 @@ function session_persist_recipe_run_stats($dbc, array $log, array $meta, $start_
     return array_keys($stats_by_session);
 }
 
-function session_list_browser_sessions($current, $root = null)
+function session_list_browser_sessions($current, $root = null, $include_archived = null)
 {
     $current = max(1, (int) $current);
-    // Only sessions up to the current DB session are browsable. Folders on disk
-    // that are ahead of the live session (e.g. left over from a run that later
-    // rewound the DB) are excluded so the browser never shows a "future"
-    // session that isn't the current operating point yet.
-    $sessions = range(1, $current);
+    $root = $root ?? session_web_root();
+    if ($include_archived === null) {
+        $include_archived = session_browse_archived_enabled();
+    }
+    $max = $current;
+    if ($include_archived) {
+        foreach (session_archived_output_numbers($root) as $n) {
+            $max = max($max, (int) $n);
+        }
+        foreach (glob(session_ensure_output_root($root) . '/session_*', GLOB_ONLYDIR) ?: [] as $d) {
+            if (preg_match('#/session_(\d+)$#', $d, $m)) {
+                $max = max($max, (int) $m[1]);
+            }
+        }
+    }
+    // Only sessions up to the current DB session are browsable unless archived
+    // output browse is enabled (rewind left session_N folders in rewind_archive).
+    $sessions = range(1, $max);
     sort($sessions, SORT_NUMERIC);
 
     return $sessions;
@@ -1000,9 +1161,31 @@ function session_nav_stylesheet_link($href = null)
     return '<link rel="stylesheet" href="' . htmlspecialchars((string) $href) . '">';
 }
 
+/**
+ * Safe print helper for generated pages. Cursor / VS Code Simple Browser
+ * (Electron) often crashes the whole window on window.print(); steer those
+ * clients to an external browser instead of calling print().
+ */
+function session_safe_print_script()
+{
+    return '<script>(function(){if(window.stsSafePrint)return;'
+        . 'window.stsSafePrint=function(){try{'
+        . 'var ua=navigator.userAgent||"";'
+        . 'if(/Electron|Cursor|VSCode|Code\\/\\d|Simple Browser/i.test(ua)'
+        . '||typeof window.acquireVsCodeApi==="function"){'
+        . 'alert("Printing from Cursor\u2019s preview can close the window. '
+        . 'Copy this page\u2019s URL into Chrome or Safari, then Print.");'
+        . 'return;}'
+        . 'window.print();'
+        . '}catch(e){alert("Print failed \u2014 open this page in an external browser.");}};'
+        . '})();</script>';
+}
+
 function session_static_head_assets($css_href = null)
 {
-    return session_bootstrap_head_links() . session_nav_stylesheet_link($css_href);
+    return session_bootstrap_head_links()
+        . session_nav_stylesheet_link($css_href)
+        . session_safe_print_script();
 }
 
 function session_nav_icon_for_label($label)
@@ -1139,6 +1322,35 @@ function session_waybill_print_all_rel_href($session_nbr, $basename)
 }
 
 /**
+ * "Jump to session" dropdown for the session-nav rows on generated print-all
+ * pages (switch lists and waybills). Every option navigates to that session's
+ * per-session overview (session_overview.php), so both page families share one
+ * consistent session picker. Rendered as a bare <select> (no wrapping element)
+ * so it drops cleanly between the prev/next buttons and doesn't disturb the
+ * serve-time nav-row refresh in so.php (which replaces the row up to its first
+ * closing </div>). Returns '' when there is only a single session.
+ */
+function session_nav_row_session_select_html($session_nbr, array $sessions, $current_db = 0)
+{
+    $session_nbr = (int) $session_nbr;
+    if (count($sessions) < 2) {
+        return '';
+    }
+    $options = '';
+    foreach ($sessions as $n) {
+        $n = (int) $n;
+        $label = 'Session ' . $n . ($n === (int) $current_db ? ' (current)' : '');
+        $options .= '<option value="' . $n . '"' . ($n === $session_nbr ? ' selected' : '') . '>'
+            . htmlspecialchars($label) . '</option>';
+    }
+
+    return '<select class="form-select form-select-sm session-nav-select" style="width:auto;display:inline-block;"'
+        . ' title="Jump to session overview"'
+        . ' onchange="if(this.value){window.location.href=\'/sts/session_overview.php?session=\'+this.value;}">'
+        . $options . '</select>';
+}
+
+/**
  * Prev/next session buttons for a waybills print-all page. Links to the same-scope
  * print-all file (session/job) in adjacent sessions; a direction is disabled when
  * that session has no such file (e.g. a job that didn't run there). Intended to be
@@ -1176,6 +1388,7 @@ function session_waybill_print_all_session_nav_html($session_nbr, $basename, $db
     } else {
         $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>';
     }
+    $html .= session_nav_row_session_select_html($session_nbr, $sessions, $current_db);
     if ($next !== null && $target_exists($next)) {
         $html .= '<a class="btn btn-outline-dark btn-sm" href="'
             . htmlspecialchars(session_waybill_print_all_rel_href($next, $basename))
@@ -1274,6 +1487,7 @@ function session_switchlist_job_print_all_session_nav_html($session_nbr, $phase_
     } else {
         $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>';
     }
+    $html .= session_nav_row_session_select_html($session_nbr, $sessions, $current_db);
     if ($next !== null) {
         $html .= '<a class="btn btn-outline-dark btn-sm" href="'
             . htmlspecialchars(session_switchlist_job_print_all_rel_href($next, $phase_num, $job))
@@ -1356,6 +1570,7 @@ function session_switchlist_train_print_all_session_nav_html($session_nbr, $job,
     } else {
         $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>';
     }
+    $html .= session_nav_row_session_select_html($session_nbr, $sessions, $current_db);
     if ($next !== null && $next_href !== '') {
         $html .= '<a class="btn btn-outline-dark btn-sm" href="'
             . htmlspecialchars($next_href)
@@ -1407,6 +1622,7 @@ function session_switchlist_print_all_session_nav_html($session_nbr, $style = ''
     } else {
         $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>';
     }
+    $html .= session_nav_row_session_select_html($session_nbr, $sessions, $current_db);
     if ($next !== null) {
         $html .= '<a class="btn btn-outline-dark btn-sm" href="'
             . htmlspecialchars(session_switchlist_print_all_rel_href($next, $style))
@@ -1426,13 +1642,16 @@ function session_waybill_index_nav_items($session_nbr, $back_href, $back_label)
     $items = [
         ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
     ];
-    // Back navigation goes to the per-session overview (the default session page).
-    // Honor a caller-supplied deeper back link, but treat the legacy totals link
-    // ('All Sessions' -> session.php) as a request for the overview instead.
-    if (!empty($back_href) && trim((string) $back_label) !== '' && $back_label !== 'All Sessions') {
+    // Back navigation is normalized to the per-session overview (session_overview
+    // .php) so waybill pages match the switch-list pages. The legacy '../index.php'
+    // back link only ever redirected there anyway; a custom label is preserved.
+    if ($session_nbr >= 1) {
+        $label = (trim((string) $back_label) !== '' && $back_label !== 'All Sessions')
+            ? (string) $back_label
+            : 'Session ' . $session_nbr;
+        $items[] = ['href' => '/sts/session_overview.php?session=' . $session_nbr, 'label' => $label, 'icon' => 'calendar-event'];
+    } elseif (!empty($back_href) && trim((string) $back_label) !== '' && $back_label !== 'All Sessions') {
         $items[] = ['href' => $back_href, 'label' => $back_label, 'icon' => 'calendar-event'];
-    } elseif ($session_nbr >= 1) {
-        $items[] = ['href' => '/sts/session_overview.php?session=' . $session_nbr, 'label' => 'Session ' . $session_nbr, 'icon' => 'calendar-event'];
     }
 
     return $items;
@@ -1823,16 +2042,25 @@ function session_compact_session_output(array &$manifest, $session_nbr, $root = 
     $phases = is_array($manifest['phases'] ?? null) ? $manifest['phases'] : [];
 
     // Keep the LAST occurrence of each slot (most recently generated wins).
+    // Preserve manifest array order (not phase_NN folder numbers) so a
+    // reconstructed earlier leg (e.g. NVL Outbound as phase_06 listed before
+    // Return as phase_04) stays in authorial / operational sequence.
     $latest = [];
+    $order = [];
+    $i = 0;
     foreach ($phases as $phase) {
         if (!is_array($phase) || (int) ($phase['phase'] ?? 0) < 1) {
             continue;
         }
-        $latest[session_phase_slot_key($phase)] = $phase;
+        $key = session_phase_slot_key($phase);
+        $latest[$key] = $phase;
+        $order[$key] = $i;
+        $i++;
     }
     $survivors = array_values($latest);
-    usort($survivors, static function ($a, $b) {
-        return (int) ($a['phase'] ?? 0) <=> (int) ($b['phase'] ?? 0);
+    usort($survivors, static function ($a, $b) use ($order) {
+        return ($order[session_phase_slot_key($a)] ?? 0)
+            <=> ($order[session_phase_slot_key($b)] ?? 0);
     });
 
     $removed_phases = count($phases) - count($survivors);
@@ -2675,6 +2903,29 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
                 'title' => $title,
                 'info' => $info,
             ]);
+            // Don't register empty switch-list phases. Compact keys on
+            // title|info, so an empty late "Starting" snapshot would wipe an
+            // earlier same-slot list that still had cars (e.g. morning snap
+            // after corrections, then empty overnight pickup).
+            $cars_written = 0;
+            foreach ((array) $written as $wj) {
+                $cars_written += (int) ($wj['cars'] ?? 0);
+            }
+            if ($cars_written < 1) {
+                if (is_dir($phase_dir)) {
+                    session_rrmdir($phase_dir);
+                }
+                $phase_num--;
+                $log[] = [
+                    'step' => $n,
+                    'phase' => null,
+                    'written' => $written,
+                    'waybills' => 0,
+                    'skipped_empty' => true,
+                ];
+                $pc++;
+                continue;
+            }
             session_register_phase($manifest, $phase_num, [
                 'step' => $n,
                 'jobs' => $jobs,
@@ -3381,11 +3632,15 @@ function session_train_print_all_primary_job($session_nbr, $job, $root = null)
  * A slot is keyed by its train(s) + recipe step + title/info (direction), and
  * because phases are stored in chronological append order, the last entry seen
  * for a key wins. Clean single-run sessions are unaffected (each key appears
- * once). Returns the surviving phase entries in phase order.
+ * once). Returns the surviving phase entries in manifest array order (the
+ * authorial / operational sequence), not sorted by phase_NN folder numbers —
+ * those can diverge when a leg is reconstructed into a later directory.
  */
 function session_latest_token_phases(array $manifest)
 {
     $latest = [];
+    $order = [];
+    $i = 0;
     foreach ($manifest['phases'] ?? [] as $phase) {
         if (!is_array($phase)) {
             continue;
@@ -3396,14 +3651,39 @@ function session_latest_token_phases(array $manifest)
         // Key on the logical slot (trains + title/info), NOT the recipe step
         // number, which can shift between runs and otherwise splits the same
         // phase into two "tokens". Later entries overwrite earlier ones.
-        $latest[session_phase_slot_key($phase)] = $phase;
+        $key = session_phase_slot_key($phase);
+        $latest[$key] = $phase;
+        $order[$key] = $i;
+        $i++;
     }
     $result = array_values($latest);
-    usort($result, static function ($a, $b) {
-        return (int) ($a['phase'] ?? 0) <=> (int) ($b['phase'] ?? 0);
+    usort($result, static function ($a, $b) use ($order) {
+        return ($order[session_phase_slot_key($a)] ?? 0)
+            <=> ($order[session_phase_slot_key($b)] ?? 0);
     });
 
     return $result;
+}
+
+/**
+ * Map of phase_num => 0-based display rank from session_latest_token_phases.
+ * Used where code still keys by phase folder number but must present legs in
+ * operational (manifest) order rather than numeric phase order.
+ *
+ * @return array<int,int>
+ */
+function session_phase_display_rank(array $manifest)
+{
+    $rank = [];
+    $i = 0;
+    foreach (session_latest_token_phases($manifest) as $phase) {
+        $pn = (int) ($phase['phase'] ?? 0);
+        if ($pn > 0 && !isset($rank[$pn])) {
+            $rank[$pn] = $i++;
+        }
+    }
+
+    return $rank;
 }
 
 /**
@@ -3646,8 +3926,8 @@ function session_build_switchlist_print_all($dbc, $session_nbr, $root = null)
         . $session_nav
         . '<div class="page">'
         . '<div class="noprint" style="margin-bottom:12px;">'
-        . '<button onclick="window.print()">PRINT ALL SWITCH LISTS</button>'
-        . '<p style="margin:8px 0 0; color:#555; font-size:14px;">Combined view. Pick a style above to print every switch list in that layout — each starts on a new page.</p>'
+        . '<button type="button" onclick="stsSafePrint()">PRINT ALL SWITCH LISTS</button>'
+        . '<p style="margin:8px 0 0; color:#555; font-size:14px;">Combined view. Pick a style above to print every switch list in that layout — each starts on a new page. Use an external browser (Chrome/Safari) if Cursor\'s preview crashes on print.</p>'
         . '</div>'
         . $phases_html
         . '</div>'
@@ -3763,7 +4043,7 @@ function session_build_switchlist_train_print_all($dbc, $session_nbr, $job, $roo
         . $session_nav
         . '<div class="page">'
         . '<div class="noprint" style="margin-bottom:12px;">'
-        . '<button onclick="window.print()">PRINT ALL SWITCH LISTS</button>'
+        . '<button type="button" onclick="stsSafePrint()">PRINT ALL SWITCH LISTS</button>'
         . '<p style="margin:8px 0 0; color:#555; font-size:14px;">All phases for '
         . htmlspecialchars($train_label) . '. Pick a style above to print in that layout — each switch list starts on a new printed page.</p>'
         . '</div>'
@@ -3989,7 +4269,7 @@ function session_build_switchlist_print_all_style($dbc, $session_nbr, $style, $r
         . $session_nav
         . '<div class="page">'
         . '<div class="noprint" style="margin-bottom:12px;">'
-        . '<button onclick="window.print()">PRINT ALL SWITCH LISTS</button>'
+        . '<button type="button" onclick="stsSafePrint()">PRINT ALL SWITCH LISTS</button>'
         . '<p style="margin:8px 0 0; color:#555; font-size:14px;">Style: ' . htmlspecialchars($style_label)
         . '. Each switch list starts on a new printed page.</p>'
         . '</div>'
@@ -4098,7 +4378,7 @@ function session_build_switchlist_train_print_all_style($dbc, $session_nbr, $job
         . $session_nav
         . '<div class="page">'
         . '<div class="noprint" style="margin-bottom:12px;">'
-        . '<button onclick="window.print()">PRINT ALL SWITCH LISTS</button>'
+        . '<button type="button" onclick="stsSafePrint()">PRINT ALL SWITCH LISTS</button>'
         . '<p style="margin:8px 0 0; color:#555; font-size:14px;">All phases for '
         . htmlspecialchars($train_label) . ' · ' . htmlspecialchars($style_label)
         . '. Each switch list starts on a new printed page.</p>'

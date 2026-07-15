@@ -389,26 +389,394 @@ $track_scale_ui = [
             padding: 0.2rem 0.45rem;
             border-radius: 0.25rem;
         }
+        .access-toggle-wrap {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            color: #fff;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            user-select: none;
+        }
+        .access-toggle-wrap .form-check-input {
+            width: 2.6rem;
+            height: 1.35rem;
+            margin: 0;
+            cursor: pointer;
+            background-color: rgba(255, 255, 255, 0.35);
+            border-color: rgba(255, 255, 255, 0.65);
+        }
+        .access-toggle-wrap .form-check-input:checked {
+            background-color: #fff;
+            border-color: #fff;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23198754'/%3e%3c/svg%3e");
+        }
+        .access-toggle-wrap .form-check-input:focus {
+            box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.35);
+        }
+        .access-toggle-wrap label {
+            cursor: pointer;
+            margin: 0;
+            line-height: 1.2;
+        }
+
+        /* Larger controls mode — same layout, bigger hit targets / type */
+        body.track-scale-accessible {
+            font-size: 1.2rem;
+        }
+        body.track-scale-accessible .navbar-brand {
+            font-size: 1.45rem;
+        }
+        body.track-scale-accessible .access-toggle-wrap {
+            font-size: 1.1rem;
+            gap: 0.7rem;
+        }
+        body.track-scale-accessible .access-toggle-wrap .form-check-input {
+            width: 3.1rem;
+            height: 1.65rem;
+        }
+        body.track-scale-accessible .container {
+            max-width: 1100px !important;
+        }
+        body.track-scale-accessible h5 {
+            font-size: 1.55rem;
+        }
+        body.track-scale-accessible .text-muted.small,
+        body.track-scale-accessible .small {
+            font-size: 1.05rem !important;
+        }
+        body.track-scale-accessible .btn-group .btn {
+            font-size: 1.2rem;
+            padding: 0.7rem 1.15rem;
+            min-height: 3rem;
+        }
+        body.track-scale-accessible .btn-lg {
+            font-size: 1.35rem;
+            padding: 0.85rem 1.35rem;
+            min-height: 3.4rem;
+        }
+        body.track-scale-accessible .btn:not(.btn-lg):not(.btn-sm) {
+            font-size: 1.15rem;
+            padding: 0.65rem 1.1rem;
+            min-height: 2.9rem;
+        }
+        body.track-scale-accessible .btn-sm {
+            font-size: 1.1rem;
+            padding: 0.55rem 0.95rem;
+            min-height: 2.75rem;
+        }
+        body.track-scale-accessible .btn.cal-position-btn,
+        body.track-scale-accessible .btn.cal-weigh-btn,
+        body.track-scale-accessible .btn.cal-adj-btn,
+        body.track-scale-accessible .btn.cal-adj-reset-btn {
+            font-size: 1.15rem;
+            min-height: 3rem;
+            padding-top: 0.65rem;
+            padding-bottom: 0.65rem;
+        }
+        body.track-scale-accessible .cal-adj-group .btn {
+            min-width: 3rem;
+        }
+        body.track-scale-accessible .cal-adj-group .form-control {
+            font-size: 1.35rem;
+            min-height: 3rem;
+            font-weight: 700;
+        }
+        body.track-scale-accessible .form-select,
+        body.track-scale-accessible .form-control {
+            font-size: 1.2rem;
+            min-height: 3rem;
+            padding: 0.55rem 0.9rem;
+        }
+        body.track-scale-accessible .form-select-sm {
+            font-size: 1.1rem;
+            min-height: 2.85rem;
+        }
+        body.track-scale-accessible .form-check-input {
+            width: 1.45rem;
+            height: 1.45rem;
+            margin-top: 0.15rem;
+        }
+        body.track-scale-accessible .form-check-label {
+            font-size: 1.1rem;
+            padding-left: 0.25rem;
+        }
+        body.track-scale-accessible .form-label {
+            font-size: 1.15rem;
+            font-weight: 600;
+        }
+        /* Match average + sensor LED scale in accessible calibrate */
+        body.track-scale-accessible #calibratePanel > .scale-top-row .scale-display .value {
+            font-size: 2.8rem;
+        }
+        body.track-scale-accessible .sensor-card .scale-display {
+            padding: 1rem 1.15rem;
+        }
+        body.track-scale-accessible .sensor-card .scale-display .value {
+            font-size: 2.4rem;
+        }
+        body.track-scale-accessible .sensor-card .scale-display .unit {
+            font-size: 1.15rem;
+        }
+        body.track-scale-accessible .sensor-card .sensor-error-line {
+            font-size: 1.15rem;
+            font-weight: 600;
+        }
+        .cal-instructions,
+        .sensor-adj-line,
+        .sensor-car-here-badge,
+        .cal-sensor-local-controls {
+            display: none !important;
+        }
+        .cal-central-controls {
+            display: block;
+        }
+        .cal-central-panel {
+            border: 2px solid #198754;
+            border-radius: 0.5rem;
+            background: #f8fff9;
+            padding: 1rem 1.15rem;
+        }
+        .cal-central-panel .cal-central-layout {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.85rem;
+            width: 100%;
+        }
+        .cal-central-panel .cal-central-stack {
+            width: 100%;
+            max-width: 52rem;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            column-gap: 1.25rem;
+            row-gap: 0.85rem;
+            align-items: start;
+            justify-items: center;
+        }
+        .cal-central-panel .cal-central-stats-block {
+            display: contents;
+        }
+        .cal-central-panel .cal-stats-grid {
+            display: contents;
+        }
+        .cal-central-panel .cal-stat {
+            text-align: center;
+            min-width: 0;
+            width: 100%;
+        }
+        .cal-central-panel .cal-stat-label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #6c757d;
+            margin-bottom: 0.3rem;
+            line-height: 1.2;
+            min-height: 1rem;
+        }
+        .cal-central-panel .cal-stat-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            line-height: 1.15;
+        }
+        .cal-central-panel .cal-stat-value .unit {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #6c757d;
+        }
+        .cal-central-panel .cal-stat-error .cal-stat-value {
+            font-size: 1.4rem;
+            color: #b02a37;
+        }
+        .cal-central-panel .cal-central-adj-wrap {
+            grid-column: 1 / 3;
+            width: 100%;
+            display: flex;
+            justify-content: stretch;
+        }
+        .cal-central-panel .cal-central-adj {
+            width: 100%;
+            flex-wrap: nowrap;
+        }
+        .cal-central-panel .cal-central-adj > .cal-central-adj-btn[data-fine="0"][data-direction="down"] {
+            margin-right: 0.55rem !important;
+            border-top-right-radius: var(--bs-border-radius) !important;
+            border-bottom-right-radius: var(--bs-border-radius) !important;
+        }
+        .cal-central-panel .cal-central-adj > .cal-central-adj-btn[data-fine="1"][data-direction="down"] {
+            margin-left: 0 !important;
+            border-top-left-radius: var(--bs-border-radius) !important;
+            border-bottom-left-radius: var(--bs-border-radius) !important;
+        }
+        .cal-central-panel .cal-central-adj > .cal-central-adj-btn[data-fine="1"][data-direction="up"] {
+            border-top-right-radius: var(--bs-border-radius) !important;
+            border-bottom-right-radius: var(--bs-border-radius) !important;
+        }
+        .cal-central-panel .cal-central-adj > .cal-central-adj-btn[data-fine="0"][data-direction="up"] {
+            margin-left: 0.55rem !important;
+            border-top-left-radius: var(--bs-border-radius) !important;
+            border-bottom-left-radius: var(--bs-border-radius) !important;
+        }
+        .cal-central-panel .cal-central-adj .btn {
+            min-width: 2.6rem;
+            min-height: 2.75rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+            font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+            letter-spacing: -0.04em;
+            padding-left: 0.4rem;
+            padding-right: 0.4rem;
+        }
+        .cal-central-panel .cal-central-adj .form-control {
+            font-size: 1.25rem;
+            font-weight: 700;
+            min-height: 2.75rem;
+            text-align: center;
+        }
+        /* Large-controls sizing for the shared calibrate layout */
+        body.track-scale-accessible .cal-central-panel {
+            padding: 1.25rem 1.35rem;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-stat-label {
+            font-size: 0.8rem;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-stat-value {
+            font-size: 1.55rem;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-stat-value .unit {
+            font-size: 0.95rem;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-stat-error .cal-stat-value {
+            font-size: 1.85rem;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-central-stack {
+            max-width: 58rem;
+            column-gap: 1.75rem;
+            row-gap: 1rem;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-central-adj > .cal-central-adj-btn[data-fine="0"][data-direction="down"] {
+            margin-right: 0.75rem !important;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-central-adj > .cal-central-adj-btn[data-fine="0"][data-direction="up"] {
+            margin-left: 0.75rem !important;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-central-adj .btn {
+            min-width: 3.35rem;
+            min-height: 3.65rem;
+            font-size: 1.45rem;
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-central-adj .form-control {
+            font-size: 1.75rem;
+            min-height: 3.65rem;
+        }
+        body.track-scale-accessible .sensor-card .cal-position-btn {
+            font-size: 1.2rem;
+            min-height: 3.25rem;
+            padding: 0.75rem 0.85rem;
+        }
+        body.track-scale-accessible #calSaveBtn,
+        body.track-scale-accessible #calResetBtn {
+            font-size: 1.2rem;
+            min-height: 3.1rem;
+            padding: 0.7rem 1.15rem;
+        }
+        body.track-scale-accessible .scale-led {
+            width: 20px;
+            height: 20px;
+        }
+        body.track-scale-accessible .scale-led-label {
+            font-size: 0.85rem;
+        }
+        body.track-scale-accessible .car-panel-header #carMarks {
+            font-size: 2.1rem;
+        }
+        body.track-scale-accessible .car-panel-header #carMeta {
+            font-size: 1.25rem;
+        }
+        body.track-scale-accessible .stat-box {
+            padding: 0.75rem 0.85rem;
+        }
+        body.track-scale-accessible .stat-box .stat-label {
+            font-size: 0.85rem;
+        }
+        body.track-scale-accessible .stat-box .stat-value {
+            font-size: 1.35rem;
+        }
+        body.track-scale-accessible .card-header {
+            font-size: 1.2rem;
+            padding: 0.85rem 1.1rem;
+        }
+        body.track-scale-accessible .card-body {
+            padding: 1.15rem;
+        }
+        body.track-scale-accessible .list-group-item.car-list-item {
+            padding: 1rem 1.15rem;
+            min-height: 3.5rem;
+            font-size: 1.2rem;
+        }
+        body.track-scale-accessible .car-list-marks {
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+        body.track-scale-accessible .car-list-position {
+            font-size: 1rem;
+        }
+        body.track-scale-accessible .status-badge {
+            font-size: 0.95rem;
+            padding: 0.35rem 0.65rem;
+        }
+        body.track-scale-accessible .badge {
+            font-size: 1rem;
+            padding: 0.45em 0.7em;
+        }
+        body.track-scale-accessible .order-empty-msg,
+        body.track-scale-accessible .alert {
+            font-size: 1.1rem;
+        }
+        body.track-scale-accessible .sensor-card {
+            padding: 1rem;
+        }
+        body.track-scale-accessible .sensor-card strong {
+            font-size: 1.25rem;
+        }
+        body.track-scale-accessible .cal-track-car img {
+            max-height: 5.5rem;
+        }
+        body.track-scale-accessible #weighResult,
+        body.track-scale-accessible #calStatus,
+        body.track-scale-accessible #assignResult {
+            font-size: 1.15rem !important;
+        }
     </style>
 </head>
 <body>
 <nav class="navbar navbar-dark bg-success mb-4">
-    <div class="container-fluid">
-        <span class="navbar-brand"><i class="bi bi-speedometer2"></i> Track Scale — <?= htmlspecialchars($track_scale_ui['siteLabel']) ?></span>
-        <div class="d-flex gap-2">
+    <div class="container-fluid gap-2 flex-wrap">
+        <span class="navbar-brand mb-0"><i class="bi bi-speedometer2"></i> Track Scale — <?= htmlspecialchars($track_scale_ui['siteLabel']) ?></span>
+        <div class="d-flex align-items-center gap-3 ms-auto flex-wrap">
+            <div class="access-toggle-wrap form-check form-switch m-0">
+                <input class="form-check-input" type="checkbox" role="switch" id="accessibleUiToggle"
+                       aria-describedby="accessibleUiHint">
+                <label class="form-check-label" for="accessibleUiToggle">
+                    Large controls
+                </label>
+            </div>
             <a href="operations.php" class="btn btn-outline-light btn-sm">
                 <i class="bi bi-arrow-left"></i> Operations
             </a>
         </div>
     </div>
 </nav>
+<span id="accessibleUiHint" class="visually-hidden">
+    Larger text and buttons for the weigh and calibrate screens. Preference is saved in this browser.
+</span>
 
 <div class="container" style="max-width: 960px;">
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <div>
-            <h5 class="mb-1"><?= htmlspecialchars($track_scale_ui['siteLabel']) ?></h5>
-            <p class="text-muted small mb-0">Pick a car at the scale or on a <?= htmlspecialchars(strtolower($track_scale_ui['routedTrainsLabel'])) ?> train, weigh it, and assign the matching order. Balanced loads ship outbound; improperly balanced loads reload. Use <strong>Reassign Order</strong> after a balanced weigh to reroute a car already on an outbound order.</p>
-        </div>
+    <div class="d-flex justify-content-end align-items-center mb-3 flex-wrap gap-2">
         <div class="btn-group" role="group" aria-label="Scale mode">
             <input type="radio" class="btn-check" name="scaleMode" id="modeWeigh" autocomplete="off" checked>
             <label class="btn btn-outline-success" for="modeWeigh"><i class="bi bi-truck"></i> Weigh</label>
@@ -570,12 +938,10 @@ $track_scale_ui = [
 
         <div class="card mb-3">
             <div class="card-body">
-                <p class="text-muted small mb-3">
-                    Place the scale test car (<strong id="calTestCarMarks">COST1</strong>, LT WT
-                    <strong id="calTestCarLbs">80,000</strong> lbs / <span id="calTestCarTons">40.00</span> t)
-                    on one section of the track at a time. Mark which sensor the car is on, weigh that position,
-                    then adjust until its error reads <strong>0.00</strong> t. Move the car to the next sensor and repeat.
-                    Calibration persists for this session only.
+                <p class="visually-hidden cal-instructions">
+                    Scale test car <strong id="calTestCarMarks">COST1</strong>,
+                    <strong id="calTestCarLbs">80,000</strong> lbs /
+                    <span id="calTestCarTons">40.00</span> t
                 </p>
                 <div class="cal-track-wrap" id="calTrackWrap">
                     <div class="cal-track-rail">
@@ -588,110 +954,88 @@ $track_scale_ui = [
                 <div class="row g-3 mb-3">
                     <div class="col-md-4">
                         <div class="sensor-card" id="sensorCard-left">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <strong>Left sensor</strong>
-                                <span class="badge bg-primary d-none" id="sensorCarHere-left">Scale car here</span>
-                            </div>
+                            <div class="mb-2"><strong>Left sensor</strong></div>
                             <div class="scale-display mb-2">
                                 <div class="label">Reading</div>
                                 <div><span class="value" id="sensorDisplay-left">—</span> <span class="unit">t</span></div>
                             </div>
-                            <div class="small mb-2">Error: <span id="sensorError-left">—</span> t</div>
-                            <div class="small text-muted mb-2" id="sensorAdj-left">adj 0.00</div>
+                            <div class="small mb-2 sensor-error-line">Error: <span id="sensorError-left">—</span> t</div>
+                            <div class="small text-muted mb-2 sensor-adj-line" id="sensorAdj-left">adj 0.00</div>
                             <button type="button" class="btn btn-outline-primary btn-sm w-100 mb-2 cal-position-btn" data-sensor="left">
-                                <i class="bi bi-truck"></i> Scale car here
-                            </button>
-                            <button type="button" class="btn btn-primary btn-sm w-100 mb-2 cal-weigh-btn" data-sensor="left" disabled>
-                                <i class="bi bi-speedometer"></i> Weigh
-                            </button>
-                            <div class="form-check form-check-sm mb-2">
-                                <input class="form-check-input cal-fine-toggle" type="checkbox" id="sensorFineTune-left" data-sensor="left" disabled>
-                                <label class="form-check-label small" for="sensorFineTune-left">Fine tune (±0.01 t)</label>
-                            </div>
-                            <div class="input-group input-group-sm cal-adj-group" data-sensor="left">
-                                <button type="button" class="btn btn-outline-secondary cal-adj-btn" data-sensor="left" data-direction="down" disabled>
-                                    <i class="bi bi-chevron-down"></i>
-                                </button>
-                                <input type="text" class="form-control text-center" id="sensorAdjustInput-left" value="0.00" readonly>
-                                <button type="button" class="btn btn-outline-secondary cal-adj-btn" data-sensor="left" data-direction="up" disabled>
-                                    <i class="bi bi-chevron-up"></i>
-                                </button>
-                            </div>
-                            <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-1 cal-adj-reset-btn" data-sensor="left" disabled>
-                                Reset adjustment
+                                <i class="bi bi-truck"></i> Place Car
                             </button>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="sensor-card" id="sensorCard-center">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <strong>Center sensor</strong>
-                                <span class="badge bg-primary d-none" id="sensorCarHere-center">Scale car here</span>
-                            </div>
+                            <div class="mb-2"><strong>Center sensor</strong></div>
                             <div class="scale-display mb-2">
                                 <div class="label">Reading</div>
                                 <div><span class="value" id="sensorDisplay-center">—</span> <span class="unit">t</span></div>
                             </div>
-                            <div class="small mb-2">Error: <span id="sensorError-center">—</span> t</div>
-                            <div class="small text-muted mb-2" id="sensorAdj-center">adj 0.00</div>
+                            <div class="small mb-2 sensor-error-line">Error: <span id="sensorError-center">—</span> t</div>
+                            <div class="small text-muted mb-2 sensor-adj-line" id="sensorAdj-center">adj 0.00</div>
                             <button type="button" class="btn btn-outline-primary btn-sm w-100 mb-2 cal-position-btn" data-sensor="center">
-                                <i class="bi bi-truck"></i> Scale car here
-                            </button>
-                            <button type="button" class="btn btn-primary btn-sm w-100 mb-2 cal-weigh-btn" data-sensor="center" disabled>
-                                <i class="bi bi-speedometer"></i> Weigh
-                            </button>
-                            <div class="form-check form-check-sm mb-2">
-                                <input class="form-check-input cal-fine-toggle" type="checkbox" id="sensorFineTune-center" data-sensor="center" disabled>
-                                <label class="form-check-label small" for="sensorFineTune-center">Fine tune (±0.01 t)</label>
-                            </div>
-                            <div class="input-group input-group-sm cal-adj-group" data-sensor="center">
-                                <button type="button" class="btn btn-outline-secondary cal-adj-btn" data-sensor="center" data-direction="down" disabled>
-                                    <i class="bi bi-chevron-down"></i>
-                                </button>
-                                <input type="text" class="form-control text-center" id="sensorAdjustInput-center" value="0.00" readonly>
-                                <button type="button" class="btn btn-outline-secondary cal-adj-btn" data-sensor="center" data-direction="up" disabled>
-                                    <i class="bi bi-chevron-up"></i>
-                                </button>
-                            </div>
-                            <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-1 cal-adj-reset-btn" data-sensor="center" disabled>
-                                Reset adjustment
+                                <i class="bi bi-truck"></i> Place Car
                             </button>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="sensor-card" id="sensorCard-right">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <strong>Right sensor</strong>
-                                <span class="badge bg-primary d-none" id="sensorCarHere-right">Scale car here</span>
-                            </div>
+                            <div class="mb-2"><strong>Right sensor</strong></div>
                             <div class="scale-display mb-2">
                                 <div class="label">Reading</div>
                                 <div><span class="value" id="sensorDisplay-right">—</span> <span class="unit">t</span></div>
                             </div>
-                            <div class="small mb-2">Error: <span id="sensorError-right">—</span> t</div>
-                            <div class="small text-muted mb-2" id="sensorAdj-right">adj 0.00</div>
+                            <div class="small mb-2 sensor-error-line">Error: <span id="sensorError-right">—</span> t</div>
+                            <div class="small text-muted mb-2 sensor-adj-line" id="sensorAdj-right">adj 0.00</div>
                             <button type="button" class="btn btn-outline-primary btn-sm w-100 mb-2 cal-position-btn" data-sensor="right">
-                                <i class="bi bi-truck"></i> Scale car here
+                                <i class="bi bi-truck"></i> Place Car
                             </button>
-                            <button type="button" class="btn btn-primary btn-sm w-100 mb-2 cal-weigh-btn" data-sensor="right" disabled>
-                                <i class="bi bi-speedometer"></i> Weigh
-                            </button>
-                            <div class="form-check form-check-sm mb-2">
-                                <input class="form-check-input cal-fine-toggle" type="checkbox" id="sensorFineTune-right" data-sensor="right" disabled>
-                                <label class="form-check-label small" for="sensorFineTune-right">Fine tune (±0.01 t)</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cal-central-controls mb-3">
+                    <div class="cal-central-panel">
+                        <div class="cal-central-layout">
+                            <div class="cal-central-stack">
+                                <div class="cal-central-stats-block">
+                                    <div class="cal-stats-grid">
+                                        <div class="cal-stat">
+                                            <div class="cal-stat-label">Sensor</div>
+                                            <div class="cal-stat-value text-capitalize" id="calCentralSensor">—</div>
+                                        </div>
+                                        <div class="cal-stat cal-stat-error">
+                                            <div class="cal-stat-label">Error</div>
+                                            <div class="cal-stat-value">
+                                                <span id="calCentralError">—</span> <span class="unit">t</span>
+                                            </div>
+                                        </div>
+                                        <div class="cal-stat">
+                                            <div class="cal-stat-label">Reading</div>
+                                            <div class="cal-stat-value">
+                                                <span id="calCentralReading">—</span> <span class="unit">t</span>
+                                            </div>
+                                        </div>
+                                        <div class="cal-stat">
+                                            <div class="cal-stat-label">Expected</div>
+                                            <div class="cal-stat-value">
+                                                <span id="calCentralExpected">—</span> <span class="unit">t</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="cal-central-adj-wrap">
+                                    <div class="input-group cal-central-adj">
+                                        <button type="button" class="btn btn-outline-secondary cal-central-adj-btn" id="calCentralAdjCoarseDown" data-direction="down" data-fine="0" disabled aria-label="Adjust down 0.10">&lt;&lt;</button>
+                                        <button type="button" class="btn btn-outline-secondary cal-central-adj-btn" id="calCentralAdjFineDown" data-direction="down" data-fine="1" disabled aria-label="Adjust down 0.01">&lt;</button>
+                                        <input type="text" class="form-control" id="calCentralAdjInput" value="0.00" readonly aria-label="Adjustment tons">
+                                        <button type="button" class="btn btn-outline-secondary cal-central-adj-btn" id="calCentralAdjFineUp" data-direction="up" data-fine="1" disabled aria-label="Adjust up 0.01">&gt;</button>
+                                        <button type="button" class="btn btn-outline-secondary cal-central-adj-btn" id="calCentralAdjCoarseUp" data-direction="up" data-fine="0" disabled aria-label="Adjust up 0.10">&gt;&gt;</button>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="input-group input-group-sm cal-adj-group" data-sensor="right">
-                                <button type="button" class="btn btn-outline-secondary cal-adj-btn" data-sensor="right" data-direction="down" disabled>
-                                    <i class="bi bi-chevron-down"></i>
-                                </button>
-                                <input type="text" class="form-control text-center" id="sensorAdjustInput-right" value="0.00" readonly>
-                                <button type="button" class="btn btn-outline-secondary cal-adj-btn" data-sensor="right" data-direction="up" disabled>
-                                    <i class="bi bi-chevron-up"></i>
-                                </button>
-                            </div>
-                            <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-1 cal-adj-reset-btn" data-sensor="right" disabled>
-                                Reset adjustment
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -713,6 +1057,34 @@ $track_scale_ui = [
 const CONFIG = <?php echo json_encode($config, JSON_UNESCAPED_SLASHES); ?>;
 const TRACK_SCALE_UI = <?php echo json_encode($track_scale_ui, JSON_UNESCAPED_SLASHES); ?>;
 const PRECISION = CONFIG.precision ?? 2;
+const ACCESSIBLE_UI_KEY = 'track_scale_accessible_ui';
+
+function applyAccessibleUi(enabled) {
+    document.body.classList.toggle('track-scale-accessible', !!enabled);
+    const toggle = document.getElementById('accessibleUiToggle');
+    if (toggle && toggle.checked !== !!enabled) {
+        toggle.checked = !!enabled;
+    }
+    try {
+        localStorage.setItem(ACCESSIBLE_UI_KEY, enabled ? '1' : '0');
+    } catch (e) {
+        /* ignore quota / private mode */
+    }
+}
+
+(function initAccessibleUiPreference() {
+    let enabled = false;
+    try {
+        enabled = localStorage.getItem(ACCESSIBLE_UI_KEY) === '1';
+    } catch (e) {
+        enabled = false;
+    }
+    applyAccessibleUi(enabled);
+    const toggle = document.getElementById('accessibleUiToggle');
+    if (toggle) {
+        toggle.addEventListener('change', () => applyAccessibleUi(toggle.checked));
+    }
+})();
 
 let currentCar = null;
 let currentProfile = null;
@@ -1175,6 +1547,7 @@ function hideError() {
 function setMode(mode) {
     document.getElementById('weighPanel').classList.toggle('active', mode === 'weigh');
     document.getElementById('calibratePanel').classList.toggle('active', mode === 'calibrate');
+    document.body.classList.toggle('mode-calibrate', mode === 'calibrate');
     if (mode === 'calibrate') {
         refreshCalibrationState();
     } else {
@@ -1566,6 +1939,7 @@ function renderCalibration(cal) {
         document.getElementById('calTrackCar').classList.add('d-none');
     }
 
+    let activeSensor = null;
     (cal.sensors || []).forEach(sensor => {
         const pos = sensor.position;
         const card = document.getElementById('sensorCard-' + pos);
@@ -1575,14 +1949,18 @@ function renderCalibration(cal) {
         card.classList.toggle('calibrated', !!sensor.is_zero);
 
         const badge = document.getElementById('sensorCarHere-' + pos);
-        badge.classList.toggle('d-none', !carHere);
+        if (badge) {
+            badge.classList.toggle('d-none', !carHere);
+        }
 
         const posBtn = card.querySelector('.cal-position-btn');
         posBtn.classList.toggle('active', carHere);
         posBtn.disabled = !testCarAtScale || calibrationLocked;
 
         const weighBtn = card.querySelector('.cal-weigh-btn');
-        weighBtn.disabled = !carHere || calibrationLocked;
+        if (weighBtn) {
+            weighBtn.disabled = !carHere || calibrationLocked;
+        }
 
         document.getElementById('sensorDisplay-' + pos).textContent =
             sensor.display_tons !== null && sensor.display_tons !== undefined
@@ -1590,24 +1968,30 @@ function renderCalibration(cal) {
                 : '—';
         document.getElementById('sensorError-' + pos).textContent =
             sensor.has_reading ? fmt(sensor.error_tons) : '—';
-        document.getElementById('sensorAdjustInput-' + pos).value = fmt(sensor.adjustment_tons);
-        document.getElementById('sensorAdj-' + pos).textContent =
-            'adj ' + fmt(sensor.adjustment_tons) + ' (step ±' + fmt(sensor.adjust_step_tons || 0.1) + ' t)';
-
-        const fineToggle = document.getElementById('sensorFineTune-' + pos);
-        if (fineToggle) {
-            fineToggle.checked = !!sensor.fine_tune;
-            fineToggle.disabled = calibrationLocked || !!sensor.adjustment_locked || !sensor.has_reading;
+        const adjInput = document.getElementById('sensorAdjustInput-' + pos);
+        if (adjInput) {
+            adjInput.value = fmt(sensor.adjustment_tons);
+        }
+        const adjLine = document.getElementById('sensorAdj-' + pos);
+        if (adjLine) {
+            adjLine.textContent =
+                'adj ' + fmt(sensor.adjustment_tons) + ' (step ±' + fmt(sensor.adjust_step_tons || 0.1) + ' t)';
         }
 
         card.querySelectorAll('.cal-adj-btn').forEach(btn => {
-            btn.disabled = calibrationLocked || !!sensor.adjustment_locked;
+            btn.disabled = calibrationLocked || !!sensor.adjustment_locked || !sensor.has_reading;
         });
         const resetBtn = card.querySelector('.cal-adj-reset-btn');
         if (resetBtn) {
-            resetBtn.disabled = calibrationLocked || !!sensor.adjustment_locked;
+            resetBtn.disabled = calibrationLocked || !!sensor.adjustment_locked || !sensor.has_reading;
+        }
+
+        if (carHere) {
+            activeSensor = sensor;
         }
     });
+
+    syncCalCentralControls(activeSensor, testCarAtScale, calibrationLocked);
 
     document.getElementById('calResetBtn').disabled = false;
     const saveBtn = document.getElementById('calSaveBtn');
@@ -1630,57 +2014,109 @@ function renderCalibration(cal) {
     }
 
     const statusEl = document.getElementById('calStatus');
-    const sessionsSince = cal.scale_status ? cal.scale_status.sessions_since_calibration : 0;
-    const lastCal = cal.last_calibration || {};
+    const accessible = document.body.classList.contains('track-scale-accessible');
     if (calibrationLocked) {
         const savedAt = cal.calibration_saved_at ? ` (${fmtTimestamp(cal.calibration_saved_at)})` : '';
-        statusEl.innerHTML =
-            '<span class="text-success"><i class="bi bi-lock-fill"></i> Calibration saved for this session'
-            + savedAt + '. Use <strong>Reset calibration</strong> to adjust again.</span>';
-    } else if (sessionsSince > 0 && lastCal.session_number != null) {
-        statusEl.innerHTML =
-            `<span class="text-warning"><i class="bi bi-exclamation-triangle"></i> `
-            + `Session ${sessionsSince} since last calibration (Session ${lastCal.session_number}) — `
-            + `scale drift applies. Weigh each sensor, adjust to zero error, then save.</span>`;
+        statusEl.innerHTML = accessible
+            ? '<span class="text-success"><i class="bi bi-lock-fill"></i> Saved' + savedAt + '</span>'
+            : ('<span class="text-success"><i class="bi bi-lock-fill"></i> Calibration saved for this session'
+                + savedAt + '. Use <strong>Reset calibration</strong> to adjust again.</span>');
     } else if (!testCarAtScale) {
         const loc = cal.test_car && cal.test_car.current_location
             ? cal.test_car.current_location
             : 'not at scale';
-        statusEl.innerHTML =
-            `<span class="text-warning"><i class="bi bi-exclamation-triangle"></i> `
-            + `Place scale test car at <strong>${scaleLocation}</strong> to calibrate `
-            + `(currently: ${loc}).</span>`;
+        statusEl.innerHTML = accessible
+            ? `<span class="text-warning"><i class="bi bi-exclamation-triangle"></i> Test car at ${loc} — move to ${scaleLocation}</span>`
+            : (`<span class="text-warning"><i class="bi bi-exclamation-triangle"></i> `
+                + `Place scale test car at <strong>${scaleLocation}</strong> to calibrate `
+                + `(currently: ${loc}).</span>`);
     } else if (cal.all_calibrated) {
         statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> All sensors calibrated.</span>';
     } else if (cal.scale_car_position) {
-        statusEl.textContent = 'Scale car marked at ' + cal.scale_car_position + ' sensor — weigh, then adjust to zero error.';
+        statusEl.textContent = accessible
+            ? (cal.scale_car_position + ' — zero the error, then next sensor')
+            : ('Car at ' + cal.scale_car_position + ' — adjust to zero error, then Place Car on the next sensor.');
     } else {
-        statusEl.textContent = 'Mark which sensor the scale car is on, then weigh that position.';
+        statusEl.textContent = accessible
+            ? 'Place Car on a sensor'
+            : 'Place Car on a sensor to weigh that position.';
     }
 }
 
-async function setScaleCarPosition(position) {
-    const data = await apiPost('calibrate_set_position', { position });
-    if (!data.success) {
-        document.getElementById('calStatus').innerHTML =
-            `<span class="text-danger">${data.error || 'Could not set position'}</span>`;
+function syncCalCentralControls(sensor, testCarAtScale, calibrationLocked) {
+    const sensorEl = document.getElementById('calCentralSensor');
+    const errorEl = document.getElementById('calCentralError');
+    const readingEl = document.getElementById('calCentralReading');
+    const expectedEl = document.getElementById('calCentralExpected');
+    const adjInput = document.getElementById('calCentralAdjInput');
+    const adjBtns = document.querySelectorAll('.cal-central-adj-btn');
+    if (!sensorEl || !adjInput) {
         return;
     }
-    renderCalibration(data.calibration);
-}
 
-async function weighSensor(position) {
-    const data = await apiPost('calibrate_read', { position });
-    if (!data.success) {
-        document.getElementById('calStatus').innerHTML =
-            `<span class="text-danger">${data.error || 'Weigh failed'}</span>`;
+    if (!sensor) {
+        sensorEl.textContent = '—';
+        errorEl.textContent = '—';
+        if (readingEl) readingEl.textContent = '—';
+        if (expectedEl) expectedEl.textContent = '—';
+        adjInput.value = '0.00';
+        adjBtns.forEach(btn => { btn.disabled = true; });
         return;
     }
-    renderCalibration(data.calibration);
+
+    const locked = calibrationLocked || !!sensor.adjustment_locked || !sensor.has_reading;
+    sensorEl.textContent = sensor.position || '—';
+    errorEl.textContent = sensor.has_reading ? fmt(sensor.error_tons) : '—';
+    if (readingEl) {
+        // Freeze the panel reading at the raw weighed value; sensor LEDs track adjustment.
+        if (sensor.has_reading
+            && sensor.display_tons !== null && sensor.display_tons !== undefined
+            && sensor.adjustment_tons !== null && sensor.adjustment_tons !== undefined) {
+            readingEl.textContent = fmt(Number(sensor.display_tons) - Number(sensor.adjustment_tons));
+        } else {
+            readingEl.textContent = '—';
+        }
+    }
+    if (expectedEl) {
+        expectedEl.textContent =
+            sensor.expected_tons !== null && sensor.expected_tons !== undefined
+                ? fmt(sensor.expected_tons)
+                : '—';
+    }
+    adjInput.value = fmt(sensor.adjustment_tons);
+    adjBtns.forEach(btn => { btn.disabled = locked; });
 }
 
-async function adjustSensor(sensor, direction) {
-    const data = await apiPost('calibrate_adjust', { sensor, direction });
+function getActiveCalSensorPosition() {
+    const activeBtn = document.querySelector('.cal-position-btn.active');
+    return activeBtn ? activeBtn.dataset.sensor : null;
+}
+
+async function placeCarAndWeigh(position) {
+    const statusEl = document.getElementById('calStatus');
+    const setData = await apiPost('calibrate_set_position', { position });
+    if (!setData.success) {
+        statusEl.innerHTML =
+            `<span class="text-danger">${setData.error || 'Could not place car'}</span>`;
+        return;
+    }
+    renderCalibration(setData.calibration);
+
+    const weighData = await apiPost('calibrate_read', { position });
+    if (!weighData.success) {
+        statusEl.innerHTML =
+            `<span class="text-danger">${weighData.error || 'Weigh failed'}</span>`;
+        return;
+    }
+    renderCalibration(weighData.calibration);
+}
+
+async function adjustSensor(sensor, direction, fineTune) {
+    const payload = { sensor, direction };
+    if (fineTune !== undefined && fineTune !== null) {
+        payload.fine_tune = !!fineTune;
+    }
+    const data = await apiPost('calibrate_adjust', payload);
     if (!data.success) {
         document.getElementById('calStatus').innerHTML =
             `<span class="text-danger">${data.error || 'Adjust failed'}</span>`;
@@ -1699,29 +2135,18 @@ async function resetSensorAdjustment(sensor) {
     renderCalibration(data.calibration);
 }
 
-async function setSensorFineTune(sensor, enabled) {
-    const data = await apiPost('calibrate_set_fine_tune', { sensor, enabled });
-    if (!data.success) {
-        document.getElementById('calStatus').innerHTML =
-            `<span class="text-danger">${data.error || 'Could not update fine tune'}</span>`;
-        await refreshCalibrationState();
-        return;
-    }
-    renderCalibration(data.calibration);
-}
-
 document.querySelectorAll('.cal-position-btn').forEach(btn => {
-    btn.addEventListener('click', () => setScaleCarPosition(btn.dataset.sensor));
-});
-
-document.querySelectorAll('.cal-weigh-btn').forEach(btn => {
-    btn.addEventListener('click', () => weighSensor(btn.dataset.sensor));
+    btn.addEventListener('click', () => {
+        if (btn.disabled) return;
+        placeCarAndWeigh(btn.dataset.sensor);
+    });
 });
 
 document.querySelectorAll('.cal-adj-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         if (btn.disabled) return;
-        adjustSensor(btn.dataset.sensor, btn.dataset.direction);
+        const fine = btn.dataset.fine === '1';
+        adjustSensor(btn.dataset.sensor, btn.dataset.direction, fine);
     });
 });
 
@@ -1732,12 +2157,16 @@ document.querySelectorAll('.cal-adj-reset-btn').forEach(btn => {
     });
 });
 
-document.querySelectorAll('.cal-fine-toggle').forEach(toggle => {
-    toggle.addEventListener('change', () => {
-        if (toggle.disabled) return;
-        setSensorFineTune(toggle.dataset.sensor, toggle.checked);
+(function wireCalCentralControls() {
+    document.querySelectorAll('.cal-central-adj-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (btn.disabled) return;
+            const pos = getActiveCalSensorPosition();
+            if (!pos) return;
+            adjustSensor(pos, btn.dataset.direction, btn.dataset.fine === '1');
+        });
     });
-});
+})();
 
 async function saveCalibration() {
     const saveBtn = document.getElementById('calSaveBtn');
