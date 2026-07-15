@@ -22,8 +22,19 @@
     executionPathSteps: null,
     dirty: false,
     previewMode: true,
+    /** Section ids (`step-N`) the operator has collapsed in edit/preview. */
+    collapsedSectionIds: null,
+    /** One-shot merge of legacy `enabled:false` steps into the Skip field. */
+    _skipFromEnabled: null,
 
     el(id) { return document.getElementById(id); },
+
+    ensureCollapsedSectionIds() {
+      if (!(this.collapsedSectionIds instanceof Set)) {
+        this.collapsedSectionIds = new Set();
+      }
+      return this.collapsedSectionIds;
+    },
 
     ensureCheckboxDropdownDocHandlers() {
       if (this._cddDocHandlers) return;
@@ -163,7 +174,7 @@
     },
 
     rowClassName(step) {
-      return 'step-row ' + this.stepColorClass(step) + (step && step.enabled === false ? ' step-disabled' : '');
+      return 'step-row ' + this.stepColorClass(step);
     },
 
     isDatabaseStep(step) {
@@ -1118,9 +1129,9 @@
       if (step.function === 'section_label' && step.params.remarks !== undefined) {
         delete step.params.remarks;
       }
-      const enabledBox = row.querySelector('[data-step-enabled]');
-      if (enabledBox ? !enabledBox.checked : prev.enabled === false) {
-        step.enabled = false;
+      // Legacy per-step `enabled` is retired — use Skip steps / Include checkboxes.
+      if (Object.prototype.hasOwnProperty.call(step, 'enabled')) {
+        delete step.enabled;
       }
       this.recipe.steps[idx] = step;
       return step;
@@ -1262,19 +1273,26 @@
 
     stepRowInnerHtml(step, idx) {
       const rowKey = idx;
+      const stepNum = idx + 1;
       const stepNumSize = Math.max(2, String(this.recipe.steps.length).length);
+      const isSection = step.function === 'section_label';
+      const collapseBtn = isSection
+        ? ('<button type="button" class="section-collapse-btn" data-section-collapse' +
+          ' aria-expanded="true" title="Collapse section">▼</button>')
+        : '';
 
       return (
         '<div class="row-top row-top-align-start' + (this.rowHasMultiRowParams(step) ? ' row-has-filters' : '') +
           this.remarksExpandedClass(step) + '">' +
-          '<div class="step-num-control">' +
-            '<input type="number" class="step-num step-num-input field-input" data-step-num min="1" max="' + this.recipe.steps.length + '" size="' + stepNumSize + '" value="' + (idx + 1) + '" title="Type step number to jump" aria-label="Step number">' +
+          '<div class="step-num-control' + (isSection ? ' step-num-control-section' : '') + '">' +
+            collapseBtn +
+            '<input type="number" class="step-num step-num-input field-input" data-step-num min="1" max="' + this.recipe.steps.length + '" size="' + stepNumSize + '" value="' + stepNum + '" title="Type step number to jump" aria-label="Step number">' +
             '<div class="step-num-arrows">' +
               '<button type="button" class="step-num-arrow" data-step-arrow="up" title="Move step up">▲</button>' +
               '<button type="button" class="step-num-arrow" data-step-arrow="down" title="Move step down">▼</button>' +
             '</div>' +
           '</div>' +
-          '<button type="button" class="btn-icon btn-insert-before" title="Add step below step ' + (idx + 1) + '">+</button>' +
+          '<button type="button" class="btn-icon btn-insert-before" title="Add step below step ' + stepNum + '">+</button>' +
           '<label class="inline-field row-command inline-field-labeled">' +
             '<span class="inline-lbl inline-lbl-visible">Command</span>' +
             this.commandSelectHtml(step, rowKey) +
@@ -1288,9 +1306,9 @@
           '<button type="button" class="btn-icon btn-del" title="Delete">×</button>' +
         '</div>' +
         '<div class="row-bottom">' +
-          '<label class="step-active-toggle" title="When unchecked, this step is skipped in every run (like a commented-out command)">' +
-            '<input type="checkbox" data-step-enabled' + (step.enabled === false ? '' : ' checked') + '>' +
-            '<span>Active</span>' +
+          '<label class="step-include-toggle" title="Include in run. Unchecked adds this step to Skip steps.">' +
+            '<input type="checkbox" data-step-include data-step-num="' + stepNum + '" checked>' +
+            '<span>Run</span>' +
           '</label>' +
           '<div class="step-preview">' + this.previewHtml(step, idx) + '</div>' +
         '</div>'
@@ -1527,6 +1545,16 @@
     },
 
     bindRowEvents(row, idx) {
+      row.querySelector('[data-step-include]')?.addEventListener('change', (e) => {
+        if (this._syncingIncludeBoxes) return;
+        this.setStepIncluded(idx + 1, !!e.target.checked);
+      });
+      row.querySelector('[data-section-collapse]')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        const sid = row.dataset.sectionId;
+        if (sid) this.toggleSectionCollapsed(sid);
+      });
+
       row.querySelector('[data-fn-select]')?.addEventListener('change', (e) => {
         const newFn = e.target.value;
         if (newFn !== 'text_instruction') {
@@ -1723,10 +1751,13 @@
       if (!list) return;
       list.innerHTML = '';
 
+      const sections = this.editorSections();
       this.recipe.steps.forEach((step, idx) => {
         const row = document.createElement('div');
         row.className = this.rowClassName(step);
         row.dataset.idx = String(idx);
+        const sid = this.sectionIdForStepNum(idx + 1, sections);
+        if (sid) row.dataset.sectionId = sid;
         row.innerHTML = this.stepRowInnerHtml(step, idx);
         this.bindRowEvents(row, idx);
         list.appendChild(row);
@@ -1752,6 +1783,8 @@
       if (count) count.textContent = '(' + this.recipe.steps.length + ')';
       this.syncRunDefaults();
       this.syncEditorSectionSelect();
+      this.syncStepIncludeCheckboxes();
+      this.applySectionCollapseUi();
       this.syncStepVisibility();
       if (this.previewMode) {
         this.runSections = this.buildRunSections();
@@ -2173,9 +2206,125 @@
         }
         if (this.previewMode) this.renderStepsPreview();
         this.syncRunRangeHighlight();
+        this.syncStepIncludeCheckboxes();
+        this.applySectionCollapseUi();
         this.syncStepVisibility();
       } finally {
         this._applyingRunSkip = false;
+      }
+    },
+
+    sectionIdForStepNum(stepNum, sections) {
+      const list = sections || this.editorSections();
+      for (let i = list.length - 1; i >= 0; i--) {
+        const s = list[i];
+        if (stepNum >= s.start && stepNum <= s.stop) return s.id;
+      }
+      return '';
+    },
+
+    /**
+     * Convert legacy recipe `enabled: false` into Skip-field entries (once).
+     */
+    absorbDisabledStepsIntoSkip() {
+      const steps = this.recipe.steps || [];
+      steps.forEach((step, i) => {
+        if (!step || !Object.prototype.hasOwnProperty.call(step, 'enabled')) return;
+        if (step.enabled === false) {
+          if (!(this._skipFromEnabled instanceof Set)) this._skipFromEnabled = new Set();
+          this._skipFromEnabled.add(i + 1);
+        }
+        delete step.enabled;
+      });
+    },
+
+    flushSkipFromEnabled() {
+      if (!(this._skipFromEnabled instanceof Set) || !this._skipFromEnabled.size) return;
+      const skipEl = this.el('run-skip');
+      if (!skipEl) return;
+      const set = this.parseStepRanges(skipEl.value);
+      this._skipFromEnabled.forEach((n) => set.add(n));
+      this._skipFromEnabled.clear();
+      skipEl.value = this.formatStepRanges(set);
+    },
+
+    setStepIncluded(stepNum, included) {
+      stepNum = parseInt(stepNum, 10);
+      if (!stepNum || stepNum < 1) return;
+      if (this._applyingRunSkip || this._applyingRunSection) return;
+      const set = this.getRunSkipSet();
+      if (included) set.delete(stepNum);
+      else set.add(stepNum);
+      const skipEl = this.el('run-skip');
+      if (skipEl) skipEl.value = this.formatStepRanges(set);
+      this.applyRunSkipEdit({ normalize: true, syncSections: true });
+    },
+
+    syncStepIncludeCheckboxes() {
+      const skipSet = this.getRunSkipSet();
+      this._syncingIncludeBoxes = true;
+      try {
+        document.querySelectorAll('[data-step-include]').forEach((box) => {
+          let n = parseInt(box.getAttribute('data-step-num'), 10);
+          if (!n) {
+            const row = box.closest('[data-idx]');
+            n = row ? parseInt(row.dataset.idx, 10) + 1 : 0;
+          }
+          if (!n) return;
+          box.checked = !skipSet.has(n);
+        });
+      } finally {
+        this._syncingIncludeBoxes = false;
+      }
+    },
+
+    toggleSectionCollapsed(sectionId) {
+      if (!sectionId) return;
+      const set = this.ensureCollapsedSectionIds();
+      if (set.has(sectionId)) set.delete(sectionId);
+      else set.add(sectionId);
+      this.applySectionCollapseUi();
+    },
+
+    applySectionCollapseUi() {
+      const collapsed = this.ensureCollapsedSectionIds();
+      const sections = this.editorSections();
+      const headerStarts = new Set(sections.map((s) => s.start));
+
+      const list = this.el('steps-list');
+      if (list) {
+        list.querySelectorAll('.step-row[data-idx]').forEach((row) => {
+          const n = parseInt(row.dataset.idx, 10) + 1;
+          const sid = row.dataset.sectionId || '';
+          const isHeader = headerStarts.has(n);
+          const btn = row.querySelector('[data-section-collapse]');
+          if (btn) {
+            const isCollapsed = !!(sid && collapsed.has(sid));
+            btn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+            btn.textContent = isCollapsed ? '▶' : '▼';
+            btn.title = isCollapsed ? 'Expand section' : 'Collapse section';
+            row.classList.toggle('section-collapsed', isCollapsed);
+          }
+          const hide = !!(sid && collapsed.has(sid) && !isHeader);
+          row.classList.toggle('section-collapsed-hidden', hide);
+        });
+      }
+
+      const preview = this.el('steps-preview');
+      if (preview) {
+        preview.querySelectorAll('[data-section-id]').forEach((li) => {
+          const sid = li.dataset.sectionId || '';
+          const isHeader = li.classList.contains('wf-preview-section');
+          const btn = li.querySelector('[data-section-collapse]');
+          if (btn) {
+            const isCollapsed = !!(sid && collapsed.has(sid));
+            btn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+            btn.textContent = isCollapsed ? '▶' : '▼';
+            btn.title = isCollapsed ? 'Expand section' : 'Collapse section';
+          }
+          const hide = !!(sid && collapsed.has(sid) && !isHeader);
+          li.classList.toggle('section-collapsed-hidden', hide);
+        });
       }
     },
 
@@ -2257,6 +2406,10 @@
       if (!sel?.value) return;
       const sec = this.editorSections().find((s) => s.id === sel.value);
       if (!sec) return;
+      if (sec.id) {
+        this.ensureCollapsedSectionIds().delete(sec.id);
+        this.applySectionCollapseUi();
+      }
       const list = this.el('steps-list');
       const idx = sec.start - 1;
       const row = list?.querySelector('.step-row[data-idx="' + idx + '"]');
@@ -2752,7 +2905,10 @@
       }
     },
 
-    applyRunSection() {
+    applyRunSection(opts) {
+      opts = opts || {};
+      // Section checkbox changes reset skip from section gaps; routine re-sync preserves custom skips.
+      const reseedSkip = opts.reseedSkip !== false;
       if (this._applyingRunSkip) return;
       this._applyingRunSection = true;
       try {
@@ -2774,10 +2930,12 @@
           stopEl.max = String(total);
           stopEl.value = String(coverage.stop);
         }
-        // Section selection reseeds skip from gaps (custom in-section skips are reset).
         if (skipEl && skipEl !== document.activeElement) {
-          skipEl.value = coverage.skipStr;
+          if (reseedSkip || !String(skipEl.value || '').trim()) {
+            skipEl.value = coverage.skipStr;
+          }
         }
+        this.flushSkipFromEnabled();
         if (hidden) {
           hidden.value = coverage.all ? '' : coverage.selectedIds.join(',');
         }
@@ -2785,6 +2943,8 @@
           this.renderStepsPreview();
         }
         this.syncRunRangeHighlight();
+        this.syncStepIncludeCheckboxes();
+        this.applySectionCollapseUi();
         this.syncStepVisibility();
       } finally {
         this._applyingRunSection = false;
@@ -2793,12 +2953,14 @@
 
     syncRunDefaults() {
       const total = Math.max(1, this.recipe.steps?.length || 1);
+      this.absorbDisabledStepsIntoSkip();
       this.syncRunSectionSelect();
       const startEl = this.el('run-start');
       const stopEl = this.el('run-stop');
       const userSet = startEl?.dataset.userSet === '1' || stopEl?.dataset.userSet === '1';
       if (!userSet) {
-        this.applyRunSection();
+        // Keep Skip steps (include checkboxes) across step list re-renders.
+        this.applyRunSection({ reseedSkip: false });
       } else {
         if (startEl) {
           startEl.min = '1';
@@ -2813,6 +2975,7 @@
         if (skipEl && !String(skipEl.value || '').trim()) {
           skipEl.value = this.getRunCoverage().skipStr;
         }
+        this.flushSkipFromEnabled();
       }
       const sessionText = this.runOptions?.current_session ?? '—';
       const sumSession = this.el('run-db-session');
@@ -2824,6 +2987,8 @@
         navSession.textContent = sessionText;
       }
       this.syncRunRangeHighlight();
+      this.syncStepIncludeCheckboxes();
+      this.applySectionCollapseUi();
       this.syncStepVisibility();
     },
 
@@ -2940,6 +3105,25 @@
       document.body.classList.toggle('workflow-preview-mode', previewing);
     },
 
+    bindPreviewEvents(host) {
+      if (!host) return;
+      host.querySelectorAll('[data-step-include]').forEach((box) => {
+        box.addEventListener('change', (e) => {
+          if (this._syncingIncludeBoxes) return;
+          const n = parseInt(e.target.getAttribute('data-step-num'), 10);
+          if (n) this.setStepIncluded(n, !!e.target.checked);
+        });
+      });
+      host.querySelectorAll('[data-section-collapse]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const li = btn.closest('[data-section-id]');
+          const sid = li?.dataset.sectionId;
+          if (sid) this.toggleSectionCollapsed(sid);
+        });
+      });
+    },
+
     renderStepsPreview() {
       const host = this.el('steps-preview');
       if (!host) return;
@@ -2950,6 +3134,7 @@
       const coverage = this.getRunCoverage();
       const { start, stop, skipStr } = this.getRunStepRange();
       const skipSet = this.getRunSkipSet();
+      const sections = this.editorSections();
 
       let body = '';
       if (!steps.length) {
@@ -2958,18 +3143,8 @@
         body = '<p class="wf-preview-empty">Select one or more sections to preview.</p>';
       } else {
         body = '<ol class="wf-preview-steps">';
-        let pendingSkip = [];
-        const flushSkip = () => {
-          if (!pendingSkip.length) return;
-          const ranges = this.formatStepRanges(pendingSkip);
-          body += '<li class="wf-preview-step wf-preview-skip">'
-            + '<div class="wf-preview-cmd"><span class="wf-preview-num">—</span> '
-            + esc('Skip Steps ' + ranges)
-            + '</div></li>';
-          pendingSkip = [];
-        };
         const appendStep = (step, idx, n) => {
-          const disabled = step && Object.prototype.hasOwnProperty.call(step, 'enabled') && !step.enabled;
+          const skipped = skipSet.has(n);
           let cmd = (this.compileOne(step, idx) || step?.function || '—').trim();
           if (cmd.indexOf('[object Object]') >= 0) {
             cmd = cmd.split('[object Object]').join('').replace(/\s+/g, ' ').trim() || (step?.function || '—');
@@ -2995,14 +3170,28 @@
             }
           }
           const isSection = step.function === 'section_label';
+          const sid = this.sectionIdForStepNum(n, sections);
           const liClass = [
             isSection ? 'wf-preview-section' : 'wf-preview-step',
-            disabled ? 'disabled' : '',
+            skipped ? 'disabled wf-preview-skipped' : '',
           ].filter(Boolean).join(' ');
-          body += '<li class="' + liClass + '">'
-            + '<div class="wf-preview-cmd"><span class="wf-preview-num">' + n + '.</span> '
+          const collapseBtn = isSection
+            ? ('<button type="button" class="section-collapse-btn" data-section-collapse' +
+              ' aria-expanded="true" title="Collapse section">▼</button>')
+            : '';
+          const includeBox = '<label class="step-include-toggle wf-preview-include" title="Include in run. Unchecked adds this step to Skip steps.">'
+            + '<input type="checkbox" data-step-include data-step-num="' + n + '"'
+            + (skipped ? '' : ' checked')
+            + ' aria-label="Include step ' + n + ' in run"></label>';
+          body += '<li class="' + liClass + '"'
+            + (sid ? (' data-section-id="' + esc(sid) + '"') : '')
+            + ' data-step-num="' + n + '">'
+            + '<div class="wf-preview-cmd">'
+            + collapseBtn
+            + includeBox
+            + '<span class="wf-preview-num">' + n + '.</span> '
             + esc(cmd)
-            + (disabled ? ' <span class="wf-preview-tag">(disabled)</span>' : '')
+            + (skipped ? ' <span class="wf-preview-tag">(skipped)</span>' : '')
             + '</div>';
           if (remarks) {
             body += '<div class="wf-preview-remarks">remarks: ' + esc(remarks) + '</div>';
@@ -3014,14 +3203,8 @@
         for (let idx = 0; idx < steps.length; idx++) {
           const n = idx + 1;
           if (scoped && (n < start || n > stop)) continue;
-          if (skipSet.has(n)) {
-            pendingSkip.push(n);
-            continue;
-          }
-          flushSkip();
           appendStep(steps[idx], idx, n);
         }
-        flushSkip();
         body += '</ol>';
       }
 
@@ -3033,6 +3216,8 @@
         if (skipStr) meta += ' (skip ' + esc(skipStr) + ')';
       }
       host.innerHTML = '<div class="wf-preview-meta">' + meta + '</div>' + body;
+      this.bindPreviewEvents(host);
+      this.applySectionCollapseUi();
     },
 
     async copyPreviewContents() {

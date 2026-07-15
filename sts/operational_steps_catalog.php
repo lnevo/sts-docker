@@ -200,6 +200,83 @@ function operational_steps_catalog_backup_param($required = true, $default = '')
     ];
 }
 
+/** Sanitize a backup basename (no path parts). */
+function operational_steps_sanitize_backup_basename($name)
+{
+    $name = basename(trim((string) $name));
+    $name = preg_replace('/[^a-zA-Z0-9_-]/', '', $name);
+
+    return ($name === null || $name === '' || $name === '.' || $name === '..') ? '' : $name;
+}
+
+/**
+ * Resolve Create Backup filename from params.
+ * Prefer prefix → "{prefix}{session_nbr}" (e.g. hart_session + 2 → hart_session2).
+ * Legacy recipes may still pass an absolute "backup" name when prefix is empty.
+ */
+function operational_steps_resolve_create_backup_name($dbc, array $params)
+{
+    $prefix = operational_steps_sanitize_backup_basename($params['prefix'] ?? '');
+    if ($prefix !== '') {
+        $session = 0;
+        if (function_exists('warm_start_get_session')) {
+            $session = (int) warm_start_get_session($dbc);
+        } elseif (function_exists('session_get_db_session')) {
+            $session = (int) session_get_db_session($dbc);
+        } elseif (function_exists('master_sw_get_setting')) {
+            $session = (int) master_sw_get_setting($dbc, 'session_nbr');
+        }
+
+        return $prefix . max(0, $session);
+    }
+
+    return operational_steps_sanitize_backup_basename(
+        operational_steps_resolve_backup_name($params['backup'] ?? '', 'manual_backup')
+    );
+}
+
+/**
+ * Copy live RollingStock photos into backups/{name}_photos (full copy, overwrite).
+ *
+ * @return array{ok:bool, count:int, path:string, message?:string}
+ */
+function operational_steps_backup_rolling_stock_photos($backup_name)
+{
+    $backup_name = operational_steps_sanitize_backup_basename($backup_name);
+    if ($backup_name === '') {
+        return ['ok' => false, 'count' => 0, 'path' => '', 'message' => 'invalid backup name'];
+    }
+    $src = __DIR__ . '/ImageStore/DB_Images/RollingStock';
+    $dest = operational_steps_backups_dir() . '/' . $backup_name . '_photos';
+    if (!is_dir($src)) {
+        return ['ok' => true, 'count' => 0, 'path' => $dest];
+    }
+    if (is_dir($dest)) {
+        foreach (glob($dest . '/{*,.*}', GLOB_BRACE) ?: [] as $file) {
+            $base = basename($file);
+            if ($base === '.' || $base === '..') {
+                continue;
+            }
+            if (is_file($file)) {
+                @unlink($file);
+            }
+        }
+    } elseif (!@mkdir($dest, 0755, true) && !is_dir($dest)) {
+        return ['ok' => false, 'count' => 0, 'path' => $dest, 'message' => 'could not create photos dir'];
+    }
+    $count = 0;
+    foreach (glob($src . '/*.*') ?: [] as $file) {
+        if (!is_file($file)) {
+            continue;
+        }
+        if (@copy($file, $dest . '/' . basename($file))) {
+            $count++;
+        }
+    }
+
+    return ['ok' => true, 'count' => $count, 'path' => $dest];
+}
+
 /** First backup file in sts/backups/ (for catalog defaults). */
 function operational_steps_default_backup_name()
 {
@@ -1512,13 +1589,19 @@ function operational_steps_catalog_definitions()
             'adder' => true,
             'adder_group' => 'database',
             'label' => 'Create Backup',
-            'gui_template' => 'Create Backup {backup}',
-            'description' => 'Export current database to sts/backups/. GUI: backup_db.php.',
+            'gui_template' => 'Create Backup {prefix}<session>',
+            'description' => 'Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. Use a stable prefix (e.g. hart_session) so each session writes hart_session1, hart_session2, … Lock from the session overview for a static *_locked checkpoint.',
             'runnable' => true,
             'dispatch' => 'backup_database',
             'gui_path' => '/sts/backup_db.php',
             'params' => [
-                operational_steps_catalog_backup_param(true, 'manual_backup'),
+                operational_steps_catalog_text_param(
+                    'prefix',
+                    'Backup prefix',
+                    'hart_session',
+                    true,
+                    'hart_session'
+                ),
             ],
         ],
         [
@@ -4771,15 +4854,18 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
             $result['index'] = master_sw_render_switchlists_root_index(session_web_root(), $session);
             break;
         case 'backup_database':
-            $name = preg_replace(
-                '/[^a-zA-Z0-9_-]/',
-                '',
-                operational_steps_resolve_backup_name($params['backup'] ?? '', 'manual_backup')
-            );
+            $name = operational_steps_resolve_create_backup_name($dbc, $params);
             if ($name === '') {
                 return ['skipped' => true, 'reason' => 'invalid backup name'];
             }
+            $result['backup'] = $name;
             $result['path'] = warm_start_backup($dbc, $name);
+            $photos = operational_steps_backup_rolling_stock_photos($name);
+            $result['photos'] = (int) ($photos['count'] ?? 0);
+            $result['photos_path'] = (string) ($photos['path'] ?? '');
+            if (empty($photos['ok'])) {
+                $result['photos_warning'] = (string) ($photos['message'] ?? 'photo copy failed');
+            }
             break;
         case 'restore_database':
             $name = operational_steps_resolve_backup_name($params['backup'] ?? '');
@@ -4858,6 +4944,13 @@ function operational_steps_format_dispatch_log_line(array $entry)
 
     if ($dispatch === 'increment_session' && isset($entry['session'])) {
         $messages[] = sprintf('Session incremented to %s.', $entry['session']);
+    }
+
+    if ($dispatch === 'backup_database' && !empty($entry['backup'])) {
+        $messages[] = sprintf('Backup written: %s.', $entry['backup']);
+        if (isset($entry['photos'])) {
+            $messages[] = sprintf('%d rolling-stock photo(s) copied.', (int) $entry['photos']);
+        }
     }
 
     if (array_key_exists('filled', $entry)) {

@@ -237,6 +237,412 @@ function session_redirect_if_beyond_current($session_nbr, $dbc = null, $exit = t
 }
 
 /**
+ * True when this overview session is the current (last) operating session and
+ * at least one backup matches the prior session number.
+ */
+function session_can_restart_from_overview($session_nbr, $current_session = null, $root = null)
+{
+    $session_nbr = (int) $session_nbr;
+    if ($session_nbr < 1) {
+        return false;
+    }
+    if ($current_session === null) {
+        return false;
+    }
+    if ($session_nbr !== (int) $current_session) {
+        return false;
+    }
+
+    return session_restart_backup_candidates($session_nbr) !== [];
+}
+
+/**
+ * Backups directory (same bind-mount the Database Restore UI uses).
+ */
+function session_restart_backups_dir()
+{
+    if (!function_exists('operational_steps_backups_dir')) {
+        require_once __DIR__ . '/operational_steps_catalog.php';
+    }
+
+    return operational_steps_backups_dir();
+}
+
+/**
+ * True when $name contains $session_nbr as a whole number token
+ * (suffix or mid: foo2, foo_2, foo2_locked — not foo12 when looking for 1).
+ */
+function session_restart_backup_name_matches_session($name, $session_nbr)
+{
+    $name = (string) $name;
+    $session_nbr = (int) $session_nbr;
+    if ($name === '' || $session_nbr < 0) {
+        return false;
+    }
+
+    return (bool) preg_match(
+        '/(?<![0-9])' . preg_quote((string) $session_nbr, '/') . '(?![0-9])/',
+        $name
+    );
+}
+
+/**
+ * Skip companions / non-SQL junk under backups/ when listing restart candidates.
+ */
+function session_restart_backup_name_excluded($name)
+{
+    $name = (string) $name;
+    if ($name === '' || $name === '.' || $name === '..') {
+        return true;
+    }
+    if (preg_match('/(_photos|\.README|\.txt|\.md|\.log|\.scores|\.json|\.html|\.css|\.js|\.php|\.tar|\.gz|\.zip)$/i', $name)) {
+        return true;
+    }
+    if (preg_match('/^(ACTIVE|session_editor|session_state|rewind_archive)/i', $name)) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Backup basenames that look like an end-of-(N-1) dump for restarting session N.
+ * Matching is by session number token only — no hardcoded prefixes.
+ *
+ * Sort: names that end with the number first, then alphabetical.
+ *
+ * @return list<string>
+ */
+function session_restart_backup_candidates($session_nbr)
+{
+    $session_nbr = (int) $session_nbr;
+    if ($session_nbr < 1) {
+        return [];
+    }
+    // Restarting session N restores the end of session N-1.
+    $prev = $session_nbr - 1;
+    $dir = session_restart_backups_dir();
+    if (!is_dir($dir)) {
+        return [];
+    }
+    $matches = [];
+    foreach (scandir($dir) ?: [] as $name) {
+        if (session_restart_backup_name_excluded($name)) {
+            continue;
+        }
+        $path = $dir . '/' . $name;
+        if (!is_file($path)) {
+            continue;
+        }
+        if (!session_restart_backup_name_matches_session($name, $prev)) {
+            continue;
+        }
+        $matches[] = $name;
+    }
+    usort($matches, static function ($a, $b) use ($prev) {
+        $a_end = (bool) preg_match('/(?<![0-9])' . preg_quote((string) $prev, '/') . '$/', $a);
+        $b_end = (bool) preg_match('/(?<![0-9])' . preg_quote((string) $prev, '/') . '$/', $b);
+        if ($a_end !== $b_end) {
+            return $a_end ? -1 : 1;
+        }
+
+        return strcasecmp($a, $b);
+    });
+
+    return $matches;
+}
+
+/**
+ * Default (single) candidate, or null when none / multiple without a pick.
+ *
+ * @deprecated Prefer session_restart_backup_candidates(); kept for simple callers.
+ */
+function session_restart_snapshot_name($session_nbr)
+{
+    $c = session_restart_backup_candidates($session_nbr);
+
+    return count($c) === 1 ? $c[0] : ($c[0] ?? null);
+}
+
+/**
+ * Restart (rewind) the current operating session: restore DB to end of N-1
+ * (start of N, before workflow steps), remove session_N+ output trees.
+ *
+ * @param string|null $backup Explicit backup basename; must be in the candidate list.
+ * @return array{ok:bool, message:string, previous_session?:int, snapshot?:string, removed?:list<string>}
+ */
+function session_restart_operating_session($dbc, $session_nbr, $root = null, $backup = null)
+{
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
+    $current = (int) session_get_db_session($dbc);
+    if ($session_nbr < 1 || $session_nbr !== $current) {
+        return [
+            'ok' => false,
+            'message' => 'Restart Session is only allowed for the current (last) operating session.',
+        ];
+    }
+    $candidates = session_restart_backup_candidates($session_nbr);
+    if ($candidates === []) {
+        $prev = $session_nbr - 1;
+        return [
+            'ok' => false,
+            'message' => 'No database backup found containing session number '
+                . $prev
+                . ' (needed to restore the start of session '
+                . $session_nbr
+                . ').',
+        ];
+    }
+    $backup = trim((string) $backup);
+    if ($backup === '') {
+        if (count($candidates) > 1) {
+            return [
+                'ok' => false,
+                'message' => 'Multiple backups match session '
+                    . ($session_nbr - 1)
+                    . '; choose one before restarting.',
+                'candidates' => $candidates,
+            ];
+        }
+        $snapshot = $candidates[0];
+    } elseif (!in_array($backup, $candidates, true)) {
+        return [
+            'ok' => false,
+            'message' => 'Selected backup is not a valid restart candidate: ' . $backup,
+            'candidates' => $candidates,
+        ];
+    } else {
+        $snapshot = $backup;
+    }
+
+    require_once __DIR__ . '/operational_steps_catalog.php';
+    // Safety undo dump so the operator can re-restore if needed.
+    $undo = 'rewind_undo_' . date('Ymd_His');
+    if (is_file(__DIR__ . '/backup_tables.php')) {
+        require_once __DIR__ . '/backup_tables.php';
+        if (function_exists('backup_tables')) {
+            backup_tables($dbc, $undo);
+        }
+    } elseif (function_exists('warm_start_backup')) {
+        warm_start_backup($dbc, $undo);
+    }
+
+    list($ok, $msg) = operational_steps_restore_backup($dbc, $snapshot);
+    if (!$ok) {
+        return ['ok' => false, 'message' => $msg, 'snapshot' => $snapshot];
+    }
+
+    // Re-open may be required after aggressive restores; re-check session.
+    $dbc = open_db();
+    $prev = $session_nbr - 1;
+    $restored_session = (int) session_get_db_session($dbc);
+    if ($restored_session !== $prev && !($prev < 1 && $restored_session === 0)) {
+        // Snapshot should set session_nbr to PREV; force it if dump omitted settings.
+        mysqli_query(
+            $dbc,
+            'UPDATE settings SET setting_value = "' . (int) max(0, $prev)
+            . '" WHERE setting_name = "session_nbr"'
+        );
+        $restored_session = (int) session_get_db_session($dbc);
+    }
+
+    $ts = __DIR__ . '/plugins/track_scale/track_scale_helpers.php';
+    if (is_readable($ts)) {
+        require_once $ts;
+        if (function_exists('track_scale_reset_cached_weights')) {
+            track_scale_reset_cached_weights($dbc, true);
+        }
+    }
+
+    $removed = [];
+    $max_scan = max($session_nbr, $current);
+    for ($s = $session_nbr; $s <= $max_scan + 20; $s++) {
+        $dir = session_dir_for($s, $root);
+        if (!is_dir($dir)) {
+            if ($s > $max_scan) {
+                break;
+            }
+            continue;
+        }
+        session_rrmdir($dir);
+        $removed[] = 'session_' . $s;
+    }
+
+    return [
+        'ok' => true,
+        'message' => 'Session ' . $session_nbr . ' restarted: restored '
+            . $snapshot . ' (start of session ' . $session_nbr
+            . ', no steps run). Undo dump: ' . $undo . '.',
+        'previous_session' => $restored_session,
+        'snapshot' => $snapshot,
+        'removed' => $removed,
+        'undo' => $undo,
+    ];
+}
+
+/**
+ * Backup basenames that look like an end-of-session dump for overview session N
+ * and are eligible to lock (not already *_locked).
+ *
+ * @return list<string>
+ */
+function session_lock_backup_candidates($session_nbr)
+{
+    $session_nbr = (int) $session_nbr;
+    if ($session_nbr < 0) {
+        return [];
+    }
+    $dir = session_restart_backups_dir();
+    if (!is_dir($dir)) {
+        return [];
+    }
+    $matches = [];
+    foreach (scandir($dir) ?: [] as $name) {
+        if (session_restart_backup_name_excluded($name)) {
+            continue;
+        }
+        // Rolling STS dumps are extensionless (hart_session2); skip *.sql etc.
+        if (strpos($name, '.') !== false) {
+            continue;
+        }
+        if (preg_match('/_locked$/i', $name)) {
+            continue;
+        }
+        $path = $dir . '/' . $name;
+        if (!is_file($path)) {
+            continue;
+        }
+        if (!session_restart_backup_name_matches_session($name, $session_nbr)) {
+            continue;
+        }
+        $matches[] = $name;
+    }
+    usort($matches, static function ($a, $b) use ($session_nbr) {
+        $a_end = (bool) preg_match('/(?<![0-9])' . preg_quote((string) $session_nbr, '/') . '$/', $a);
+        $b_end = (bool) preg_match('/(?<![0-9])' . preg_quote((string) $session_nbr, '/') . '$/', $b);
+        if ($a_end !== $b_end) {
+            return $a_end ? -1 : 1;
+        }
+
+        return strcasecmp($a, $b);
+    });
+
+    return $matches;
+}
+
+/** Locked companion name for a rolling backup (hart_session2 → hart_session2_locked). */
+function session_lock_backup_target_name($backup_name)
+{
+    $name = basename(trim((string) $backup_name));
+    if ($name === '' || $name === '.' || $name === '..') {
+        return '';
+    }
+    if (preg_match('/_locked$/i', $name)) {
+        return $name;
+    }
+
+    return $name . '_locked';
+}
+
+/**
+ * Copy a backup SQL dump (+ optional _photos dir) to its *_locked companion.
+ * Filesystem only — does not restore or otherwise touch the live database.
+ *
+ * @return array{ok:bool, message:string, source?:string, locked?:string, photos?:int}
+ */
+function session_lock_backup($session_nbr, $backup = null)
+{
+    $session_nbr = (int) $session_nbr;
+    $candidates = session_lock_backup_candidates($session_nbr);
+    if ($candidates === []) {
+        return [
+            'ok' => false,
+            'message' => 'No unlocked backup found containing session number '
+                . $session_nbr
+                . ' to lock.',
+        ];
+    }
+    $backup = trim((string) $backup);
+    if ($backup === '') {
+        if (count($candidates) > 1) {
+            return [
+                'ok' => false,
+                'message' => 'Multiple backups match session '
+                    . $session_nbr
+                    . '; choose one before locking.',
+                'candidates' => $candidates,
+            ];
+        }
+        $source = $candidates[0];
+    } elseif (!in_array($backup, $candidates, true)) {
+        return [
+            'ok' => false,
+            'message' => 'Selected backup is not a valid lock candidate: ' . $backup,
+            'candidates' => $candidates,
+        ];
+    } else {
+        $source = $backup;
+    }
+
+    $locked = session_lock_backup_target_name($source);
+    if ($locked === '') {
+        return ['ok' => false, 'message' => 'Invalid lock target name.'];
+    }
+
+    $dir = session_restart_backups_dir();
+    $src_path = $dir . '/' . $source;
+    $dest_path = $dir . '/' . $locked;
+    if (!is_file($src_path)) {
+        return ['ok' => false, 'message' => 'Backup file missing: ' . $source];
+    }
+    if (!@copy($src_path, $dest_path)) {
+        return ['ok' => false, 'message' => 'Failed to write locked backup: ' . $locked];
+    }
+
+    $photo_count = 0;
+    $src_photos = $dir . '/' . $source . '_photos';
+    $dest_photos = $dir . '/' . $locked . '_photos';
+    if (is_dir($src_photos)) {
+        if (is_dir($dest_photos)) {
+            session_rrmdir($dest_photos);
+        }
+        if (!@mkdir($dest_photos, 0755, true) && !is_dir($dest_photos)) {
+            return [
+                'ok' => false,
+                'message' => 'Locked SQL written, but could not create '
+                    . $locked . '_photos',
+                'source' => $source,
+                'locked' => $locked,
+            ];
+        }
+        foreach (glob($src_photos . '/{*,.*}', GLOB_BRACE) ?: [] as $file) {
+            $base = basename($file);
+            if ($base === '.' || $base === '..' || !is_file($file)) {
+                continue;
+            }
+            if (@copy($file, $dest_photos . '/' . $base)) {
+                $photo_count++;
+            }
+        }
+    }
+
+    $msg = 'Locked ' . $source . ' → ' . $locked;
+    if ($photo_count > 0) {
+        $msg .= ' (' . $photo_count . ' photo' . ($photo_count === 1 ? '' : 's') . ')';
+    }
+    $msg .= '.';
+
+    return [
+        'ok' => true,
+        'message' => $msg,
+        'source' => $source,
+        'locked' => $locked,
+        'photos' => $photo_count,
+    ];
+}
+
+/**
  * Master switch for the rewind-archive browse/extract UI.
  * Leave supporting helpers in place; flip to true to re-enable.
  */

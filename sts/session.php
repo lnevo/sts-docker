@@ -47,11 +47,26 @@ if ($jobs) {
     mysqli_close($dbc_trains);
 }
 $selected_manifest_stats = $manifest['run_stats'] ?? [];
-// Cumulative roll-up of operations, cars moved, cars by station, and generated
-// output across sessions 1..selected. The operations dashboard is kept as the
-// selected session's own snapshot (state at that time), not aggregated.
+// Cumulative roll-up of generated output / operations across sessions 1..selected.
+// Cars-moved and station tallies use THIS session's run_stats so a rebuild of
+// session N does not hide its trains behind session 1's leftover summary.
 $run_stats = session_aggregate_run_stats_through($selected, $root);
-$run_stats['dashboard'] = $selected_manifest_stats['dashboard'] ?? [];
+$own = is_array($selected_manifest_stats) ? $selected_manifest_stats : [];
+if (session_run_stats_has_data($own)) {
+    if (!empty($own['move_summary']) && is_array($own['move_summary'])) {
+        $run_stats['move_summary'] = $own['move_summary'];
+    }
+    if (!empty($own['station_counts']) && is_array($own['station_counts'])) {
+        $run_stats['station_counts'] = $own['station_counts'];
+    }
+    if (array_key_exists('on_train_count', $own)) {
+        $run_stats['on_train_count'] = (int) $own['on_train_count'];
+    }
+    if (!empty($own['updated'])) {
+        $run_stats['updated'] = $own['updated'];
+    }
+}
+$run_stats['dashboard'] = $own['dashboard'] ?? [];
 if ($selected === $current) {
     require_once $sts_dir . '/operations_stats.php';
     $dbc_stats = open_db();

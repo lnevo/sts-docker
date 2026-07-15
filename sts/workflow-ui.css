@@ -195,6 +195,60 @@ h2 { margin: 0 0 12px; font-size: 16px; }
   opacity: 0.45;
   background: #f8f9fa;
 }
+.step-row.section-collapsed-hidden,
+.wf-preview-steps li.section-collapsed-hidden {
+  display: none !important;
+}
+.section-collapse-btn {
+  flex: 0 0 22px;
+  width: 22px;
+  min-height: 100%;
+  padding: 0;
+  margin: 0;
+  border: 1px solid #c5ccd4;
+  border-right: none;
+  border-radius: 4px 0 0 4px;
+  background: #f4f6f8;
+  color: #44505c;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  align-self: stretch;
+}
+.section-collapse-btn:hover {
+  background: #e8edf2;
+  border-color: #9aa5b1;
+}
+.step-num-control-section .step-num-input {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.wf-preview-cmd .section-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  width: 22px;
+  min-height: 22px;
+  margin-right: 6px;
+  border-right: 1px solid #c5ccd4;
+  border-radius: 4px;
+  align-self: auto;
+}
+.wf-preview-include {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 6px;
+  flex: none;
+  width: auto;
+}
+.wf-preview-include input {
+  margin: 0;
+  cursor: pointer;
+}
+.wf-preview-steps li.wf-preview-skipped .wf-preview-cmd {
+  color: #6c757d;
+}
 .wf-preview-skip .wf-preview-cmd {
   color: #6c757d;
   font-style: italic;
@@ -412,8 +466,8 @@ h2 { margin: 0 0 12px; font-size: 16px; }
   text-decoration: line-through;
   text-decoration-color: rgba(90, 100, 110, 0.6);
 }
-/* Keep the toggle itself fully legible while the rest is muted.
-   Sits in the left gutter, directly under the step number. */
+/* Run/Include toggle — left gutter under the step number; drives Skip steps. */
+.step-include-toggle,
 .step-active-toggle {
   display: inline-flex;
   flex-direction: column;
@@ -430,11 +484,12 @@ h2 { margin: 0 0 12px; font-size: 16px; }
   user-select: none;
   white-space: nowrap;
 }
+.step-include-toggle input,
 .step-active-toggle input {
   margin: 0;
   cursor: pointer;
 }
-.step-row.step-disabled .step-active-toggle {
+.step-row.run-skip .step-include-toggle {
   color: #b02a2a;
 }
 .btn-insert-before {

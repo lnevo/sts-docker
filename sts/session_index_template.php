@@ -124,6 +124,25 @@ $overview_nav[] = [
     'icon' => 'diagram-3',
     'right' => true,
 ];
+$can_restart = !$archived_output_only
+    && session_can_restart_from_overview($session, $current_session, $root);
+$restart_candidates = $can_restart ? session_restart_backup_candidates($session) : [];
+$restart_error = isset($_GET['restart_error']) ? (string) $_GET['restart_error'] : '';
+$restart_ok = isset($_GET['restart_ok']) ? (string) $_GET['restart_ok'] : '';
+$restart_prev = max(0, (int) $session - 1);
+$restart_confirm_base = 'Restart Session '
+    . (int) $session
+    . '?\n\nThis restores the database to the start of session '
+    . (int) $session
+    . ' (end of session '
+    . $restart_prev
+    . ') with no workflow steps applied, and deletes this session\'s generated output.';
+$lock_candidates = !$archived_output_only ? session_lock_backup_candidates($session) : [];
+$lock_error = isset($_GET['lock_error']) ? (string) $_GET['lock_error'] : '';
+$lock_ok = isset($_GET['lock_ok']) ? (string) $_GET['lock_ok'] : '';
+$lock_confirm_base = 'Lock backup for Session '
+    . (int) $session
+    . '?\n\nThis copies the selected dump to a static *_locked companion (and its _photos folder when present). Overwrites any prior locked copy with the same name. Does not change the live database.';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -139,11 +158,63 @@ session_render_nav_bar($overview_nav, 'Session ' . (int) $session);
 ?>
   <main>
   <?php echo session_archived_view_banner_html($session, $current_session); ?>
+  <?php if ($restart_ok !== ''): ?>
+    <div class="session-flash session-flash-ok" role="status"><?php echo htmlspecialchars($restart_ok); ?></div>
+  <?php endif; ?>
+  <?php if ($restart_error !== ''): ?>
+    <div class="session-flash session-flash-error" role="alert"><?php echo htmlspecialchars($restart_error); ?></div>
+  <?php endif; ?>
+  <?php if ($lock_ok !== ''): ?>
+    <div class="session-flash session-flash-ok" role="status"><?php echo htmlspecialchars($lock_ok); ?></div>
+  <?php endif; ?>
+  <?php if ($lock_error !== ''): ?>
+    <div class="session-flash session-flash-error" role="alert"><?php echo htmlspecialchars($lock_error); ?></div>
+  <?php endif; ?>
   <div class="session-topbar">
     <div class="session-topbar-heading">
       <h1 style="margin:0;">Session <?php echo (int) $session; ?></h1>
     </div>
-    <a class="btn-editor-primary" href="/sts/editor.html"><i class="bi bi-pencil-square"></i> Open Session Editor</a>
+    <div class="session-topbar-actions">
+      <a class="btn-editor-primary" href="/sts/editor.html"><i class="bi bi-pencil-square"></i> Open Session Editor</a>
+      <?php if ($lock_candidates !== []): ?>
+        <form method="post" action="/sts/session_lock_backup.php" class="session-restart-form" id="session-lock-form">
+          <input type="hidden" name="session" value="<?php echo (int) $session; ?>">
+          <?php if (count($lock_candidates) === 1): ?>
+            <input type="hidden" name="backup" value="<?php echo htmlspecialchars($lock_candidates[0]); ?>">
+          <?php else: ?>
+            <label class="session-restart-backup-label" for="session-lock-backup">Backup</label>
+            <select name="backup" id="session-lock-backup" class="session-restart-backup" required>
+              <option value="">Select backup…</option>
+              <?php foreach ($lock_candidates as $cand): ?>
+                <option value="<?php echo htmlspecialchars($cand); ?>"><?php echo htmlspecialchars($cand); ?></option>
+              <?php endforeach; ?>
+            </select>
+          <?php endif; ?>
+          <button type="submit" class="btn-session-lock" title="Copy this session's dump to a static *_locked checkpoint">
+            <i class="bi bi-lock"></i> Lock Backup
+          </button>
+        </form>
+      <?php endif; ?>
+      <?php if ($can_restart && $restart_candidates !== []): ?>
+        <form method="post" action="/sts/session_restart.php" class="session-restart-form" id="session-restart-form">
+          <input type="hidden" name="session" value="<?php echo (int) $session; ?>">
+          <?php if (count($restart_candidates) === 1): ?>
+            <input type="hidden" name="backup" value="<?php echo htmlspecialchars($restart_candidates[0]); ?>">
+          <?php else: ?>
+            <label class="session-restart-backup-label" for="session-restart-backup">Backup</label>
+            <select name="backup" id="session-restart-backup" class="session-restart-backup" required>
+              <option value="">Select backup…</option>
+              <?php foreach ($restart_candidates as $cand): ?>
+                <option value="<?php echo htmlspecialchars($cand); ?>"><?php echo htmlspecialchars($cand); ?></option>
+              <?php endforeach; ?>
+            </select>
+          <?php endif; ?>
+          <button type="submit" class="btn-session-restart" title="Restore DB to the start of this session and clear its output">
+            <i class="bi bi-arrow-clockwise"></i> Restart Session
+          </button>
+        </form>
+      <?php endif; ?>
+    </div>
   </div>
   <form method="get" class="session-picker session-nav-row waybill-session-nav" action="/sts/session_overview.php" id="session-select-form">
     <label class="session-picker-label" for="session-select">Jump to session</label>
@@ -223,6 +294,41 @@ session_render_nav_bar($overview_nav, 'Session ' . (int) $session);
       const sessionSelect = document.getElementById('session-select');
       sessionSelect?.addEventListener('change', function () {
         document.getElementById('session-select-form')?.submit();
+      });
+
+      const restartForm = document.getElementById('session-restart-form');
+      const confirmBase = <?php echo json_encode($restart_confirm_base); ?>;
+      restartForm?.addEventListener('submit', function (ev) {
+        const backupInput = restartForm.querySelector('[name="backup"]');
+        const backup = (backupInput && backupInput.value) ? String(backupInput.value).trim() : '';
+        if (backupInput && backupInput.tagName === 'SELECT' && backup === '') {
+          ev.preventDefault();
+          alert('Select a backup to restore before restarting.');
+          return;
+        }
+        const msg = confirmBase + (backup ? ('\n\nBackup: ' + backup) : '');
+        if (!confirm(msg)) {
+          ev.preventDefault();
+        }
+      });
+
+      const lockForm = document.getElementById('session-lock-form');
+      const lockConfirmBase = <?php echo json_encode($lock_confirm_base); ?>;
+      lockForm?.addEventListener('submit', function (ev) {
+        const backupInput = lockForm.querySelector('[name="backup"]');
+        const backup = (backupInput && backupInput.value) ? String(backupInput.value).trim() : '';
+        if (backupInput && backupInput.tagName === 'SELECT' && backup === '') {
+          ev.preventDefault();
+          alert('Select a backup to lock.');
+          return;
+        }
+        const locked = backup ? (backup.endsWith('_locked') ? backup : (backup + '_locked')) : '';
+        const msg = lockConfirmBase
+          + (backup ? ('\n\nSource: ' + backup) : '')
+          + (locked ? ('\nLocked: ' + locked) : '');
+        if (!confirm(msg)) {
+          ev.preventDefault();
+        }
       });
     })();
   </script>
