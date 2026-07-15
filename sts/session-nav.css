@@ -211,6 +211,18 @@ body a:not(.btn):not(.button):not(.btn-editor-primary):not(.navbar-brand):not(.p
 .session-topbar-heading p {
   margin: 0;
 }
+.session-locked-note {
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+  color: #555;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.session-locked-note i {
+  color: var(--sts-charcoal, #2c3e50);
+}
 a.btn-editor-primary,
 a.btn-editor-primary:link,
 a.btn-editor-primary:visited {

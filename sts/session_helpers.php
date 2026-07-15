@@ -239,6 +239,7 @@ function session_redirect_if_beyond_current($session_nbr, $dbc = null, $exit = t
 /**
  * True when this overview session is the current (last) operating session and
  * at least one backup matches the prior session number.
+ * Locked sessions (a *_locked dump for this session number) cannot be restarted.
  */
 function session_can_restart_from_overview($session_nbr, $current_session = null, $root = null)
 {
@@ -252,8 +253,58 @@ function session_can_restart_from_overview($session_nbr, $current_session = null
     if ($session_nbr !== (int) $current_session) {
         return false;
     }
+    if (session_is_locked($session_nbr)) {
+        return false;
+    }
 
     return session_restart_backup_candidates($session_nbr) !== [];
+}
+
+/**
+ * *_locked backup basenames that match overview session N
+ * (e.g. hart_session2_locked).
+ *
+ * @return list<string>
+ */
+function session_locked_backup_names($session_nbr)
+{
+    $session_nbr = (int) $session_nbr;
+    if ($session_nbr < 0) {
+        return [];
+    }
+    $dir = session_restart_backups_dir();
+    if (!is_dir($dir)) {
+        return [];
+    }
+    $matches = [];
+    foreach (scandir($dir) ?: [] as $name) {
+        if (session_restart_backup_name_excluded($name)) {
+            continue;
+        }
+        if (strpos($name, '.') !== false) {
+            continue;
+        }
+        if (!preg_match('/_locked$/i', $name)) {
+            continue;
+        }
+        $path = $dir . '/' . $name;
+        if (!is_file($path)) {
+            continue;
+        }
+        if (!session_restart_backup_name_matches_session($name, $session_nbr)) {
+            continue;
+        }
+        $matches[] = $name;
+    }
+    sort($matches, SORT_STRING | SORT_FLAG_CASE);
+
+    return $matches;
+}
+
+/** True when a static *_locked backup exists for this session number. */
+function session_is_locked($session_nbr)
+{
+    return session_locked_backup_names($session_nbr) !== [];
 }
 
 /**
@@ -380,6 +431,19 @@ function session_restart_operating_session($dbc, $session_nbr, $root = null, $ba
         return [
             'ok' => false,
             'message' => 'Restart Session is only allowed for the current (last) operating session.',
+        ];
+    }
+    if (session_is_locked($session_nbr)) {
+        $locked = session_locked_backup_names($session_nbr);
+
+        return [
+            'ok' => false,
+            'message' => 'Session '
+                . $session_nbr
+                . ' is locked ('
+                . implode(', ', $locked)
+                . '); Restart Session is disabled. Remove or rename the *_locked backup to allow restart.',
+            'locked' => $locked,
         ];
     }
     $candidates = session_restart_backup_candidates($session_nbr);

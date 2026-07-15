@@ -124,7 +124,10 @@ $overview_nav[] = [
     'icon' => 'diagram-3',
     'right' => true,
 ];
+$session_locked_names = session_locked_backup_names($session);
+$session_is_locked = $session_locked_names !== [];
 $can_restart = !$archived_output_only
+    && !$session_is_locked
     && session_can_restart_from_overview($session, $current_session, $root);
 $restart_candidates = $can_restart ? session_restart_backup_candidates($session) : [];
 $restart_error = isset($_GET['restart_error']) ? (string) $_GET['restart_error'] : '';
@@ -142,7 +145,8 @@ $lock_error = isset($_GET['lock_error']) ? (string) $_GET['lock_error'] : '';
 $lock_ok = isset($_GET['lock_ok']) ? (string) $_GET['lock_ok'] : '';
 $lock_confirm_base = 'Lock backup for Session '
     . (int) $session
-    . '?\n\nThis copies the selected dump to a static *_locked companion (and its _photos folder when present). Overwrites any prior locked copy with the same name. Does not change the live database.';
+    . '?\n\nThis copies the selected dump to a static *_locked companion (and its _photos folder when present). Overwrites any prior locked copy with the same name. Does not change the live database.'
+    . "\n\nRestart Session is disabled while a *_locked backup exists for this session.";
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -173,6 +177,12 @@ session_render_nav_bar($overview_nav, 'Session ' . (int) $session);
   <div class="session-topbar">
     <div class="session-topbar-heading">
       <h1 style="margin:0;">Session <?php echo (int) $session; ?></h1>
+      <?php if ($session_is_locked): ?>
+        <p class="session-locked-note" title="<?php echo htmlspecialchars(implode(', ', $session_locked_names), ENT_QUOTES); ?>">
+          <i class="bi bi-lock-fill"></i> Locked checkpoint
+          (<?php echo htmlspecialchars(implode(', ', $session_locked_names)); ?>) — Restart Session disabled
+        </p>
+      <?php endif; ?>
     </div>
     <div class="session-topbar-actions">
       <a class="btn-editor-primary" href="/sts/editor.html"><i class="bi bi-pencil-square"></i> Open Session Editor</a>
@@ -191,7 +201,7 @@ session_render_nav_bar($overview_nav, 'Session ' . (int) $session);
             </select>
           <?php endif; ?>
           <button type="submit" class="btn-session-lock" title="Copy this session's dump to a static *_locked checkpoint">
-            <i class="bi bi-lock"></i> Lock Backup
+            <i class="bi bi-lock"></i> <?php echo $session_is_locked ? 'Update Locked Backup' : 'Lock Backup'; ?>
           </button>
         </form>
       <?php endif; ?>
