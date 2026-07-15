@@ -18,12 +18,18 @@ function track_scale_json_error($message, $code = 400)
 
 function track_scale_read_json_body()
 {
+    static $decoded = null;
+    if ($decoded !== null) {
+        return $decoded;
+    }
     $raw = file_get_contents('php://input');
     if ($raw === false || $raw === '') {
-        return [];
+        $decoded = [];
+        return $decoded;
     }
-    $decoded = json_decode($raw, true);
-    return is_array($decoded) ? $decoded : [];
+    $parsed = json_decode($raw, true);
+    $decoded = is_array($parsed) ? $parsed : [];
+    return $decoded;
 }
 
 $action = $_GET['action'] ?? '';
@@ -38,7 +44,7 @@ $dbc = open_db();
 // unlocks). Read-only endpoints must not trigger it so polling the scale never
 // changes state. The GUI page runs the sync once on load, and each write action
 // below still syncs before mutating.
-$track_scale_read_only_actions = ['cars_at_scale', 'calibration_state'];
+$track_scale_read_only_actions = ['cars_at_scale', 'calibration_state', 'test_car_options'];
 if (!in_array($action, $track_scale_read_only_actions, true)) {
     track_scale_sync_session_calibration($dbc);
 }
@@ -155,6 +161,7 @@ try {
                 echo json_encode([
                     'success' => true,
                     'reading' => $reading,
+                    'prev_car' => null,
                     'next_car' => null,
                 ]);
                 break;
@@ -193,20 +200,12 @@ try {
                 $reading['unloaded_weigh'] = false;
             }
             track_scale_record_weigh_log($dbc, $reporting_marks, $reading, $config);
-            $next_car = track_scale_get_next_car_in_train($dbc, $car, $config);
-            $next_car_payload = null;
-            if ($next_car !== null) {
-                $next_car_payload = [
-                    'id' => (int) $next_car['id'],
-                    'reporting_marks' => $next_car['reporting_marks'],
-                    'position' => (int) ($next_car['position'] ?? 0),
-                    'train_job' => $next_car['train_job'] ?? null,
-                ];
-            }
+            $adjacent = track_scale_get_adjacent_cars_in_train($dbc, $car, $config);
             echo json_encode([
                 'success' => true,
                 'reading' => $reading,
-                'next_car' => $next_car_payload,
+                'prev_car' => track_scale_train_neighbor_payload($adjacent['prev']),
+                'next_car' => track_scale_train_neighbor_payload($adjacent['next']),
             ]);
             break;
 
@@ -294,7 +293,19 @@ try {
             if (!track_scale_sensor_has_reading($sensor)) {
                 track_scale_json_error('Weigh the scale car at this sensor before adjusting');
             }
-            $adjustment = track_scale_adjust_sensor($sensor, $direction, $config);
+            if (array_key_exists('adjustment_tons', $body) && $body['adjustment_tons'] !== null && $body['adjustment_tons'] !== '') {
+                $adjustment = track_scale_set_sensor_adjustment_tons(
+                    $sensor,
+                    $body['adjustment_tons'],
+                    $config
+                );
+            } else {
+                $use_fine = null;
+                if (array_key_exists('fine_tune', $body)) {
+                    $use_fine = !empty($body['fine_tune']);
+                }
+                $adjustment = track_scale_adjust_sensor($sensor, $direction, $config, $use_fine);
+            }
             echo json_encode([
                 'success' => true,
                 'sensor' => $sensor,
@@ -396,6 +407,34 @@ try {
             ]);
             break;
 
+        case 'test_car_options':
+            $marks = trim((string) (($config['calibration'] ?? [])['test_car_reporting_marks'] ?? ''));
+            echo json_encode([
+                'success' => true,
+                'reporting_marks' => $marks,
+                'options' => track_scale_test_car_roster_options($config, $dbc),
+            ]);
+            break;
+
+        case 'set_test_car':
+            $body = track_scale_read_json_body();
+            $result = track_scale_set_test_car_reporting_marks(
+                $body['reporting_marks'] ?? ($_GET['reporting_marks'] ?? ''),
+                $config,
+                $dbc
+            );
+            if (empty($result['success'])) {
+                track_scale_json_error($result['error'] ?? 'Could not set test car');
+            }
+            // Reload config so subsequent builders see the override on this request.
+            $config = track_scale_load_config();
+            echo json_encode([
+                'success' => true,
+                'reporting_marks' => $result['reporting_marks'],
+                'calibration' => track_scale_build_calibration_readings($config, $dbc),
+            ]);
+            break;
+
         case 'open_orders':
             $car_id = $_GET['car_id'] ?? '';
             $routing = $_GET['routing'] ?? 'outbound';
@@ -455,6 +494,7 @@ try {
                 'car_code' => $result['car_code'] ?? '',
                 'unloaded_first' => !empty($result['unloaded_first']),
                 'closed_prior_order' => !empty($result['closed_prior_order']),
+                'unfilled_prior_order' => !empty($result['unfilled_prior_order']),
                 'preserved_load' => !empty($result['preserved_load']),
                 'previous_status' => $result['previous_status'] ?? null,
                 'returned_to_train' => !empty($result['returned_to_train']),
