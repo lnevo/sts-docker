@@ -39,7 +39,7 @@ function track_scale_default_config()
         'routing_tolerance_tons' => 5.0,
         'loading_location_code' => 'SOUTH-SCALE',
         'site_label' => '',
-        'routed_trains_label' => 'Scale-area trains',
+        'routed_trains_label' => 'Trains',
         'outbound_loading_location_code' => 'NORTH',
         'reload_loading_location_code' => 'SOUTH-SCALE',
         'api_base_url' => '/sts/api/index.php',
@@ -2318,7 +2318,7 @@ function track_scale_routed_trains_label($config = null)
 {
     $config = $config ?? track_scale_load_config();
     $label = trim((string) ($config['routed_trains_label'] ?? ''));
-    return $label !== '' ? $label : 'Scale-area trains';
+    return $label !== '' ? $label : 'Trains';
 }
 
 function track_scale_loading_location_code($config = null)
@@ -2385,17 +2385,12 @@ function track_scale_job_ids_for_scale_trains($dbc, $config = null)
         return $cache;
     }
 
-    $routing_ids = track_scale_job_ids_for_south_yard_routing($dbc, $config);
-    if (count($routing_ids) === 0) {
-        $cache = [];
-        return $cache;
-    }
-
-    $ids_sql = implode(', ', array_map('intval', $routing_ids));
+    // Any job that currently has cars in train — no south-yard / scale-area
+    // station filter. Locals like D749 can weigh cars already on the train.
     $sql = 'SELECT DISTINCT cars.handled_by_job_id AS job_id
             FROM cars
             WHERE cars.current_location_id = 0
-              AND cars.handled_by_job_id IN (' . $ids_sql . ')
+              AND cars.handled_by_job_id > 0
               AND cars.status != "Unavailable"';
 
     $job_ids = [];
@@ -2451,6 +2446,8 @@ function track_scale_job_ids_for_south_yard_routing($dbc, $config = null)
 
 function track_scale_car_in_south_yard_train($car, $dbc, $config = null)
 {
+    // Name is historical: any car currently in a train is weigh-eligible.
+    // (Previously limited to jobs whose schedule included the scale station.)
     if (!is_array($car)) {
         return false;
     }
@@ -2466,7 +2463,7 @@ function track_scale_car_in_south_yard_train($car, $dbc, $config = null)
         return false;
     }
 
-    return in_array($job_id, track_scale_job_ids_for_south_yard_routing($dbc, $config), true);
+    return true;
 }
 
 function track_scale_car_weighable($car, $dbc, $config = null)
@@ -2492,7 +2489,7 @@ function track_scale_weighable_car_error($car, $config = null)
     }
 
     return 'Car must be at ' . $scale_location
-        . ' or on a train routed to the scale area to weigh (currently at ' . $current . ')';
+        . ' or in a train to weigh (currently at ' . $current . ')';
 }
 
 function track_scale_car_at_scale($car, $config = null)
@@ -2682,10 +2679,6 @@ function track_scale_get_cars_at_scale($dbc, $config = null, $filter = null)
     $config = $config ?? track_scale_load_config();
     $filter = trim((string) ($filter ?? ''));
     $location_code = mysqli_real_escape_string($dbc, track_scale_loading_location_code($config));
-    $job_ids = track_scale_job_ids_for_south_yard_routing($dbc, $config);
-    $job_filter = count($job_ids) > 0
-        ? ' AND cars.handled_by_job_id IN (' . implode(', ', array_map('intval', $job_ids)) . ')'
-        : ' AND 1 = 0';
 
     $cars = [];
 
@@ -2712,7 +2705,8 @@ function track_scale_get_cars_at_scale($dbc, $config = null, $filter = null)
     }
 
     if ($filter === '' || ($filter !== 'scale' && ctype_digit($filter))) {
-        $train_filter = $job_filter;
+        // In-train cars from any job (optional single-job filter from the UI).
+        $train_filter = '';
         if ($filter !== '' && $filter !== 'scale') {
             $train_filter = ' AND cars.handled_by_job_id = ' . (int) $filter;
         }

@@ -1443,7 +1443,7 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
                 </div>
             </div>
             <div class="card-body p-0">
-                <div id="carsListEmpty" class="p-3 text-muted d-none">No cars at the scale or on a <?= htmlspecialchars(strtolower($track_scale_ui['routedTrainsLabel'])) ?> train right now.</div>
+                <div id="carsListEmpty" class="p-3 text-muted d-none">No cars at the scale or in a train right now.</div>
                 <div id="carsListError" class="alert alert-danger m-3 d-none" role="alert"></div>
                 <div class="list-group list-group-flush" id="carsList"></div>
             </div>
@@ -2108,7 +2108,7 @@ function setWeightLed(state, label) {
 
 function weighFailureLedLabel(reading) {
     const reason = String((reading && reading.failure_reason) || '').toLowerCase();
-    if (reason === 'overloaded') return 'OVERLOADED - FAIL';
+    if (reason === 'overloaded') return 'LIMIT - FAIL';
     if (reason === 'imbalanced' || reason === 'underweight') return 'BALANCE - FAIL';
     return 'BALANCE - FAIL';
 }
@@ -2656,7 +2656,7 @@ document.getElementById('weighBtn').addEventListener('click', async () => {
             `<span class="routing-outbound"><i class="bi bi-check-circle"></i> Left/right sensors within ±${fmt(data.reading.tolerance_tons)} t — assign to outbound coke order.</span>`;
     } else if (String(data.reading.failure_reason || '').toLowerCase() === 'overloaded') {
         resultEl.innerHTML =
-            `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Overloaded — net ${fmt(data.reading.net_tons)} t exceeds load limit ${fmt(data.reading.target_net_tons)} t — assign to coke reload.</div>`;
+            `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Overloaded — net ${fmt(data.reading.net_tons)} t exceeds load limit ${fmt(data.reading.target_net_tons)} t.</div>`;
     } else {
         resultEl.innerHTML =
             `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Imbalanced — left/right differ by ${fmt(data.reading.delta_tons)} t.</div>`;
