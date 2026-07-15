@@ -236,9 +236,21 @@ function session_redirect_if_beyond_current($session_nbr, $dbc = null, $exit = t
     return $current;
 }
 
+/**
+ * Master switch for the rewind-archive browse/extract UI.
+ * Leave supporting helpers in place; flip to true to re-enable.
+ */
+function session_rewind_archive_feature_enabled()
+{
+    return false;
+}
+
 /** True when the operator has opted in to browsing archived session output. */
 function session_browse_archived_enabled()
 {
+    if (!session_rewind_archive_feature_enabled()) {
+        return false;
+    }
     if (isset($_GET['archive'])) {
         return (string) $_GET['archive'] !== '' && (string) $_GET['archive'] !== '0';
     }
@@ -265,6 +277,9 @@ function session_rewind_archive_dir($root = null)
  */
 function session_archived_output_numbers($root = null)
 {
+    if (!session_rewind_archive_feature_enabled()) {
+        return [];
+    }
     $dir = session_rewind_archive_dir($root);
     if (!is_dir($dir)) {
         return [];
@@ -287,6 +302,9 @@ function session_archived_output_numbers($root = null)
  */
 function session_ensure_archived_session_extracted($session_nbr, $root = null)
 {
+    if (!session_rewind_archive_feature_enabled()) {
+        return false;
+    }
     $root = $root ?? session_web_root();
     $session_nbr = (int) $session_nbr;
     if ($session_nbr < 1) {
@@ -336,6 +354,9 @@ function session_is_archived_output_only($session_nbr, $dbc = null)
 /** Warning banner for pages showing archived session output (DB is behind). */
 function session_archived_view_banner_html($session_nbr, $current_session)
 {
+    if (!session_rewind_archive_feature_enabled()) {
+        return '';
+    }
     $session_nbr = (int) $session_nbr;
     $current_session = (int) $current_session;
     if ($session_nbr <= $current_session) {
@@ -354,6 +375,9 @@ function session_archived_view_banner_html($session_nbr, $current_session)
  */
 function session_browse_archived_controls_html()
 {
+    if (!session_rewind_archive_feature_enabled()) {
+        return '';
+    }
     $checked = session_browse_archived_enabled();
     $archived = session_archived_output_numbers();
     if (!$archived) {
@@ -3621,6 +3645,13 @@ function session_train_switchlist_legs($dbc, $session_nbr, $job, $root = null)
             continue;
         }
         $work_leg_total = count($sections);
+        $phase_info = '';
+        foreach ($manifest['phases'] ?? [] as $ph_row) {
+            if ((int) ($ph_row['phase'] ?? 0) === $p) {
+                $phase_info = session_phase_info($ph_row);
+                break;
+            }
+        }
         foreach ($sections as $idx => $section) {
             $work_leg = $idx + 1;
             $numbers = session_waybill_numbers_for_sections($dbc, [$section]);
@@ -3636,6 +3667,7 @@ function session_train_switchlist_legs($dbc, $session_nbr, $job, $root = null)
                 'workflow_phase' => $p,
                 'work_leg' => $work_leg,
                 'work_leg_total' => $work_leg_total,
+                'info' => $phase_info,
                 'label' => (string) ($section['label'] ?? ('Phase ' . $work_leg)),
                 'base_href' => session_output_url('session_' . (int) $session_nbr
                     . '/phase_' . session_phase_pad($p)
@@ -4020,7 +4052,8 @@ function session_build_switchlist_print_all($dbc, $session_nbr, $root = null)
                 $phase_title = master_sw_switchlist_title_from_cache($phase_dir, $job, $session_nbr);
             }
             $phase_info = session_phase_info($phase);
-            $display_train = master_sw_display_train_name($meta['table_name'], ['title' => $phase_title, 'info' => $phase_info]);
+            $phase_opts = ['title' => $phase_title, 'info' => $phase_info];
+            $display_train = master_sw_display_train_name($meta['table_name'], $phase_opts);
             $total = count($sections);
             for ($i = 0; $i < $total; $i++) {
                 $phases_html .= master_sw_render_print_all_phase_body(
@@ -4028,7 +4061,8 @@ function session_build_switchlist_print_all($dbc, $session_nbr, $root = null)
                     $sections[$i],
                     $i + 1,
                     $total,
-                    $display_train
+                    $display_train,
+                    $phase_opts
                 );
                 $phase_count++;
             }
@@ -4135,7 +4169,8 @@ function session_build_switchlist_train_print_all($dbc, $session_nbr, $job, $roo
                 $phase_title = master_sw_switchlist_title_from_cache($phase_dir, $pj, $session_nbr);
             }
             $phase_info = session_phase_info($phase);
-            $display_train = master_sw_display_train_name($meta['table_name'], ['title' => $phase_title, 'info' => $phase_info]);
+            $phase_opts = ['title' => $phase_title, 'info' => $phase_info];
+            $display_train = master_sw_display_train_name($meta['table_name'], $phase_opts);
             $total = count($sections);
             for ($i = 0; $i < $total; $i++) {
                 $phases_html .= master_sw_render_print_all_phase_body(
@@ -4143,7 +4178,8 @@ function session_build_switchlist_train_print_all($dbc, $session_nbr, $job, $roo
                     $sections[$i],
                     $i + 1,
                     $total,
-                    $display_train
+                    $display_train,
+                    $phase_opts
                 );
                 $phase_count++;
             }

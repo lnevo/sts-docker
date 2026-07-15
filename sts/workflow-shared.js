@@ -2516,6 +2516,7 @@
       const title = this.el('steps-panel-title');
       const btn = this.el('btn-preview');
       const printBtn = this.el('btn-preview-print');
+      const copyBtn = this.el('btn-preview-copy');
       const editNav = this.el('steps-edit-nav');
       const editInsert = this.el('steps-edit-insert');
       const addBtn = this.el('btn-add');
@@ -2530,6 +2531,7 @@
         btn.classList.toggle('btn-outline-dark', !previewing);
       }
       if (printBtn) printBtn.hidden = !previewing;
+      if (copyBtn) copyBtn.hidden = !previewing;
       if (editNav) editNav.hidden = previewing;
       if (editInsert) editInsert.hidden = previewing;
       if (addBtn) addBtn.hidden = previewing;
@@ -2602,6 +2604,48 @@
         + (file ? (' · ' + esc(file)) : '')
         + '</div>'
         + body;
+    },
+
+    async copyPreviewContents() {
+      const host = this.el('steps-preview');
+      if (!host || host.hidden) return;
+      const text = String(host.innerText || host.textContent || '').replace(/\s+$/g, '');
+      if (!text) {
+        this.setStatus('Nothing to copy', 'err');
+        return;
+      }
+      const copyBtn = this.el('btn-preview-copy');
+      const flashCopied = () => {
+        if (!copyBtn) return;
+        const prev = copyBtn.innerHTML;
+        copyBtn.innerHTML = '<i class="bi bi-clipboard-check"></i>';
+        copyBtn.classList.add('btn-success');
+        copyBtn.classList.remove('btn-outline-dark');
+        setTimeout(() => {
+          copyBtn.innerHTML = prev;
+          copyBtn.classList.remove('btn-success');
+          copyBtn.classList.add('btn-outline-dark');
+        }, 1200);
+      };
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        flashCopied();
+        this.setStatus('Preview copied to clipboard', 'ok');
+      } catch (e) {
+        this.setStatus('Could not copy preview: ' + (e && e.message ? e.message : e), 'err');
+      }
     },
   };
 

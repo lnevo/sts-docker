@@ -1211,9 +1211,28 @@ function track_scale_append_session_log_row(array $row, $config = null)
     return true;
 }
 
-function track_scale_load_config()
+function &track_scale_config_ref()
 {
     static $config = null;
+    return $config;
+}
+
+function track_scale_apply_test_car_override(array &$config)
+{
+    $settings = track_scale_load_settings();
+    $marks = strtoupper(trim((string) ($settings['test_car_reporting_marks'] ?? '')));
+    if ($marks === '') {
+        return;
+    }
+    if (!isset($config['calibration']) || !is_array($config['calibration'])) {
+        $config['calibration'] = [];
+    }
+    $config['calibration']['test_car_reporting_marks'] = $marks;
+}
+
+function track_scale_load_config()
+{
+    $config = &track_scale_config_ref();
     if ($config !== null) {
         return $config;
     }
@@ -1222,11 +1241,108 @@ function track_scale_load_config()
     $path = track_scale_config_path();
     if (!is_readable($path)) {
         $config = $defaults;
+        track_scale_apply_test_car_override($config);
         return $config;
     }
 
     $config = track_scale_read_json_file($path, $defaults);
+    track_scale_apply_test_car_override($config);
     return $config;
+}
+
+function track_scale_ms_test_car_marks($dbc)
+{
+    $marks = [];
+    if ($dbc === null) {
+        return $marks;
+    }
+    $sql = 'SELECT UPPER(TRIM(cars.reporting_marks)) AS reporting_marks
+            FROM cars
+            INNER JOIN car_codes ON car_codes.id = cars.car_code_id
+            WHERE UPPER(TRIM(car_codes.code)) = \'MS\'
+              AND cars.reporting_marks IS NOT NULL
+              AND TRIM(cars.reporting_marks) <> \'\'
+            ORDER BY cars.reporting_marks';
+    $result = mysqli_query($dbc, $sql);
+    if ($result === false) {
+        return $marks;
+    }
+    while ($row = mysqli_fetch_assoc($result)) {
+        $value = strtoupper(trim((string) ($row['reporting_marks'] ?? '')));
+        if ($value !== '') {
+            $marks[$value] = true;
+        }
+    }
+    return array_keys($marks);
+}
+
+function track_scale_car_is_ms_code($dbc, $reporting_marks)
+{
+    $marks = strtoupper(trim((string) $reporting_marks));
+    if ($dbc === null || $marks === '') {
+        return false;
+    }
+    $escaped = mysqli_real_escape_string($dbc, $marks);
+    $sql = 'SELECT 1
+            FROM cars
+            INNER JOIN car_codes ON car_codes.id = cars.car_code_id
+            WHERE UPPER(TRIM(cars.reporting_marks)) = \'' . $escaped . '\'
+              AND UPPER(TRIM(car_codes.code)) = \'MS\'
+            LIMIT 1';
+    $result = mysqli_query($dbc, $sql);
+    return $result !== false && mysqli_fetch_row($result) !== null;
+}
+
+function track_scale_test_car_roster_options($config = null, $dbc = null)
+{
+    $config = $config ?? track_scale_load_config();
+    $roster = track_scale_load_roster();
+    $options = [];
+    // Scale-test dropdown is limited to cars coded MS in the live fleet.
+    $ms_marks = track_scale_ms_test_car_marks($dbc);
+    foreach ($ms_marks as $marks) {
+        $row = $roster[$marks] ?? null;
+        $tare = ($row !== null && ($row['tare_tons'] ?? '') !== '')
+            ? (float) $row['tare_tons']
+            : null;
+        $options[] = [
+            'reporting_marks' => $marks,
+            'car_type' => 'MS',
+            'tare_tons' => $tare !== null ? track_scale_round($tare, $config) : null,
+        ];
+    }
+    usort($options, static function ($a, $b) {
+        return strcmp($a['reporting_marks'], $b['reporting_marks']);
+    });
+    return $options;
+}
+
+function track_scale_set_test_car_reporting_marks($reporting_marks, $config = null, $dbc = null)
+{
+    $config = $config ?? track_scale_load_config();
+    $marks = strtoupper(trim((string) $reporting_marks));
+    if ($marks === '') {
+        return ['success' => false, 'error' => 'Missing reporting_marks'];
+    }
+
+    if ($dbc !== null && !track_scale_car_is_ms_code($dbc, $marks)) {
+        return ['success' => false, 'error' => 'Only MS (scale test) cars can be selected'];
+    }
+
+    $settings = track_scale_load_settings();
+    $settings['test_car_reporting_marks'] = $marks;
+    if (track_scale_save_settings($settings) === null) {
+        return ['success' => false, 'error' => 'Could not save test car selection'];
+    }
+
+    $live = &track_scale_config_ref();
+    if ($live !== null) {
+        track_scale_apply_test_car_override($live);
+    } else {
+        track_scale_apply_test_car_override($config);
+    }
+
+    return ['success' => true, 'reporting_marks' => $marks];
 }
 
 function track_scale_round($value, $config = null)
@@ -1325,9 +1441,11 @@ function track_scale_profile_for_marks($reporting_marks, $config = null)
     $row = $roster[$marks] ?? null;
 
     if (track_scale_is_tare_only_car($marks, $row, $config)) {
+        // Never call track_scale_test_car_expected_gross() here: that helper builds a
+        // profile for the configured test car, which re-enters this branch and can recurse.
         $tare = ($row !== null && ($row['tare_tons'] ?? '') !== '')
             ? (float) $row['tare_tons']
-            : track_scale_test_car_expected_gross($config);
+            : (float) (($config['calibration'] ?? [])['test_car_tare_tons'] ?? 40.0);
         return [
             'reporting_marks' => $marks,
             'car_type' => $row['car_type'] ?? '',
@@ -1714,11 +1832,24 @@ function track_scale_test_car_expected_gross($config = null)
 {
     $config = $config ?? track_scale_load_config();
     $cal = $config['calibration'] ?? [];
-    $marks = trim((string) ($cal['test_car_reporting_marks'] ?? ''));
+    $marks = strtoupper(trim((string) ($cal['test_car_reporting_marks'] ?? '')));
     if ($marks !== '') {
-        $profile = track_scale_profile_for_marks($marks, $config);
-        if ((float) ($profile['tare_tons'] ?? 0) > 0) {
-            return (float) $profile['tare_tons'];
+        $roster = track_scale_load_roster();
+        $row = $roster[$marks] ?? null;
+        if ($row !== null && ($row['tare_tons'] ?? '') !== '' && (float) $row['tare_tons'] > 0) {
+            return (float) $row['tare_tons'];
+        }
+        if ($row !== null) {
+            $car_type = strtoupper(trim((string) ($row['car_type'] ?? '')));
+            $has_load = ($row['load_limit_tons'] ?? '') !== '';
+            // MOW / tare-only cars without roster tare keep the configured fallback.
+            if ($car_type !== 'MOW' || $has_load) {
+                $length_ft = (int) ($row['length_ft'] ?? 0);
+                $default = track_scale_default_profile_for_length($length_ft, $config);
+                if ((float) ($default['tare_tons'] ?? 0) > 0) {
+                    return (float) $default['tare_tons'];
+                }
+            }
         }
     }
     return (float) ($cal['test_car_tare_tons'] ?? 40.0);
@@ -2087,6 +2218,7 @@ function track_scale_build_display_weighing($true_net, $tare, $target_net, $conf
     $config = $config ?? track_scale_load_config();
     $true_net = (float) $true_net;
     $tare = (float) $tare;
+    $target_net = (float) $target_net;
     $balance_shift = (float) $balance_shift;
     $true_gross = $true_net + $tare;
     $sensor_readings = track_scale_build_sensor_readings_for_load($tare, $true_net, $balance_shift, $config);
@@ -2098,6 +2230,23 @@ function track_scale_build_display_weighing($true_net, $tare, $target_net, $conf
     $display_net = track_scale_round($display_gross - $tare, $config);
     $classification = track_scale_classify_load_balance($sensor_readings, $config);
 
+    // Imbalance = left/right sensor spread. Overload = displayed net above load limit (LD LMT).
+    $imbalanced = empty($classification['in_tolerance']);
+    $overloaded = $target_net > 0 && $display_net > ($target_net + 0.005);
+    if ($imbalanced) {
+        $failure_reason = 'imbalanced';
+        $in_tolerance = false;
+        $routing = 'reload';
+    } elseif ($overloaded) {
+        $failure_reason = 'overloaded';
+        $in_tolerance = false;
+        $routing = 'reload';
+    } else {
+        $failure_reason = null;
+        $in_tolerance = true;
+        $routing = 'outbound';
+    }
+
     return [
         'true_net_tons' => track_scale_round($true_net, $config),
         'true_gross_tons' => track_scale_round($true_gross, $config),
@@ -2106,12 +2255,12 @@ function track_scale_build_display_weighing($true_net, $tare, $target_net, $conf
         'tare_tons' => track_scale_round($tare, $config),
         'target_net_tons' => track_scale_round($target_net, $config),
         'delta_tons' => $classification['balance_delta_tons'],
-        'net_delta_tons' => track_scale_round(abs($display_net - (float) $target_net), $config),
+        'net_delta_tons' => track_scale_round(abs($display_net - $target_net), $config),
         'balance_shift_tons' => track_scale_round($balance_shift, $config),
         'tolerance_tons' => $classification['tolerance_tons'],
-        'in_tolerance' => $classification['in_tolerance'],
-        'routing' => $classification['routing'],
-        'failure_reason' => $classification['failure_reason'],
+        'in_tolerance' => $in_tolerance,
+        'routing' => $routing,
+        'failure_reason' => $failure_reason,
         'sensor_readings' => $sensor_readings,
     ];
 }
@@ -2609,16 +2758,32 @@ function track_scale_car_weigh_source($car, $dbc, $config = null)
     return null;
 }
 
-function track_scale_get_next_car_in_train($dbc, $car, $config = null)
+function track_scale_train_neighbor_payload($neighbor)
+{
+    if (!is_array($neighbor) || empty($neighbor['id'])) {
+        return null;
+    }
+
+    return [
+        'id' => (int) $neighbor['id'],
+        'reporting_marks' => $neighbor['reporting_marks'] ?? '',
+        'position' => (int) ($neighbor['position'] ?? 0),
+        'train_job' => $neighbor['train_job'] ?? null,
+    ];
+}
+
+function track_scale_get_adjacent_cars_in_train($dbc, $car, $config = null)
 {
     $config = $config ?? track_scale_load_config();
+    $prev = null;
+    $next = null;
     if (!is_array($car) || track_scale_car_weigh_source($car, $dbc, $config) !== 'in_train') {
-        return null;
+        return ['prev' => null, 'next' => null];
     }
 
     $job_id = (int) ($car['handled_by_job_id'] ?? 0);
     if ($job_id <= 0) {
-        return null;
+        return ['prev' => null, 'next' => null];
     }
 
     $train_cars = track_scale_get_cars_at_scale($dbc, $config, (string) $job_id);
@@ -2630,14 +2795,28 @@ function track_scale_get_next_car_in_train($dbc, $car, $config = null)
         if (!$found_current) {
             if ((int) $candidate['id'] === (int) $car['id']) {
                 $found_current = true;
+            } else {
+                $prev = $candidate;
             }
             continue;
         }
-
-        return $candidate;
+        $next = $candidate;
+        break;
     }
 
-    return null;
+    return ['prev' => $prev, 'next' => $next];
+}
+
+function track_scale_get_next_car_in_train($dbc, $car, $config = null)
+{
+    $adjacent = track_scale_get_adjacent_cars_in_train($dbc, $car, $config);
+    return $adjacent['next'];
+}
+
+function track_scale_get_prev_car_in_train($dbc, $car, $config = null)
+{
+    $adjacent = track_scale_get_adjacent_cars_in_train($dbc, $car, $config);
+    return $adjacent['prev'];
 }
 
 function track_scale_count_weighable_cars($dbc, $config = null)
@@ -2775,10 +2954,20 @@ function track_scale_build_car_response($car, $config = null, $dbc = null)
         }
     }
 
+    $prev_car = null;
+    $next_car = null;
+    if ($in_train && $dbc !== null) {
+        $adjacent = track_scale_get_adjacent_cars_in_train($dbc, $car, $config);
+        $prev_car = track_scale_train_neighbor_payload($adjacent['prev']);
+        $next_car = track_scale_train_neighbor_payload($adjacent['next']);
+    }
+
     return [
         'success' => true,
         'at_scale' => $at_scale,
         'in_train' => $in_train,
+        'prev_car' => $prev_car,
+        'next_car' => $next_car,
         'weighable' => track_scale_car_weighable($car, $dbc, $config),
         'required_location' => $scale_location,
         'scale_status' => $dbc !== null ? track_scale_build_scale_status($dbc, $config) : null,
@@ -3347,9 +3536,10 @@ function track_scale_complete_wagon_unload($dbc, $car)
         $new_status = 'Loaded';
     } else {
         $new_status = 'Empty';
-        $del = 'DELETE FROM car_orders WHERE car = "' . $car_id_esc . '"';
-        if (!mysqli_query($dbc, $del)) {
-            return ['success' => false, 'error' => 'Failed to delete car orders: ' . mysqli_error($dbc)];
+        // Keep the order open as unfilled so it can be filled again.
+        $unfill = 'UPDATE car_orders SET car = "" WHERE car = "' . $car_id_esc . '"';
+        if (!mysqli_query($dbc, $unfill)) {
+            return ['success' => false, 'error' => 'Failed to unfill car orders: ' . mysqli_error($dbc)];
         }
     }
 
@@ -3371,9 +3561,24 @@ function track_scale_complete_wagon_unload($dbc, $car)
 function track_scale_clear_active_car_orders($dbc, $car_id, $preserve_loaded = false)
 {
     $car_id_esc = mysqli_real_escape_string($dbc, (string) $car_id);
-    $del = 'DELETE FROM car_orders WHERE car = "' . $car_id_esc . '"';
-    if (!mysqli_query($dbc, $del)) {
-        return ['success' => false, 'error' => 'Failed to delete car orders: ' . mysqli_error($dbc)];
+
+    $prior_waybills = [];
+    $rs_prior = mysqli_query(
+        $dbc,
+        'SELECT waybill_number FROM car_orders WHERE car = "' . $car_id_esc . '"'
+    );
+    if ($rs_prior) {
+        while ($row = mysqli_fetch_assoc($rs_prior)) {
+            if (!empty($row['waybill_number'])) {
+                $prior_waybills[] = $row['waybill_number'];
+            }
+        }
+    }
+
+    // Leave the order row intact so it returns to the unfilled pool.
+    $unfill = 'UPDATE car_orders SET car = "" WHERE car = "' . $car_id_esc . '"';
+    if (!mysqli_query($dbc, $unfill)) {
+        return ['success' => false, 'error' => 'Failed to unfill car orders: ' . mysqli_error($dbc)];
     }
 
     $new_status = $preserve_loaded ? 'Loaded' : 'Empty';
@@ -3387,7 +3592,11 @@ function track_scale_clear_active_car_orders($dbc, $car_id, $preserve_loaded = f
     return [
         'success' => true,
         'unloaded' => !$preserve_loaded,
-        'message' => $preserve_loaded ? 'Prior car order cleared (load retained)' : 'Prior car order cleared',
+        'unfilled_prior_order' => $prior_waybills !== [],
+        'unfilled_waybills' => $prior_waybills,
+        'message' => $preserve_loaded
+            ? 'Prior car order returned to unfilled (load retained)'
+            : 'Prior car order returned to unfilled',
         'new_status' => $new_status,
     ];
 }
@@ -3408,7 +3617,9 @@ function track_scale_prepare_car_for_assign($dbc, $car, $config = null)
         if (!$result['success']) {
             return $result;
         }
+        // Unloading path unfills the prior order (keeps the waybill open).
         $result['closed_prior_order'] = !empty($result['unloaded']);
+        $result['unfilled_prior_order'] = !empty($result['unloaded']);
         $result['previous_status'] = $previous_status;
         return $result;
     }
@@ -3419,7 +3630,9 @@ function track_scale_prepare_car_for_assign($dbc, $car, $config = null)
         if (!$result['success']) {
             return $result;
         }
-        $result['closed_prior_order'] = true;
+        // Backward-compatible flag — prior order is no longer deleted, only unfilled.
+        $result['closed_prior_order'] = !empty($result['unfilled_prior_order']);
+        $result['unfilled_prior_order'] = !empty($result['unfilled_prior_order']);
         $result['preserved_load'] = $preserve_loaded;
         $result['previous_status'] = $previous_status;
         return $result;
@@ -3465,6 +3678,7 @@ function track_scale_assign_car($dbc, $waybill_number, $car_id, $config = null)
     }
 
     $closed_prior_order = false;
+    $unfilled_prior_order = false;
     $previous_status = null;
     $preserved_load = false;
     $had_load_before_assign = track_scale_car_has_load($car);
@@ -3476,8 +3690,9 @@ function track_scale_assign_car($dbc, $waybill_number, $car_id, $config = null)
         }
         return $prepare;
     }
-    if (!empty($prepare['closed_prior_order'])) {
+    if (!empty($prepare['closed_prior_order']) || !empty($prepare['unfilled_prior_order'])) {
         $closed_prior_order = true;
+        $unfilled_prior_order = !empty($prepare['unfilled_prior_order']) || !empty($prepare['closed_prior_order']);
         $previous_status = $prepare['previous_status'] ?? null;
         $preserved_load = !empty($prepare['preserved_load']);
         if (!$preserved_load) {
@@ -3530,8 +3745,9 @@ function track_scale_assign_car($dbc, $waybill_number, $car_id, $config = null)
     }
     $in_train_workflow[] = 'assigned';
 
-    if ($closed_prior_order) {
+    if ($closed_prior_order || $unfilled_prior_order) {
         $result['closed_prior_order'] = true;
+        $result['unfilled_prior_order'] = true;
         $result['previous_status'] = $previous_status;
         $result['preserved_load'] = $preserved_load || $had_load_before_assign;
         if (!$result['preserved_load']) {

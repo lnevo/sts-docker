@@ -132,6 +132,7 @@
           <button type="button" class="btn btn-outline-dark btn-sm" id="btn-add">+ Add step</button>
           <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-reload">Reload</button>
           <button type="button" class="btn btn-outline-dark btn-sm" id="btn-preview" title="Toggle clean command summary">Preview</button>
+          <button type="button" class="btn btn-outline-dark btn-sm noprint" id="btn-preview-copy" hidden title="Copy preview text"><i class="bi bi-clipboard"></i></button>
           <button type="button" class="btn btn-outline-dark btn-sm noprint" id="btn-preview-print" hidden><i class="bi bi-printer"></i> Print</button>
         </div>
       </div>
@@ -141,7 +142,7 @@
       <div id="steps-preview" class="steps-preview" hidden></div>
     </div>
   </div>
-  <script src="workflow-shared.js?v=82"></script>
+  <script src="workflow-shared.js?v=83"></script>
   <script>
 (function () {
   const W = WorkflowUI;
@@ -149,6 +150,7 @@
   W.el('btn-add').addEventListener('click', () => W.addStep());
   W.el('btn-save').addEventListener('click', () => W.saveRecipe().catch((e) => W.setStatus(e.message, 'err')));
   W.el('btn-preview')?.addEventListener('click', () => W.togglePreview());
+  W.el('btn-preview-copy')?.addEventListener('click', () => W.copyPreviewContents());
   W.el('btn-preview-print')?.addEventListener('click', () => window.print());
   W.el('btn-import').addEventListener('click', () => W.promptImportWorkflow());
   W.el('workflow-import-file')?.addEventListener('change', (e) => {

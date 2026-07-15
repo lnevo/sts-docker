@@ -12,6 +12,8 @@ $track_scale_ui = [
     'routedTrainsLabel' => track_scale_routed_trains_label($config),
     'scaleLocation' => track_scale_loading_location_code($config),
 ];
+$track_scale_test_car_marks = strtoupper(trim((string) (($config['calibration'] ?? [])['test_car_reporting_marks'] ?? '')));
+$track_scale_test_car_options = track_scale_test_car_roster_options($config, $track_scale_dbc);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -53,20 +55,17 @@ $track_scale_ui = [
         }
         .scale-led-wrap {
             position: absolute;
-            top: 0.75rem;
+            top: 0.65rem;
             right: 0.75rem;
             display: flex;
             align-items: center;
-            gap: 0.4rem;
+            justify-content: flex-end;
+            gap: 0.55rem;
+            max-width: min(58%, 22rem);
+            z-index: 2;
         }
         .scale-led {
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            background: #333;
-            border: 1px solid #555;
-            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
-            flex-shrink: 0;
+            display: none !important; /* status text only — no indicator lamp */
         }
         .scale-led[data-state="ok"] {
             background: #39ff14;
@@ -83,16 +82,54 @@ $track_scale_ui = [
             border-color: #ff6b6b;
             box-shadow: 0 0 6px #ff3131, 0 0 14px rgba(255, 49, 49, 0.5);
         }
-        .scale-led-label.oos-label {
-            color: #ff6b6b;
-            font-weight: 700;
-        }
         .scale-led-label {
             font-family: "Courier New", Courier, monospace;
             font-size: 0.62rem;
             color: #888;
             text-transform: uppercase;
             letter-spacing: 0.1em;
+            text-align: right;
+            line-height: 1.1;
+        }
+        /* Status banners share one size (PASS / OOS / FAIL - …) */
+        .scale-led-label.ready-label,
+        .scale-led-label.oos-label,
+        .scale-led-label.fail-label {
+            font-size: 1.35rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            line-height: 1.1;
+        }
+        .scale-led-label.oos-label,
+        .scale-led-label.fail-label {
+            color: #ff6b6b;
+        }
+        .scale-led-label.ready-label {
+            color: #39ff14;
+        }
+        /* Status banners: full width across top of the LED panel, right-justified */
+        .scale-display.out-of-service .scale-led-wrap,
+        .scale-display.out-of-range .scale-led-wrap,
+        .scale-display.is-ready .scale-led-wrap {
+            left: 0.65rem;
+            right: 0.65rem;
+            top: 0.55rem;
+            max-width: none;
+            width: auto;
+            justify-content: flex-end;
+        }
+        .scale-display.out-of-service .scale-led-label.oos-label,
+        .scale-display.out-of-range .scale-led-label.fail-label,
+        .scale-display.is-ready .scale-led-label.ready-label {
+            display: block;
+            width: 100%;
+            text-align: right;
+            white-space: nowrap;
+            letter-spacing: 0.12em;
+        }
+        .scale-display.out-of-range .scale-led-label.fail-label {
+            letter-spacing: 0.06em;
+            font-size: 1.15rem;
         }
         .scale-display.out-of-range .value,
         .scale-display.out-of-range .unit {
@@ -282,6 +319,32 @@ $track_scale_ui = [
             background: #fff;
             padding: 0.75rem;
             height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .sensor-card > .scale-display {
+            order: 1;
+        }
+        .sensor-card > .sensor-error-line {
+            order: 2;
+        }
+        .sensor-card > .sensor-adj-line {
+            order: 3;
+        }
+        .sensor-card > .cal-position-btn {
+            order: 4;
+            margin-top: 0.35rem;
+            margin-bottom: 0.65rem !important;
+            min-height: 4rem;
+            padding-top: 0.85rem;
+            padding-bottom: 0.85rem;
+        }
+        /* Left / Center / Right labels sit at the bottom of each panel */
+        .sensor-card > .sensor-card-heading {
+            order: 5;
+            margin-top: auto;
+            margin-bottom: 0 !important;
+            text-align: center;
         }
         .sensor-card .scale-display {
             padding: 0.75rem 1rem;
@@ -291,7 +354,33 @@ $track_scale_ui = [
         }
         .sensor-card.calibrated {
             border-color: #2e7d32;
-            box-shadow: 0 0 0 1px #2e7d32;
+            box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.35);
+            background: #e8f5e9;
+        }
+        .sensor-card.calibrated.car-at-position {
+            border-color: #198754;
+            box-shadow: 0 0 0 2px rgba(25, 135, 84, 0.45);
+            background: #d1e7dd;
+        }
+        .cal-central-panel.is-ready {
+            border-color: #198754;
+            background: #e8f8ee;
+            box-shadow: 0 0 0 1px rgba(25, 135, 84, 0.2);
+        }
+        .scale-display.is-ready .value,
+        .scale-display.is-ready .unit,
+        .scale-display.is-ready .label {
+            color: #39ff14;
+        }
+        /* Ready wins over OOS red if both classes briefly overlap */
+        .scale-display.out-of-service.is-ready .value,
+        .scale-display.out-of-service.is-ready .unit,
+        .scale-display.out-of-service.is-ready .label {
+            color: #39ff14;
+        }
+        .sensor-card.calibrated .scale-display .value,
+        .sensor-card.calibrated .scale-display .unit {
+            color: #39ff14;
         }
         .sensor-card.car-at-position {
             border-color: #0d6efd;
@@ -361,8 +450,8 @@ $track_scale_ui = [
             }
             .cal-sensor-row .sensor-card .cal-position-btn {
                 font-size: 0.72rem;
-                padding: 0.35rem 0.25rem;
-                min-height: 2.15rem;
+                padding: 0.7rem 0.25rem;
+                min-height: 4.3rem;
                 margin-bottom: 0 !important;
             }
             .cal-sensor-row .sensor-card .cal-position-btn .bi {
@@ -423,26 +512,61 @@ $track_scale_ui = [
         :root {
             --scale-top-row-height: 150px;
         }
-        .scale-top-row {
-            height: var(--scale-top-row-height);
-            box-sizing: border-box;
+        body.track-scale-accessible {
+            --scale-top-row-height: 168px;
         }
-        #weighPanel > .scale-top-row > [class*="col-"] {
-            display: flex;
-        }
+        /* Shared LCD height for weigh + calibrate top panels */
         #weighPanel > .scale-top-row .scale-display,
         #calibratePanel > .scale-top-row .scale-display {
             flex: 1 1 auto;
             width: 100%;
-            height: 100%;
-            min-height: 0;
+            height: var(--scale-top-row-height);
+            min-height: var(--scale-top-row-height);
+            max-height: var(--scale-top-row-height);
+            box-sizing: border-box;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        #weighPanel > .scale-top-row > [class*="col-"] {
+            display: flex;
+        }
+        #weighPanel > .scale-top-row {
+            /* Row may wrap on narrow screens; each LCD stays fixed height */
+            min-height: var(--scale-top-row-height);
             box-sizing: border-box;
         }
         .sensor-average.scale-top-row {
             display: flex;
+            height: var(--scale-top-row-height);
+            min-height: var(--scale-top-row-height);
+            max-height: var(--scale-top-row-height);
+            box-sizing: border-box;
         }
+        #weighPanel > .scale-top-row .scale-display .value,
         #calibratePanel > .scale-top-row .scale-display .value {
-            font-size: 2.8rem;
+            font-size: 2.4rem;
+        }
+        #weighPanel .scale-led-label.ready-label,
+        #weighPanel .scale-led-label.oos-label,
+        #weighPanel .scale-led-label.fail-label,
+        #calibratePanel .scale-led-label.ready-label,
+        #calibratePanel .scale-led-label.oos-label,
+        #calibratePanel .scale-led-label.fail-label {
+            font-size: 1.35rem;
+        }
+        /* Keep train reassign note on its own row so it never collapses beside action buttons. */
+        #inTrainAssignNote.in-train-assign-note {
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+        #inTrainAssignNote.in-train-assign-note.d-none {
+            display: none !important;
         }
         .car-list-item {
             cursor: pointer;
@@ -544,14 +668,19 @@ $track_scale_ui = [
             padding: 0.55rem 0.95rem;
             min-height: 2.75rem;
         }
-        body.track-scale-accessible .btn.cal-position-btn,
-        body.track-scale-accessible .btn.cal-weigh-btn,
         body.track-scale-accessible .btn.cal-adj-btn,
         body.track-scale-accessible .btn.cal-adj-reset-btn {
             font-size: 1.15rem;
             min-height: 3rem;
             padding-top: 0.65rem;
             padding-bottom: 0.65rem;
+        }
+        body.track-scale-accessible .btn.cal-position-btn,
+        body.track-scale-accessible .btn.cal-weigh-btn {
+            font-size: 1.15rem;
+            min-height: 6rem;
+            padding-top: 1.3rem;
+            padding-bottom: 1.3rem;
         }
         body.track-scale-accessible .cal-adj-group .btn {
             min-width: 3rem;
@@ -584,9 +713,17 @@ $track_scale_ui = [
             font-size: 1.15rem;
             font-weight: 600;
         }
-        /* Match average + sensor LED scale in accessible calibrate */
+        body.track-scale-accessible #weighPanel > .scale-top-row .scale-display .value,
         body.track-scale-accessible #calibratePanel > .scale-top-row .scale-display .value {
-            font-size: 2.8rem;
+            font-size: 2.6rem;
+        }
+        body.track-scale-accessible #weighPanel .scale-led-label.ready-label,
+        body.track-scale-accessible #weighPanel .scale-led-label.oos-label,
+        body.track-scale-accessible #weighPanel .scale-led-label.fail-label,
+        body.track-scale-accessible #calibratePanel .scale-led-label.ready-label,
+        body.track-scale-accessible #calibratePanel .scale-led-label.oos-label,
+        body.track-scale-accessible #calibratePanel .scale-led-label.fail-label {
+            font-size: 1.5rem;
         }
         body.track-scale-accessible .sensor-card .scale-display {
             padding: 1rem 1.15rem;
@@ -617,12 +754,18 @@ $track_scale_ui = [
             background: #f8fff9;
             padding: 1rem 1.15rem;
         }
-        /* Blank band below the adjustment panel (outside the green box) */
-        .cal-central-below-spacer {
-            display: block;
+        /* Status band below the adjustment slider (inside the green panel) */
+        .cal-central-panel .cal-actions-meta {
+            grid-column: 1 / -1;
             width: 100%;
+            max-width: none;
+            justify-self: stretch;
+            text-align: left;
             min-height: 1.35rem;
-            margin: 0 0 0.85rem;
+            margin-top: 0.35rem;
+            margin-bottom: 0.15rem;
+            padding-top: 0.35rem;
+            padding-left: 0;
         }
         .cal-central-panel .cal-central-layout {
             display: flex;
@@ -882,74 +1025,156 @@ $track_scale_ui = [
                 padding-right: 0.15rem;
             }
         }
+        /*
+         * Calibrate layout: Sensors → scale-car track → adjustment panel.
+         */
+        #calibratePanel .card-body {
+            display: flex;
+            flex-direction: column;
+        }
+        #calibratePanel .card-body > .cal-instructions {
+            order: 0;
+        }
+        #calibratePanel .card-body > .cal-sensor-row {
+            order: 1;
+            margin-bottom: 1rem !important;
+        }
+        #calibratePanel .card-body > .cal-track-wrap {
+            order: 2;
+            margin-top: 0.15rem;
+            margin-bottom: 1.15rem;
+        }
+        #calibratePanel .card-body > .cal-central-controls {
+            order: 3;
+        }
+        #calibratePanel .cal-actions-footer {
+            margin-top: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-actions-meta {
+            max-width: none;
+        }
+        body.track-scale-accessible #calibratePanel .card-body > .cal-sensor-row {
+            margin-bottom: 1.65rem !important;
+        }
+        body.track-scale-accessible #calibratePanel .card-body > .cal-track-wrap {
+            margin-top: 0.85rem;
+            margin-bottom: 1.35rem;
+        }
+        .scale-mode-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem 0.75rem;
+            min-height: 2.5rem;
+            margin-bottom: 1rem;
+        }
+        .test-car-select-wrap {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 0.5rem;
+            min-width: 12rem;
+            max-width: min(28rem, 100%);
+            flex: 1 1 auto;
+        }
+        /* Keep toolbar height stable in Weigh mode (no layout jump into Calibrate) */
+        body:not(.mode-calibrate) .test-car-select-wrap {
+            visibility: hidden;
+            pointer-events: none;
+        }
+        .test-car-select-wrap .form-label {
+            margin-bottom: 0;
+            font-size: 0.8rem;
+            color: #6c757d;
+            white-space: nowrap;
+        }
+        .test-car-select-wrap .form-select {
+            width: auto;
+            min-width: 11rem;
+            max-width: 22rem;
+            flex: 1 1 auto;
+        }
+        body.track-scale-accessible .test-car-select-wrap .form-label {
+            font-size: 0.95rem;
+        }
+        body.track-scale-accessible .test-car-select-wrap .form-select {
+            min-height: 3rem;
+            font-size: 1.15rem;
+        }
+        body.track-scale-accessible .scale-mode-bar {
+            min-height: 3.25rem;
+        }
         /* Large-controls sizing for the shared calibrate layout */
         body.track-scale-accessible .cal-central-panel {
             padding: 1.25rem 1.35rem;
         }
-        body.track-scale-accessible .cal-central-panel .cal-stat-label {
-            font-size: 0.8rem;
-        }
-        body.track-scale-accessible .cal-central-panel .cal-stat-value {
-            font-size: 1.55rem;
-        }
-        body.track-scale-accessible .cal-central-panel .cal-stat-value .unit {
-            font-size: 0.95rem;
-        }
-        body.track-scale-accessible .cal-central-panel .cal-stat-error .cal-stat-value {
-            font-size: 1.85rem;
+        /* Stats use display:contents, so hide the cells themselves */
+        body.track-scale-accessible .cal-central-panel .cal-stat {
+            display: none !important;
         }
         body.track-scale-accessible .cal-central-panel .cal-central-stack {
-            max-width: 58rem;
+            max-width: 64rem;
             column-gap: 1.75rem;
             row-gap: 1.55rem;
         }
         body.track-scale-accessible .cal-central-panel .cal-central-adj-wrap,
         body.track-scale-accessible .cal-central-panel .cal-central-adj-value-row {
-            max-width: 52rem;
+            max-width: 58rem;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-central-adj-label {
+            font-size: 0.95rem;
         }
         body.track-scale-accessible .cal-central-panel .cal-central-adj-value {
-            font-size: 2rem;
+            font-size: 2.45rem;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-central-adj-value .unit {
+            font-size: 1.25rem;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-central-adj {
+            gap: 1.05rem;
         }
         body.track-scale-accessible .cal-central-panel .cal-central-adj-slider-cell {
-            padding: 0.65rem 0.85rem;
+            padding: 0.85rem 1rem;
         }
         body.track-scale-accessible .cal-central-panel .cal-central-adj-slider-track,
         body.track-scale-accessible .cal-central-panel .cal-central-adj-slider {
-            height: 3rem;
+            height: 4.25rem;
         }
         body.track-scale-accessible .cal-central-panel .cal-central-adj-slider::-webkit-slider-runnable-track,
         body.track-scale-accessible .cal-central-panel .cal-central-adj-slider::-moz-range-track {
-            height: 1.15rem;
+            height: 1.4rem;
         }
         body.track-scale-accessible .cal-central-panel .cal-central-adj-slider::-webkit-slider-thumb {
-            width: 2.25rem;
-            height: 2.25rem;
-            margin-top: calc((1.15rem - 2.25rem) / 2);
+            width: 2.75rem;
+            height: 2.75rem;
+            margin-top: calc((1.4rem - 2.75rem) / 2);
         }
         body.track-scale-accessible .cal-central-panel .cal-central-adj-slider::-moz-range-thumb {
-            width: 2.25rem;
-            height: 2.25rem;
+            width: 2.75rem;
+            height: 2.75rem;
         }
         body.track-scale-accessible .cal-central-panel .cal-central-adj-end {
-            font-size: 1rem;
+            font-size: 1.15rem;
         }
         body.track-scale-accessible .cal-central-panel .cal-central-adj > .cal-central-adj-btn[data-fine="0"][data-direction="down"] {
-            margin-right: 0.55rem !important;
+            margin-right: 0.7rem !important;
         }
         body.track-scale-accessible .cal-central-panel .cal-central-adj > .cal-central-adj-btn[data-fine="0"][data-direction="up"] {
-            margin-left: 0.55rem !important;
+            margin-left: 0.7rem !important;
         }
         body.track-scale-accessible .cal-central-panel .cal-central-adj .btn {
-            min-width: 3.75rem;
-            min-height: 3.85rem;
-            font-size: 1.55rem;
-            padding-left: 0.5rem;
-            padding-right: 0.5rem;
+            min-width: 5rem;
+            min-height: 5.25rem;
+            font-size: 2rem;
+            padding-left: 0.7rem;
+            padding-right: 0.7rem;
         }
         body.track-scale-accessible .sensor-card .cal-position-btn {
             font-size: 1.2rem;
-            min-height: 3.25rem;
-            padding: 0.75rem 0.85rem;
+            min-height: 6.5rem;
+            padding: 1.5rem 0.85rem;
         }
         body.track-scale-accessible #calSaveBtn,
         body.track-scale-accessible #calResetBtn,
@@ -962,7 +1187,7 @@ $track_scale_ui = [
             width: 20px;
             height: 20px;
         }
-        body.track-scale-accessible .scale-led-label {
+        body.track-scale-accessible .scale-led-label:not(.ready-label):not(.oos-label):not(.fail-label) {
             font-size: 0.85rem;
         }
         body.track-scale-accessible .car-panel-header #carMarks {
@@ -1021,7 +1246,6 @@ $track_scale_ui = [
             max-height: 5.5rem;
         }
         body.track-scale-accessible #weighResult,
-        body.track-scale-accessible #calStatus,
         body.track-scale-accessible #assignResult {
             font-size: 1.15rem !important;
         }
@@ -1050,7 +1274,32 @@ $track_scale_ui = [
 </span>
 
 <div class="container" style="max-width: 960px;">
-    <div class="d-flex justify-content-end align-items-center mb-3 flex-wrap gap-2">
+    <div class="scale-mode-bar">
+        <div class="test-car-select-wrap" id="testCarSelectWrap">
+            <label class="form-label" for="testCarSelect">Scale test car</label>
+            <select class="form-select form-select-sm" id="testCarSelect" aria-label="Choose scale test car from roster">
+                <?php if ($track_scale_test_car_options === []): ?>
+                    <option value="">No MS scale test cars</option>
+                <?php else: ?>
+                    <?php foreach ($track_scale_test_car_options as $opt):
+                        $marks = (string) ($opt['reporting_marks'] ?? '');
+                        $type = trim((string) ($opt['car_type'] ?? ''));
+                        $tare = $opt['tare_tons'] ?? null;
+                        $label = $marks;
+                        if ($type !== '') {
+                            $label .= ' — ' . $type;
+                        }
+                        if ($tare !== null && $tare !== '') {
+                            $label .= ' · ' . number_format((float) $tare, 2) . ' t';
+                        }
+                        ?>
+                        <option value="<?= htmlspecialchars($marks) ?>"<?= strtoupper($marks) === $track_scale_test_car_marks ? ' selected' : '' ?>>
+                            <?= htmlspecialchars($label) ?>
+                        </option>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </select>
+        </div>
         <div class="btn-group" role="group" aria-label="Scale mode">
             <input type="radio" class="btn-check" name="scaleMode" id="modeWeigh" autocomplete="off" checked>
             <label class="btn btn-outline-success" for="modeWeigh"><i class="bi bi-truck"></i> Weigh</label>
@@ -1061,8 +1310,7 @@ $track_scale_ui = [
 
     <!-- Weigh mode -->
     <div id="weighPanel" class="mode-panel active">
-        <div class="small mb-2 text-danger" id="weighCalibrationMeta">Last calibrated: —</div>
-        <div class="row g-3 mb-3 scale-top-row">
+        <div class="row g-3 mb-2 scale-top-row">
             <div class="col-md-6">
                 <div class="scale-display h-100">
                     <div class="label">Gross weight (3-sensor avg)</div>
@@ -1074,14 +1322,15 @@ $track_scale_ui = [
                 <div class="scale-display h-100 position-relative" id="netDisplayPanel">
                     <div class="scale-led-wrap">
                         <div class="scale-led" id="weightLed" data-state="off" title="Tolerance indicator"></div>
-                        <span class="scale-led-label" id="weightLedLabel">—</span>
+                        <span class="scale-led-label d-none" id="weightLedLabel"></span>
                     </div>
-                    <div class="label">Net load</div>
-                    <div><span class="value" id="displayNet">0.00</span> <span class="unit">tons</span></div>
+                    <div id="netReadingBlock" class="d-none">
+                        <div class="label">Net load</div>
+                        <div><span class="value" id="displayNet">0.00</span> <span class="unit">tons</span></div>
+                    </div>
                 </div>
             </div>
         </div>
-
         <div id="carPanel" class="d-none mb-3">
             <div class="car-panel-header">
                 <h4 id="carMarks" class="mb-1"></h4>
@@ -1128,19 +1377,26 @@ $track_scale_ui = [
         </div>
 
         <div class="card mb-3">
-            <div class="card-body d-flex flex-wrap gap-2 align-items-center justify-content-between">
-                <div class="d-flex flex-wrap gap-2 align-items-center">
-                    <button type="button" class="btn btn-primary btn-lg" id="weighBtn" disabled>
-                        <i class="bi bi-speedometer"></i> Weigh Car
-                    </button>
-                    <button type="button" class="btn btn-outline-primary btn-lg d-none" id="nextCarBtn">
-                        <i class="bi bi-skip-forward"></i> Next Car
-                    </button>
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <button type="button" class="btn btn-primary btn-lg" id="weighBtn" disabled>
+                            <i class="bi bi-speedometer"></i> Weigh Car
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-lg d-none" id="prevCarBtn" aria-label="Previous car" title="Previous car">
+                            <i class="bi bi-skip-backward"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-lg d-none" id="nextCarBtn" aria-label="Next car" title="Next car">
+                            <i class="bi bi-skip-forward"></i>
+                        </button>
+                    </div>
+                    <div id="weighResult" class="small text-muted">Select a car from the list, then weigh.</div>
+                </div>
+                <div class="d-flex flex-wrap gap-2 align-items-center mt-2" id="weighNavActions">
                     <button type="button" class="btn btn-outline-danger btn-lg d-none" id="reassignBtn">
                         <i class="bi bi-arrow-left-right"></i> Reassign Order
                     </button>
                 </div>
-                <div id="weighResult" class="small text-muted">Select a car from the list, then weigh.</div>
             </div>
         </div>
 
@@ -1154,22 +1410,21 @@ $track_scale_ui = [
                     <i class="bi bi-info-circle"></i>
                     Rerouting this car — the current order
                     <strong id="reassignPriorWaybill">—</strong>
-                    will close when you assign a new outbound order.
+                    will return to unfilled when you assign a new order.
                 </div>
-                <div class="mb-3">
+                <div class="mb-3 d-none" id="orderSelectWrap">
                     <label for="orderSelect" class="form-label">Open coke orders</label>
                     <select class="form-select order-select" id="orderSelect">
-                        <option value="">— No orders available —</option>
+                        <option value="">— Select order —</option>
                     </select>
-                    <div id="orderEmptyMsg" class="order-empty-msg d-none"><i class="bi bi-exclamation-circle"></i> No matching open orders. Generate one below.</div>
                 </div>
-                <div class="d-flex flex-wrap gap-2 mb-3" id="generateButtons"></div>
-                <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
-                    <button type="button" class="btn btn-success" id="assignBtn" disabled>
-                        <i class="bi bi-check2-circle"></i> Assign to Order
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-2" id="orderActionRow">
+                    <div class="d-flex flex-wrap gap-2" id="generateButtons"></div>
+                    <button type="button" class="btn btn-success d-none" id="assignBtn" disabled>
+                        <i class="bi bi-check2-circle"></i> <span id="assignBtnLabel">Assign to Order</span>
                     </button>
-                    <div id="inTrainAssignNote" class="alert alert-info py-2 px-3 small d-none mb-0 flex-grow-1"></div>
                 </div>
+                <div id="inTrainAssignNote" class="alert alert-info py-2 px-3 small d-none mb-3 in-train-assign-note"></div>
                 <div id="assignResult" class="mt-2 small"></div>
             </div>
         </div>
@@ -1197,9 +1452,12 @@ $track_scale_ui = [
 
     <!-- Calibrate mode -->
     <div id="calibratePanel" class="mode-panel">
-        <div class="small mb-2 text-danger" id="calCalibrationMeta">Last calibrated: —</div>
-        <div class="sensor-average mb-3 scale-top-row">
-            <div class="scale-display h-100">
+        <div class="sensor-average mb-2 scale-top-row">
+            <div class="scale-display h-100 position-relative" id="calAverageDisplayPanel">
+                <div class="scale-led-wrap">
+                    <div class="scale-led" id="calAverageLed" data-state="off" title="Calibration alignment"></div>
+                    <span class="scale-led-label d-none" id="calAverageLedLabel"></span>
+                </div>
                 <div class="label">Average of 3 sensors</div>
                 <div><span class="value" id="calAverageDisplay">—</span> <span class="unit">tons</span></div>
                 <div class="small mt-2" style="color:#6bdc6b;">
@@ -1228,7 +1486,7 @@ $track_scale_ui = [
                 <div class="row g-2 g-md-3 mb-3 cal-sensor-row">
                     <div class="col-4">
                         <div class="sensor-card" id="sensorCard-left">
-                            <div class="mb-2"><strong class="sensor-card-title"><span class="sensor-title-full">Left sensor</span><span class="sensor-title-short">Left</span></strong></div>
+                            <div class="mb-2 sensor-card-heading"><strong class="sensor-card-title"><span class="sensor-title-full">LEFT</span><span class="sensor-title-short">LEFT</span></strong></div>
                             <div class="scale-display mb-2">
                                 <div class="label">Reading</div>
                                 <div><span class="value" id="sensorDisplay-left">—</span> <span class="unit">t</span></div>
@@ -1242,7 +1500,7 @@ $track_scale_ui = [
                     </div>
                     <div class="col-4">
                         <div class="sensor-card" id="sensorCard-center">
-                            <div class="mb-2"><strong class="sensor-card-title"><span class="sensor-title-full">Center sensor</span><span class="sensor-title-short">Center</span></strong></div>
+                            <div class="mb-2 sensor-card-heading"><strong class="sensor-card-title"><span class="sensor-title-full">CENTER</span><span class="sensor-title-short">CENTER</span></strong></div>
                             <div class="scale-display mb-2">
                                 <div class="label">Reading</div>
                                 <div><span class="value" id="sensorDisplay-center">—</span> <span class="unit">t</span></div>
@@ -1256,7 +1514,7 @@ $track_scale_ui = [
                     </div>
                     <div class="col-4">
                         <div class="sensor-card" id="sensorCard-right">
-                            <div class="mb-2"><strong class="sensor-card-title"><span class="sensor-title-full">Right sensor</span><span class="sensor-title-short">Right</span></strong></div>
+                            <div class="mb-2 sensor-card-heading"><strong class="sensor-card-title"><span class="sensor-title-full">RIGHT</span><span class="sensor-title-short">RIGHT</span></strong></div>
                             <div class="scale-display mb-2">
                                 <div class="label">Reading</div>
                                 <div><span class="value" id="sensorDisplay-right">—</span> <span class="unit">t</span></div>
@@ -1278,7 +1536,7 @@ $track_scale_ui = [
                                     <div class="cal-stats-grid">
                                         <div class="cal-stat">
                                             <div class="cal-stat-label">Sensor</div>
-                                            <div class="cal-stat-value text-capitalize" id="calCentralSensor">—</div>
+                                            <div class="cal-stat-value text-uppercase" id="calCentralSensor">—</div>
                                         </div>
                                         <div class="cal-stat">
                                             <div class="cal-stat-label">Reading</div>
@@ -1309,7 +1567,7 @@ $track_scale_ui = [
                                 </div>
                                 <div class="cal-central-adj-wrap">
                                     <div class="cal-central-adj">
-                                        <button type="button" class="btn btn-outline-secondary cal-central-adj-btn" id="calCentralAdjMinBtn" data-jump="min" disabled aria-label="Jump to minimum adjustment">|&lt;&lt;</button>
+                                        <button type="button" class="btn btn-outline-secondary cal-central-adj-btn" id="calCentralAdjMinBtn" data-step="1" data-direction="down" disabled aria-label="Adjust down 1.00">|&lt;&lt;</button>
                                         <button type="button" class="btn btn-outline-secondary cal-central-adj-btn" id="calCentralAdjCoarseDown" data-direction="down" data-fine="0" disabled aria-label="Adjust down 0.10">&lt;&lt;</button>
                                         <button type="button" class="btn btn-outline-secondary cal-central-adj-btn" id="calCentralAdjFineDown" data-direction="down" data-fine="1" disabled aria-label="Adjust down 0.01">&lt;</button>
                                         <div class="cal-central-adj-slider-cell" title="Drag to adjust">
@@ -1321,24 +1579,27 @@ $track_scale_ui = [
                                         </div>
                                         <button type="button" class="btn btn-outline-secondary cal-central-adj-btn" id="calCentralAdjFineUp" data-direction="up" data-fine="1" disabled aria-label="Adjust up 0.01">&gt;</button>
                                         <button type="button" class="btn btn-outline-secondary cal-central-adj-btn" id="calCentralAdjCoarseUp" data-direction="up" data-fine="0" disabled aria-label="Adjust up 0.10">&gt;&gt;</button>
-                                        <button type="button" class="btn btn-outline-secondary cal-central-adj-btn" id="calCentralAdjMaxBtn" data-jump="max" disabled aria-label="Jump to maximum adjustment">&gt;&gt;|</button>
+                                        <button type="button" class="btn btn-outline-secondary cal-central-adj-btn" id="calCentralAdjMaxBtn" data-step="1" data-direction="up" disabled aria-label="Adjust up 1.00">&gt;&gt;|</button>
                                     </div>
                                     <input type="hidden" id="calCentralAdjInput" value="0.00">
+                                </div>
+                                <div class="cal-actions-meta">
+                                    <span id="calCalibrationMeta" class="small text-danger">Last calibrated: —</span>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="cal-central-below-spacer" aria-hidden="true"></div>
                 </div>
+            </div>
+        </div>
 
-                <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
-                    <button type="button" class="btn btn-success btn-sm" id="calSaveBtn" disabled>
-                        <i class="bi bi-lock"></i> Save calibration
-                    </button>
-                    <button type="button" class="btn btn-outline-danger btn-sm" id="calResetBtn">Reset calibration</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="calResetAdjBtn" disabled>Reset adjustment</button>
-                    <span id="calStatus" class="small ms-2"></span>
-                </div>
+        <div class="cal-actions-footer">
+            <div class="d-flex flex-wrap gap-2 align-items-center cal-actions-row">
+                <button type="button" class="btn btn-success btn-sm" id="calSaveBtn" disabled>
+                    <i class="bi bi-lock"></i> Save calibration
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="calResetBtn">Reset calibration</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="calResetAdjBtn" disabled>Reset adjustment</button>
             </div>
         </div>
     </div>
@@ -1351,6 +1612,7 @@ const TRACK_SCALE_UI = <?php echo json_encode($track_scale_ui, JSON_UNESCAPED_SL
 const PRECISION = CONFIG.precision ?? 2;
 const ACCESSIBLE_UI_KEY = 'track_scale_accessible_ui';
 const SCALE_MODE_KEY = 'track_scale_mode';
+let selectedTestCarMarks = <?php echo json_encode($track_scale_test_car_marks, JSON_UNESCAPED_SLASHES); ?>;
 
 function applyAccessibleUi(enabled) {
     document.body.classList.toggle('track-scale-accessible', !!enabled);
@@ -1387,8 +1649,119 @@ let currentOpenOrders = [];
 let selectedCarId = null;
 let scaleInService = true;
 let pendingNextCar = null;
+let pendingPrevCar = null;
 let manualReassignMode = false;
+/** In-memory weigh/assign UI per car for this page load only. */
+const weighSessionCache = new Map();
+let restoringWeighSession = false;
 const SENSOR_POSITIONS = ['left', 'center', 'right'];
+
+function snapshotWeighSession(carId) {
+    if (restoringWeighSession || !carId || !currentReading) return;
+    const orderSection = document.getElementById('orderSection');
+    const select = document.getElementById('orderSelect');
+    const assignResult = document.getElementById('assignResult');
+    const weighResult = document.getElementById('weighResult');
+    const led = document.getElementById('weightLed');
+    const ledLabel = document.getElementById('weightLedLabel');
+    weighSessionCache.set(String(carId), {
+        reading: currentReading,
+        routing: currentRouting,
+        nextCar: pendingNextCar,
+        prevCar: pendingPrevCar,
+        manualReassignMode: !!manualReassignMode,
+        orderVisible: !!(orderSection && !orderSection.classList.contains('d-none')),
+        selectedWaybill: select ? String(select.value || '') : '',
+        assignResultHtml: assignResult ? assignResult.innerHTML : '',
+        weighResultHtml: weighResult ? weighResult.innerHTML : '',
+        ledState: led ? (led.dataset.state || 'off') : 'off',
+        ledLabel: ledLabel ? ledLabel.textContent : '',
+        showReassignBtn: !!(document.getElementById('reassignBtn')
+            && !document.getElementById('reassignBtn').classList.contains('d-none')),
+    });
+}
+
+function clearWeighSession(carId) {
+    if (carId == null) return;
+    weighSessionCache.delete(String(carId));
+}
+
+function applyReadingDisplays(reading) {
+    if (!reading) return;
+    document.getElementById('displayGross').textContent = fmt(reading.gross_tons);
+    document.getElementById('displayNet').textContent = fmt(reading.net_tons);
+    setNetReadingVisible(true);
+    const breakdownEl = document.getElementById('sensorBreakdown');
+    if (breakdownEl) {
+        if (reading.sensor_readings && reading.sensor_readings.length) {
+            breakdownEl.textContent = reading.sensor_readings
+                .map(s => s.position.charAt(0).toUpperCase() + ': ' + fmt(s.display_tons))
+                .join(' · ');
+        } else {
+            breakdownEl.textContent = '';
+        }
+    }
+}
+
+async function restoreWeighSession(carId) {
+    const snap = weighSessionCache.get(String(carId));
+    if (!snap || !snap.reading || !currentCar) return false;
+
+    restoringWeighSession = true;
+    try {
+        currentReading = snap.reading;
+        currentRouting = snap.routing;
+        manualReassignMode = !!snap.manualReassignMode;
+
+        applyReadingDisplays(snap.reading);
+
+        const resultEl = document.getElementById('weighResult');
+        if (resultEl && snap.weighResultHtml) {
+            resultEl.innerHTML = snap.weighResultHtml;
+        }
+
+        if (snap.reading.test_car_weigh || snap.reading.unloaded_weigh) {
+            setWeightLed('off');
+        } else if (snap.ledState) {
+            setWeightLed(snap.ledState, snap.ledLabel || '');
+        } else {
+            const inTol = snap.reading.in_tolerance;
+            setWeightLed(inTol ? 'ok' : 'fail', inTol ? 'PASS' : weighFailureLedLabel(snap.reading));
+        }
+
+        if (currentCar.weigh_source === 'in_train') {
+            showTrainNavButtons(snap.prevCar, snap.nextCar, { keepVisible: true });
+        } else {
+            hidePrevCarButton();
+            hideNextCarButton();
+        }
+
+        if (snap.showReassignBtn && shouldOfferReassignButton(currentCar, snap.reading)) {
+            showReassignButton();
+        } else {
+            hideReassignButton();
+        }
+
+        if (snap.orderVisible) {
+            await loadOrders(snap.routing || 'outbound', { forceReassign: snap.manualReassignMode });
+            const select = document.getElementById('orderSelect');
+            if (select && snap.selectedWaybill) {
+                const hasOpt = [...select.options].some(o => o.value === snap.selectedWaybill);
+                if (hasOpt) select.value = snap.selectedWaybill;
+            }
+            const assignResult = document.getElementById('assignResult');
+            if (assignResult && snap.assignResultHtml) {
+                assignResult.innerHTML = snap.assignResultHtml;
+            }
+            updateAssignBtnState();
+        }
+    } finally {
+        restoringWeighSession = false;
+    }
+
+    snapshotWeighSession(carId);
+    return true;
+}
 
 function hideReassignButton() {
     manualReassignMode = false;
@@ -1408,8 +1781,36 @@ function showReassignButton() {
 }
 
 function hideWeighActionButtons() {
+    hidePrevCarButton();
     hideNextCarButton();
     hideReassignButton();
+}
+
+function hidePrevCarButton() {
+    pendingPrevCar = null;
+    const btn = document.getElementById('prevCarBtn');
+    if (!btn) return;
+    btn.classList.add('d-none');
+    btn.disabled = true;
+}
+
+function showPrevCarButton(prevCar, options) {
+    const btn = document.getElementById('prevCarBtn');
+    if (!btn) return;
+    const keepVisible = !!(options && options.keepVisible);
+    if (!prevCar || !prevCar.id) {
+        pendingPrevCar = null;
+        if (keepVisible) {
+            btn.classList.remove('d-none');
+            btn.disabled = true;
+            return;
+        }
+        hidePrevCarButton();
+        return;
+    }
+    pendingPrevCar = prevCar;
+    btn.classList.remove('d-none');
+    btn.disabled = false;
 }
 
 function hideNextCarButton() {
@@ -1418,20 +1819,42 @@ function hideNextCarButton() {
     if (!btn) return;
     btn.classList.add('d-none');
     btn.disabled = true;
-    btn.innerHTML = '<i class="bi bi-skip-forward"></i> Next Car';
+    btn.innerHTML = '<i class="bi bi-skip-forward"></i>';
 }
 
-function showNextCarButton(nextCar) {
+function showNextCarButton(nextCar, options) {
     const btn = document.getElementById('nextCarBtn');
     if (!btn) return;
+    const keepVisible = !!(options && options.keepVisible);
     if (!nextCar || !nextCar.id) {
+        pendingNextCar = null;
+        if (keepVisible) {
+            btn.classList.remove('d-none');
+            btn.disabled = true;
+            return;
+        }
         hideNextCarButton();
         return;
     }
     pendingNextCar = nextCar;
     btn.classList.remove('d-none');
     btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-skip-forward"></i> Next Car';
+    btn.innerHTML = '<i class="bi bi-skip-forward"></i>';
+}
+
+function showTrainNavButtons(prevCar, nextCar, options) {
+    const keepVisible = !!(options && options.keepVisible);
+    showPrevCarButton(prevCar, { keepVisible });
+    showNextCarButton(nextCar, { keepVisible });
+}
+
+function applyTrainNavFromResponse(data) {
+    if (!data || !data.car || data.car.weigh_source !== 'in_train') {
+        hidePrevCarButton();
+        hideNextCarButton();
+        return;
+    }
+    showTrainNavButtons(data.prev_car, data.next_car, { keepVisible: true });
 }
 
 function getTrainFilterValue() {
@@ -1504,11 +1927,24 @@ function carHasFinalUnloadAssignment(car) {
     return car.active_unloading_location.toUpperCase() !== (TRACK_SCALE_UI.scaleLocation || '').toUpperCase();
 }
 
+/** Already on a coke reload order returning to Shenango — assign panel stays closed unless Reassign. */
+function carAssignedToShenCokeReload(car) {
+    if (!car || !car.has_active_order || carNeedsAssignment(car)) return false;
+    const unload = String(car.active_unloading_location || '').toUpperCase();
+    const shipment = String(car.active_shipment_code || '').toUpperCase();
+    if (unload === 'SHEN-COKE' || unload.indexOf('SHEN-COKE') >= 0) return true;
+    if (shipment.indexOf('RELOAD') >= 0 && shipment.indexOf('SHEN') >= 0) return true;
+    return false;
+}
+
 function shouldOfferReassignButton(car, reading) {
     if (!car || !reading || reading.unloaded_weigh || reading.test_car_weigh) return false;
-    if (!reading.in_tolerance) return false;
     if (car.allows_scale_reassign !== true) return false;
     if (!car.has_active_order || carNeedsAssignment(car)) return false;
+    // Fail weigh but already routed back to SHEN-COKE — offer manual reassign only.
+    if (!reading.in_tolerance) {
+        return carAssignedToShenCokeReload(car);
+    }
     if (shouldShowAssignAfterWeigh(car, reading)) return false;
     return true;
 }
@@ -1516,6 +1952,8 @@ function shouldOfferReassignButton(car, reading) {
 function shouldShowAssignAfterWeigh(car, reading) {
     if (!car || !reading || reading.unloaded_weigh || reading.test_car_weigh) return false;
     if (!reading.in_tolerance) {
+        // Keep assign panel closed when the car is already going back to SHEN-COKE.
+        if (carAssignedToShenCokeReload(car)) return false;
         return carNeedsAssignment(car) || car.allows_scale_reassign === true;
     }
     if (carHasFinalUnloadAssignment(car)) return false;
@@ -1524,10 +1962,31 @@ function shouldShowAssignAfterWeigh(car, reading) {
 
 function hideOrderSection() {
     manualReassignMode = false;
-    document.getElementById('orderSection').classList.add('d-none');
-    document.getElementById('assignBtn').disabled = true;
-    document.getElementById('assignResult').textContent = '';
+    currentRouting = null;
     currentOpenOrders = [];
+    document.getElementById('orderSection').classList.add('d-none');
+    document.getElementById('assignResult').textContent = '';
+
+    const selectWrap = document.getElementById('orderSelectWrap');
+    if (selectWrap) selectWrap.classList.add('d-none');
+    const select = document.getElementById('orderSelect');
+    if (select) select.innerHTML = '';
+
+    const genWrap = document.getElementById('generateButtons');
+    if (genWrap) genWrap.innerHTML = '';
+
+    const assignBtn = document.getElementById('assignBtn');
+    if (assignBtn) {
+        assignBtn.disabled = true;
+        assignBtn.classList.add('d-none');
+        assignBtn.classList.remove('btn-danger');
+        assignBtn.classList.add('btn-success');
+        const label = document.getElementById('assignBtnLabel');
+        if (label) label.textContent = 'Assign to Order';
+        const icon = assignBtn.querySelector('i');
+        if (icon) icon.className = 'bi bi-check2-circle';
+    }
+
     const reassignNote = document.getElementById('reassignNote');
     if (reassignNote) {
         reassignNote.classList.add('d-none');
@@ -1619,17 +2078,49 @@ function formatInTrainWorkflowNote(data) {
     return data.in_train_workflow.map(step => labels[step] || step).join(' → ');
 }
 
+function setNetReadingVisible(visible) {
+    const block = document.getElementById('netReadingBlock');
+    if (block) block.classList.toggle('d-none', !visible);
+}
+
 function setWeightLed(state, label) {
     const led = document.getElementById('weightLed');
     const panel = document.getElementById('netDisplayPanel');
     const ledLabel = document.getElementById('weightLedLabel');
-    if (!led || !panel || !ledLabel) return;
-    led.dataset.state = state || 'off';
-    const labels = { ok: 'In range', fail: 'Out of range', off: '—', oos: 'OUT OF SERVICE' };
-    ledLabel.textContent = label || labels[state] || '—';
+    if (!panel || !ledLabel) return;
+    state = state || 'off';
+    if (led) led.dataset.state = state;
+    const labels = {
+        ok: 'PASS',
+        fail: 'BALANCE - FAIL',
+        off: '',
+        oos: 'OUT OF SERVICE',
+    };
+    const text = label != null && label !== '' ? label : (labels[state] || '');
+    ledLabel.textContent = text;
+    ledLabel.classList.toggle('d-none', !text);
     ledLabel.classList.toggle('oos-label', state === 'oos');
+    ledLabel.classList.toggle('fail-label', state === 'fail');
+    ledLabel.classList.toggle('ready-label', state === 'ok');
     panel.classList.toggle('out-of-range', state === 'fail');
     panel.classList.toggle('out-of-service', state === 'oos');
+}
+
+function weighFailureLedLabel(reading) {
+    const reason = String((reading && reading.failure_reason) || '').toLowerCase();
+    if (reason === 'overloaded') return 'OVERLOADED - FAIL';
+    if (reason === 'imbalanced' || reason === 'underweight') return 'BALANCE - FAIL';
+    return 'BALANCE - FAIL';
+}
+
+let lastCalibrationMetaText = 'Last calibration unknown';
+
+function outOfServiceBannerText() {
+    const detail = (lastCalibrationMetaText || 'Last calibration unknown').trim();
+    if (/^OUT OF SERVICE\b/i.test(detail)) {
+        return detail;
+    }
+    return 'OUT OF SERVICE - ' + detail;
 }
 
 function applyScaleServiceState(scale) {
@@ -1640,16 +2131,38 @@ function applyScaleServiceState(scale) {
     if (!scaleInService) {
         if (weighBtn) weighBtn.disabled = true;
         setWeightLed('oos', 'OUT OF SERVICE');
+        setCalAverageLed('oos', 'OUT OF SERVICE');
+        setNetReadingVisible(false);
+        // Same slot as before (next to Weigh Car) — short last-cal detail instead of
+        // "initial calibration must be completed before weighing cars".
         if (resultEl) {
-            resultEl.innerHTML = `<span class="text-danger">${scale.message || 'Scale out of service — calibrate before weighing cars.'}</span>`;
+            resultEl.innerHTML = `<span class="text-danger">${outOfServiceBannerText()}</span>`;
         }
+        syncCalibrateFooterMeta(true);
         return;
     }
 
     panelCleanupOutOfService();
+    setNetReadingVisible(true);
+    syncCalibrateFooterMeta(false);
     if (weighBtn && currentCar) {
         weighBtn.disabled = false;
     }
+}
+
+function syncCalibrateFooterMeta(forceOutOfService) {
+    const calEl = document.getElementById('calCalibrationMeta');
+    if (!calEl) return;
+    const metaWrap = calEl.closest('.cal-actions-meta');
+    const oos = forceOutOfService || !scaleInService;
+    const detail = (lastCalibrationMetaText || 'Last calibration unknown').trim();
+    const known = detail !== '' && !/unknown/i.test(detail);
+    // In service after calibrate: show known date/time (not OOS). When OOS, prefix
+    // OUT OF SERVICE and keep the last-cal detail (date when known).
+    calEl.textContent = oos ? outOfServiceBannerText() : detail;
+    calEl.className = 'small ' + (oos ? 'text-danger' : (known ? 'text-success' : 'text-danger'));
+    calEl.hidden = false;
+    if (metaWrap) metaWrap.hidden = false;
 }
 
 function panelCleanupOutOfService() {
@@ -1657,6 +2170,28 @@ function panelCleanupOutOfService() {
     const ledLabel = document.getElementById('weightLedLabel');
     if (panel) panel.classList.remove('out-of-service');
     if (ledLabel) ledLabel.classList.remove('oos-label');
+    const calPanel = document.getElementById('calAverageDisplayPanel');
+    const calLabel = document.getElementById('calAverageLedLabel');
+    if (calPanel) calPanel.classList.remove('out-of-service');
+    if (calLabel) calLabel.classList.remove('oos-label');
+}
+
+function setCalAverageLed(state, labelText) {
+    const panel = document.getElementById('calAverageDisplayPanel');
+    const led = document.getElementById('calAverageLed');
+    const label = document.getElementById('calAverageLedLabel');
+    if (!panel || !label) return;
+    state = state || 'off';
+    if (led) led.dataset.state = state;
+    const text = labelText || '';
+    label.textContent = text;
+    label.classList.toggle('d-none', !text);
+    label.classList.toggle('oos-label', state === 'oos');
+    label.classList.toggle('ready-label', state === 'ok');
+    label.classList.toggle('fail-label', state === 'fail');
+    panel.classList.toggle('out-of-service', state === 'oos');
+    panel.classList.toggle('is-ready', state === 'ok');
+    panel.classList.toggle('out-of-range', state === 'fail');
 }
 
 function assignedOrderMessage(car) {
@@ -1751,6 +2286,9 @@ async function loadCarsAtScale() {
 }
 
 async function selectCar(carId) {
+    if (currentCar && currentCar.id && currentReading) {
+        snapshotWeighSession(currentCar.id);
+    }
     selectedCarId = carId;
     hideWeighActionButtons();
     document.querySelectorAll('.car-list-item').forEach(el => {
@@ -1767,6 +2305,11 @@ async function selectCar(carId) {
         applyScaleServiceState(data.scale_status);
     }
     renderCar(data);
+    if (scaleInService) {
+        await restoreWeighSession(carId);
+    }
+    // Train nav stays available whenever a train car is highlighted (not only after weigh).
+    applyTrainNavFromResponse(data);
 }
 
 function fmtTimestamp(ts) {
@@ -1785,11 +2328,14 @@ function fmtTimestamp(ts) {
 function calibrationMetaText(cal) {
     const info = cal && cal.last_calibration ? cal.last_calibration : null;
     const calibrated = !!(cal && (cal.calibrated_this_session || cal.calibration_locked));
+    const savedAt = (info && info.saved_at) || (cal && cal.calibration_saved_at) || null;
+    const sessionNumber = (info && info.session_number) ? info.session_number : null;
+    const stamped = fmtTimestamp(savedAt);
 
-    if (info && info.saved_at) {
+    if (stamped) {
         const prefix = calibrated ? 'Calibrated this session' : 'Last calibrated';
-        const sessionPart = info.session_number ? 'Session ' + info.session_number + ' — ' : '';
-        return prefix + ': ' + sessionPart + fmtTimestamp(info.saved_at);
+        const sessionPart = sessionNumber ? 'Session ' + sessionNumber + ' — ' : '';
+        return prefix + ': ' + sessionPart + stamped;
     }
 
     if (info && info.calibration_unknown) {
@@ -1802,18 +2348,11 @@ function calibrationMetaText(cal) {
 }
 
 function updateCalibrationMeta(cal) {
-    const text = calibrationMetaText(cal);
-    const calibrated = !!(cal && (cal.calibrated_this_session || cal.calibration_locked));
-    const className = 'small mb-2 ' + (calibrated ? 'text-success' : 'text-danger');
-    const weighEl = document.getElementById('weighCalibrationMeta');
-    const calEl = document.getElementById('calCalibrationMeta');
-    [weighEl, calEl].forEach(el => {
-        if (!el) return;
-        el.textContent = text;
-        el.className = className;
-    });
+    lastCalibrationMetaText = calibrationMetaText(cal);
     if (cal && cal.scale_status) {
         applyScaleServiceState(cal.scale_status);
+    } else {
+        syncCalibrateFooterMeta(false);
     }
 }
 
@@ -1885,6 +2424,40 @@ document.getElementById('modeWeigh').addEventListener('change', () => setMode('w
 document.getElementById('modeCalibrate').addEventListener('change', () => setMode('calibrate'));
 restoreScaleMode();
 
+async function setSelectedTestCar(marks) {
+    const sel = document.getElementById('testCarSelect');
+    const next = String(marks || '').toUpperCase();
+    if (!next || next === selectedTestCarMarks) return;
+    const previous = selectedTestCarMarks;
+    if (sel) sel.disabled = true;
+    try {
+        const data = await apiPost('set_test_car', { reporting_marks: next });
+        if (!data.success) {
+            throw new Error(data.error || 'Could not set test car');
+        }
+        selectedTestCarMarks = String(data.reporting_marks || next).toUpperCase();
+        if (CONFIG.calibration) {
+            CONFIG.calibration.test_car_reporting_marks = selectedTestCarMarks;
+        }
+        if (data.calibration) {
+            renderCalibration(data.calibration);
+        } else {
+            await refreshCalibration();
+        }
+    } catch (err) {
+        if (sel && previous) sel.value = previous;
+        setCalActionError(err.message || 'Could not set test car');
+    } finally {
+        if (sel) sel.disabled = false;
+    }
+}
+
+(function initTestCarSelect() {
+    const sel = document.getElementById('testCarSelect');
+    if (!sel) return;
+    sel.addEventListener('change', () => setSelectedTestCar(sel.value));
+})();
+
 async function apiGet(action, params = {}) {
     const qs = new URLSearchParams({ action, ...params });
     const res = await fetch('track_scale_ajax.php?' + qs.toString());
@@ -1897,7 +2470,12 @@ async function apiPost(action, payload = {}) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, ...payload }),
     });
-    return res.json();
+    const text = await res.text();
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        throw new Error(text.trim().slice(0, 180) || ('Request failed (' + res.status + ')'));
+    }
 }
 
 function renderCar(data) {
@@ -1945,13 +2523,13 @@ function renderCar(data) {
     const inboundTrainAssign = data.car.requires_train_reassign_confirm === true;
     if (!scaleInService) {
         document.getElementById('weighResult').innerHTML =
-            `<span class="text-danger">${(data.scale_status && data.scale_status.message) || 'Scale out of service — calibrate before weighing cars.'}</span>`;
+            `<span class="text-danger">${outOfServiceBannerText()}</span>`;
     } else {
         document.getElementById('weighResult').innerHTML = tareOnly
             ? 'Scale test car — weigh to verify tare weight on the scale.'
             : (assignedMsg
                 || (unloadingAssign
-                    ? '<span class="text-muted">Unloading — weigh, then assign to a new coke order (prior order closes on assign).</span>'
+                    ? '<span class="text-muted">Unloading — weigh, then assign to a new coke order (prior order returns to unfilled on assign).</span>'
                     : (inboundTrainAssign
                         ? `<span class="text-muted">In train on <strong>${data.car.active_waybill || 'inbound order'}</strong> to the scale — weigh, then assign outbound or reload (confirm train workflow on assign).</span>`
                         : (data.car.weigh_source === 'in_train'
@@ -1961,14 +2539,21 @@ function renderCar(data) {
     }
     document.getElementById('displayGross').textContent = '0.00';
     document.getElementById('displayNet').textContent = '0.00';
+    setNetReadingVisible(scaleInService);
     if (scaleInService) {
         setWeightLed('off');
     }
     hideWeighActionButtons();
+    hideOrderSection();
+    applyTrainNavFromResponse(data);
 }
 
 document.getElementById('trainFilter').addEventListener('change', () => loadCarsAtScale());
 document.getElementById('refreshCarsBtn').addEventListener('click', () => loadCarsAtScale());
+document.getElementById('prevCarBtn').addEventListener('click', () => {
+    if (!pendingPrevCar || !pendingPrevCar.id) return;
+    selectCar(pendingPrevCar.id);
+});
 document.getElementById('nextCarBtn').addEventListener('click', () => {
     if (!pendingNextCar || !pendingNextCar.id) return;
     selectCar(pendingNextCar.id);
@@ -1980,11 +2565,13 @@ document.getElementById('reassignBtn').addEventListener('click', () => {
 
 async function openManualReassign() {
     manualReassignMode = true;
-    await loadOrders('outbound', { forceReassign: true });
+    const routing = (currentReading && !currentReading.in_tolerance) ? 'reload' : 'outbound';
+    await loadOrders(routing, { forceReassign: true });
     const section = document.getElementById('orderSection');
     if (section && !section.classList.contains('d-none')) {
         section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
+    if (currentCar) snapshotWeighSession(currentCar.id);
 }
 
 document.getElementById('weighBtn').addEventListener('click', async () => {
@@ -1998,17 +2585,7 @@ document.getElementById('weighBtn').addEventListener('click', async () => {
 
     currentReading = data.reading;
     currentRouting = data.reading.routing;
-
-    document.getElementById('displayGross').textContent = fmt(data.reading.gross_tons);
-    document.getElementById('displayNet').textContent = fmt(data.reading.net_tons);
-    const breakdownEl = document.getElementById('sensorBreakdown');
-    if (data.reading.sensor_readings && data.reading.sensor_readings.length) {
-        breakdownEl.textContent = data.reading.sensor_readings
-            .map(s => s.position.charAt(0).toUpperCase() + ': ' + fmt(s.display_tons))
-            .join(' · ');
-    } else {
-        breakdownEl.textContent = '';
-    }
+    applyReadingDisplays(data.reading);
 
     const resultEl = document.getElementById('weighResult');
     if (data.reading.test_car_weigh) {
@@ -2017,6 +2594,7 @@ document.getElementById('weighBtn').addEventListener('click', async () => {
         setWeightLed('off');
         document.getElementById('orderSection').classList.add('d-none');
         hideWeighActionButtons();
+        snapshotWeighSession(currentCar.id);
         return;
     }
     if (data.reading.unloaded_weigh) {
@@ -2025,16 +2603,40 @@ document.getElementById('weighBtn').addEventListener('click', async () => {
         setWeightLed('off');
         document.getElementById('orderSection').classList.add('d-none');
         hideReassignButton();
-        showNextCarButton(data.next_car);
+        showTrainNavButtons(
+            data.prev_car,
+            data.next_car,
+            { keepVisible: currentCar.weigh_source === 'in_train' }
+        );
+        snapshotWeighSession(currentCar.id);
         return;
     }
 
     const inTol = data.reading.in_tolerance;
-    setWeightLed(inTol ? 'ok' : 'fail');
-    showNextCarButton(data.next_car);
+    setWeightLed(inTol ? 'ok' : 'fail', inTol ? 'PASS' : weighFailureLedLabel(data.reading));
+    showTrainNavButtons(
+        data.prev_car,
+        data.next_car,
+        { keepVisible: currentCar.weigh_source === 'in_train' }
+    );
     if (!shouldShowAssignAfterWeigh(currentCar, data.reading)) {
-        const baseMsg = assignedOrderMessage(currentCar)
-            || '<span class="text-muted">Weigh complete — load balanced on assigned order.</span>';
+        let baseMsg;
+        if (!inTol) {
+            if (String(data.reading.failure_reason || '').toLowerCase() === 'overloaded') {
+                baseMsg =
+                    `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Overloaded — net ${fmt(data.reading.net_tons)} t exceeds load limit ${fmt(data.reading.target_net_tons)} t.</div>`;
+            } else {
+                baseMsg =
+                    `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Imbalanced — left/right differ by ${fmt(data.reading.delta_tons)} t.</div>`;
+            }
+            const assigned = assignedOrderMessage(currentCar);
+            if (assigned) {
+                baseMsg += `<div class="mt-1">${assigned}</div>`;
+            }
+        } else {
+            baseMsg = assignedOrderMessage(currentCar)
+                || '<span class="text-muted">Weigh complete — load balanced on assigned order.</span>';
+        }
         const reassignHint = shouldOfferReassignButton(currentCar, data.reading)
             ? ' <span class="text-muted">Use <strong>Reassign Order</strong> to change destination.</span>'
             : '';
@@ -2045,14 +2647,23 @@ document.getElementById('weighBtn').addEventListener('click', async () => {
         } else {
             hideReassignButton();
         }
+        snapshotWeighSession(currentCar.id);
         return;
     }
     hideReassignButton();
-    resultEl.innerHTML = inTol
-        ? `<span class="routing-outbound"><i class="bi bi-check-circle"></i> Left/right sensors within ±${fmt(data.reading.tolerance_tons)} t — assign to outbound coke order.</span>`
-        : `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Improperly balanced — left/right differ by ${fmt(data.reading.delta_tons)} t — assign to coke reload.</div>`;
+    if (inTol) {
+        resultEl.innerHTML =
+            `<span class="routing-outbound"><i class="bi bi-check-circle"></i> Left/right sensors within ±${fmt(data.reading.tolerance_tons)} t — assign to outbound coke order.</span>`;
+    } else if (String(data.reading.failure_reason || '').toLowerCase() === 'overloaded') {
+        resultEl.innerHTML =
+            `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Overloaded — net ${fmt(data.reading.net_tons)} t exceeds load limit ${fmt(data.reading.target_net_tons)} t — assign to coke reload.</div>`;
+    } else {
+        resultEl.innerHTML =
+            `<div class="routing-reload"><i class="bi bi-exclamation-triangle-fill"></i> Imbalanced — left/right differ by ${fmt(data.reading.delta_tons)} t.</div>`;
+    }
 
     await loadOrders(currentRouting);
+    snapshotWeighSession(currentCar.id);
 });
 
 async function loadOrders(routing, options = {}) {
@@ -2101,14 +2712,15 @@ async function loadOrders(routing, options = {}) {
     currentRouting = routing;
 
     currentOpenOrders = data.orders || [];
+    const hasOrders = currentOpenOrders.length > 0;
+    const selectWrap = document.getElementById('orderSelectWrap');
     const select = document.getElementById('orderSelect');
+    const assignBtn = document.getElementById('assignBtn');
+
+    if (selectWrap) selectWrap.classList.toggle('d-none', !hasOrders);
+
     select.innerHTML = '';
-    if (currentOpenOrders.length === 0) {
-        const emptyOpt = document.createElement('option');
-        emptyOpt.value = '';
-        emptyOpt.textContent = '— No orders available —';
-        select.appendChild(emptyOpt);
-    } else {
+    if (hasOrders) {
         currentOpenOrders.forEach(order => {
             const opt = document.createElement('option');
             opt.value = order.waybill_number;
@@ -2121,21 +2733,54 @@ async function loadOrders(routing, options = {}) {
         select.value = currentOpenOrders[0].waybill_number;
     }
 
-    document.getElementById('orderEmptyMsg').classList.toggle('d-none', currentOpenOrders.length > 0);
-
     const genWrap = document.getElementById('generateButtons');
     genWrap.innerHTML = '';
+    const isReloadRouting = routing === 'reload';
     (data.shipment_codes || []).forEach(code => {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'btn btn-outline-primary btn-sm';
-        btn.innerHTML = `<i class="bi bi-plus-circle"></i> Generate ${code}`;
+        const isReload = isReloadRouting || String(code).toUpperCase().indexOf('RELOAD') >= 0;
+        if (isReload) {
+            // Always available so a new order can reopen the dropdown.
+            btn.className = 'btn btn-outline-primary';
+            btn.innerHTML = '<i class="bi bi-plus-circle"></i> Create work order';
+        } else if (hasOrders) {
+            // Outbound: hide generate once there is something to assign.
+            return;
+        } else {
+            btn.className = 'btn btn-outline-primary btn-sm';
+            btn.innerHTML = `<i class="bi bi-plus-circle"></i> Generate ${code}`;
+        }
         btn.addEventListener('click', () => generateOrder(code, routing));
         genWrap.appendChild(btn);
     });
 
-    select.onchange = () => updateAssignBtnState();
+    if (assignBtn) {
+        const label = document.getElementById('assignBtnLabel');
+        if (isReloadRouting) {
+            // Show beside Create only after an order exists to assign.
+            assignBtn.classList.toggle('d-none', !hasOrders);
+            assignBtn.classList.remove('btn-success');
+            assignBtn.classList.add('btn-danger');
+            if (label) label.textContent = 'Reassign Car';
+            const icon = assignBtn.querySelector('i');
+            if (icon) icon.className = 'bi bi-arrow-repeat';
+        } else {
+            assignBtn.classList.toggle('d-none', !hasOrders);
+            assignBtn.classList.remove('btn-danger');
+            assignBtn.classList.add('btn-success');
+            if (label) label.textContent = 'Assign to Order';
+            const icon = assignBtn.querySelector('i');
+            if (icon) icon.className = 'bi bi-check2-circle';
+        }
+    }
+
+    select.onchange = () => {
+        updateAssignBtnState();
+        if (currentCar) snapshotWeighSession(currentCar.id);
+    };
     updateAssignBtnState();
+    if (currentCar) snapshotWeighSession(currentCar.id);
 }
 
 async function generateOrder(shipmentCode, routing) {
@@ -2160,12 +2805,14 @@ async function generateOrder(shipmentCode, routing) {
             `<span class="text-muted">Created ${data.orders_created} orders for ${data.shipment_code}. Select one to assign this car.</span>`;
     }
     updateAssignBtnState();
+    snapshotWeighSession(currentCar.id);
 }
 
 document.getElementById('assignBtn').addEventListener('click', async () => {
     const waybill = document.getElementById('orderSelect').value;
     if (!waybill || !currentCar) return;
 
+    const assignedCarId = currentCar.id;
     const nextCarId = pendingNextCar?.id || getNextCarIdInList(currentCar.id);
     const payload = {
         waybill_number: waybill,
@@ -2181,12 +2828,13 @@ document.getElementById('assignBtn').addEventListener('click', async () => {
         resultEl.innerHTML = `<span class="text-danger">${data.error || 'Assign failed'}</span>`;
         return;
     }
-    const priorOrderNote = data.closed_prior_order
+    clearWeighSession(assignedCarId);
+    const priorOrderNote = (data.unfilled_prior_order || data.closed_prior_order)
         ? (data.preserved_load
-            ? '<span class="text-muted">Prior order closed · car stays loaded · </span>'
-            : '<span class="text-muted">Prior order closed · </span>')
+            ? '<span class="text-muted">Prior order returned to unfilled · car stays loaded · </span>'
+            : '<span class="text-muted">Prior order returned to unfilled · </span>')
         : (data.unloaded_first
-            ? '<span class="text-muted">Prior order cleared · </span>'
+            ? '<span class="text-muted">Prior order returned to unfilled · </span>'
             : '');
     const workflowNote = formatInTrainWorkflowNote(data);
     const workflowHtml = workflowNote
@@ -2197,6 +2845,7 @@ document.getElementById('assignBtn').addEventListener('click', async () => {
         + workflowHtml;
     hideOrderSection();
     hideWeighActionButtons();
+    currentReading = null;
     await loadCarsAtScale();
     if (nextCarId && document.querySelector(`.car-list-item[data-car-id="${nextCarId}"]`)) {
         await selectCar(nextCarId);
@@ -2207,7 +2856,9 @@ document.getElementById('assignBtn').addEventListener('click', async () => {
     document.getElementById('carPanel').classList.add('d-none');
     document.getElementById('weighBtn').disabled = true;
     document.getElementById('weighResult').textContent = 'Select a car from the list, then weigh.';
-    setWeightLed('off');
+    document.getElementById('displayNet').textContent = '0.00';
+    setNetReadingVisible(scaleInService);
+    setWeightLed(scaleInService ? 'off' : 'oos', scaleInService ? '' : 'OUT OF SERVICE');
 });
 
 function updateCalTrackCar(position) {
@@ -2230,6 +2881,14 @@ function renderCalibration(cal) {
     document.getElementById('calExpected').textContent = fmt(cal.expected_tons);
     if (cal.test_car) {
         const tc = cal.test_car;
+        if (tc.reporting_marks) {
+            selectedTestCarMarks = String(tc.reporting_marks).toUpperCase();
+            const sel = document.getElementById('testCarSelect');
+            if (sel && sel.value !== selectedTestCarMarks) {
+                const opt = Array.from(sel.options).find(o => o.value.toUpperCase() === selectedTestCarMarks);
+                if (opt) sel.value = opt.value;
+            }
+        }
         document.getElementById('calTestCarMarks').textContent = tc.reporting_marks || '—';
         document.getElementById('calTestCarLbs').textContent = (tc.tare_lbs || 0).toLocaleString();
         document.getElementById('calTestCarTons').textContent = fmt(tc.tare_tons);
@@ -2340,34 +2999,14 @@ function renderCalibration(cal) {
         document.getElementById('calAverageMeta').textContent = '(weigh each position to build average)';
     }
 
-    const statusEl = document.getElementById('calStatus');
-    const accessible = document.body.classList.contains('track-scale-accessible');
-    if (calibrationLocked) {
-        const savedAt = cal.calibration_saved_at ? ` (${fmtTimestamp(cal.calibration_saved_at)})` : '';
-        statusEl.innerHTML = accessible
-            ? '<span class="text-success"><i class="bi bi-lock-fill"></i> Saved' + savedAt + '</span>'
-            : ('<span class="text-success"><i class="bi bi-lock-fill"></i> Calibration saved for this session'
-                + savedAt + '. Use <strong>Reset calibration</strong> to adjust again.</span>');
-    } else if (!testCarAtScale) {
-        const loc = cal.test_car && cal.test_car.current_location
-            ? cal.test_car.current_location
-            : 'not at scale';
-        statusEl.innerHTML = accessible
-            ? `<span class="text-warning"><i class="bi bi-exclamation-triangle"></i> Test car at ${loc} — move to ${scaleLocation}</span>`
-            : (`<span class="text-warning"><i class="bi bi-exclamation-triangle"></i> `
-                + `Place scale test car at <strong>${scaleLocation}</strong> to calibrate `
-                + `(currently: ${loc}).</span>`);
-    } else if (cal.all_calibrated) {
-        statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> All sensors calibrated.</span>';
-    } else if (cal.scale_car_position) {
-        statusEl.textContent = accessible
-            ? (cal.scale_car_position + ' — zero the error, then next sensor')
-            : ('Car at ' + cal.scale_car_position + ' — Weigh, zero the error, then Place Car on the next sensor.');
-    } else {
-        statusEl.textContent = accessible
-            ? 'Place Car, then Weigh'
-            : 'Place Car on a sensor, then Weigh that position.';
-    }
+    syncCalReadyUi(cal, activeSensor);
+}
+
+function sensorMatchesExpected(sensor) {
+    if (!sensor || !sensor.has_reading) return false;
+    if (sensor.is_zero) return true;
+    const err = Number(sensor.error_tons);
+    return Number.isFinite(err) && Math.abs(err) < (Math.pow(10, -PRECISION) / 2);
 }
 
 function syncCalErrorStat(sensor) {
@@ -2386,11 +3025,28 @@ function syncCalErrorStat(sensor) {
     }
     const err = Number(sensor.error_tons);
     errorEl.textContent = fmt(err);
-    if (sensor.is_zero || Math.abs(err) < (Math.pow(10, -PRECISION) / 2)) {
+    if (sensorMatchesExpected(sensor)) {
         errorBox.classList.add('is-zero');
     } else {
         errorBox.classList.add('is-nonzero');
     }
+}
+
+function syncCalReadyUi(cal, activeSensor) {
+    const adjPanel = document.querySelector('#calibratePanel .cal-central-panel');
+    const activeReady = sensorMatchesExpected(activeSensor);
+    // Banner READY only when all 3 sensors align (save enabled). Keep the
+    // average weight readout until then.
+    const allReady = !!(cal && cal.all_calibrated);
+
+    if (allReady) {
+        setCalAverageLed('ok', 'READY');
+    } else if (!scaleInService) {
+        setCalAverageLed('oos', 'OUT OF SERVICE');
+    } else {
+        setCalAverageLed('off', '');
+    }
+    if (adjPanel) adjPanel.classList.toggle('is-ready', activeReady);
 }
 
 const ADJ_SLIDER_MIN = -2.5;
@@ -2449,7 +3105,7 @@ function syncCalCentralControls(sensor, testCarAtScale, calibrationLocked) {
     }
 
     const locked = calibrationLocked || !!sensor.adjustment_locked || !sensor.has_reading;
-    sensorEl.textContent = sensor.position || '—';
+    sensorEl.textContent = sensor.position ? String(sensor.position).toUpperCase() : '—';
     syncCalErrorStat(sensor);
     if (readingEl) {
         // Freeze the panel reading at the raw weighed value; sensor LEDs track adjustment.
@@ -2482,26 +3138,28 @@ function getActiveCalSensorPosition() {
     return activeBtn ? activeBtn.dataset.sensor : null;
 }
 
+function setCalActionError(message) {
+    const el = document.getElementById('calCalibrationMeta');
+    if (!el) return;
+    el.innerHTML = `<span class="text-danger">${message}</span>`;
+    el.hidden = false;
+    const wrap = el.closest('.cal-actions-meta');
+    if (wrap) wrap.hidden = false;
+}
+
 async function placeCalCar(position) {
-    const statusEl = document.getElementById('calStatus');
     const setData = await apiPost('calibrate_set_position', { position });
     if (!setData.success) {
-        statusEl.innerHTML =
-            `<span class="text-danger">${setData.error || 'Could not place car'}</span>`;
+        setCalActionError(setData.error || 'Could not place car');
         return;
     }
     renderCalibration(setData.calibration);
-    statusEl.textContent = document.body.classList.contains('track-scale-accessible')
-        ? (position + ' — ready to weigh')
-        : ('Car placed on ' + position + ' — press Weigh.');
 }
 
 async function weighCalPosition(position) {
-    const statusEl = document.getElementById('calStatus');
     const weighData = await apiPost('calibrate_read', { position });
     if (!weighData.success) {
-        statusEl.innerHTML =
-            `<span class="text-danger">${weighData.error || 'Weigh failed'}</span>`;
+        setCalActionError(weighData.error || 'Weigh failed');
         return;
     }
     renderCalibration(weighData.calibration);
@@ -2520,8 +3178,7 @@ async function adjustSensor(sensor, direction, fineTune) {
     }
     const data = await apiPost('calibrate_adjust', payload);
     if (!data.success) {
-        document.getElementById('calStatus').innerHTML =
-            `<span class="text-danger">${data.error || 'Adjust failed'}</span>`;
+        setCalActionError(data.error || 'Adjust failed');
         return;
     }
     renderCalibration(data.calibration);
@@ -2535,8 +3192,7 @@ async function setSensorAdjustmentTons(sensor, tons) {
     const payload = { sensor, adjustment_tons: clampAdjTons(tons) };
     const data = await apiPost('calibrate_adjust', payload);
     if (!data.success) {
-        document.getElementById('calStatus').innerHTML =
-            `<span class="text-danger">${data.error || 'Adjust failed'}</span>`;
+        setCalActionError(data.error || 'Adjust failed');
         return false;
     }
     renderCalibration(data.calibration);
@@ -2571,8 +3227,7 @@ async function flushSensorAdjustmentFromSlider() {
 async function resetSensorAdjustment(sensor) {
     const data = await apiPost('calibrate_adjust_reset', { sensor });
     if (!data.success) {
-        document.getElementById('calStatus').innerHTML =
-            `<span class="text-danger">${data.error || 'Reset failed'}</span>`;
+        setCalActionError(data.error || 'Reset failed');
         return;
     }
     renderCalibration(data.calibration);
@@ -2611,12 +3266,12 @@ document.querySelectorAll('.cal-adj-reset-btn').forEach(btn => {
             if (btn.disabled) return;
             const pos = getActiveCalSensorPosition();
             if (!pos) return;
-            if (btn.dataset.jump === 'min') {
-                setSensorAdjustmentTons(pos, ADJ_SLIDER_MIN);
-                return;
-            }
-            if (btn.dataset.jump === 'max') {
-                setSensorAdjustmentTons(pos, ADJ_SLIDER_MAX);
+            const step = Number(btn.dataset.step);
+            if (Number.isFinite(step) && step > 0) {
+                const adjInput = document.getElementById('calCentralAdjInput');
+                const current = Number(adjInput ? adjInput.value : 0) || 0;
+                const delta = btn.dataset.direction === 'down' ? -step : step;
+                setSensorAdjustmentTons(pos, current + delta);
                 return;
             }
             adjustSensor(pos, btn.dataset.direction, btn.dataset.fine === '1');
@@ -2652,8 +3307,7 @@ async function saveCalibration() {
     saveBtn.disabled = true;
     const data = await apiPost('calibrate_save');
     if (!data.success) {
-        document.getElementById('calStatus').innerHTML =
-            `<span class="text-danger">${data.error || 'Could not save calibration'}</span>`;
+        setCalActionError(data.error || 'Could not save calibration');
         saveBtn.disabled = false;
         return;
     }
@@ -2675,8 +3329,7 @@ document.getElementById('calResetBtn').addEventListener('click', async () => {
     if (resetBtn) resetBtn.disabled = true;
     const data = await apiPost('calibrate_reset');
     if (!data.success) {
-        document.getElementById('calStatus').innerHTML =
-            `<span class="text-danger">${data.error || 'Could not reset calibration'}</span>`;
+        setCalActionError(data.error || 'Could not reset calibration');
         if (resetBtn) resetBtn.disabled = false;
         return;
     }

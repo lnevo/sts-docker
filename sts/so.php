@@ -419,8 +419,8 @@ function so_inject_waybill_memo_filter($html, $rel)
  *
  * Injected at serve time so it works on every previously generated page without
  * regeneration. Per-phase bundles (phase_XX_<job>.print_all.html) already show
- * a single phase and are left alone. The control hides itself when the scoped
- * page has fewer than two phases.
+ * a single phase and are left alone. The control always appears when the scoped
+ * page has at least one phase (including exactly one).
  */
 function so_inject_waybill_phase_filter($html, $rel)
 {
@@ -456,7 +456,7 @@ function so_inject_waybill_phase_filter($html, $rel)
         }
         $phase_jobs[$phase][(string) $job] = true;
     }
-    if (count($phase_jobs) < 2) {
+    if (count($phase_jobs) < 1) {
         return $html;
     }
 
@@ -586,8 +586,8 @@ function so_inject_waybill_selection_index($html, $rel)
             }
             $phase_jobs[$phase][(string) $job] = true;
         }
-        if (count($phase_jobs) < 2) {
-            $show_phase = false; // nothing to filter (0 or 1 phase)
+        if (count($phase_jobs) < 1) {
+            $show_phase = false; // no phase data in the store
         }
     }
 
@@ -744,7 +744,8 @@ function so_inject_waybill_selection_print($html, $rel)
  * previously generated page without regeneration. The options are built client
  * side from each rendered `.print-all-phase` section's heading, so the filter
  * needs no server-side phase data and stays correct as pages are regenerated.
- * The control hides itself when a page has fewer than two phases.
+ * The control always appears when at least one phase section is present
+ * (including exactly one).
  */
 function so_inject_switchlist_phase_filter($html, $rel)
 {
@@ -780,10 +781,12 @@ function so_inject_switchlist_phase_filter($html, $rel)
         . 'var lab=document.querySelector("label[for=\\"sw-phase-select\\"]");'
         . 'if(!sel)return;'
         . 'var secs=Array.prototype.slice.call(document.querySelectorAll(".page .print-all-phase"));'
-        . 'if(secs.length<2){sel.style.display="none";if(lab)lab.style.display="none";return;}'
+        . 'if(secs.length<1){sel.style.display="none";if(lab)lab.style.display="none";return;}'
         . 'secs.forEach(function(s,i){'
         . 'var h=s.querySelector("h2");'
         . 'var t=h?(h.textContent||"").trim():("Phase "+(i+1));'
+        // Drop redundant " — Phase N of M" when Train Info already names the leg.
+        . 't=t.replace(/\\s*[\\u2014\\-]\\s*Phase\\s+\\d+\\s+of\\s+\\d+\\s*$/i,"").trim()||t;'
         . 's.setAttribute("data-sw-phase",String(i));'
         . 'var o=document.createElement("option");o.value=String(i);o.textContent=t;sel.appendChild(o);});'
         . 'function apply(){var v=sel.value;secs.forEach(function(s){'

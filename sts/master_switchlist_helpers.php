@@ -50,6 +50,26 @@ function master_sw_display_train_name($table_name, array $options = [])
     return $info !== '' ? $train . ' ' . $info : $train;
 }
 
+/**
+ * Operator-facing phase heading. When Train Info is set (Starting/Outbound/…),
+ * that already names the leg — omit the redundant "Phase X of Y" suffix
+ * (especially "Phase 1 of 1").
+ */
+function master_sw_phase_heading_label($display_train, $phase_index, $phase_total, array $options = [])
+{
+    $display_train = (string) $display_train;
+    if (master_sw_switchlist_info($options) !== '') {
+        return $display_train;
+    }
+    $phase_index = (int) $phase_index;
+    $phase_total = (int) $phase_total;
+    if ($phase_index > 0 && $phase_total > 0) {
+        return $display_train . ' — Phase ' . $phase_index . ' of ' . $phase_total;
+    }
+
+    return $display_train;
+}
+
 function master_sw_switchlist_sql($job_id, $table_name)
 {
     $job_id = (int) $job_id;
@@ -1544,7 +1564,7 @@ function master_sw_generate_phased($dbc, $job_name, array $sections, $output_dir
     ];
 }
 
-function master_sw_render_print_all_phase_body($dbc, array $section, $phase_index, $phase_total, $display_train)
+function master_sw_render_print_all_phase_body($dbc, array $section, $phase_index, $phase_total, $display_train, array $options = [])
 {
     // Destination color swatches come from set_colors(); load it so the print-all
     // pages get the same colored "To" cells as the per-phase switch lists.
@@ -1618,8 +1638,10 @@ function master_sw_render_print_all_phase_body($dbc, array $section, $phase_inde
         }
     }
 
+    $heading = master_sw_phase_heading_label($display_train, $phase_index, $phase_total, $options);
+
     return '<section class="print-all-phase">
-  <h2>' . htmlspecialchars($display_train) . ' — Phase ' . (int) $phase_index . ' of ' . (int) $phase_total . '</h2>
+  <h2>' . htmlspecialchars($heading) . '</h2>
   <table>
     <tr>
       <th style="width: 60px;">Rptg<br>Marks</th>
@@ -1661,7 +1683,8 @@ function master_sw_render_print_all($dbc, $job_name, array $sections, $job_dir, 
             $sections[$i],
             $i + 1,
             $phase_total,
-            $display_train
+            $display_train,
+            $options
         );
     }
 
@@ -1822,7 +1845,9 @@ function master_sw_render_mobile($dbc, $job_name, array $sections, $output_path,
 <?php
     if ($single_phase && isset($sections[0]['label'])) {
         echo str_pad('Train: ' . $display_train . '  Session ' . $session_nbr, $page_width, ' ', STR_PAD_BOTH) . '<br />';
-        echo str_pad('Phase ' . $phase_index . ' of ' . $phase_total, $page_width, ' ', STR_PAD_BOTH) . '<br />';
+        if (master_sw_switchlist_info($options) === '') {
+            echo str_pad('Phase ' . $phase_index . ' of ' . $phase_total, $page_width, ' ', STR_PAD_BOTH) . '<br />';
+        }
     } else {
         echo str_pad('Train: ' . $display_train . '  Session ' . $session_nbr, $page_width, ' ', STR_PAD_BOTH) . '<br />';
     }
@@ -1989,6 +2014,7 @@ function master_sw_render_phase_shell_start($dbc, $job_name, $style, array $opti
         'phase_total' => $phase_total,
         'nav' => $nav,
         'single_phase' => $phase_index > 0,
+        'has_train_info' => master_sw_switchlist_info($options) !== '',
     ];
 }
 
@@ -2019,7 +2045,7 @@ function master_sw_render_full($dbc, $job_name, array $sections, $output_path, a
 <table id="consist" style="width:100%; border-collapse:collapse;">
   <tr><td colspan="8"><h2 style="text-align:center;"><?= htmlspecialchars($rr_initials) ?></h2><h3 style="text-align:center;">Switchlist</h3></td></tr>
   <tr>
-    <td colspan="4"><b>Train: <?= htmlspecialchars($shell['table_name']) ?></b><br>Session <?= htmlspecialchars($shell['session_nbr']) ?><?php if ($shell['single_phase']) { ?><br>Phase <?= (int) $shell['phase_index'] ?> of <?= (int) $shell['phase_total'] ?><?php } ?><br><br></td>
+    <td colspan="4"><b>Train: <?= htmlspecialchars($shell['table_name']) ?></b><br>Session <?= htmlspecialchars($shell['session_nbr']) ?><?php if ($shell['single_phase'] && empty($shell['has_train_info'])) { ?><br>Phase <?= (int) $shell['phase_index'] ?> of <?= (int) $shell['phase_total'] ?><?php } ?><br><br></td>
     <td colspan="4"><b>Dpt (station/date/time)</b><br><br><br></td>
   </tr>
   <tr>
@@ -2525,7 +2551,7 @@ function master_sw_render_halfsheet($dbc, $job_name, array $sections, $output_pa
 <table>
 <tr><td style="vertical-align: top;">
 <?php if ($single_phase) { ?>
-<h2 style="text-align:center; font-size:16px;"><?= htmlspecialchars($display_train) ?> — Phase <?= (int) $phase_index ?> of <?= (int) $phase_total ?></h2>
+<h2 style="text-align:center; font-size:16px;"><?= htmlspecialchars(master_sw_phase_heading_label($display_train, $phase_index, $phase_total, $options)) ?></h2>
 <?php } else { ?>
 <h2 style="text-align: center;"><?= htmlspecialchars($rr_initials) ?></h2>
 <h3 style="text-align: center;">Master Switchlist</h3>

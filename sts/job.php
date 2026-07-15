@@ -215,7 +215,13 @@ session_render_nav_bar([
           </form>
           <div class="job-phase-nav">
             <button type="button" class="btn btn-outline-dark btn-sm" id="phase-prev"><i class="bi bi-chevron-left"></i> Prev phase</button>
-            <span class="job-phase-label" id="phase-label">Phase 1 of <?php echo count($legs); ?></span>
+            <?php
+              $initial_info = trim((string) ($legs[$initial_leg]['info'] ?? ''));
+              $initial_phase_label = $initial_info !== ''
+                  ? $initial_info
+                  : ('Phase ' . ((int) $initial_leg + 1) . ' of ' . count($legs));
+            ?>
+            <span class="job-phase-label" id="phase-label"><?php echo htmlspecialchars($initial_phase_label); ?></span>
             <button type="button" class="btn btn-outline-dark btn-sm" id="phase-next">Next phase <i class="bi bi-chevron-right"></i></button>
           </div>
         </div>
@@ -225,13 +231,18 @@ session_render_nav_bar([
             <?php
               $leg_open = htmlspecialchars($leg['base_href'] . '_' . $selected_style . '.html');
               $leg_src = htmlspecialchars($leg['base_href'] . '_' . $selected_style . '.html&embed=1');
+              $leg_info = trim((string) ($leg['info'] ?? ''));
+              $leg_title = ($leg_info !== '' && (int) ($leg['work_leg_total'] ?? 0) <= 1)
+                  ? $leg_info
+                  : ('Phase ' . (int) $leg['work_leg'] . ' of ' . (int) $leg['work_leg_total']);
             ?>
             <section class="switchlist-leg"
                      data-leg="<?php echo (int) $i; ?>"
                      data-base="<?php echo htmlspecialchars($leg['base_href']); ?>"
+                     data-info="<?php echo htmlspecialchars($leg_info, ENT_QUOTES); ?>"
                      style="<?php echo $i === $initial_leg ? '' : 'display:none;'; ?>">
               <h2 class="switchlist-leg-title">
-                Phase <?php echo (int) $leg['work_leg']; ?> of <?php echo (int) $leg['work_leg_total']; ?>
+                <?php echo htmlspecialchars($leg_title); ?>
                 <span class="muted">— <?php echo htmlspecialchars($leg['label']); ?></span>
                 <a class="switchlist-leg-open" href="<?php echo $leg_open; ?>" target="_blank" rel="noopener" data-base="<?php echo htmlspecialchars($leg['base_href']); ?>"><i class="bi bi-box-arrow-up-right"></i> Open</a>
               </h2>
@@ -337,7 +348,10 @@ session_render_nav_bar([
           leg.style.display = i === current ? '' : 'none';
         });
         if (phaseLabel) {
-          phaseLabel.textContent = 'Phase ' + (current + 1) + ' of ' + legs.length;
+          const info = (legs[current] && legs[current].dataset.info) ? legs[current].dataset.info.trim() : '';
+          phaseLabel.textContent = info !== ''
+            ? info
+            : ('Phase ' + (current + 1) + ' of ' + legs.length);
         }
         if (prevBtn) prevBtn.disabled = current === 0;
         if (nextBtn) nextBtn.disabled = current === legs.length - 1;
