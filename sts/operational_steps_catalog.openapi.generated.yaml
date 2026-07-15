@@ -43,27 +43,27 @@ components:
                 options_from: backups
                 allow_custom: true
                 required: true
-                default: db_session_1
+                default: hart_seed
           -
             id: backup_database
             category: database
             adder: true
             adder_group: database
             label: Create Backup
-            gui_template: "Create Backup {backup}"
-            description: "Export current database to sts/backups/. GUI: backup_db.php."
+            gui_template: "Create Backup {prefix}<session>"
+            description: "Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. Use a stable prefix (e.g. hart_session) so each session writes hart_session1, hart_session2, … Lock from the session overview for a static *_locked checkpoint."
             runnable: true
             dispatch: backup_database
             gui_path: /sts/backup_db.php
             params:
               -
-                key: backup
-                label: Backup file
-                type: backup
-                options_from: backups
-                allow_custom: true
+                key: prefix
+                label: Backup prefix
+                type: text
+                default: hart_session
                 required: true
-                default: manual_backup
+                placeholder: hart_session
+                visible_label: true
           -
             id: validate_database
             category: database
@@ -211,6 +211,25 @@ components:
             runnable: true
             dispatch: stop
             params: []
+          -
+            id: skip_steps
+            category: workflow
+            adder: true
+            adder_group: workflow
+            label: Skip steps
+            gui_template: "Skip Steps {steps}"
+            description: "Do not run the listed steps (comma-separated numbers and ranges, e.g. 1-2,5,8-10). Useful when previewing/running non-contiguous sections."
+            runnable: true
+            dispatch: skip_steps
+            params:
+              -
+                key: steps
+                label: Steps
+                type: text
+                default: ""
+                required: true
+                placeholder: "e.g. 1-2,5,8-10"
+                visible_label: true
           -
             id: goto
             category: workflow
@@ -704,7 +723,7 @@ components:
           -
             id: release_yard_cars
             category: operations
-            adder: true
+            adder: false
             adder_group: during
             label: Release Yard Assignments
             gui_template: "Release Yard Assignments {job} {station}"
@@ -1044,19 +1063,19 @@ components:
                 visible_label: true
               -
                 key: title
-                label: Override Train
+                label: Train
                 type: text
                 default: ""
                 required: false
-                placeholder: Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. LOCAL1).
+                placeholder: Optional train name override (consolidates phases with the same value).
                 visible_label: true
               -
                 key: info
-                label: Switch list info
+                label: Info
                 type: text
                 default: ""
                 required: false
-                placeholder: "Extra note shown next to the train name on this switch list only (e.g. Inbound, Outbound, Departure). Does not affect consolidation."
+                placeholder: "Note beside the train name (e.g. Inbound, Outbound, Next Day)."
                 visible_label: true
           -
             id: generate_waybills
@@ -1069,6 +1088,44 @@ components:
             runnable: true
             dispatch: generate_waybills
             params: []
+          -
+            id: generate_station_report
+            category: reports
+            adder: true
+            adder_group: reports
+            label: Generate Station Report
+            gui_template: "Generate Station Report{info_suffix}"
+            description: "Snapshot cars by station from the live database into this session's station report. Each call appends a new phase (Phase 1, Phase 2, …); optional Info labels the phase (like Train Info on switch lists). Station-report phases are numbered independently of wheel reports."
+            runnable: true
+            dispatch: generate_station_report
+            params:
+              -
+                key: info
+                label: Info
+                type: text
+                default: ""
+                required: false
+                placeholder: "Optional phase label (e.g. Starting, After D749, End of session)."
+                visible_label: true
+          -
+            id: generate_wheel_report
+            category: reports
+            adder: true
+            adder_group: reports
+            label: Generate Wheel Report
+            gui_template: "Generate Wheel Report{info_suffix}"
+            description: "Snapshot in-train / assigned cars from the live database into this session's wheel report. Each call appends a new phase (Phase 1, Phase 2, …); optional Info labels the phase. Wheel-report phases are numbered independently of station reports."
+            runnable: true
+            dispatch: generate_wheel_report
+            params:
+              -
+                key: info
+                label: Info
+                type: text
+                default: ""
+                required: false
+                placeholder: "Optional phase label (e.g. Starting, After CK1, End of session)."
+                visible_label: true
           -
             id: render_switchlists
             category: switchlists
@@ -1338,7 +1395,7 @@ components:
           -
             id: replenish_coke_orders
             category: operations
-            adder: true
+            adder: false
             adder_group: before
             label: Replenish Coke Orders
             gui_template: "Replenish Coke Orders (target {target_min}–{target_max})"
@@ -1718,35 +1775,6 @@ components:
                       - 1
                     default: ""
           -
-            id: replenish_coke_orders
-            category: operations
-            adder: true
-            adder_group: before
-            label: Replenish Coke Orders
-            gui_template: "Replenish Coke Orders (target {target_min}–{target_max})"
-            description: "Count unfilled outbound coke orders (USS/CLEV singles and bulk). When below target minimum, generate single-car COKE-USS / COKE-CLEV orders alternating lanes until the minimum is met (capped at target maximum)."
-            runnable: true
-            dispatch: replenish_coke_orders
-            params:
-              -
-                key: target_min
-                label: Target minimum
-                type: number
-                default: 6
-                required: true
-                min: 1
-                step: 1
-                visible_label: true
-              -
-                key: target_max
-                label: Target maximum
-                type: number
-                default: 8
-                required: true
-                min: 1
-                step: 1
-                visible_label: true
-          -
             id: auto_assign_locals
             category: operations
             adder: true
@@ -1789,36 +1817,6 @@ components:
                 visible_label: true
                 empty_label: Any
                 summary_label: destinations
-          -
-            id: release_yard_cars
-            category: operations
-            adder: true
-            adder_group: during
-            label: Release Yard Assignments
-            gui_template: "Release Yard Assignments {job} {station}"
-            description: Clear job assignment for cars still sitting in a yard (not on the train). Use after a selective pick-up so the leave-yard switch list only shows lifted cars.
-            runnable: true
-            dispatch: release_yard_cars
-            params:
-              -
-                key: job
-                label: Job
-                type: job
-                options_from: jobs
-                allow_custom: true
-                required: true
-                default: ""
-                visible_label: true
-              -
-                key: station
-                label: Yard station
-                type: station
-                options_from: stations
-                allow_custom: true
-                required: true
-                default: ""
-                visible_label: true
-                suppress_all_station_option: true
           -
             id: pick_up_cars
             category: operations
@@ -2181,19 +2179,19 @@ components:
                 visible_label: true
               -
                 key: title
-                label: Override Train
+                label: Train
                 type: text
                 default: ""
                 required: false
-                placeholder: Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. LOCAL1).
+                placeholder: Optional train name override (consolidates phases with the same value).
                 visible_label: true
               -
                 key: info
-                label: Switch list info
+                label: Info
                 type: text
                 default: ""
                 required: false
-                placeholder: "Extra note shown next to the train name on this switch list only (e.g. Inbound, Outbound, Departure). Does not affect consolidation."
+                placeholder: "Note beside the train name (e.g. Inbound, Outbound, Next Day)."
                 visible_label: true
           -
             id: generate_waybills
@@ -2206,6 +2204,44 @@ components:
             runnable: true
             dispatch: generate_waybills
             params: []
+          -
+            id: generate_station_report
+            category: reports
+            adder: true
+            adder_group: reports
+            label: Generate Station Report
+            gui_template: "Generate Station Report{info_suffix}"
+            description: "Snapshot cars by station from the live database into this session's station report. Each call appends a new phase (Phase 1, Phase 2, …); optional Info labels the phase (like Train Info on switch lists). Station-report phases are numbered independently of wheel reports."
+            runnable: true
+            dispatch: generate_station_report
+            params:
+              -
+                key: info
+                label: Info
+                type: text
+                default: ""
+                required: false
+                placeholder: "Optional phase label (e.g. Starting, After D749, End of session)."
+                visible_label: true
+          -
+            id: generate_wheel_report
+            category: reports
+            adder: true
+            adder_group: reports
+            label: Generate Wheel Report
+            gui_template: "Generate Wheel Report{info_suffix}"
+            description: "Snapshot in-train / assigned cars from the live database into this session's wheel report. Each call appends a new phase (Phase 1, Phase 2, …); optional Info labels the phase. Wheel-report phases are numbered independently of station reports."
+            runnable: true
+            dispatch: generate_wheel_report
+            params:
+              -
+                key: info
+                label: Info
+                type: text
+                default: ""
+                required: false
+                placeholder: "Optional phase label (e.g. Starting, After CK1, End of session)."
+                visible_label: true
           -
             id: restore_database
             category: database
@@ -2225,27 +2261,27 @@ components:
                 options_from: backups
                 allow_custom: true
                 required: true
-                default: db_session_1
+                default: hart_seed
           -
             id: backup_database
             category: database
             adder: true
             adder_group: database
             label: Create Backup
-            gui_template: "Create Backup {backup}"
-            description: "Export current database to sts/backups/. GUI: backup_db.php."
+            gui_template: "Create Backup {prefix}<session>"
+            description: "Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. Use a stable prefix (e.g. hart_session) so each session writes hart_session1, hart_session2, … Lock from the session overview for a static *_locked checkpoint."
             runnable: true
             dispatch: backup_database
             gui_path: /sts/backup_db.php
             params:
               -
-                key: backup
-                label: Backup file
-                type: backup
-                options_from: backups
-                allow_custom: true
+                key: prefix
+                label: Backup prefix
+                type: text
+                default: hart_session
                 required: true
-                default: manual_backup
+                placeholder: hart_session
+                visible_label: true
           -
             id: validate_database
             category: database
@@ -2446,6 +2482,25 @@ components:
                 type: number
                 default: ""
           -
+            id: skip_steps
+            category: workflow
+            adder: true
+            adder_group: workflow
+            label: Skip steps
+            gui_template: "Skip Steps {steps}"
+            description: "Do not run the listed steps (comma-separated numbers and ranges, e.g. 1-2,5,8-10). Useful when previewing/running non-contiguous sections."
+            runnable: true
+            dispatch: skip_steps
+            params:
+              -
+                key: steps
+                label: Steps
+                type: text
+                default: ""
+                required: true
+                placeholder: "e.g. 1-2,5,8-10"
+                visible_label: true
+          -
             id: stop
             category: workflow
             adder: true
@@ -2502,7 +2557,7 @@ components:
                   options_from: backups
                   allow_custom: true
                   required: true
-                  default: db_session_1
+                  default: hart_seed
         backup_database:
           type: object
           required: [id, label, params]
@@ -2524,23 +2579,23 @@ components:
               example: backup_database
             gui_template:
               type: string
-              example: "Create Backup {backup}"
+              example: "Create Backup {prefix}<session>"
             description:
               type: string
-              example: "Export current database to sts/backups/. GUI: backup_db.php."
+              example: "Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. Use a stable prefix (e.g. hart_session) so each session writes hart_session1, hart_session2, … Lock from the session overview for a static *_locked checkpoint."
             params:
               type: array
               items:
                 $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
               example:
                 -
-                  key: backup
-                  label: Backup file
-                  type: backup
-                  options_from: backups
-                  allow_custom: true
+                  key: prefix
+                  label: Backup prefix
+                  type: text
+                  default: hart_session
                   required: true
-                  default: manual_backup
+                  placeholder: hart_session
+                  visible_label: true
         validate_database:
           type: object
           required: [id, label, params]
@@ -2837,6 +2892,44 @@ components:
               items:
                 $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
               example: []
+        skip_steps:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [skip_steps]
+            label:
+              type: string
+              example: Skip steps
+            category:
+              type: string
+              example: workflow
+            runnable:
+              type: boolean
+              example: true
+            dispatch:
+              type: string
+              example: skip_steps
+            gui_template:
+              type: string
+              example: "Skip Steps {steps}"
+            description:
+              type: string
+              example: "Do not run the listed steps (comma-separated numbers and ranges, e.g. 1-2,5,8-10). Useful when previewing/running non-contiguous sections."
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example:
+                -
+                  key: steps
+                  label: Steps
+                  type: text
+                  default: ""
+                  required: true
+                  placeholder: "e.g. 1-2,5,8-10"
+                  visible_label: true
         goto:
           type: object
           required: [id, label, params]
@@ -3950,19 +4043,19 @@ components:
                   visible_label: true
                 -
                   key: title
-                  label: Override Train
+                  label: Train
                   type: text
                   default: ""
                   required: false
-                  placeholder: Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. LOCAL1).
+                  placeholder: Optional train name override (consolidates phases with the same value).
                   visible_label: true
                 -
                   key: info
-                  label: Switch list info
+                  label: Info
                   type: text
                   default: ""
                   required: false
-                  placeholder: "Extra note shown next to the train name on this switch list only (e.g. Inbound, Outbound, Departure). Does not affect consolidation."
+                  placeholder: "Note beside the train name (e.g. Inbound, Outbound, Next Day)."
                   visible_label: true
         generate_waybills:
           type: object
@@ -3994,6 +4087,82 @@ components:
               items:
                 $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
               example: []
+        generate_station_report:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [generate_station_report]
+            label:
+              type: string
+              example: Generate Station Report
+            category:
+              type: string
+              example: reports
+            runnable:
+              type: boolean
+              example: true
+            dispatch:
+              type: string
+              example: generate_station_report
+            gui_template:
+              type: string
+              example: "Generate Station Report{info_suffix}"
+            description:
+              type: string
+              example: "Snapshot cars by station from the live database into this session's station report. Each call appends a new phase (Phase 1, Phase 2, …); optional Info labels the phase (like Train Info on switch lists). Station-report phases are numbered independently of wheel reports."
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example:
+                -
+                  key: info
+                  label: Info
+                  type: text
+                  default: ""
+                  required: false
+                  placeholder: "Optional phase label (e.g. Starting, After D749, End of session)."
+                  visible_label: true
+        generate_wheel_report:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [generate_wheel_report]
+            label:
+              type: string
+              example: Generate Wheel Report
+            category:
+              type: string
+              example: reports
+            runnable:
+              type: boolean
+              example: true
+            dispatch:
+              type: string
+              example: generate_wheel_report
+            gui_template:
+              type: string
+              example: "Generate Wheel Report{info_suffix}"
+            description:
+              type: string
+              example: "Snapshot in-train / assigned cars from the live database into this session's wheel report. Each call appends a new phase (Phase 1, Phase 2, …); optional Info labels the phase. Wheel-report phases are numbered independently of station reports."
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example:
+                -
+                  key: info
+                  label: Info
+                  type: text
+                  default: ""
+                  required: false
+                  placeholder: "Optional phase label (e.g. Starting, After CK1, End of session)."
+                  visible_label: true
         render_switchlists:
           type: object
           required: [id, label, params]
