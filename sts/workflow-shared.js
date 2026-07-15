@@ -21,8 +21,32 @@
     hideNonExecute: false,
     executionPathSteps: null,
     dirty: false,
+    previewMode: true,
+    /** Section ids (`step-N`) the operator has collapsed in edit/preview. */
+    collapsedSectionIds: null,
+    /** One-shot merge of legacy `enabled:false` steps into the Skip field. */
+    _skipFromEnabled: null,
 
     el(id) { return document.getElementById(id); },
+
+    ensureCollapsedSectionIds() {
+      if (!(this.collapsedSectionIds instanceof Set)) {
+        this.collapsedSectionIds = new Set();
+      }
+      return this.collapsedSectionIds;
+    },
+
+    ensureCheckboxDropdownDocHandlers() {
+      if (this._cddDocHandlers) return;
+      this._cddDocHandlers = true;
+      document.addEventListener('click', (e) => {
+        if (e.target.closest('[data-checkbox-dropdown]')) return;
+        this.closeAllCheckboxDropdowns();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') this.closeAllCheckboxDropdowns();
+      });
+    },
 
     markDirty() {
       this.dirty = true;
@@ -150,7 +174,7 @@
     },
 
     rowClassName(step) {
-      return 'step-row ' + this.stepColorClass(step) + (step && step.enabled === false ? ' step-disabled' : '');
+      return 'step-row ' + this.stepColorClass(step);
     },
 
     isDatabaseStep(step) {
@@ -230,7 +254,153 @@
     },
 
     resolveAutoAssignJobsValue(val) {
+      return this.resolveCsvValues(val);
+    },
+
+    resolveCsvValues(val) {
+      if (Array.isArray(val)) {
+        return val.map((s) => String(s).trim()).filter(Boolean);
+      }
       return String(val || '').split(',').map((s) => s.trim()).filter(Boolean);
+    },
+
+    checkboxDropdownSummary(selected, opts, emptyLabel, summaryLabel) {
+      const empty = emptyLabel || 'Any';
+      if (!selected.length) return empty;
+      const labelFor = (v) => {
+        const hit = (opts || []).find((o) => String(o.value != null ? o.value : o) === String(v));
+        if (!hit) return String(v);
+        return String(hit.label != null ? hit.label : (hit.value != null ? hit.value : hit));
+      };
+      if (selected.length === 1) return labelFor(selected[0]);
+      if (selected.length <= 2) return selected.map(labelFor).join(', ');
+      return selected.length + ' ' + (summaryLabel || 'selected');
+    },
+
+    syncCheckboxDropdown(root) {
+      if (!root) return;
+      const hidden = root.querySelector('[data-param]');
+      const toggle = root.querySelector('[data-cdd-toggle]');
+      const selected = Array.from(root.querySelectorAll('[data-cdd-opt]:checked')).map((n) => n.value);
+      if (hidden) hidden.value = selected.join(',');
+      if (!toggle) return;
+
+      const emptyLabel = root.getAttribute('data-empty-label') || 'Any';
+      const summaryLabel = root.getAttribute('data-summary-label') || 'selected';
+      const allLabel = root.getAttribute('data-all-label') || '';
+      const countOnly = root.getAttribute('data-count-summary') === '1';
+      const optionCount = root.querySelectorAll('[data-cdd-opt]').length;
+      const selectedLabels = () => Array.from(root.querySelectorAll('[data-cdd-opt]:checked')).map((n) => {
+        const lab = n.closest('label');
+        const span = lab && lab.querySelector('.cdd-opt-lbl');
+        return (span ? span.textContent : n.value || '').trim();
+      }).filter(Boolean);
+
+      let text;
+      if (!selected.length) {
+        text = emptyLabel;
+      } else if (allLabel && optionCount > 0 && selected.length >= optionCount) {
+        text = allLabel;
+      } else if (countOnly) {
+        const unit = summaryLabel === 'sections' && selected.length === 1 ? 'section' : summaryLabel;
+        text = selected.length + ' ' + unit;
+      } else if (selected.length <= 2) {
+        const labels = selectedLabels();
+        text = labels.length
+          ? labels.join(', ')
+          : this.checkboxDropdownSummary(selected, null, emptyLabel, summaryLabel);
+      } else {
+        text = selected.length + ' ' + summaryLabel;
+      }
+      toggle.textContent = text;
+      toggle.title = selected.length
+        ? (allLabel && selected.length >= optionCount ? allLabel : selectedLabels().join(', '))
+        : emptyLabel;
+    },
+
+    closeAllCheckboxDropdowns(except) {
+      document.querySelectorAll('[data-checkbox-dropdown].open').forEach((root) => {
+        if (except && root === except) return;
+        root.classList.remove('open');
+        const menu = root.querySelector('[data-cdd-menu]');
+        if (menu) menu.hidden = true;
+        const toggle = root.querySelector('[data-cdd-toggle]');
+        if (toggle) toggle.setAttribute('aria-expanded', 'false');
+      });
+    },
+
+    checkboxDropdownFieldHtml(p, val, rowIdx, dataParamKey, visibleLabels, step) {
+      const paramKey = dataParamKey || p.key;
+      const id = 'r' + rowIdx + '-' + paramKey.replace(/\./g, '-');
+      const lblClass = visibleLabels ? 'inline-lbl inline-lbl-visible' : 'inline-lbl';
+      const lbl = (visibleLabels && p.label)
+        ? '<span class="' + lblClass + '">' + this.escapeHtml(p.label) + '</span>'
+        : '';
+      const opts = this.optionsForParam(p, { rowIdx, step, paramKey });
+      const selected = this.resolveCsvValues(val != null ? val : (p.default != null ? p.default : ''));
+      const selectedSet = new Set(selected.map(String));
+      const emptyLabel = p.empty_label || 'Any';
+      const summaryLabel = p.summary_label || 'selected';
+      const allLabel = p.all_label || '';
+      const countOnly = !!p.count_summary;
+      let summary;
+      if (!selected.length) {
+        summary = emptyLabel;
+      } else if (allLabel && opts.length && selected.length >= opts.length) {
+        summary = allLabel;
+      } else if (countOnly) {
+        const unit = summaryLabel === 'sections' && selected.length === 1 ? 'section' : summaryLabel;
+        summary = selected.length + ' ' + unit;
+      } else {
+        summary = this.checkboxDropdownSummary(selected, opts, emptyLabel, summaryLabel);
+      }
+
+      let menu = '<div class="checkbox-dropdown-menu" data-cdd-menu hidden>';
+      menu += '<div class="checkbox-dropdown-search-wrap">'
+        + '<input type="search" class="checkbox-dropdown-search" data-cdd-search placeholder="Filter…" autocomplete="off">'
+        + '</div>';
+      menu += '<div class="checkbox-dropdown-actions">'
+        + '<button type="button" class="checkbox-dropdown-action" data-cdd-all>All</button>'
+        + '<button type="button" class="checkbox-dropdown-action" data-cdd-none>None</button>'
+        + '</div>';
+      menu += '<div class="checkbox-dropdown-list" data-cdd-list>';
+      opts.forEach((o) => {
+        const v = o.value != null ? o.value : o;
+        const l = o.label != null ? o.label : o;
+        const oid = id + '-opt-' + String(v).replace(/[^a-zA-Z0-9_-]/g, '_');
+        menu += '<label class="checkbox-dropdown-option" data-cdd-option>'
+          + '<input type="checkbox" data-cdd-opt value="' + this.escapeHtml(String(v)) + '"'
+          + (selectedSet.has(String(v)) ? ' checked' : '') + ' id="' + this.escapeHtml(oid) + '">'
+          + '<span class="cdd-opt-lbl">' + this.escapeHtml(String(l)) + '</span></label>';
+      });
+      selected.forEach((v) => {
+        if (!opts.some((o) => String(o.value != null ? o.value : o) === String(v))) {
+          const oid = id + '-opt-extra-' + String(v).replace(/[^a-zA-Z0-9_-]/g, '_');
+          menu += '<label class="checkbox-dropdown-option" data-cdd-option>'
+            + '<input type="checkbox" data-cdd-opt value="' + this.escapeHtml(String(v)) + '" checked id="'
+            + this.escapeHtml(oid) + '">'
+            + '<span class="cdd-opt-lbl">' + this.escapeHtml(String(v)) + '</span></label>';
+        }
+      });
+      if (!opts.length && !selected.length) {
+        menu += '<div class="checkbox-dropdown-empty">No options</div>';
+      }
+      menu += '</div></div>';
+
+      return '<div class="inline-field inline-field-checkbox-dropdown'
+        + (visibleLabels ? ' inline-field-labeled' : '') + '">' + lbl
+        + '<div class="checkbox-dropdown" data-checkbox-dropdown data-empty-label="'
+        + this.escapeHtml(emptyLabel) + '" data-summary-label="' + this.escapeHtml(summaryLabel) + '"'
+        + (allLabel ? (' data-all-label="' + this.escapeHtml(allLabel) + '"') : '')
+        + (countOnly ? ' data-count-summary="1"' : '')
+        + '>'
+        + '<button type="button" class="field-select checkbox-dropdown-toggle" data-cdd-toggle '
+        + 'aria-haspopup="listbox" aria-expanded="false" id="' + id + '-toggle">'
+        + this.escapeHtml(summary) + '</button>'
+        + menu
+        + '<input type="hidden" data-param="' + this.escapeHtml(paramKey) + '" id="' + id
+        + '" value="' + this.escapeHtml(selected.join(',')) + '">'
+        + '</div></div>';
     },
 
     optionsForParam(p, context) {
@@ -304,6 +474,9 @@
       const opts = this.optionsForParam(p, { rowIdx, step, paramKey });
       val = val != null ? val : (p.default != null ? p.default : '');
 
+      if (p.type === 'checkbox_dropdown' || p.type === 'jobs_multiselect') {
+        return this.checkboxDropdownFieldHtml(p, val, rowIdx, dataParamKey, visibleLabels, step);
+      }
       if (p.type === 'select' && p.options) {
         let h = '<label class="inline-field' + (visibleLabels ? ' inline-field-labeled' : '') + '">' + lbl +
           '<select class="field-select" data-param="' + this.escapeHtml(paramKey) + '" id="' + id + '">';
@@ -372,25 +545,6 @@
           '<input type="number" class="field-input field-percent" data-param="' + this.escapeHtml(paramKey) + '" id="' + id + '" value="' +
           this.escapeHtml(String(val)) + '" min="' + min + '" max="' + max + '" step="' + step + '">' +
           '<span class="field-percent-suffix">%</span></span></label>';
-      }
-      if (p.type === 'jobs_multiselect') {
-        const opts = this.optionsForParam(p, { rowIdx, step });
-        const selected = this.resolveAutoAssignJobsValue(val);
-        const selectedSet = new Set(selected.map(String));
-        let h = '<label class="inline-field inline-field-multiselect' + (visibleLabels ? ' inline-field-labeled' : '') + '">' + lbl +
-          '<select multiple class="field-select field-multiselect" data-param="' + this.escapeHtml(paramKey) + '" id="' + id + '" size="4">';
-        opts.forEach((o) => {
-          const v = o.value != null ? o.value : o;
-          const l = o.label != null ? o.label : o;
-          h += '<option value="' + this.escapeHtml(String(v)) + '"' +
-            (selectedSet.has(String(v)) ? ' selected' : '') + '>' + this.escapeHtml(String(l)) + '</option>';
-        });
-        selected.forEach((v) => {
-          if (!opts.some((o) => String(o.value != null ? o.value : o) === String(v))) {
-            h += '<option value="' + this.escapeHtml(String(v)) + '" selected>' + this.escapeHtml(String(v)) + '</option>';
-          }
-        });
-        return h + '</select></label>';
       }
       return '<label class="inline-field' + (visibleLabels ? ' inline-field-labeled' : '') + '">' + lbl +
         '<input type="text" class="field-input" data-param="' + this.escapeHtml(paramKey) + '" id="' + id + '" value="' +
@@ -618,7 +772,7 @@
     compileGenerateOrdersTitle(params) {
       params = params || {};
       const parts = [];
-      const shipment = String(params.shipment || '').trim();
+      const shipment = this.resolveCsvValues(params.shipment).join(', ');
       if (shipment) parts.push(shipment);
       if (String(params.increment_session || '') === '1') parts.push('increment session');
       const maxUnfilled = String(params.max_unfilled || '').trim();
@@ -631,11 +785,92 @@
 
     compileAutoAssignTitle(params) {
       params = params || {};
-      const jobs = String(params.jobs || '').trim();
-      if (!jobs) {
-        return 'Assign Cars';
+      const jobs = this.resolveCsvValues(params.jobs).join(', ');
+      let line = jobs ? ('Assign Cars ' + jobs) : 'Assign Cars';
+      const stations = this.resolveCsvValues(params.station).filter((s) => s.toLowerCase() !== 'all');
+      if (stations.length) {
+        line += ' at ' + stations.join(', ');
       }
-      return 'Assign Cars ' + jobs.split(',').map((s) => s.trim()).filter(Boolean).join(', ');
+      const destLabels = this.resolveCsvValues(params.destination).map((token) => {
+        if (token.indexOf('station::') === 0) return token.slice(9);
+        if (token.indexOf('location::') === 0) return token.slice(10);
+        return token;
+      }).filter(Boolean);
+      if (destLabels.length) {
+        line += ' → ' + destLabels.join(', ');
+      }
+      return line;
+    },
+
+    formatStationLocationToken(token) {
+      token = String(token || '').trim();
+      if (token.indexOf('station::') === 0) return token.slice(9);
+      if (token.indexOf('location::') === 0) return token.slice(10);
+      if (token === 'remainder') return 'Final Destination';
+      return token;
+    },
+
+    /** Pretty value for preview/compile — expands filter objects to active keys only. */
+    formatParamDisplay(val, paramDef) {
+      if (val == null) return '';
+      if (typeof val === 'object' && !Array.isArray(val)) {
+        const fields = (paramDef && paramDef.fields) || [];
+        const labelFor = (key) => {
+          const f = fields.find((x) => x.key === key);
+          return (f && f.label) || key;
+        };
+        const parts = [];
+        Object.keys(val).forEach((key) => {
+          const raw = val[key];
+          if (raw == null || typeof raw === 'object') return;
+          const text = String(raw).trim();
+          if (!text) return;
+          const pretty = this.resolveCsvValues(text)
+            .map((t) => this.formatStationLocationToken(t))
+            .filter(Boolean)
+            .join(', ');
+          if (!pretty) return;
+          parts.push(labelFor(key) + '=' + pretty);
+        });
+        return parts.join('; ');
+      }
+      if (Array.isArray(val)) {
+        return val.map((v) => this.formatParamDisplay(v, paramDef)).filter(Boolean).join(', ');
+      }
+      const text = String(val).trim();
+      if (!text || text === '[object Object]') return '';
+      const type = paramDef && paramDef.type;
+      const from = paramDef && paramDef.options_from;
+      if (type === 'select' && Array.isArray(paramDef.options)) {
+        // Keep the common "all" format chip short (not "All styles").
+        if (paramDef.key === 'format' && text === 'all') {
+          return 'All';
+        }
+        const opt = paramDef.options.find((o) => {
+          const ov = (o && typeof o === 'object') ? (o.value != null ? o.value : o.label) : o;
+          return String(ov) === text;
+        });
+        if (opt && typeof opt === 'object' && opt.label != null) {
+          return String(opt.label);
+        }
+      }
+      if (
+        type === 'checkbox_dropdown'
+        || type === 'jobs_multiselect'
+        || type === 'station_location'
+        || type === 'setout_location'
+        || from === 'station_locations'
+        || from === 'setout_locations'
+        || from === 'stations'
+        || from === 'locations'
+        || from === 'jobs'
+      ) {
+        return this.resolveCsvValues(text)
+          .map((t) => this.formatStationLocationToken(t))
+          .filter(Boolean)
+          .join(', ');
+      }
+      return text;
     },
 
     compileTrainCarFiltersTitle(filters) {
@@ -652,8 +887,10 @@
         unloading_location: 'unload',
       };
       Object.keys(labels).forEach((key) => {
-        const v = String(filters[key] || '').trim();
-        if (v) parts.push(labels[key] + '=' + v);
+        const raw = String(filters[key] || '').trim();
+        if (!raw) return;
+        const pretty = this.resolveCsvValues(raw).map((t) => this.formatStationLocationToken(t)).join(', ');
+        if (pretty) parts.push(labels[key] + '=' + pretty);
       });
       return parts.length ? parts.join('; ') : '';
     },
@@ -811,7 +1048,7 @@
           if (p.type === 'filter_group') {
             return this.filterGroupHtml(p, values[p.key] || {}, rowIdx);
           }
-          return this.inlineParamFieldHtml(p, values[p.key], rowIdx, undefined, !!p.visible_label, step);
+          return this.inlineParamFieldHtml(p, values[p.key], rowIdx, undefined, true, step);
         });
       return fields.length ? fields.join('') : '<span class="inline-empty">No parameters</span>';
     },
@@ -892,9 +1129,9 @@
       if (step.function === 'section_label' && step.params.remarks !== undefined) {
         delete step.params.remarks;
       }
-      const enabledBox = row.querySelector('[data-step-enabled]');
-      if (enabledBox ? !enabledBox.checked : prev.enabled === false) {
-        step.enabled = false;
+      // Legacy per-step `enabled` is retired — use Skip steps / Include checkboxes.
+      if (Object.prototype.hasOwnProperty.call(step, 'enabled')) {
+        delete step.enabled;
       }
       this.recipe.steps[idx] = step;
       return step;
@@ -1036,35 +1273,42 @@
 
     stepRowInnerHtml(step, idx) {
       const rowKey = idx;
+      const stepNum = idx + 1;
       const stepNumSize = Math.max(2, String(this.recipe.steps.length).length);
+      const isSection = step.function === 'section_label';
+      const collapseBtn = isSection
+        ? ('<button type="button" class="section-collapse-btn" data-section-collapse' +
+          ' aria-expanded="true" title="Collapse section">▼</button>')
+        : '';
 
       return (
         '<div class="row-top row-top-align-start' + (this.rowHasMultiRowParams(step) ? ' row-has-filters' : '') +
           this.remarksExpandedClass(step) + '">' +
-          '<div class="step-num-control">' +
-            '<input type="number" class="step-num step-num-input field-input" data-step-num min="1" max="' + this.recipe.steps.length + '" size="' + stepNumSize + '" value="' + (idx + 1) + '" title="Type step number to jump" aria-label="Step number">' +
+          '<div class="step-num-control' + (isSection ? ' step-num-control-section' : '') + '">' +
+            collapseBtn +
+            '<input type="number" class="step-num step-num-input field-input" data-step-num min="1" max="' + this.recipe.steps.length + '" size="' + stepNumSize + '" value="' + stepNum + '" title="Type step number to jump" aria-label="Step number">' +
             '<div class="step-num-arrows">' +
               '<button type="button" class="step-num-arrow" data-step-arrow="up" title="Move step up">▲</button>' +
               '<button type="button" class="step-num-arrow" data-step-arrow="down" title="Move step down">▼</button>' +
             '</div>' +
           '</div>' +
-          '<button type="button" class="btn-icon btn-insert-before" title="Add step below step ' + (idx + 1) + '">+</button>' +
-          '<label class="inline-field row-command">' +
-            '<span class="inline-lbl">Command</span>' +
+          '<button type="button" class="btn-icon btn-insert-before" title="Add step below step ' + stepNum + '">+</button>' +
+          '<label class="inline-field row-command inline-field-labeled">' +
+            '<span class="inline-lbl inline-lbl-visible">Command</span>' +
             this.commandSelectHtml(step, rowKey) +
           '</label>' +
           '<div class="row-params">' + this.paramsHtmlForStep(step, rowKey) + '</div>' +
-          '<label class="inline-field row-remarks">' +
-            '<span class="inline-lbl">Remarks</span>' +
+          '<label class="inline-field row-remarks inline-field-labeled">' +
+            '<span class="inline-lbl inline-lbl-visible">Remarks</span>' +
             '<input type="text" class="field-input field-remarks" data-notes placeholder="Optional remarks" value="' +
             this.escapeHtml(this.rowRemarksText(step)) + '">' +
           '</label>' +
           '<button type="button" class="btn-icon btn-del" title="Delete">×</button>' +
         '</div>' +
         '<div class="row-bottom">' +
-          '<label class="step-active-toggle" title="When unchecked, this step is skipped in every run (like a commented-out command)">' +
-            '<input type="checkbox" data-step-enabled' + (step.enabled === false ? '' : ' checked') + '>' +
-            '<span>Active</span>' +
+          '<label class="step-include-toggle" title="Include in run. Unchecked adds this step to Skip steps.">' +
+            '<input type="checkbox" data-step-include data-step-num="' + stepNum + '" checked>' +
+            '<span>Run</span>' +
           '</label>' +
           '<div class="step-preview">' + this.previewHtml(step, idx) + '</div>' +
         '</div>'
@@ -1110,8 +1354,8 @@
           params[k] = String(!isNaN(fraction) ? (fraction <= 1 ? Math.round(fraction * 100) : Math.round(fraction)) : (p.default || ''));
           return;
         }
-        if (k === 'jobs' && p.type === 'jobs_multiselect') {
-          params[k] = oldParams.jobs != null ? String(oldParams.jobs) : '';
+        if (p.type === 'jobs_multiselect' || p.type === 'checkbox_dropdown') {
+          params[k] = oldParams[k] != null ? String(oldParams[k]) : '';
           return;
         }
         if (oldParams[k] !== undefined && oldParams[k] !== '') {
@@ -1144,31 +1388,31 @@
         return this.compileAutoAssignTitle(step.params);
       }
       if (step.function === 'pick_up_cars') {
-        const job = String(step.params?.job || '').trim();
+        const jobs = this.resolveCsvValues(step.params?.job).join(', ');
+        const locs = this.resolveCsvValues(step.params?.location).join(', ');
         const filterSuffix = this.compileTrainCarFiltersTitle(step.params?.car_filters);
-        if (!job && !String(step.params?.location || '').trim()) {
+        if (!jobs && !locs) {
           return filterSuffix ? ('Pick Up Cars locals (' + filterSuffix + ')') : 'Pick Up Cars locals';
         }
         let title = '';
-        if (!job) title = 'Pick Up Cars locals';
-        else {
-          const loc = String(step.params?.location || '').trim();
-          title = loc ? ('Pick Up Cars ' + job + ' ' + loc) : ('Pick Up Cars ' + job);
-        }
+        if (!jobs) title = 'Pick Up Cars locals';
+        else title = locs ? ('Pick Up Cars ' + jobs + ' ' + locs) : ('Pick Up Cars ' + jobs);
         if (filterSuffix) title += ' (' + filterSuffix + ')';
         return title;
       }
       if (step.function === 'set_out_cars') {
-        const job = String(step.params?.job || '').trim();
-        const loc = String(step.params?.location || '').trim();
+        const jobs = this.resolveCsvValues(step.params?.job).join(', ');
+        const locTokens = this.resolveCsvValues(step.params?.location);
+        const locs = locTokens.map((t) => this.formatStationLocationToken(t)).join(', ');
         const filterSuffix = this.compileTrainCarFiltersTitle(step.params?.car_filters);
-        if (!job && !loc) return 'Set Out Cars locals';
+        if (!jobs && !locs) return 'Set Out Cars locals';
         let title = '';
-        if (job && !loc) title = 'Set Out Cars ' + job + ' Final Destination';
-        else title = this.catalogMap[step.function]
-          ? (this.catalogMap[step.function].gui_template || '')
-              .replace('{job}', job).replace('{location}', loc).replace(/\s+/g, ' ').trim()
-          : ('Set Out Cars ' + job + ' ' + loc).trim();
+        if (jobs && !locs) title = 'Set Out Cars ' + jobs + ' Final Destination';
+        else if (jobs && locTokens.length === 1 && locTokens[0] === 'remainder') {
+          title = 'Set Out Cars ' + jobs + ' Final Destination';
+        } else {
+          title = ('Set Out Cars ' + jobs + ' ' + locs).replace(/\s+/g, ' ').trim();
+        }
         if (filterSuffix) title += ' (' + filterSuffix + ')';
         return title;
       }
@@ -1196,6 +1440,10 @@
       if (step.function === 'text_instruction') {
         return (step.params?.instruction || '').trim();
       }
+      if (step.function === 'skip_steps') {
+        const ranges = String(step.params?.steps || '').trim();
+        return ranges ? ('Skip Steps ' + ranges) : 'Skip Steps';
+      }
       if (step.function === 'generate_switchlists') {
         const p = step.params || {};
         const jobs = String(p.jobs || 'all').trim() || 'all';
@@ -1211,7 +1459,10 @@
         if (step.function === 'pick_up_cars') {
           t = t.replace('{location_suffix}', p.location ? p.location : '');
         }
-        title = t.replace(/\{(\w+)\}/g, (_, k) => (p[k] != null && p[k] !== '' ? String(p[k]) : '')).replace(/\s+/g, ' ').trim();
+        title = t.replace(/\{(\w+)\}/g, (_, k) => {
+          const pdef = (def.params || []).find((pp) => pp.key === k);
+          return this.formatParamDisplay(p[k], pdef);
+        }).replace(/\s+/g, ' ').trim();
       }
       if (!title && step.instruction) title = String(step.instruction).trim();
       if (!title && step.params?.label) title = String(step.params.label).trim();
@@ -1244,7 +1495,7 @@
       }
       const cmd = def?.label || (step.function || '').replace(/_/g, ' ');
       let html = '<span class="preview-cmd">' + this.escapeHtml(cmd) + '</span>';
-      if (step.function === 'load_unload' || step.function === 'fill_orders' || step.function === 'reposition_empties' || step.function === 'generate_orders' || step.function === 'auto_assign_locals' || step.function === 'goto' || step.function === 'if_then') {
+      if (step.function === 'load_unload' || step.function === 'fill_orders' || step.function === 'reposition_empties' || step.function === 'generate_orders' || step.function === 'auto_assign_locals' || step.function === 'pick_up_cars' || step.function === 'set_out_cars' || step.function === 'goto' || step.function === 'if_then') {
         const compiled = this.compileOne(step, idx);
         if (compiled) {
           return '<span class="preview-cmd">' + this.escapeHtml(compiled) + '</span>';
@@ -1255,12 +1506,11 @@
       let pi = 0;
       pdefs.forEach((p) => {
         if (this.shouldHideInlineParam(step, p)) return;
-        const val = params[p.key];
-        if (val !== undefined && String(val).trim() !== '') {
-          html += '<span class="preview-param p-' + (pi % 5) + '" title="' + this.escapeHtml(p.label) + '">' +
-            this.escapeHtml(String(val)) + '</span>';
-          pi++;
-        }
+        const shown = this.formatParamDisplay(params[p.key], p);
+        if (!shown) return;
+        html += '<span class="preview-param p-' + (pi % 5) + '" title="' + this.escapeHtml(p.label || p.key) + '">' +
+          this.escapeHtml(shown) + '</span>';
+        pi++;
       });
       if (pi === 0) {
         const compiled = this.compileOne(step, idx);
@@ -1295,6 +1545,16 @@
     },
 
     bindRowEvents(row, idx) {
+      row.querySelector('[data-step-include]')?.addEventListener('change', (e) => {
+        if (this._syncingIncludeBoxes) return;
+        this.setStepIncluded(idx + 1, !!e.target.checked);
+      });
+      row.querySelector('[data-section-collapse]')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        const sid = row.dataset.sectionId;
+        if (sid) this.toggleSectionCollapsed(sid);
+      });
+
       row.querySelector('[data-fn-select]')?.addEventListener('change', (e) => {
         const newFn = e.target.value;
         if (newFn !== 'text_instruction') {
@@ -1346,6 +1606,59 @@
         this.updateRemarksLayout(row);
         this.updateRowPreview(row, idx);
       };
+      row.addEventListener('click', (e) => {
+        const toggle = e.target.closest('[data-cdd-toggle]');
+        if (toggle && row.contains(toggle)) {
+          e.preventDefault();
+          const root = toggle.closest('[data-checkbox-dropdown]');
+          const menu = root && root.querySelector('[data-cdd-menu]');
+          if (!root || !menu) return;
+          const willOpen = menu.hidden;
+          this.closeAllCheckboxDropdowns(willOpen ? root : null);
+          menu.hidden = !willOpen;
+          root.classList.toggle('open', willOpen);
+          toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+          if (willOpen) {
+            const search = menu.querySelector('[data-cdd-search]');
+            if (search) {
+              search.value = '';
+              menu.querySelectorAll('[data-cdd-option]').forEach((opt) => { opt.hidden = false; });
+              queueMicrotask(() => search.focus());
+            }
+          }
+          return;
+        }
+        const allBtn = e.target.closest('[data-cdd-all]');
+        if (allBtn && row.contains(allBtn)) {
+          e.preventDefault();
+          const root = allBtn.closest('[data-checkbox-dropdown]');
+          root.querySelectorAll('[data-cdd-opt]').forEach((n) => {
+            if (!n.closest('[data-cdd-option]')?.hidden) n.checked = true;
+          });
+          this.syncCheckboxDropdown(root);
+          onRowEdit();
+          return;
+        }
+        const noneBtn = e.target.closest('[data-cdd-none]');
+        if (noneBtn && row.contains(noneBtn)) {
+          e.preventDefault();
+          const root = noneBtn.closest('[data-checkbox-dropdown]');
+          root.querySelectorAll('[data-cdd-opt]').forEach((n) => { n.checked = false; });
+          this.syncCheckboxDropdown(root);
+          onRowEdit();
+        }
+      });
+      row.addEventListener('input', (e) => {
+        if (e.target.matches('[data-cdd-search]')) {
+          const q = e.target.value.trim().toLowerCase();
+          const menu = e.target.closest('[data-cdd-menu]');
+          if (!menu) return;
+          menu.querySelectorAll('[data-cdd-option]').forEach((opt) => {
+            const label = (opt.querySelector('.cdd-opt-lbl')?.textContent || '').toLowerCase();
+            opt.hidden = q !== '' && label.indexOf(q) < 0;
+          });
+        }
+      });
       row.addEventListener('change', (e) => {
         const target = e.target;
         if (target.matches('[data-step-num]')) return;
@@ -1364,10 +1677,13 @@
             hidden.value = selected.join(',');
           }
         }
+        if (target.matches('[data-cdd-opt]')) {
+          this.syncCheckboxDropdown(target.closest('[data-checkbox-dropdown]'));
+        }
         onRowEdit();
       });
       row.addEventListener('input', (e) => {
-        if (e.target.matches('[data-step-num]')) return;
+        if (e.target.matches('[data-step-num]') || e.target.matches('[data-cdd-search]')) return;
         onRowEdit();
       });
       this.updateRemarksLayout(row);
@@ -1421,6 +1737,7 @@
     },
 
     renderSteps(options) {
+      this.ensureCheckboxDropdownDocHandlers();
       options = options || {};
       const scrollY = options.preserveScroll ? window.scrollY : null;
 
@@ -1434,10 +1751,13 @@
       if (!list) return;
       list.innerHTML = '';
 
+      const sections = this.editorSections();
       this.recipe.steps.forEach((step, idx) => {
         const row = document.createElement('div');
         row.className = this.rowClassName(step);
         row.dataset.idx = String(idx);
+        const sid = this.sectionIdForStepNum(idx + 1, sections);
+        if (sid) row.dataset.sectionId = sid;
         row.innerHTML = this.stepRowInnerHtml(step, idx);
         this.bindRowEvents(row, idx);
         list.appendChild(row);
@@ -1463,12 +1783,19 @@
       if (count) count.textContent = '(' + this.recipe.steps.length + ')';
       this.syncRunDefaults();
       this.syncEditorSectionSelect();
+      this.syncStepIncludeCheckboxes();
+      this.applySectionCollapseUi();
       this.syncStepVisibility();
+      if (this.previewMode) {
+        this.runSections = this.buildRunSections();
+        this.renderStepsPreview();
+        this.syncPreviewUi();
+      }
     },
 
     isExecutableStep(step) {
       const fid = step?.function || '';
-      if (['section_label', 'text_instruction', 'marker', 'goto', 'if_then'].includes(fid)) {
+      if (['section_label', 'text_instruction', 'marker', 'goto', 'if_then', 'skip_steps'].includes(fid)) {
         return false;
       }
       const def = this.catalogMap[fid];
@@ -1562,6 +1889,7 @@
       const steps = this.recipe.steps || [];
       const executed = new Set();
       if (!steps.length) return executed;
+      const skipSet = this.getRunSkipSet();
       let pc = Math.max(0, fromStep - 1);
       const end = Math.min(steps.length, toStep);
       const maxIter = Math.max(500, (end - fromStep + 1) * 100);
@@ -1572,13 +1900,23 @@
           pc++;
           continue;
         }
+        const n = pc + 1;
+        if (skipSet.has(n)) {
+          pc++;
+          continue;
+        }
         const fid = step.function || '';
         if (fid === 'stop') {
-          if (this.isExecutableStep(step)) executed.add(pc + 1);
+          if (this.isExecutableStep(step)) executed.add(n);
           break;
         }
+        if (fid === 'skip_steps') {
+          this.parseStepRanges(step.params?.steps || '').forEach((sn) => skipSet.add(sn));
+          pc++;
+          continue;
+        }
         if (fid === 'goto') {
-          const target = this.resolveGotoTarget(step, pc + 1);
+          const target = this.resolveGotoTarget(step, n);
           if (target >= 1 && target <= steps.length) {
             pc = target - 1;
           } else {
@@ -1589,7 +1927,7 @@
         if (fid === 'if_then') {
           const ok = this.evaluateCondition(step.params || {});
           if (ok && this.ifThenHasGoto(step)) {
-            const target = this.resolveGotoTarget({ params: step.params || {} }, pc + 1);
+            const target = this.resolveGotoTarget({ params: step.params || {} }, n);
             if (target >= 1 && target <= steps.length) {
               pc = target - 1;
             } else {
@@ -1601,7 +1939,7 @@
           continue;
         }
         if (this.isExecutableStep(step)) {
-          executed.add(pc + 1);
+          executed.add(n);
         }
         pc++;
       }
@@ -1613,6 +1951,7 @@
       const step = this.recipe.steps[idx];
       if (!step || !this.isExecutableStep(step)) return false;
       const stepNum = idx + 1;
+      if (this.getRunSkipSet().has(stepNum)) return false;
       const { start, stop } = this.getRunStepRange();
       if (stepNum < start || stepNum > stop) return false;
       if (!this.executionPathSteps) {
@@ -1644,22 +1983,382 @@
       }
     },
 
-    getRunStepRange() {
+    parseStepRanges(text) {
+      const out = new Set();
+      String(text || '').split(',').forEach((part) => {
+        part = part.trim();
+        if (!part) return;
+        const m = part.match(/^(\d+)\s*-\s*(\d+)$/);
+        if (m) {
+          let a = parseInt(m[1], 10);
+          let b = parseInt(m[2], 10);
+          if (a > b) {
+            const t = a;
+            a = b;
+            b = t;
+          }
+          for (let n = a; n <= b; n++) {
+            if (n >= 1) out.add(n);
+          }
+          return;
+        }
+        if (/^\d+$/.test(part)) {
+          const n = parseInt(part, 10);
+          if (n >= 1) out.add(n);
+        }
+      });
+      return out;
+    },
+
+    formatStepRanges(nums) {
+      const list = Array.from(nums || []).map((n) => parseInt(n, 10)).filter((n) => n >= 1);
+      list.sort((a, b) => a - b);
+      const uniq = [];
+      list.forEach((n) => {
+        if (!uniq.length || uniq[uniq.length - 1] !== n) uniq.push(n);
+      });
+      if (!uniq.length) return '';
+      const parts = [];
+      let start = uniq[0];
+      let prev = uniq[0];
+      for (let i = 1; i <= uniq.length; i++) {
+        const n = i < uniq.length ? uniq[i] : null;
+        if (n !== null && n === prev + 1) {
+          prev = n;
+          continue;
+        }
+        parts.push(start === prev ? String(start) : (start + '-' + prev));
+        if (n === null) break;
+        start = prev = n;
+      }
+      return parts.join(',');
+    },
+
+    getSelectedRunSectionIds() {
+      const host = this.el('run-section-host');
+      if (!host) {
+        const raw = (this.el('run-section')?.value || '').trim();
+        return raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      }
+      const checked = Array.from(host.querySelectorAll('[data-cdd-opt]:checked')).map((n) => n.value);
+      return checked.filter((id) => id && id !== 'all');
+    },
+
+    getRunCoverage() {
       const total = Math.max(1, this.recipe.steps?.length || 1);
-      let start = parseInt(this.el('run-start')?.value, 10) || 1;
-      let stop = parseInt(this.el('run-stop')?.value, 10) || total;
+      const sections = this.editorSections();
+      let selectedIds = this.getSelectedRunSectionIds();
+      if (!sections.length) {
+        return {
+          start: 1,
+          stop: total,
+          total,
+          selectedIds: [],
+          included: null,
+          skipSteps: [],
+          skipStr: '',
+          all: true,
+        };
+      }
+      // None selected — operator must pick sections (distinct from All).
+      if (!selectedIds.length) {
+        return {
+          start: 1,
+          stop: total,
+          total,
+          selectedIds: [],
+          included: new Set(),
+          skipSteps: [],
+          skipStr: '',
+          all: false,
+          none: true,
+        };
+      }
+      // Every section checked ⇒ full contiguous range, no skip.
+      if (selectedIds.length >= sections.length) {
+        selectedIds = sections.map((s) => s.id);
+        return {
+          start: 1,
+          stop: total,
+          total,
+          selectedIds,
+          included: null,
+          skipSteps: [],
+          skipStr: '',
+          all: true,
+          none: false,
+        };
+      }
+      const selected = sections.filter((s) => selectedIds.indexOf(s.id) >= 0);
+      let start = total;
+      let stop = 1;
+      const included = new Set();
+      selected.forEach((s) => {
+        start = Math.min(start, s.start);
+        stop = Math.max(stop, s.stop);
+        for (let n = s.start; n <= s.stop; n++) included.add(n);
+      });
       start = Math.max(1, Math.min(start, total));
       stop = Math.max(start, Math.min(stop, total));
-      return { start, stop, total };
+      const skipSteps = [];
+      for (let n = start; n <= stop; n++) {
+        if (!included.has(n)) skipSteps.push(n);
+      }
+      return {
+        start,
+        stop,
+        total,
+        selectedIds: selected.map((s) => s.id),
+        included,
+        skipSteps,
+        skipStr: this.formatStepRanges(skipSteps),
+        all: false,
+        none: false,
+      };
+    },
+
+    getRunSkipSet() {
+      // Skip field is source of truth once shown/edited; section gaps only seed it.
+      const manual = (this.el('run-skip')?.value || '').trim();
+      if (manual) return this.parseStepRanges(manual);
+      return new Set(this.getRunCoverage().skipSteps || []);
+    },
+
+    normalizeRunSkipField(opts) {
+      opts = opts || {};
+      const skipEl = this.el('run-skip');
+      if (!skipEl) return '';
+      const total = Math.max(1, this.recipe.steps?.length || 1);
+      const parsed = this.parseStepRanges(skipEl.value);
+      const clamped = [];
+      parsed.forEach((n) => {
+        if (n >= 1 && n <= total) clamped.push(n);
+      });
+      const str = this.formatStepRanges(clamped);
+      if (opts.write !== false) {
+        // Preserve free typing until blur/change normalize.
+        if (opts.force || skipEl !== document.activeElement) {
+          skipEl.value = str;
+        }
+      }
+      return str;
+    },
+
+    /**
+     * After skip edits: optionally uncheck any section whose every step is skipped.
+     * Does not rewrite the skip field from section gaps (avoids clobbering custom skips).
+     */
+    applyRunSkipEdit(opts) {
+      opts = opts || {};
+      if (this._applyingRunSection) return;
+      this._applyingRunSkip = true;
+      try {
+        if (opts.normalize) {
+          this.normalizeRunSkipField({ force: true });
+        }
+        const syncSections = opts.syncSections !== false;
+        const skipSet = this.getRunSkipSet();
+        const host = this.el('run-section-host');
+        const root = host && host.querySelector('[data-checkbox-dropdown]');
+        const sections = this.editorSections();
+        let changed = false;
+        if (syncSections && root && sections.length) {
+          const optsByValue = {};
+          root.querySelectorAll('[data-cdd-opt]').forEach((n) => { optsByValue[n.value] = n; });
+          sections.forEach((sec) => {
+            const opt = optsByValue[sec.id];
+            if (!opt || !opt.checked) return;
+            let fullySkipped = true;
+            for (let n = sec.start; n <= sec.stop; n++) {
+              if (!skipSet.has(n)) {
+                fullySkipped = false;
+                break;
+              }
+            }
+            if (fullySkipped && sec.stop >= sec.start) {
+              opt.checked = false;
+              changed = true;
+            }
+          });
+          if (changed) this.syncCheckboxDropdown(root);
+        }
+
+        // Recompute start/stop from remaining checked sections; keep skip as-is.
+        const coverage = this.getRunCoverage();
+        const startEl = this.el('run-start');
+        const stopEl = this.el('run-stop');
+        const hidden = this.el('run-section');
+        const total = coverage.total;
+        if (!coverage.none) {
+          if (startEl && startEl.dataset.userSet !== '1') {
+            startEl.min = '1';
+            startEl.max = String(total);
+            startEl.value = String(coverage.start);
+          }
+          if (stopEl && stopEl.dataset.userSet !== '1') {
+            stopEl.min = '1';
+            stopEl.max = String(total);
+            stopEl.value = String(coverage.stop);
+          }
+        }
+        if (hidden) {
+          hidden.value = coverage.all ? '' : coverage.selectedIds.join(',');
+        }
+        if (this.previewMode) this.renderStepsPreview();
+        this.syncRunRangeHighlight();
+        this.syncStepIncludeCheckboxes();
+        this.applySectionCollapseUi();
+        this.syncStepVisibility();
+      } finally {
+        this._applyingRunSkip = false;
+      }
+    },
+
+    sectionIdForStepNum(stepNum, sections) {
+      const list = sections || this.editorSections();
+      for (let i = list.length - 1; i >= 0; i--) {
+        const s = list[i];
+        if (stepNum >= s.start && stepNum <= s.stop) return s.id;
+      }
+      return '';
+    },
+
+    /**
+     * Convert legacy recipe `enabled: false` into Skip-field entries (once).
+     */
+    absorbDisabledStepsIntoSkip() {
+      const steps = this.recipe.steps || [];
+      steps.forEach((step, i) => {
+        if (!step || !Object.prototype.hasOwnProperty.call(step, 'enabled')) return;
+        if (step.enabled === false) {
+          if (!(this._skipFromEnabled instanceof Set)) this._skipFromEnabled = new Set();
+          this._skipFromEnabled.add(i + 1);
+        }
+        delete step.enabled;
+      });
+    },
+
+    flushSkipFromEnabled() {
+      if (!(this._skipFromEnabled instanceof Set) || !this._skipFromEnabled.size) return;
+      const skipEl = this.el('run-skip');
+      if (!skipEl) return;
+      const set = this.parseStepRanges(skipEl.value);
+      this._skipFromEnabled.forEach((n) => set.add(n));
+      this._skipFromEnabled.clear();
+      skipEl.value = this.formatStepRanges(set);
+    },
+
+    setStepIncluded(stepNum, included) {
+      stepNum = parseInt(stepNum, 10);
+      if (!stepNum || stepNum < 1) return;
+      if (this._applyingRunSkip || this._applyingRunSection) return;
+      const set = this.getRunSkipSet();
+      if (included) set.delete(stepNum);
+      else set.add(stepNum);
+      const skipEl = this.el('run-skip');
+      if (skipEl) skipEl.value = this.formatStepRanges(set);
+      this.applyRunSkipEdit({ normalize: true, syncSections: true });
+    },
+
+    syncStepIncludeCheckboxes() {
+      const skipSet = this.getRunSkipSet();
+      this._syncingIncludeBoxes = true;
+      try {
+        document.querySelectorAll('[data-step-include]').forEach((box) => {
+          let n = parseInt(box.getAttribute('data-step-num'), 10);
+          if (!n) {
+            const row = box.closest('[data-idx]');
+            n = row ? parseInt(row.dataset.idx, 10) + 1 : 0;
+          }
+          if (!n) return;
+          box.checked = !skipSet.has(n);
+        });
+      } finally {
+        this._syncingIncludeBoxes = false;
+      }
+    },
+
+    toggleSectionCollapsed(sectionId) {
+      if (!sectionId) return;
+      const set = this.ensureCollapsedSectionIds();
+      if (set.has(sectionId)) set.delete(sectionId);
+      else set.add(sectionId);
+      this.applySectionCollapseUi();
+    },
+
+    applySectionCollapseUi() {
+      const collapsed = this.ensureCollapsedSectionIds();
+      const sections = this.editorSections();
+      const headerStarts = new Set(sections.map((s) => s.start));
+
+      const list = this.el('steps-list');
+      if (list) {
+        list.querySelectorAll('.step-row[data-idx]').forEach((row) => {
+          const n = parseInt(row.dataset.idx, 10) + 1;
+          const sid = row.dataset.sectionId || '';
+          const isHeader = headerStarts.has(n);
+          const btn = row.querySelector('[data-section-collapse]');
+          if (btn) {
+            const isCollapsed = !!(sid && collapsed.has(sid));
+            btn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+            btn.textContent = isCollapsed ? '▶' : '▼';
+            btn.title = isCollapsed ? 'Expand section' : 'Collapse section';
+            row.classList.toggle('section-collapsed', isCollapsed);
+          }
+          const hide = !!(sid && collapsed.has(sid) && !isHeader);
+          row.classList.toggle('section-collapsed-hidden', hide);
+        });
+      }
+
+      const preview = this.el('steps-preview');
+      if (preview) {
+        preview.querySelectorAll('[data-section-id]').forEach((li) => {
+          const sid = li.dataset.sectionId || '';
+          const isHeader = li.classList.contains('wf-preview-section');
+          const btn = li.querySelector('[data-section-collapse]');
+          if (btn) {
+            const isCollapsed = !!(sid && collapsed.has(sid));
+            btn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+            btn.textContent = isCollapsed ? '▶' : '▼';
+            btn.title = isCollapsed ? 'Expand section' : 'Collapse section';
+          }
+          const hide = !!(sid && collapsed.has(sid) && !isHeader);
+          li.classList.toggle('section-collapsed-hidden', hide);
+        });
+      }
+    },
+
+    getRunStepRange() {
+      const coverage = this.getRunCoverage();
+      const total = coverage.total;
+      let start = parseInt(this.el('run-start')?.value, 10) || coverage.start;
+      let stop = parseInt(this.el('run-stop')?.value, 10) || coverage.stop;
+      start = Math.max(1, Math.min(start, total));
+      stop = Math.max(start, Math.min(stop, total));
+      const skipStr = (this.el('run-skip')?.value || coverage.skipStr || '').trim();
+      return {
+        start,
+        stop,
+        total,
+        skipStr,
+        included: coverage.included,
+        all: coverage.all,
+        none: !!coverage.none,
+      };
     },
 
     syncRunRangeHighlight() {
       const list = this.el('steps-list');
       if (!list) return;
-      const { start, stop } = this.getRunStepRange();
+      const { start, stop, included } = this.getRunStepRange();
+      const skipSet = this.getRunSkipSet();
       list.querySelectorAll('.step-row[data-idx]').forEach((row) => {
         const stepNum = parseInt(row.dataset.idx, 10) + 1;
-        row.classList.toggle('run-range', stepNum >= start && stepNum <= stop);
+        const inSpan = stepNum >= start && stepNum <= stop;
+        const isSkip = skipSet.has(stepNum);
+        const inRun = inSpan && !isSkip && (included == null || included.has(stepNum));
+        row.classList.toggle('run-range', inRun);
+        row.classList.toggle('run-skip', inSpan && isSkip);
       });
     },
 
@@ -1707,6 +2406,10 @@
       if (!sel?.value) return;
       const sec = this.editorSections().find((s) => s.id === sel.value);
       if (!sec) return;
+      if (sec.id) {
+        this.ensureCollapsedSectionIds().delete(sec.id);
+        this.applySectionCollapseUi();
+      }
       const list = this.el('steps-list');
       const idx = sec.start - 1;
       const row = list?.querySelector('.step-row[data-idx="' + idx + '"]');
@@ -1890,6 +2593,7 @@
       await this.loadRecipe();
       await this.loadRunOptions();
       this.renderSteps({ skipSync: true });
+      this.showPreview();
       this.syncWorkflowSaveFilename();
       this.setStatus(
         'Loaded ' + this.activeWorkflow + ' — ' + this.recipe.steps.length + ' steps · DB session ' +
@@ -2084,56 +2788,179 @@
       return sections;
     },
 
-    syncRunSectionSelect() {
-      const sel = this.el('run-section');
-      if (!sel) return;
-      this.runSections = this.buildRunSections();
-      const current = sel.value || 'all';
-      let html = '';
-      this.runSections.forEach((s) => {
-        const text = s.id === 'all' ? 'All' : this.truncateSectionLabel(s.label);
-        html += '<option value="' + this.escapeHtml(s.id) + '" title="' + this.escapeHtml(s.label) + '">' +
-          this.escapeHtml(text) + ' (steps ' + s.start + '–' + s.stop + ')</option>';
+    ensureRunSectionDropdownHandlers() {
+      if (this._runSectionHandlers) return;
+      this._runSectionHandlers = true;
+      this.ensureCheckboxDropdownDocHandlers();
+      const host = this.el('run-section-host');
+      if (!host) return;
+      host.addEventListener('click', (e) => {
+        const toggle = e.target.closest('[data-cdd-toggle]');
+        if (toggle && host.contains(toggle)) {
+          e.preventDefault();
+          const root = toggle.closest('[data-checkbox-dropdown]');
+          const menu = root && root.querySelector('[data-cdd-menu]');
+          if (!root || !menu) return;
+          const willOpen = menu.hidden;
+          this.closeAllCheckboxDropdowns(willOpen ? root : null);
+          menu.hidden = !willOpen;
+          root.classList.toggle('open', willOpen);
+          toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+          if (willOpen) {
+            const search = menu.querySelector('[data-cdd-search]');
+            if (search) {
+              search.value = '';
+              menu.querySelectorAll('[data-cdd-option]').forEach((opt) => { opt.hidden = false; });
+              queueMicrotask(() => search.focus());
+            }
+          }
+          return;
+        }
+        const allBtn = e.target.closest('[data-cdd-all]');
+        if (allBtn && host.contains(allBtn)) {
+          e.preventDefault();
+          const root = allBtn.closest('[data-checkbox-dropdown]');
+          root.querySelectorAll('[data-cdd-opt]').forEach((n) => {
+            if (!n.closest('[data-cdd-option]')?.hidden) n.checked = true;
+          });
+          this.syncCheckboxDropdown(root);
+          this.applyRunSection();
+          return;
+        }
+        const noneBtn = e.target.closest('[data-cdd-none]');
+        if (noneBtn && host.contains(noneBtn)) {
+          e.preventDefault();
+          const root = noneBtn.closest('[data-checkbox-dropdown]');
+          root.querySelectorAll('[data-cdd-opt]').forEach((n) => { n.checked = false; });
+          this.syncCheckboxDropdown(root);
+          this.applyRunSection();
+        }
       });
-      sel.innerHTML = html;
-      if (this.runSections.some((s) => s.id === current)) {
-        sel.value = current;
-      } else {
-        sel.value = 'all';
+      host.addEventListener('input', (e) => {
+        if (!e.target.matches('[data-cdd-search]')) return;
+        const q = e.target.value.trim().toLowerCase();
+        const menu = e.target.closest('[data-cdd-menu]');
+        if (!menu) return;
+        menu.querySelectorAll('[data-cdd-option]').forEach((opt) => {
+          const label = (opt.querySelector('.cdd-opt-lbl')?.textContent || '').toLowerCase();
+          opt.hidden = q !== '' && label.indexOf(q) < 0;
+        });
+      });
+      host.addEventListener('change', (e) => {
+        if (!e.target.matches('[data-cdd-opt]')) return;
+        this.syncCheckboxDropdown(e.target.closest('[data-checkbox-dropdown]'));
+        this.applyRunSection();
+      });
+    },
+
+    syncRunSectionSelect() {
+      const host = this.el('run-section-host');
+      const hidden = this.el('run-section');
+      if (!host) return;
+      this.ensureRunSectionDropdownHandlers();
+      this.runSections = this.buildRunSections();
+      const sections = this.editorSections();
+      const prev = this.getSelectedRunSectionIds();
+      const prevSet = new Set(prev);
+      const hadControls = !!host.querySelector('[data-cdd-opt]');
+      // First paint defaults to All; afterwards honor None vs partial vs All.
+      const selectAll = !hadControls
+        ? true
+        : (sections.length > 0 && prev.length >= sections.length);
+      const selectNone = hadControls && !prev.length;
+      const selectedCsv = selectAll
+        ? sections.map((s) => s.id).join(',')
+        : (selectNone ? '' : prev.filter((id) => sections.some((s) => s.id === id)).join(','));
+      const opts = sections.map((s) => ({
+        value: s.id,
+        label: this.truncateSectionLabel(s.label) + ' (steps ' + s.start + '–' + s.stop + ')',
+      }));
+      const param = {
+        key: 'run_sections',
+        label: '',
+        type: 'checkbox_dropdown',
+        empty_label: '-- Select Sections --',
+        all_label: 'All Sections',
+        summary_label: 'sections',
+        count_summary: true,
+        default: selectedCsv,
+      };
+      // optionsForParam won't know these; inject via temporary dynamic override.
+      const prevJobs = this.optionsForParam;
+      this.optionsForParam = (p, context) => {
+        if (p && p.key === 'run_sections') return opts;
+        return prevJobs.call(this, p, context);
+      };
+      host.innerHTML = this.checkboxDropdownFieldHtml(param, selectedCsv, 'run', 'run_sections', false, null);
+      this.optionsForParam = prevJobs;
+      const root = host.querySelector('[data-checkbox-dropdown]');
+      if (root) {
+        root.querySelectorAll('[data-cdd-opt]').forEach((n) => {
+          n.checked = selectAll ? true : prevSet.has(n.value);
+        });
+        this.syncCheckboxDropdown(root);
+      }
+      if (hidden) {
+        hidden.value = selectAll ? '' : selectedCsv;
       }
     },
 
-    applyRunSection() {
-      const id = this.el('run-section')?.value || 'all';
-      const sec = (this.runSections || this.buildRunSections()).find((s) => s.id === id);
-      if (!sec) return;
-      const startEl = this.el('run-start');
-      const stopEl = this.el('run-stop');
-      const total = Math.max(1, this.recipe.steps?.length || 1);
-      if (startEl) {
-        delete startEl.dataset.userSet;
-        startEl.min = '1';
-        startEl.max = String(total);
-        startEl.value = String(sec.start);
+    applyRunSection(opts) {
+      opts = opts || {};
+      // Section checkbox changes reset skip from section gaps; routine re-sync preserves custom skips.
+      const reseedSkip = opts.reseedSkip !== false;
+      if (this._applyingRunSkip) return;
+      this._applyingRunSection = true;
+      try {
+        const coverage = this.getRunCoverage();
+        const startEl = this.el('run-start');
+        const stopEl = this.el('run-stop');
+        const skipEl = this.el('run-skip');
+        const hidden = this.el('run-section');
+        const total = coverage.total;
+        if (startEl) {
+          delete startEl.dataset.userSet;
+          startEl.min = '1';
+          startEl.max = String(total);
+          startEl.value = String(coverage.start);
+        }
+        if (stopEl) {
+          delete stopEl.dataset.userSet;
+          stopEl.min = '1';
+          stopEl.max = String(total);
+          stopEl.value = String(coverage.stop);
+        }
+        if (skipEl && skipEl !== document.activeElement) {
+          if (reseedSkip || !String(skipEl.value || '').trim()) {
+            skipEl.value = coverage.skipStr;
+          }
+        }
+        this.flushSkipFromEnabled();
+        if (hidden) {
+          hidden.value = coverage.all ? '' : coverage.selectedIds.join(',');
+        }
+        if (this.previewMode) {
+          this.renderStepsPreview();
+        }
+        this.syncRunRangeHighlight();
+        this.syncStepIncludeCheckboxes();
+        this.applySectionCollapseUi();
+        this.syncStepVisibility();
+      } finally {
+        this._applyingRunSection = false;
       }
-      if (stopEl) {
-        delete stopEl.dataset.userSet;
-        stopEl.min = '1';
-        stopEl.max = String(total);
-        stopEl.value = String(sec.stop);
-      }
-      this.syncRunRangeHighlight();
-      this.syncStepVisibility();
     },
 
     syncRunDefaults() {
       const total = Math.max(1, this.recipe.steps?.length || 1);
+      this.absorbDisabledStepsIntoSkip();
       this.syncRunSectionSelect();
       const startEl = this.el('run-start');
       const stopEl = this.el('run-stop');
       const userSet = startEl?.dataset.userSet === '1' || stopEl?.dataset.userSet === '1';
       if (!userSet) {
-        this.applyRunSection();
+        // Keep Skip steps (include checkboxes) across step list re-renders.
+        this.applyRunSection({ reseedSkip: false });
       } else {
         if (startEl) {
           startEl.min = '1';
@@ -2143,6 +2970,12 @@
           stopEl.min = '1';
           stopEl.max = String(total);
         }
+        // Preserve editable skip unless empty (then seed gaps from sections).
+        const skipEl = this.el('run-skip');
+        if (skipEl && !String(skipEl.value || '').trim()) {
+          skipEl.value = this.getRunCoverage().skipStr;
+        }
+        this.flushSkipFromEnabled();
       }
       const sessionText = this.runOptions?.current_session ?? '—';
       const sumSession = this.el('run-db-session');
@@ -2154,6 +2987,8 @@
         navSession.textContent = sessionText;
       }
       this.syncRunRangeHighlight();
+      this.syncStepIncludeCheckboxes();
+      this.applySectionCollapseUi();
       this.syncStepVisibility();
     },
 
@@ -2167,41 +3002,43 @@
       if (options.saveFirst) {
         await this.saveRecipe();
       }
-      const total = Math.max(1, this.recipe.steps?.length || 1);
-      let start = parseInt(this.el('run-start')?.value, 10) || 1;
-      let stop = parseInt(this.el('run-stop')?.value, 10) || total;
+      const coverage = this.getRunCoverage();
+      if (coverage.none) {
+        throw new Error('Select at least one section to run');
+      }
+      const total = coverage.total;
+      let start = parseInt(this.el('run-start')?.value, 10) || coverage.start;
+      let stop = parseInt(this.el('run-stop')?.value, 10) || coverage.stop;
       start = Math.max(1, Math.min(start, total));
       stop = Math.max(start, Math.min(stop, total));
       if (stop < start) {
         throw new Error('Stop step must be at or after start step');
       }
+      const skipStr = (this.el('run-skip')?.value || coverage.skipStr || '').trim();
       this.clearRunCompleteActions();
-      this.setStatus(
-        repeat > 1 ? ('Running ' + repeat + ' cycles (steps ' + start + '–' + stop + ')…') : ('Running steps ' + start + '–' + stop + '…'),
-        'info'
-      );
-      const sectionId = this.el('run-section')?.value || 'all';
+      let statusMsg = repeat > 1
+        ? ('Running ' + repeat + ' cycles (steps ' + start + '–' + stop + ')')
+        : ('Running steps ' + start + '–' + stop);
+      if (skipStr) statusMsg += ' (skip ' + skipStr + ')';
+      statusMsg += '…';
+      this.setStatus(statusMsg, 'info');
       const runBody = {
         recipe: this.recipe,
         save_recipe: true,
         session_count: repeat,
         workflow_file: this.activeWorkflow,
+        start_step: start,
+        stop_step: stop,
+        skip_steps: skipStr,
       };
-      let d;
-      if (sectionId === 'all') {
-        d = await this.simulatorApi('run', 'POST', Object.assign(runBody, {
-          start_step: start,
-          stop_step: stop,
-        }));
-      } else {
-        d = await this.simulatorApi('run_section', 'POST', Object.assign(runBody, {
-          section_id: sectionId,
-          start_step: start,
-          stop_step: stop,
-        }));
-      }
+      // Multi-section (or gaps) always uses the range runner with skip_steps.
+      const d = await this.simulatorApi('run', 'POST', runBody);
       const lines = (d.summary || []).slice();
-      if (d.start_step) lines.unshift('Steps ' + d.start_step + '–' + d.stop_step);
+      if (d.start_step) {
+        let head = 'Steps ' + d.start_step + '–' + d.stop_step;
+        if (d.skip_steps) head += ' (skip ' + d.skip_steps + ')';
+        lines.unshift(head);
+      }
       if (d.warnings?.length) lines.push('', ...d.warnings);
       if (d.index_url) lines.push('', 'Sessions: ' + d.index_url);
       if (d.session_url) lines.push('Latest: ' + d.session_url);
@@ -2214,6 +3051,215 @@
       this.runOptions = await this.simulatorApi('run_options');
       this.syncRunDefaults();
       return d;
+    },
+
+    /**
+     * In-page recipe summary (compiled command + remarks), shown in place of
+     * the Steps editor. Toggle with Preview / Edit — no pop-up window.
+     */
+    togglePreview() {
+      if (this.previewMode) this.hidePreview();
+      else this.showPreview();
+    },
+
+    showPreview() {
+      this.syncAllStepsFromDom();
+      this.runSections = this.buildRunSections();
+      this.previewMode = true;
+      this.renderStepsPreview();
+      this.syncPreviewUi();
+    },
+
+    hidePreview() {
+      this.previewMode = false;
+      this.syncPreviewUi();
+    },
+
+    syncPreviewUi() {
+      const previewing = !!this.previewMode;
+      const scroll = this.el('steps-scroll');
+      const preview = this.el('steps-preview');
+      const title = this.el('steps-panel-title');
+      const btn = this.el('btn-preview');
+      const printBtn = this.el('btn-preview-print');
+      const copyBtn = this.el('btn-preview-copy');
+      const editNav = this.el('steps-edit-nav');
+      const editInsert = this.el('steps-edit-insert');
+      const addBtn = this.el('btn-add');
+      const reloadBtn = this.el('btn-reload');
+      if (scroll) scroll.hidden = previewing;
+      if (preview) preview.hidden = !previewing;
+      if (title) title.textContent = previewing ? 'Preview' : 'Steps';
+      if (btn) {
+        btn.textContent = previewing ? 'Edit' : 'Preview';
+        btn.title = previewing ? 'Return to the step editor' : 'Show clean command summary';
+        btn.classList.toggle('btn-dark', previewing);
+        btn.classList.toggle('btn-outline-dark', !previewing);
+      }
+      if (printBtn) printBtn.hidden = !previewing;
+      if (copyBtn) copyBtn.hidden = !previewing;
+      if (editNav) editNav.hidden = previewing;
+      if (editInsert) editInsert.hidden = previewing;
+      if (addBtn) addBtn.hidden = previewing;
+      if (reloadBtn) reloadBtn.hidden = previewing;
+      document.body.classList.toggle('workflow-preview-mode', previewing);
+    },
+
+    bindPreviewEvents(host) {
+      if (!host) return;
+      host.querySelectorAll('[data-step-include]').forEach((box) => {
+        box.addEventListener('change', (e) => {
+          if (this._syncingIncludeBoxes) return;
+          const n = parseInt(e.target.getAttribute('data-step-num'), 10);
+          if (n) this.setStepIncluded(n, !!e.target.checked);
+        });
+      });
+      host.querySelectorAll('[data-section-collapse]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const li = btn.closest('[data-section-id]');
+          const sid = li?.dataset.sectionId;
+          if (sid) this.toggleSectionCollapsed(sid);
+        });
+      });
+    },
+
+    renderStepsPreview() {
+      const host = this.el('steps-preview');
+      if (!host) return;
+      const steps = Array.isArray(this.recipe.steps) ? this.recipe.steps : [];
+      const name = (this.recipe.name || this.activeWorkflow || 'workflow').trim() || 'workflow';
+      const file = (this.activeWorkflow || '').trim();
+      const esc = (s) => this.escapeHtml(s);
+      const coverage = this.getRunCoverage();
+      const { start, stop, skipStr } = this.getRunStepRange();
+      const skipSet = this.getRunSkipSet();
+      const sections = this.editorSections();
+
+      let body = '';
+      if (!steps.length) {
+        body = '<p class="wf-preview-empty">No steps in this workflow.</p>';
+      } else if (coverage.none) {
+        body = '<p class="wf-preview-empty">Select one or more sections to preview.</p>';
+      } else {
+        body = '<ol class="wf-preview-steps">';
+        const appendStep = (step, idx, n) => {
+          const skipped = skipSet.has(n);
+          let cmd = (this.compileOne(step, idx) || step?.function || '—').trim();
+          if (cmd.indexOf('[object Object]') >= 0) {
+            cmd = cmd.split('[object Object]').join('').replace(/\s+/g, ' ').trim() || (step?.function || '—');
+          }
+          const remarks = (this.rowRemarksText(step) || '').trim();
+          const expandsOwnFilters = [
+            'pick_up_cars', 'set_out_cars', 'fill_orders', 'load_unload',
+            'reposition_empties', 'auto_assign_locals',
+          ].indexOf(step.function) >= 0;
+          if (!expandsOwnFilters) {
+            const filterBits = [];
+            const params = step.params || {};
+            const pdefs = (this.catalogMap[step.function] || {}).params || [];
+            pdefs.forEach((p) => {
+              if (p.type !== 'filter_group') return;
+              const shown = this.formatParamDisplay(params[p.key], p);
+              if (!shown) return;
+              if (cmd.indexOf(shown) >= 0) return;
+              filterBits.push(shown);
+            });
+            if (filterBits.length) {
+              cmd = (cmd + ' (' + filterBits.join('; ') + ')').replace(/\s+/g, ' ').trim();
+            }
+          }
+          const isSection = step.function === 'section_label';
+          const sid = this.sectionIdForStepNum(n, sections);
+          const liClass = [
+            isSection ? 'wf-preview-section' : 'wf-preview-step',
+            skipped ? 'disabled wf-preview-skipped' : '',
+          ].filter(Boolean).join(' ');
+          const collapseBtn = isSection
+            ? ('<button type="button" class="section-collapse-btn" data-section-collapse' +
+              ' aria-expanded="true" title="Collapse section">▼</button>')
+            : '';
+          const includeBox = '<label class="step-include-toggle wf-preview-include" title="Include in run. Unchecked adds this step to Skip steps.">'
+            + '<input type="checkbox" data-step-include data-step-num="' + n + '"'
+            + (skipped ? '' : ' checked')
+            + ' aria-label="Include step ' + n + ' in run"></label>';
+          body += '<li class="' + liClass + '"'
+            + (sid ? (' data-section-id="' + esc(sid) + '"') : '')
+            + ' data-step-num="' + n + '">'
+            + '<div class="wf-preview-cmd">'
+            + collapseBtn
+            + includeBox
+            + '<span class="wf-preview-num">' + n + '.</span> '
+            + esc(cmd)
+            + (skipped ? ' <span class="wf-preview-tag">(skipped)</span>' : '')
+            + '</div>';
+          if (remarks) {
+            body += '<div class="wf-preview-remarks">remarks: ' + esc(remarks) + '</div>';
+          }
+          body += '</li>';
+        };
+
+        const scoped = !coverage.all || skipSet.size > 0;
+        for (let idx = 0; idx < steps.length; idx++) {
+          const n = idx + 1;
+          if (scoped && (n < start || n > stop)) continue;
+          appendStep(steps[idx], idx, n);
+        }
+        body += '</ol>';
+      }
+
+      let meta = esc(name)
+        + ' · ' + steps.length + ' step' + (steps.length === 1 ? '' : 's')
+        + (file ? (' · ' + esc(file)) : '');
+      if (!coverage.all || skipStr) {
+        meta += ' · run ' + start + '–' + stop;
+        if (skipStr) meta += ' (skip ' + esc(skipStr) + ')';
+      }
+      host.innerHTML = '<div class="wf-preview-meta">' + meta + '</div>' + body;
+      this.bindPreviewEvents(host);
+      this.applySectionCollapseUi();
+    },
+
+    async copyPreviewContents() {
+      const host = this.el('steps-preview');
+      if (!host || host.hidden) return;
+      const text = String(host.innerText || host.textContent || '').replace(/\s+$/g, '');
+      if (!text) {
+        this.setStatus('Nothing to copy', 'err');
+        return;
+      }
+      const copyBtn = this.el('btn-preview-copy');
+      const flashCopied = () => {
+        if (!copyBtn) return;
+        const prev = copyBtn.innerHTML;
+        copyBtn.innerHTML = '<i class="bi bi-clipboard-check"></i>';
+        copyBtn.classList.add('btn-success');
+        copyBtn.classList.remove('btn-outline-dark');
+        setTimeout(() => {
+          copyBtn.innerHTML = prev;
+          copyBtn.classList.remove('btn-success');
+          copyBtn.classList.add('btn-outline-dark');
+        }, 1200);
+      };
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        flashCopied();
+        this.setStatus('Preview copied to clipboard', 'ok');
+      } catch (e) {
+        this.setStatus('Could not copy preview: ' + (e && e.message ? e.message : e), 'err');
+      }
     },
   };
 

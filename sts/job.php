@@ -48,9 +48,22 @@ foreach ($train_members as $member_job) {
         $legs[] = $leg;
     }
 }
-usort($legs, static function ($a, $b) {
-    return [(int) $a['workflow_phase'], (int) $a['work_leg']]
-        <=> [(int) $b['workflow_phase'], (int) $b['work_leg']];
+// Rank by Train Info operational order (Starting first), then manifest
+// position — not phase_NN folder numbers (a reconstructed Starting can live
+// in a higher-numbered folder than Outbound/Next Day).
+$phase_rank = session_phase_display_rank($manifest);
+usort($legs, static function ($a, $b) use ($phase_rank) {
+    $ia = session_phase_info_sort_rank((string) ($a['info'] ?? ''));
+    $ib = session_phase_info_sort_rank((string) ($b['info'] ?? ''));
+    if ($ia !== $ib) {
+        return $ia <=> $ib;
+    }
+    $wa = (int) $a['workflow_phase'];
+    $wb = (int) $b['workflow_phase'];
+    $ra = $phase_rank[$wa] ?? $wa;
+    $rb = $phase_rank[$wb] ?? $wb;
+
+    return [$ra, (int) $a['work_leg']] <=> [$rb, (int) $b['work_leg']];
 });
 // Build/cache this train's all-phases print-all switch list while the DB handle
 // is open (the "Train switch lists" nav target below).
@@ -64,6 +77,7 @@ $next_session = session_adjacent_session($browser_sessions, $session, 'next');
 
 // Phase print-all links across every member of the consolidated train.
 $phase_links = [];
+$phase_rank = session_phase_display_rank($manifest);
 foreach ($train_members as $member_job) {
     $member_phases = $manifest['jobs'][$member_job]['phases'] ?? [];
     // Restrict to the latest generation token so re-runs that appended phases to
@@ -74,6 +88,12 @@ foreach ($train_members as $member_job) {
             return isset($token_phase_nums[(int) $p]);
         }));
     }
+    usort($member_phases, static function ($a, $b) use ($phase_rank) {
+        $ra = $phase_rank[(int) $a] ?? (int) $a;
+        $rb = $phase_rank[(int) $b] ?? (int) $b;
+
+        return $ra <=> $rb;
+    });
     foreach (session_train_switchlist_phase_links($session, $member_job, $member_phases, $root) as $pl) {
         $phase_links[] = $pl;
     }
@@ -159,9 +179,9 @@ session_render_nav_bar([
     <p class="muted">Switch lists and the waybills for the cars on each phase.</p>
     <div class="session-nav-row session-nav-row-stats">
       <?php if ($prev_session !== null): ?>
-        <a class="btn btn-outline-dark btn-sm" href="<?php echo htmlspecialchars(session_train_browse_href($prev_session, $job_display, $selected_style, $root)); ?>"><i class="bi bi-chevron-left"></i> Session <?php echo (int) $prev_session; ?></a>
+        <?php echo session_nav_chevron_btn_html('prev', session_train_browse_href($prev_session, $job_display, $selected_style, $root), $prev_session); ?>
       <?php else: ?>
-        <span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>
+        <?php echo session_nav_chevron_btn_html('prev', null); ?>
       <?php endif; ?>
       <label class="job-session-select-label">
         <span class="visually-hidden">Session</span>
@@ -172,9 +192,9 @@ session_render_nav_bar([
         </select>
       </label>
       <?php if ($next_session !== null): ?>
-        <a class="btn btn-outline-dark btn-sm" href="<?php echo htmlspecialchars(session_train_browse_href($next_session, $job_display, $selected_style, $root)); ?>">Session <?php echo (int) $next_session; ?> <i class="bi bi-chevron-right"></i></a>
+        <?php echo session_nav_chevron_btn_html('next', session_train_browse_href($next_session, $job_display, $selected_style, $root), $next_session); ?>
       <?php else: ?>
-        <span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true">Next <i class="bi bi-chevron-right"></i></span>
+        <?php echo session_nav_chevron_btn_html('next', null); ?>
       <?php endif; ?>
       <label class="job-train-select-label">
         <span>Train</span>
@@ -208,7 +228,13 @@ session_render_nav_bar([
           </form>
           <div class="job-phase-nav">
             <button type="button" class="btn btn-outline-dark btn-sm" id="phase-prev"><i class="bi bi-chevron-left"></i> Prev phase</button>
-            <span class="job-phase-label" id="phase-label">Phase 1 of <?php echo count($legs); ?></span>
+            <?php
+              $initial_info = trim((string) ($legs[$initial_leg]['info'] ?? ''));
+              $initial_phase_label = $initial_info !== ''
+                  ? $initial_info
+                  : ('Phase ' . ((int) $initial_leg + 1) . ' of ' . count($legs));
+            ?>
+            <span class="job-phase-label" id="phase-label"><?php echo htmlspecialchars($initial_phase_label); ?></span>
             <button type="button" class="btn btn-outline-dark btn-sm" id="phase-next">Next phase <i class="bi bi-chevron-right"></i></button>
           </div>
         </div>
@@ -218,13 +244,18 @@ session_render_nav_bar([
             <?php
               $leg_open = htmlspecialchars($leg['base_href'] . '_' . $selected_style . '.html');
               $leg_src = htmlspecialchars($leg['base_href'] . '_' . $selected_style . '.html&embed=1');
+              $leg_info = trim((string) ($leg['info'] ?? ''));
+              $leg_title = ($leg_info !== '' && (int) ($leg['work_leg_total'] ?? 0) <= 1)
+                  ? $leg_info
+                  : ('Phase ' . (int) $leg['work_leg'] . ' of ' . (int) $leg['work_leg_total']);
             ?>
             <section class="switchlist-leg"
                      data-leg="<?php echo (int) $i; ?>"
                      data-base="<?php echo htmlspecialchars($leg['base_href']); ?>"
+                     data-info="<?php echo htmlspecialchars($leg_info, ENT_QUOTES); ?>"
                      style="<?php echo $i === $initial_leg ? '' : 'display:none;'; ?>">
               <h2 class="switchlist-leg-title">
-                Phase <?php echo (int) $leg['work_leg']; ?> of <?php echo (int) $leg['work_leg_total']; ?>
+                <?php echo htmlspecialchars($leg_title); ?>
                 <span class="muted">— <?php echo htmlspecialchars($leg['label']); ?></span>
                 <a class="switchlist-leg-open" href="<?php echo $leg_open; ?>" target="_blank" rel="noopener" data-base="<?php echo htmlspecialchars($leg['base_href']); ?>"><i class="bi bi-box-arrow-up-right"></i> Open</a>
               </h2>
@@ -330,7 +361,10 @@ session_render_nav_bar([
           leg.style.display = i === current ? '' : 'none';
         });
         if (phaseLabel) {
-          phaseLabel.textContent = 'Phase ' + (current + 1) + ' of ' + legs.length;
+          const info = (legs[current] && legs[current].dataset.info) ? legs[current].dataset.info.trim() : '';
+          phaseLabel.textContent = info !== ''
+            ? info
+            : ('Phase ' + (current + 1) + ' of ' + legs.length);
         }
         if (prevBtn) prevBtn.disabled = current === 0;
         if (nextBtn) nextBtn.disabled = current === legs.length - 1;

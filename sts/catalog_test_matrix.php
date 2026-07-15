@@ -211,6 +211,7 @@ function catalog_test_matrix_sections($dbc = null)
             'steps' => [
                 [
                     'function' => 'backup_database',
+                    // Full-name override (no prefix): keeps remove_backup pairing stable.
                     'params' => ['backup' => 'catalog_test_backup'],
                     'description' => 'Test: Create Backup',
                 ],

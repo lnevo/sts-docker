@@ -43,27 +43,27 @@ components:
                 options_from: backups
                 allow_custom: true
                 required: true
-                default: demo_line
+                default: hart_seed
           -
             id: backup_database
             category: database
             adder: true
             adder_group: database
             label: Create Backup
-            gui_template: "Create Backup {backup}"
-            description: "Export current database to sts/backups/. GUI: backup_db.php."
+            gui_template: "Create Backup {prefix}<session>"
+            description: "Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. Use a stable prefix (e.g. hart_session) so each session writes hart_session1, hart_session2, … Lock from the session overview for a static *_locked checkpoint."
             runnable: true
             dispatch: backup_database
             gui_path: /sts/backup_db.php
             params:
               -
-                key: backup
-                label: Backup file
-                type: backup
-                options_from: backups
-                allow_custom: true
+                key: prefix
+                label: Backup prefix
+                type: text
+                default: hart_session
                 required: true
-                default: manual_backup
+                placeholder: hart_session
+                visible_label: true
           -
             id: validate_database
             category: database
@@ -212,6 +212,25 @@ components:
             dispatch: stop
             params: []
           -
+            id: skip_steps
+            category: workflow
+            adder: true
+            adder_group: workflow
+            label: Skip steps
+            gui_template: "Skip Steps {steps}"
+            description: "Do not run the listed steps (comma-separated numbers and ranges, e.g. 1-2,5,8-10). Useful when previewing/running non-contiguous sections."
+            runnable: true
+            dispatch: skip_steps
+            params:
+              -
+                key: steps
+                label: Steps
+                type: text
+                default: ""
+                required: true
+                placeholder: "e.g. 1-2,5,8-10"
+                visible_label: true
+          -
             id: goto
             category: workflow
             adder: false
@@ -311,18 +330,20 @@ components:
             adder_group: before
             label: Generate Car Orders
             gui_template: "Generate Orders {shipment}"
-            description: "Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or set Shipment for a single manual order. Max unfilled orders skips generation entirely when the unfilled backlog is above the limit (hard gate). Max new orders/session is a soft cap: it still generates every session but stops after that many new orders, serving due shipments in random order and leaving the rest due for later — this spreads demand smoothly and avoids the burst-then-starve pattern a hard gate causes. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore."
+            description: "Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or check one or more Shipments for manual orders (multi-select). Leave unchecked for AUTOMATIC generation. Max unfilled orders skips generation entirely when the unfilled backlog is above the limit (hard gate). Max new orders/session is a soft cap: it still generates every session but stops after that many new orders, serving due shipments in random order and leaving the rest due for later — this spreads demand smoothly and avoids the burst-then-starve pattern a hard gate causes. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore."
             runnable: true
             dispatch: generate_orders
             params:
               -
                 key: shipment
-                label: Shipment
-                type: shipment
+                label: Shipment (manual)
+                type: checkbox_dropdown
                 options_from: shipments
-                allow_custom: true
                 required: false
                 default: ""
+                visible_label: true
+                empty_label: Automatic
+                summary_label: shipments
               -
                 key: increment_session
                 label: Increment session
@@ -374,6 +395,104 @@ components:
             dispatch: increment_session
             gui_path: /sts/generate.php
             params: []
+          -
+            id: cancel_orders
+            category: operations
+            adder: true
+            adder_group: before
+            label: Cancel Orders
+            gui_template: "Cancel Orders when unfilled > {threshold} down to {target} ({order})"
+            description: "When unfilled (non-E) orders exceed Threshold, cancel unfilled orders down to Target so the generate max_unfilled gate can reopen. Keeps COKE-* orders by default. Choose Oldest first (stale backlog) or Newest first (drop recent surge). Does not invent capacity — pairs with fill/reposition and fleet balance."
+            runnable: true
+            dispatch: cancel_orders
+            params:
+              -
+                key: threshold
+                label: Threshold
+                type: number
+                default: 40
+                required: true
+                min: 0
+              -
+                key: target
+                label: Target
+                type: number
+                default: 30
+                required: true
+                min: 0
+              -
+                key: order
+                label: Cancel order
+                type: select
+                options:
+                  -
+                    value: oldest_first
+                    label: Oldest first
+                  -
+                    value: newest_first
+                    label: Newest first
+                default: oldest_first
+              -
+                key: keep_coke
+                label: Keep coke orders
+                type: select
+                options:
+                  -
+                    value: 1
+                    label: Yes
+                  -
+                    value: 0
+                    label: No
+                default: 1
+          -
+            id: drain_unfilled_orders
+            category: operations
+            adder: false
+            adder_group: before
+            label: Cancel Orders (legacy)
+            gui_template: "Cancel Orders when unfilled > {threshold} down to {target} ({order})"
+            description: Legacy recipe id for Cancel Orders. Prefer cancel_orders in the editor.
+            runnable: true
+            dispatch: cancel_orders
+            params:
+              -
+                key: threshold
+                label: Threshold
+                type: number
+                default: 40
+                required: true
+                min: 0
+              -
+                key: target
+                label: Target
+                type: number
+                default: 30
+                required: true
+                min: 0
+              -
+                key: order
+                label: Cancel order
+                type: select
+                options:
+                  -
+                    value: oldest_first
+                    label: Oldest first
+                  -
+                    value: newest_first
+                    label: Newest first
+                default: oldest_first
+              -
+                key: keep_coke
+                label: Keep coke orders
+                type: select
+                options:
+                  -
+                    value: 1
+                    label: Yes
+                  -
+                    value: 0
+                    label: No
+                default: 1
           -
             id: fill_orders
             category: operations
@@ -564,8 +683,8 @@ components:
             adder: true
             adder_group: during
             label: Assign Cars
-            gui_template: "Assign Cars {jobs} {station}"
-            description: Assign eligible cars to selected job(s)/train(s). Hold Ctrl/Cmd to select multiple. Optional station filter limits picks to one yard.
+            gui_template: "Assign Cars {jobs} {station} {destination}"
+            description: Assign eligible cars to selected job(s)/train(s). Jobs and destinations use checkbox dropdowns (multi-select). Optional station filters limit to cars currently at those yards (OR); destination filters limit to cars bound for those stations/locations (OR — same tokens as Pickup final dest). Prefer multi-destination assigns + Pick Up all over many single-destination steps.
             runnable: true
             dispatch: auto_assign_locals
             gui_path: /sts/auto_assign.php
@@ -573,18 +692,61 @@ components:
               -
                 key: jobs
                 label: Jobs
-                type: jobs_multiselect
+                type: checkbox_dropdown
                 options_from: jobs
                 required: false
                 default: ""
                 visible_label: true
+                empty_label: Any
+                summary_label: jobs
               -
                 key: station
                 label: Station filter
+                type: checkbox_dropdown
+                options_from: stations
+                required: false
+                default: ""
+                visible_label: true
+                suppress_all_station_option: true
+                empty_label: Any
+                summary_label: stations
+              -
+                key: destination
+                label: Destination filter
+                type: checkbox_dropdown
+                options_from: station_locations
+                required: false
+                default: ""
+                visible_label: true
+                empty_label: Any
+                summary_label: destinations
+          -
+            id: release_yard_cars
+            category: operations
+            adder: false
+            adder_group: during
+            label: Release Yard Assignments
+            gui_template: "Release Yard Assignments {job} {station}"
+            description: Clear job assignment for cars still sitting in a yard (not on the train). Use after a selective pick-up so the leave-yard switch list only shows lifted cars.
+            runnable: true
+            dispatch: release_yard_cars
+            params:
+              -
+                key: job
+                label: Job
+                type: job
+                options_from: jobs
+                allow_custom: true
+                required: true
+                default: ""
+                visible_label: true
+              -
+                key: station
+                label: Yard station
                 type: station
                 options_from: stations
                 allow_custom: true
-                required: false
+                required: true
                 default: ""
                 visible_label: true
                 suppress_all_station_option: true
@@ -595,28 +757,30 @@ components:
             adder_group: during
             label: Pick Up Cars
             gui_template: "Pick Up Cars {job} {location_suffix}"
-            description: Pick up assigned cars onto a job train. Optional car filters match the Pick Up Cars page. Leave job blank for all locals (staging excluded).
+            description: "Pick up assigned cars onto a job train. Job and location use checkbox dropdowns (multi-select, OR). Optional car filters match the Pick Up Cars page. Leave jobs unchecked for all locals (staging excluded)."
             runnable: true
             dispatch: pick_up_cars
             params:
               -
                 key: job
                 label: Job
-                type: job
+                type: checkbox_dropdown
                 options_from: jobs
-                allow_custom: true
                 required: false
                 default: ""
                 visible_label: true
+                empty_label: Locals (all)
+                summary_label: jobs
               -
                 key: location
                 label: Location (optional)
-                type: location
+                type: checkbox_dropdown
                 options_from: locations
-                allow_custom: true
                 required: false
                 default: ""
                 visible_label: true
+                empty_label: Any
+                summary_label: locations
               -
                 key: car_filters
                 label: Car filters
@@ -626,9 +790,11 @@ components:
                   -
                     key: pickup_location
                     label: Pickup
-                    type: station_location
+                    type: checkbox_dropdown
                     options_from: station_locations
                     default: ""
+                    empty_label: Any
+                    summary_label: pickup
                   -
                     key: reporting_marks
                     label: Marks
@@ -663,21 +829,27 @@ components:
                   -
                     key: final_destination
                     label: Final dest.
-                    type: station_location
+                    type: checkbox_dropdown
                     options_from: station_locations
                     default: ""
+                    empty_label: Any
+                    summary_label: destinations
                   -
                     key: loading_location
                     label: Loading
-                    type: station_location
+                    type: checkbox_dropdown
                     options_from: station_locations
                     default: ""
+                    empty_label: Any
+                    summary_label: loading
                   -
                     key: unloading_location
                     label: Unloading
-                    type: station_location
+                    type: checkbox_dropdown
                     options_from: station_locations
                     default: ""
+                    empty_label: Any
+                    summary_label: unloading
           -
             id: set_out_cars
             category: operations
@@ -685,29 +857,30 @@ components:
             adder_group: during
             label: Set Out Cars
             gui_template: "Set Out Cars {job} {location}"
-            description: Set out cars from a job train. Choose Final Destination to assign each car to its loading or unloading location (same as Assign on set_out.php). Pick a yard to set out all matching train cars there. Optional car filters match the Set Out Cars page. Leave job and location blank for all locals.
+            description: "Set out cars from a job train. Job and set-out location use checkbox dropdowns (multi-select, OR). Choose Final Destination to spot each car at its loading or unloading location, or pick station/location codes. Optional car filters (including multi Final dest.) match the Set Out Cars page. Leave jobs and locations unchecked for all locals."
             runnable: true
             dispatch: set_out_cars
             params:
               -
                 key: job
                 label: Job
-                type: job
+                type: checkbox_dropdown
                 options_from: jobs
-                allow_custom: true
                 required: false
                 default: ""
                 visible_label: true
+                empty_label: Locals (all)
+                summary_label: jobs
               -
                 key: location
-                label: Location
-                type: setout_location
+                label: Set out at
+                type: checkbox_dropdown
                 options_from: setout_locations
-                allow_custom: true
-                suppress_any_option: true
                 required: false
                 default: ""
                 visible_label: true
+                empty_label: Any
+                summary_label: locations
               -
                 key: car_filters
                 label: Car filters
@@ -717,9 +890,11 @@ components:
                   -
                     key: pickup_location
                     label: Pickup
-                    type: station_location
+                    type: checkbox_dropdown
                     options_from: station_locations
                     default: ""
+                    empty_label: Any
+                    summary_label: pickup
                   -
                     key: reporting_marks
                     label: Marks
@@ -754,21 +929,27 @@ components:
                   -
                     key: final_destination
                     label: Final dest.
-                    type: station_location
+                    type: checkbox_dropdown
                     options_from: station_locations
                     default: ""
+                    empty_label: Any
+                    summary_label: destinations
                   -
                     key: loading_location
                     label: Loading
-                    type: station_location
+                    type: checkbox_dropdown
                     options_from: station_locations
                     default: ""
+                    empty_label: Any
+                    summary_label: loading
                   -
                     key: unloading_location
                     label: Unloading
-                    type: station_location
+                    type: checkbox_dropdown
                     options_from: station_locations
                     default: ""
+                    empty_label: Any
+                    summary_label: unloading
           -
             id: load_unload
             category: operations
@@ -882,19 +1063,19 @@ components:
                 visible_label: true
               -
                 key: title
-                label: Override Train
+                label: Train
                 type: text
                 default: ""
                 required: false
-                placeholder: Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. LOCAL1).
+                placeholder: Optional train name override (consolidates phases with the same value).
                 visible_label: true
               -
                 key: info
-                label: Switch list info
+                label: Info
                 type: text
                 default: ""
                 required: false
-                placeholder: "Extra note shown next to the train name on this switch list only (e.g. Inbound, Outbound, Departure). Does not affect consolidation."
+                placeholder: "Note beside the train name (e.g. Inbound, Outbound, Next Day)."
                 visible_label: true
           -
             id: generate_waybills
@@ -907,6 +1088,44 @@ components:
             runnable: true
             dispatch: generate_waybills
             params: []
+          -
+            id: generate_station_report
+            category: reports
+            adder: true
+            adder_group: reports
+            label: Generate Station Report
+            gui_template: "Generate Station Report{info_suffix}"
+            description: "Snapshot cars by station from the live database into this session's station report. Each call appends a new phase (Phase 1, Phase 2, …); optional Info labels the phase (like Train Info on switch lists). Station-report phases are numbered independently of wheel reports."
+            runnable: true
+            dispatch: generate_station_report
+            params:
+              -
+                key: info
+                label: Info
+                type: text
+                default: ""
+                required: false
+                placeholder: "Optional phase label (e.g. Starting, After D749, End of session)."
+                visible_label: true
+          -
+            id: generate_wheel_report
+            category: reports
+            adder: true
+            adder_group: reports
+            label: Generate Wheel Report
+            gui_template: "Generate Wheel Report{info_suffix}"
+            description: "Snapshot in-train / assigned cars from the live database into this session's wheel report. Each call appends a new phase (Phase 1, Phase 2, …); optional Info labels the phase. Wheel-report phases are numbered independently of station reports."
+            runnable: true
+            dispatch: generate_wheel_report
+            params:
+              -
+                key: info
+                label: Info
+                type: text
+                default: ""
+                required: false
+                placeholder: "Optional phase label (e.g. Starting, After CK1, End of session)."
+                visible_label: true
           -
             id: render_switchlists
             category: switchlists
@@ -1173,7 +1392,144 @@ components:
             runnable: false
             gui_path: /sts/printable_station_qr_code_report.php
             params: []
+          -
+            id: replenish_coke_orders
+            category: operations
+            adder: false
+            adder_group: before
+            label: Replenish Coke Orders
+            gui_template: "Replenish Coke Orders (target {target_min}–{target_max})"
+            description: "Count unfilled outbound coke orders (USS/CLEV singles and bulk). When below target minimum, generate single-car COKE-USS / COKE-CLEV orders alternating lanes until the minimum is met (capped at target maximum)."
+            runnable: true
+            dispatch: replenish_coke_orders
+            params:
+              -
+                key: target_min
+                label: Target minimum
+                type: number
+                default: 6
+                required: true
+                min: 1
+                step: 1
+                visible_label: true
+              -
+                key: target_max
+                label: Target maximum
+                type: number
+                default: 8
+                required: true
+                min: 1
+                step: 1
+                visible_label: true
+          -
+            id: track_scale
+            category: operations
+            adder: true
+            adder_group: during
+            label: Track Scale
+            gui_template: "Weigh Cars {job}{commodity_suffix}"
+            description: Weigh loaded cars on a job train (or at the scale) for the selected commodity. Uses track scale config when commodity is blank.
+            runnable: true
+            dispatch: track_scale
+            params:
+              -
+                key: job
+                label: Job
+                type: job
+                options_from: jobs
+                allow_custom: true
+                required: false
+                default: ""
+                visible_label: true
+              -
+                key: commodity
+                label: Commodity
+                type: commodity
+                options_from: commodities
+                allow_custom: true
+                required: false
+                default: ""
+                visible_label: true
+          -
+            id: calibrate_track_scale
+            category: operations
+            adder: true
+            adder_group: during
+            label: Calibrate Track Scale
+            gui_template: "Calibrate Track Scale (every {every_sessions} session[s])"
+            description: "Recalibrate the coke track scale. Performs a fresh random calibration when required (first use / out of service) or when the configured number of sessions have elapsed since the last calibration. Set to 1 to calibrate every session (steady ~15% reload routing); higher values let scale drift accumulate so more cars route to reload between calibrations. Run this before the Track Scale weigh step."
+            runnable: true
+            dispatch: calibrate_track_scale
+            params:
+              -
+                key: every_sessions
+                label: Calibrate every N sessions
+                type: number
+                default: 1
+                required: false
+                min: 1
+                step: 1
+                visible_label: true
+          -
+            id: track_scale_gui
+            category: operations
+            adder: false
+            label: Track Scale (STS GUI)
+            gui_template: Track Scale
+            description: "Weigh cars at track scale. GUI: track_scale.php."
+            runnable: false
+            gui_path: /sts/track_scale.php
+            params: []
         adder_functions:
+          -
+            id: cancel_orders
+            category: operations
+            adder: true
+            adder_group: before
+            label: Cancel Orders
+            gui_template: "Cancel Orders when unfilled > {threshold} down to {target} ({order})"
+            description: "When unfilled (non-E) orders exceed Threshold, cancel unfilled orders down to Target so the generate max_unfilled gate can reopen. Keeps COKE-* orders by default. Choose Oldest first (stale backlog) or Newest first (drop recent surge). Does not invent capacity — pairs with fill/reposition and fleet balance."
+            runnable: true
+            dispatch: cancel_orders
+            params:
+              -
+                key: threshold
+                label: Threshold
+                type: number
+                default: 40
+                required: true
+                min: 0
+              -
+                key: target
+                label: Target
+                type: number
+                default: 30
+                required: true
+                min: 0
+              -
+                key: order
+                label: Cancel order
+                type: select
+                options:
+                  -
+                    value: oldest_first
+                    label: Oldest first
+                  -
+                    value: newest_first
+                    label: Newest first
+                default: oldest_first
+              -
+                key: keep_coke
+                label: Keep coke orders
+                type: select
+                options:
+                  -
+                    value: 1
+                    label: Yes
+                  -
+                    value: 0
+                    label: No
+                default: 1
           -
             id: generate_orders
             category: operations
@@ -1181,18 +1537,20 @@ components:
             adder_group: before
             label: Generate Car Orders
             gui_template: "Generate Orders {shipment}"
-            description: "Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or set Shipment for a single manual order. Max unfilled orders skips generation entirely when the unfilled backlog is above the limit (hard gate). Max new orders/session is a soft cap: it still generates every session but stops after that many new orders, serving due shipments in random order and leaving the rest due for later — this spreads demand smoothly and avoids the burst-then-starve pattern a hard gate causes. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore."
+            description: "Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or check one or more Shipments for manual orders (multi-select). Leave unchecked for AUTOMATIC generation. Max unfilled orders skips generation entirely when the unfilled backlog is above the limit (hard gate). Max new orders/session is a soft cap: it still generates every session but stops after that many new orders, serving due shipments in random order and leaving the rest due for later — this spreads demand smoothly and avoids the burst-then-starve pattern a hard gate causes. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore."
             runnable: true
             dispatch: generate_orders
             params:
               -
                 key: shipment
-                label: Shipment
-                type: shipment
+                label: Shipment (manual)
+                type: checkbox_dropdown
                 options_from: shipments
-                allow_custom: true
                 required: false
                 default: ""
+                visible_label: true
+                empty_label: Automatic
+                summary_label: shipments
               -
                 key: increment_session
                 label: Increment session
@@ -1422,8 +1780,8 @@ components:
             adder: true
             adder_group: during
             label: Assign Cars
-            gui_template: "Assign Cars {jobs} {station}"
-            description: Assign eligible cars to selected job(s)/train(s). Hold Ctrl/Cmd to select multiple. Optional station filter limits picks to one yard.
+            gui_template: "Assign Cars {jobs} {station} {destination}"
+            description: Assign eligible cars to selected job(s)/train(s). Jobs and destinations use checkbox dropdowns (multi-select). Optional station filters limit to cars currently at those yards (OR); destination filters limit to cars bound for those stations/locations (OR — same tokens as Pickup final dest). Prefer multi-destination assigns + Pick Up all over many single-destination steps.
             runnable: true
             dispatch: auto_assign_locals
             gui_path: /sts/auto_assign.php
@@ -1431,21 +1789,34 @@ components:
               -
                 key: jobs
                 label: Jobs
-                type: jobs_multiselect
+                type: checkbox_dropdown
                 options_from: jobs
                 required: false
                 default: ""
                 visible_label: true
+                empty_label: Any
+                summary_label: jobs
               -
                 key: station
                 label: Station filter
-                type: station
+                type: checkbox_dropdown
                 options_from: stations
-                allow_custom: true
                 required: false
                 default: ""
                 visible_label: true
                 suppress_all_station_option: true
+                empty_label: Any
+                summary_label: stations
+              -
+                key: destination
+                label: Destination filter
+                type: checkbox_dropdown
+                options_from: station_locations
+                required: false
+                default: ""
+                visible_label: true
+                empty_label: Any
+                summary_label: destinations
           -
             id: pick_up_cars
             category: operations
@@ -1453,28 +1824,30 @@ components:
             adder_group: during
             label: Pick Up Cars
             gui_template: "Pick Up Cars {job} {location_suffix}"
-            description: Pick up assigned cars onto a job train. Optional car filters match the Pick Up Cars page. Leave job blank for all locals (staging excluded).
+            description: "Pick up assigned cars onto a job train. Job and location use checkbox dropdowns (multi-select, OR). Optional car filters match the Pick Up Cars page. Leave jobs unchecked for all locals (staging excluded)."
             runnable: true
             dispatch: pick_up_cars
             params:
               -
                 key: job
                 label: Job
-                type: job
+                type: checkbox_dropdown
                 options_from: jobs
-                allow_custom: true
                 required: false
                 default: ""
                 visible_label: true
+                empty_label: Locals (all)
+                summary_label: jobs
               -
                 key: location
                 label: Location (optional)
-                type: location
+                type: checkbox_dropdown
                 options_from: locations
-                allow_custom: true
                 required: false
                 default: ""
                 visible_label: true
+                empty_label: Any
+                summary_label: locations
               -
                 key: car_filters
                 label: Car filters
@@ -1484,9 +1857,11 @@ components:
                   -
                     key: pickup_location
                     label: Pickup
-                    type: station_location
+                    type: checkbox_dropdown
                     options_from: station_locations
                     default: ""
+                    empty_label: Any
+                    summary_label: pickup
                   -
                     key: reporting_marks
                     label: Marks
@@ -1521,21 +1896,27 @@ components:
                   -
                     key: final_destination
                     label: Final dest.
-                    type: station_location
+                    type: checkbox_dropdown
                     options_from: station_locations
                     default: ""
+                    empty_label: Any
+                    summary_label: destinations
                   -
                     key: loading_location
                     label: Loading
-                    type: station_location
+                    type: checkbox_dropdown
                     options_from: station_locations
                     default: ""
+                    empty_label: Any
+                    summary_label: loading
                   -
                     key: unloading_location
                     label: Unloading
-                    type: station_location
+                    type: checkbox_dropdown
                     options_from: station_locations
                     default: ""
+                    empty_label: Any
+                    summary_label: unloading
           -
             id: set_out_cars
             category: operations
@@ -1543,29 +1924,30 @@ components:
             adder_group: during
             label: Set Out Cars
             gui_template: "Set Out Cars {job} {location}"
-            description: Set out cars from a job train. Choose Final Destination to assign each car to its loading or unloading location (same as Assign on set_out.php). Pick a yard to set out all matching train cars there. Optional car filters match the Set Out Cars page. Leave job and location blank for all locals.
+            description: "Set out cars from a job train. Job and set-out location use checkbox dropdowns (multi-select, OR). Choose Final Destination to spot each car at its loading or unloading location, or pick station/location codes. Optional car filters (including multi Final dest.) match the Set Out Cars page. Leave jobs and locations unchecked for all locals."
             runnable: true
             dispatch: set_out_cars
             params:
               -
                 key: job
                 label: Job
-                type: job
+                type: checkbox_dropdown
                 options_from: jobs
-                allow_custom: true
                 required: false
                 default: ""
                 visible_label: true
+                empty_label: Locals (all)
+                summary_label: jobs
               -
                 key: location
-                label: Location
-                type: setout_location
+                label: Set out at
+                type: checkbox_dropdown
                 options_from: setout_locations
-                allow_custom: true
-                suppress_any_option: true
                 required: false
                 default: ""
                 visible_label: true
+                empty_label: Any
+                summary_label: locations
               -
                 key: car_filters
                 label: Car filters
@@ -1575,9 +1957,11 @@ components:
                   -
                     key: pickup_location
                     label: Pickup
-                    type: station_location
+                    type: checkbox_dropdown
                     options_from: station_locations
                     default: ""
+                    empty_label: Any
+                    summary_label: pickup
                   -
                     key: reporting_marks
                     label: Marks
@@ -1612,21 +1996,76 @@ components:
                   -
                     key: final_destination
                     label: Final dest.
-                    type: station_location
+                    type: checkbox_dropdown
                     options_from: station_locations
                     default: ""
+                    empty_label: Any
+                    summary_label: destinations
                   -
                     key: loading_location
                     label: Loading
-                    type: station_location
+                    type: checkbox_dropdown
                     options_from: station_locations
                     default: ""
+                    empty_label: Any
+                    summary_label: loading
                   -
                     key: unloading_location
                     label: Unloading
-                    type: station_location
+                    type: checkbox_dropdown
                     options_from: station_locations
                     default: ""
+                    empty_label: Any
+                    summary_label: unloading
+          -
+            id: track_scale
+            category: operations
+            adder: true
+            adder_group: during
+            label: Track Scale
+            gui_template: "Weigh Cars {job}{commodity_suffix}"
+            description: Weigh loaded cars on a job train (or at the scale) for the selected commodity. Uses track scale config when commodity is blank.
+            runnable: true
+            dispatch: track_scale
+            params:
+              -
+                key: job
+                label: Job
+                type: job
+                options_from: jobs
+                allow_custom: true
+                required: false
+                default: ""
+                visible_label: true
+              -
+                key: commodity
+                label: Commodity
+                type: commodity
+                options_from: commodities
+                allow_custom: true
+                required: false
+                default: ""
+                visible_label: true
+          -
+            id: calibrate_track_scale
+            category: operations
+            adder: true
+            adder_group: during
+            label: Calibrate Track Scale
+            gui_template: "Calibrate Track Scale (every {every_sessions} session[s])"
+            description: "Recalibrate the coke track scale. Performs a fresh random calibration when required (first use / out of service) or when the configured number of sessions have elapsed since the last calibration. Set to 1 to calibrate every session (steady ~15% reload routing); higher values let scale drift accumulate so more cars route to reload between calibrations. Run this before the Track Scale weigh step."
+            runnable: true
+            dispatch: calibrate_track_scale
+            params:
+              -
+                key: every_sessions
+                label: Calibrate every N sessions
+                type: number
+                default: 1
+                required: false
+                min: 1
+                step: 1
+                visible_label: true
           -
             id: load_unload
             category: operations
@@ -1740,19 +2179,19 @@ components:
                 visible_label: true
               -
                 key: title
-                label: Override Train
+                label: Train
                 type: text
                 default: ""
                 required: false
-                placeholder: Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. LOCAL1).
+                placeholder: Optional train name override (consolidates phases with the same value).
                 visible_label: true
               -
                 key: info
-                label: Switch list info
+                label: Info
                 type: text
                 default: ""
                 required: false
-                placeholder: "Extra note shown next to the train name on this switch list only (e.g. Inbound, Outbound, Departure). Does not affect consolidation."
+                placeholder: "Note beside the train name (e.g. Inbound, Outbound, Next Day)."
                 visible_label: true
           -
             id: generate_waybills
@@ -1765,6 +2204,44 @@ components:
             runnable: true
             dispatch: generate_waybills
             params: []
+          -
+            id: generate_station_report
+            category: reports
+            adder: true
+            adder_group: reports
+            label: Generate Station Report
+            gui_template: "Generate Station Report{info_suffix}"
+            description: "Snapshot cars by station from the live database into this session's station report. Each call appends a new phase (Phase 1, Phase 2, …); optional Info labels the phase (like Train Info on switch lists). Station-report phases are numbered independently of wheel reports."
+            runnable: true
+            dispatch: generate_station_report
+            params:
+              -
+                key: info
+                label: Info
+                type: text
+                default: ""
+                required: false
+                placeholder: "Optional phase label (e.g. Starting, After D749, End of session)."
+                visible_label: true
+          -
+            id: generate_wheel_report
+            category: reports
+            adder: true
+            adder_group: reports
+            label: Generate Wheel Report
+            gui_template: "Generate Wheel Report{info_suffix}"
+            description: "Snapshot in-train / assigned cars from the live database into this session's wheel report. Each call appends a new phase (Phase 1, Phase 2, …); optional Info labels the phase. Wheel-report phases are numbered independently of station reports."
+            runnable: true
+            dispatch: generate_wheel_report
+            params:
+              -
+                key: info
+                label: Info
+                type: text
+                default: ""
+                required: false
+                placeholder: "Optional phase label (e.g. Starting, After CK1, End of session)."
+                visible_label: true
           -
             id: restore_database
             category: database
@@ -1784,27 +2261,27 @@ components:
                 options_from: backups
                 allow_custom: true
                 required: true
-                default: demo_line
+                default: hart_seed
           -
             id: backup_database
             category: database
             adder: true
             adder_group: database
             label: Create Backup
-            gui_template: "Create Backup {backup}"
-            description: "Export current database to sts/backups/. GUI: backup_db.php."
+            gui_template: "Create Backup {prefix}<session>"
+            description: "Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. Use a stable prefix (e.g. hart_session) so each session writes hart_session1, hart_session2, … Lock from the session overview for a static *_locked checkpoint."
             runnable: true
             dispatch: backup_database
             gui_path: /sts/backup_db.php
             params:
               -
-                key: backup
-                label: Backup file
-                type: backup
-                options_from: backups
-                allow_custom: true
+                key: prefix
+                label: Backup prefix
+                type: text
+                default: hart_session
                 required: true
-                default: manual_backup
+                placeholder: hart_session
+                visible_label: true
           -
             id: validate_database
             category: database
@@ -2005,6 +2482,25 @@ components:
                 type: number
                 default: ""
           -
+            id: skip_steps
+            category: workflow
+            adder: true
+            adder_group: workflow
+            label: Skip steps
+            gui_template: "Skip Steps {steps}"
+            description: "Do not run the listed steps (comma-separated numbers and ranges, e.g. 1-2,5,8-10). Useful when previewing/running non-contiguous sections."
+            runnable: true
+            dispatch: skip_steps
+            params:
+              -
+                key: steps
+                label: Steps
+                type: text
+                default: ""
+                required: true
+                placeholder: "e.g. 1-2,5,8-10"
+                visible_label: true
+          -
             id: stop
             category: workflow
             adder: true
@@ -2061,7 +2557,7 @@ components:
                   options_from: backups
                   allow_custom: true
                   required: true
-                  default: demo_line
+                  default: hart_seed
         backup_database:
           type: object
           required: [id, label, params]
@@ -2083,23 +2579,23 @@ components:
               example: backup_database
             gui_template:
               type: string
-              example: "Create Backup {backup}"
+              example: "Create Backup {prefix}<session>"
             description:
               type: string
-              example: "Export current database to sts/backups/. GUI: backup_db.php."
+              example: "Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. Use a stable prefix (e.g. hart_session) so each session writes hart_session1, hart_session2, … Lock from the session overview for a static *_locked checkpoint."
             params:
               type: array
               items:
                 $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
               example:
                 -
-                  key: backup
-                  label: Backup file
-                  type: backup
-                  options_from: backups
-                  allow_custom: true
+                  key: prefix
+                  label: Backup prefix
+                  type: text
+                  default: hart_session
                   required: true
-                  default: manual_backup
+                  placeholder: hart_session
+                  visible_label: true
         validate_database:
           type: object
           required: [id, label, params]
@@ -2396,6 +2892,44 @@ components:
               items:
                 $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
               example: []
+        skip_steps:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [skip_steps]
+            label:
+              type: string
+              example: Skip steps
+            category:
+              type: string
+              example: workflow
+            runnable:
+              type: boolean
+              example: true
+            dispatch:
+              type: string
+              example: skip_steps
+            gui_template:
+              type: string
+              example: "Skip Steps {steps}"
+            description:
+              type: string
+              example: "Do not run the listed steps (comma-separated numbers and ranges, e.g. 1-2,5,8-10). Useful when previewing/running non-contiguous sections."
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example:
+                -
+                  key: steps
+                  label: Steps
+                  type: text
+                  default: ""
+                  required: true
+                  placeholder: "e.g. 1-2,5,8-10"
+                  visible_label: true
         goto:
           type: object
           required: [id, label, params]
@@ -2569,7 +3103,7 @@ components:
               example: "Generate Orders {shipment}"
             description:
               type: string
-              example: "Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or set Shipment for a single manual order. Max unfilled orders skips generation entirely when the unfilled backlog is above the limit (hard gate). Max new orders/session is a soft cap: it still generates every session but stops after that many new orders, serving due shipments in random order and leaving the rest due for later — this spreads demand smoothly and avoids the burst-then-starve pattern a hard gate causes. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore."
+              example: "Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or check one or more Shipments for manual orders (multi-select). Leave unchecked for AUTOMATIC generation. Max unfilled orders skips generation entirely when the unfilled backlog is above the limit (hard gate). Max new orders/session is a soft cap: it still generates every session but stops after that many new orders, serving due shipments in random order and leaving the rest due for later — this spreads demand smoothly and avoids the burst-then-starve pattern a hard gate causes. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore."
             params:
               type: array
               items:
@@ -2577,12 +3111,14 @@ components:
               example:
                 -
                   key: shipment
-                  label: Shipment
-                  type: shipment
+                  label: Shipment (manual)
+                  type: checkbox_dropdown
                   options_from: shipments
-                  allow_custom: true
                   required: false
                   default: ""
+                  visible_label: true
+                  empty_label: Automatic
+                  summary_label: shipments
                 -
                   key: increment_session
                   label: Increment session
@@ -2652,6 +3188,142 @@ components:
               items:
                 $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
               example: []
+        cancel_orders:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [cancel_orders]
+            label:
+              type: string
+              example: Cancel Orders
+            category:
+              type: string
+              example: operations
+            runnable:
+              type: boolean
+              example: true
+            dispatch:
+              type: string
+              example: cancel_orders
+            gui_template:
+              type: string
+              example: "Cancel Orders when unfilled > {threshold} down to {target} ({order})"
+            description:
+              type: string
+              example: "When unfilled (non-E) orders exceed Threshold, cancel unfilled orders down to Target so the generate max_unfilled gate can reopen. Keeps COKE-* orders by default. Choose Oldest first (stale backlog) or Newest first (drop recent surge). Does not invent capacity — pairs with fill/reposition and fleet balance."
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example:
+                -
+                  key: threshold
+                  label: Threshold
+                  type: number
+                  default: 40
+                  required: true
+                  min: 0
+                -
+                  key: target
+                  label: Target
+                  type: number
+                  default: 30
+                  required: true
+                  min: 0
+                -
+                  key: order
+                  label: Cancel order
+                  type: select
+                  options:
+                    -
+                      value: oldest_first
+                      label: Oldest first
+                    -
+                      value: newest_first
+                      label: Newest first
+                  default: oldest_first
+                -
+                  key: keep_coke
+                  label: Keep coke orders
+                  type: select
+                  options:
+                    -
+                      value: 1
+                      label: Yes
+                    -
+                      value: 0
+                      label: No
+                  default: 1
+        drain_unfilled_orders:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [drain_unfilled_orders]
+            label:
+              type: string
+              example: Cancel Orders (legacy)
+            category:
+              type: string
+              example: operations
+            runnable:
+              type: boolean
+              example: true
+            dispatch:
+              type: string
+              example: cancel_orders
+            gui_template:
+              type: string
+              example: "Cancel Orders when unfilled > {threshold} down to {target} ({order})"
+            description:
+              type: string
+              example: Legacy recipe id for Cancel Orders. Prefer cancel_orders in the editor.
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example:
+                -
+                  key: threshold
+                  label: Threshold
+                  type: number
+                  default: 40
+                  required: true
+                  min: 0
+                -
+                  key: target
+                  label: Target
+                  type: number
+                  default: 30
+                  required: true
+                  min: 0
+                -
+                  key: order
+                  label: Cancel order
+                  type: select
+                  options:
+                    -
+                      value: oldest_first
+                      label: Oldest first
+                    -
+                      value: newest_first
+                      label: Newest first
+                  default: oldest_first
+                -
+                  key: keep_coke
+                  label: Keep coke orders
+                  type: select
+                  options:
+                    -
+                      value: 1
+                      label: Yes
+                    -
+                      value: 0
+                      label: No
+                  default: 1
         fill_orders:
           type: object
           required: [id, label, params]
@@ -2894,10 +3566,10 @@ components:
               example: auto_assign_locals
             gui_template:
               type: string
-              example: "Assign Cars {jobs} {station}"
+              example: "Assign Cars {jobs} {station} {destination}"
             description:
               type: string
-              example: Assign eligible cars to selected job(s)/train(s). Hold Ctrl/Cmd to select multiple. Optional station filter limits picks to one yard.
+              example: Assign eligible cars to selected job(s)/train(s). Jobs and destinations use checkbox dropdowns (multi-select). Optional station filters limit to cars currently at those yards (OR); destination filters limit to cars bound for those stations/locations (OR — same tokens as Pickup final dest). Prefer multi-destination assigns + Pick Up all over many single-destination steps.
             params:
               type: array
               items:
@@ -2906,18 +3578,80 @@ components:
                 -
                   key: jobs
                   label: Jobs
-                  type: jobs_multiselect
+                  type: checkbox_dropdown
                   options_from: jobs
                   required: false
                   default: ""
                   visible_label: true
+                  empty_label: Any
+                  summary_label: jobs
                 -
                   key: station
                   label: Station filter
+                  type: checkbox_dropdown
+                  options_from: stations
+                  required: false
+                  default: ""
+                  visible_label: true
+                  suppress_all_station_option: true
+                  empty_label: Any
+                  summary_label: stations
+                -
+                  key: destination
+                  label: Destination filter
+                  type: checkbox_dropdown
+                  options_from: station_locations
+                  required: false
+                  default: ""
+                  visible_label: true
+                  empty_label: Any
+                  summary_label: destinations
+        release_yard_cars:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [release_yard_cars]
+            label:
+              type: string
+              example: Release Yard Assignments
+            category:
+              type: string
+              example: operations
+            runnable:
+              type: boolean
+              example: true
+            dispatch:
+              type: string
+              example: release_yard_cars
+            gui_template:
+              type: string
+              example: "Release Yard Assignments {job} {station}"
+            description:
+              type: string
+              example: Clear job assignment for cars still sitting in a yard (not on the train). Use after a selective pick-up so the leave-yard switch list only shows lifted cars.
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example:
+                -
+                  key: job
+                  label: Job
+                  type: job
+                  options_from: jobs
+                  allow_custom: true
+                  required: true
+                  default: ""
+                  visible_label: true
+                -
+                  key: station
+                  label: Yard station
                   type: station
                   options_from: stations
                   allow_custom: true
-                  required: false
+                  required: true
                   default: ""
                   visible_label: true
                   suppress_all_station_option: true
@@ -2945,7 +3679,7 @@ components:
               example: "Pick Up Cars {job} {location_suffix}"
             description:
               type: string
-              example: Pick up assigned cars onto a job train. Optional car filters match the Pick Up Cars page. Leave job blank for all locals (staging excluded).
+              example: "Pick up assigned cars onto a job train. Job and location use checkbox dropdowns (multi-select, OR). Optional car filters match the Pick Up Cars page. Leave jobs unchecked for all locals (staging excluded)."
             params:
               type: array
               items:
@@ -2954,21 +3688,23 @@ components:
                 -
                   key: job
                   label: Job
-                  type: job
+                  type: checkbox_dropdown
                   options_from: jobs
-                  allow_custom: true
                   required: false
                   default: ""
                   visible_label: true
+                  empty_label: Locals (all)
+                  summary_label: jobs
                 -
                   key: location
                   label: Location (optional)
-                  type: location
+                  type: checkbox_dropdown
                   options_from: locations
-                  allow_custom: true
                   required: false
                   default: ""
                   visible_label: true
+                  empty_label: Any
+                  summary_label: locations
                 -
                   key: car_filters
                   label: Car filters
@@ -2978,9 +3714,11 @@ components:
                     -
                       key: pickup_location
                       label: Pickup
-                      type: station_location
+                      type: checkbox_dropdown
                       options_from: station_locations
                       default: ""
+                      empty_label: Any
+                      summary_label: pickup
                     -
                       key: reporting_marks
                       label: Marks
@@ -3015,21 +3753,27 @@ components:
                     -
                       key: final_destination
                       label: Final dest.
-                      type: station_location
+                      type: checkbox_dropdown
                       options_from: station_locations
                       default: ""
+                      empty_label: Any
+                      summary_label: destinations
                     -
                       key: loading_location
                       label: Loading
-                      type: station_location
+                      type: checkbox_dropdown
                       options_from: station_locations
                       default: ""
+                      empty_label: Any
+                      summary_label: loading
                     -
                       key: unloading_location
                       label: Unloading
-                      type: station_location
+                      type: checkbox_dropdown
                       options_from: station_locations
                       default: ""
+                      empty_label: Any
+                      summary_label: unloading
         set_out_cars:
           type: object
           required: [id, label, params]
@@ -3054,7 +3798,7 @@ components:
               example: "Set Out Cars {job} {location}"
             description:
               type: string
-              example: Set out cars from a job train. Choose Final Destination to assign each car to its loading or unloading location (same as Assign on set_out.php). Pick a yard to set out all matching train cars there. Optional car filters match the Set Out Cars page. Leave job and location blank for all locals.
+              example: "Set out cars from a job train. Job and set-out location use checkbox dropdowns (multi-select, OR). Choose Final Destination to spot each car at its loading or unloading location, or pick station/location codes. Optional car filters (including multi Final dest.) match the Set Out Cars page. Leave jobs and locations unchecked for all locals."
             params:
               type: array
               items:
@@ -3063,22 +3807,23 @@ components:
                 -
                   key: job
                   label: Job
-                  type: job
+                  type: checkbox_dropdown
                   options_from: jobs
-                  allow_custom: true
                   required: false
                   default: ""
                   visible_label: true
+                  empty_label: Locals (all)
+                  summary_label: jobs
                 -
                   key: location
-                  label: Location
-                  type: setout_location
+                  label: Set out at
+                  type: checkbox_dropdown
                   options_from: setout_locations
-                  allow_custom: true
-                  suppress_any_option: true
                   required: false
                   default: ""
                   visible_label: true
+                  empty_label: Any
+                  summary_label: locations
                 -
                   key: car_filters
                   label: Car filters
@@ -3088,9 +3833,11 @@ components:
                     -
                       key: pickup_location
                       label: Pickup
-                      type: station_location
+                      type: checkbox_dropdown
                       options_from: station_locations
                       default: ""
+                      empty_label: Any
+                      summary_label: pickup
                     -
                       key: reporting_marks
                       label: Marks
@@ -3125,21 +3872,27 @@ components:
                     -
                       key: final_destination
                       label: Final dest.
-                      type: station_location
+                      type: checkbox_dropdown
                       options_from: station_locations
                       default: ""
+                      empty_label: Any
+                      summary_label: destinations
                     -
                       key: loading_location
                       label: Loading
-                      type: station_location
+                      type: checkbox_dropdown
                       options_from: station_locations
                       default: ""
+                      empty_label: Any
+                      summary_label: loading
                     -
                       key: unloading_location
                       label: Unloading
-                      type: station_location
+                      type: checkbox_dropdown
                       options_from: station_locations
                       default: ""
+                      empty_label: Any
+                      summary_label: unloading
         load_unload:
           type: object
           required: [id, label, params]
@@ -3290,19 +4043,19 @@ components:
                   visible_label: true
                 -
                   key: title
-                  label: Override Train
+                  label: Train
                   type: text
                   default: ""
                   required: false
-                  placeholder: Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. LOCAL1).
+                  placeholder: Optional train name override (consolidates phases with the same value).
                   visible_label: true
                 -
                   key: info
-                  label: Switch list info
+                  label: Info
                   type: text
                   default: ""
                   required: false
-                  placeholder: "Extra note shown next to the train name on this switch list only (e.g. Inbound, Outbound, Departure). Does not affect consolidation."
+                  placeholder: "Note beside the train name (e.g. Inbound, Outbound, Next Day)."
                   visible_label: true
         generate_waybills:
           type: object
@@ -3334,6 +4087,82 @@ components:
               items:
                 $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
               example: []
+        generate_station_report:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [generate_station_report]
+            label:
+              type: string
+              example: Generate Station Report
+            category:
+              type: string
+              example: reports
+            runnable:
+              type: boolean
+              example: true
+            dispatch:
+              type: string
+              example: generate_station_report
+            gui_template:
+              type: string
+              example: "Generate Station Report{info_suffix}"
+            description:
+              type: string
+              example: "Snapshot cars by station from the live database into this session's station report. Each call appends a new phase (Phase 1, Phase 2, …); optional Info labels the phase (like Train Info on switch lists). Station-report phases are numbered independently of wheel reports."
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example:
+                -
+                  key: info
+                  label: Info
+                  type: text
+                  default: ""
+                  required: false
+                  placeholder: "Optional phase label (e.g. Starting, After D749, End of session)."
+                  visible_label: true
+        generate_wheel_report:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [generate_wheel_report]
+            label:
+              type: string
+              example: Generate Wheel Report
+            category:
+              type: string
+              example: reports
+            runnable:
+              type: boolean
+              example: true
+            dispatch:
+              type: string
+              example: generate_wheel_report
+            gui_template:
+              type: string
+              example: "Generate Wheel Report{info_suffix}"
+            description:
+              type: string
+              example: "Snapshot in-train / assigned cars from the live database into this session's wheel report. Each call appends a new phase (Phase 1, Phase 2, …); optional Info labels the phase. Wheel-report phases are numbered independently of station reports."
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example:
+                -
+                  key: info
+                  label: Info
+                  type: text
+                  default: ""
+                  required: false
+                  placeholder: "Optional phase label (e.g. Starting, After CK1, End of session)."
+                  visible_label: true
         render_switchlists:
           type: object
           required: [id, label, params]
@@ -3920,6 +4749,168 @@ components:
             description:
               type: string
               example: Alternate printable station QR layout.
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example: []
+        replenish_coke_orders:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [replenish_coke_orders]
+            label:
+              type: string
+              example: Replenish Coke Orders
+            category:
+              type: string
+              example: operations
+            runnable:
+              type: boolean
+              example: true
+            dispatch:
+              type: string
+              example: replenish_coke_orders
+            gui_template:
+              type: string
+              example: "Replenish Coke Orders (target {target_min}–{target_max})"
+            description:
+              type: string
+              example: "Count unfilled outbound coke orders (USS/CLEV singles and bulk). When below target minimum, generate single-car COKE-USS / COKE-CLEV orders alternating lanes until the minimum is met (capped at target maximum)."
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example:
+                -
+                  key: target_min
+                  label: Target minimum
+                  type: number
+                  default: 6
+                  required: true
+                  min: 1
+                  step: 1
+                  visible_label: true
+                -
+                  key: target_max
+                  label: Target maximum
+                  type: number
+                  default: 8
+                  required: true
+                  min: 1
+                  step: 1
+                  visible_label: true
+        track_scale:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [track_scale]
+            label:
+              type: string
+              example: Track Scale
+            category:
+              type: string
+              example: operations
+            runnable:
+              type: boolean
+              example: true
+            dispatch:
+              type: string
+              example: track_scale
+            gui_template:
+              type: string
+              example: "Weigh Cars {job}{commodity_suffix}"
+            description:
+              type: string
+              example: Weigh loaded cars on a job train (or at the scale) for the selected commodity. Uses track scale config when commodity is blank.
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example:
+                -
+                  key: job
+                  label: Job
+                  type: job
+                  options_from: jobs
+                  allow_custom: true
+                  required: false
+                  default: ""
+                  visible_label: true
+                -
+                  key: commodity
+                  label: Commodity
+                  type: commodity
+                  options_from: commodities
+                  allow_custom: true
+                  required: false
+                  default: ""
+                  visible_label: true
+        calibrate_track_scale:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [calibrate_track_scale]
+            label:
+              type: string
+              example: Calibrate Track Scale
+            category:
+              type: string
+              example: operations
+            runnable:
+              type: boolean
+              example: true
+            dispatch:
+              type: string
+              example: calibrate_track_scale
+            gui_template:
+              type: string
+              example: "Calibrate Track Scale (every {every_sessions} session[s])"
+            description:
+              type: string
+              example: "Recalibrate the coke track scale. Performs a fresh random calibration when required (first use / out of service) or when the configured number of sessions have elapsed since the last calibration. Set to 1 to calibrate every session (steady ~15% reload routing); higher values let scale drift accumulate so more cars route to reload between calibrations. Run this before the Track Scale weigh step."
+            params:
+              type: array
+              items:
+                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
+              example:
+                -
+                  key: every_sessions
+                  label: Calibrate every N sessions
+                  type: number
+                  default: 1
+                  required: false
+                  min: 1
+                  step: 1
+                  visible_label: true
+        track_scale_gui:
+          type: object
+          required: [id, label, params]
+          properties:
+            id:
+              type: string
+              enum: [track_scale_gui]
+            label:
+              type: string
+              example: Track Scale (STS GUI)
+            category:
+              type: string
+              example: operations
+            runnable:
+              type: boolean
+              example: false
+            gui_template:
+              type: string
+              example: Track Scale
+            description:
+              type: string
+              example: "Weigh cars at track scale. GUI: track_scale.php."
             params:
               type: array
               items:

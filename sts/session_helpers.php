@@ -196,14 +196,17 @@ function session_session_index_href($session_nbr)
  * Guard against viewing a session that no longer exists. Simulations rewind the
  * live session counter, so links/URLs captured earlier can point past the current
  * session. When the requested session exceeds the current DB session, redirect to
- * the latest session's overview and exit. Returns the current DB session number
- * for callers that want it (when no redirect was needed).
+ * the latest live session — preferring the same so.php relative path (switch list,
+ * train bundle, waybill page, etc.) so the browser stays in that view. Falls back
+ * to the session overview when no path is known. Returns the current DB session
+ * number for callers that want it (when no redirect was needed).
  *
  * @param int          $session_nbr Requested session.
  * @param mysqli|null  $dbc         Optional open handle (a fresh one is used if null).
  * @param bool         $exit        When true (default) send the redirect and exit.
+ * @param string|null  $rel_path    Optional so.php relative path (session_N/…).
  */
-function session_redirect_if_beyond_current($session_nbr, $dbc = null, $exit = true)
+function session_redirect_if_beyond_current($session_nbr, $dbc = null, $exit = true, $rel_path = null)
 {
     $session_nbr = (int) $session_nbr;
     if ($dbc === null) {
@@ -212,14 +215,661 @@ function session_redirect_if_beyond_current($session_nbr, $dbc = null, $exit = t
     }
     $current = (int) session_get_db_session($dbc);
     if ($current >= 1 && $session_nbr > $current) {
+        if (session_browse_archived_enabled()) {
+            session_ensure_archived_session_extracted($session_nbr);
+            if (is_dir(session_dir_for($session_nbr))) {
+                return $current;
+            }
+        }
         if ($exit) {
-            header('Location: /sts/session_overview.php?session=' . $current);
+            $rel_path = ltrim(str_replace('\\', '/', (string) $rel_path), '/');
+            if ($rel_path !== '' && preg_match('#^session_\d+/(.*)$#', $rel_path, $m) && $m[1] !== '') {
+                header('Location: /sts/so.php?f=session_' . $current . '/' . $m[1]);
+            } else {
+                header('Location: /sts/session_overview.php?session=' . $current);
+            }
             exit;
         }
         return $current;
     }
 
     return $current;
+}
+
+/**
+ * True when this overview session is the current (last) operating session and
+ * at least one backup matches the prior session number.
+ * Locked sessions (a *_locked dump for this session number) cannot be restarted.
+ */
+function session_can_restart_from_overview($session_nbr, $current_session = null, $root = null)
+{
+    $session_nbr = (int) $session_nbr;
+    if ($session_nbr < 1) {
+        return false;
+    }
+    if ($current_session === null) {
+        return false;
+    }
+    if ($session_nbr !== (int) $current_session) {
+        return false;
+    }
+    if (session_is_locked($session_nbr)) {
+        return false;
+    }
+
+    return session_restart_backup_candidates($session_nbr) !== [];
+}
+
+/**
+ * *_locked backup basenames that match overview session N
+ * (e.g. hart_session2_locked).
+ *
+ * @return list<string>
+ */
+function session_locked_backup_names($session_nbr)
+{
+    $session_nbr = (int) $session_nbr;
+    if ($session_nbr < 0) {
+        return [];
+    }
+    $dir = session_restart_backups_dir();
+    if (!is_dir($dir)) {
+        return [];
+    }
+    $matches = [];
+    foreach (scandir($dir) ?: [] as $name) {
+        if (session_restart_backup_name_excluded($name)) {
+            continue;
+        }
+        if (strpos($name, '.') !== false) {
+            continue;
+        }
+        if (!preg_match('/_locked$/i', $name)) {
+            continue;
+        }
+        $path = $dir . '/' . $name;
+        if (!is_file($path)) {
+            continue;
+        }
+        if (!session_restart_backup_name_matches_session($name, $session_nbr)) {
+            continue;
+        }
+        $matches[] = $name;
+    }
+    sort($matches, SORT_STRING | SORT_FLAG_CASE);
+
+    return $matches;
+}
+
+/** True when a static *_locked backup exists for this session number. */
+function session_is_locked($session_nbr)
+{
+    return session_locked_backup_names($session_nbr) !== [];
+}
+
+/**
+ * Backups directory (same bind-mount the Database Restore UI uses).
+ */
+function session_restart_backups_dir()
+{
+    if (!function_exists('operational_steps_backups_dir')) {
+        require_once __DIR__ . '/operational_steps_catalog.php';
+    }
+
+    return operational_steps_backups_dir();
+}
+
+/**
+ * True when $name contains $session_nbr as a whole number token
+ * (suffix or mid: foo2, foo_2, foo2_locked — not foo12 when looking for 1).
+ */
+function session_restart_backup_name_matches_session($name, $session_nbr)
+{
+    $name = (string) $name;
+    $session_nbr = (int) $session_nbr;
+    if ($name === '' || $session_nbr < 0) {
+        return false;
+    }
+
+    return (bool) preg_match(
+        '/(?<![0-9])' . preg_quote((string) $session_nbr, '/') . '(?![0-9])/',
+        $name
+    );
+}
+
+/**
+ * Skip companions / non-SQL junk under backups/ when listing restart candidates.
+ */
+function session_restart_backup_name_excluded($name)
+{
+    $name = (string) $name;
+    if ($name === '' || $name === '.' || $name === '..') {
+        return true;
+    }
+    if (preg_match('/(_photos|\.README|\.txt|\.md|\.log|\.scores|\.json|\.html|\.css|\.js|\.php|\.tar|\.gz|\.zip)$/i', $name)) {
+        return true;
+    }
+    if (preg_match('/^(ACTIVE|session_editor|session_state|rewind_archive)/i', $name)) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Backup basenames that look like an end-of-(N-1) dump for restarting session N.
+ * Matching is by session number token only — no hardcoded prefixes.
+ *
+ * Sort: names that end with the number first, then alphabetical.
+ *
+ * @return list<string>
+ */
+function session_restart_backup_candidates($session_nbr)
+{
+    $session_nbr = (int) $session_nbr;
+    if ($session_nbr < 1) {
+        return [];
+    }
+    // Restarting session N restores the end of session N-1.
+    $prev = $session_nbr - 1;
+    $dir = session_restart_backups_dir();
+    if (!is_dir($dir)) {
+        return [];
+    }
+    $matches = [];
+    foreach (scandir($dir) ?: [] as $name) {
+        if (session_restart_backup_name_excluded($name)) {
+            continue;
+        }
+        $path = $dir . '/' . $name;
+        if (!is_file($path)) {
+            continue;
+        }
+        if (!session_restart_backup_name_matches_session($name, $prev)) {
+            continue;
+        }
+        $matches[] = $name;
+    }
+    usort($matches, static function ($a, $b) use ($prev) {
+        $a_end = (bool) preg_match('/(?<![0-9])' . preg_quote((string) $prev, '/') . '$/', $a);
+        $b_end = (bool) preg_match('/(?<![0-9])' . preg_quote((string) $prev, '/') . '$/', $b);
+        if ($a_end !== $b_end) {
+            return $a_end ? -1 : 1;
+        }
+
+        return strcasecmp($a, $b);
+    });
+
+    return $matches;
+}
+
+/**
+ * Default (single) candidate, or null when none / multiple without a pick.
+ *
+ * @deprecated Prefer session_restart_backup_candidates(); kept for simple callers.
+ */
+function session_restart_snapshot_name($session_nbr)
+{
+    $c = session_restart_backup_candidates($session_nbr);
+
+    return count($c) === 1 ? $c[0] : ($c[0] ?? null);
+}
+
+/**
+ * Restart (rewind) the current operating session: restore DB to end of N-1
+ * (start of N, before workflow steps), remove session_N+ output trees.
+ *
+ * @param string|null $backup Explicit backup basename; must be in the candidate list.
+ * @return array{ok:bool, message:string, previous_session?:int, snapshot?:string, removed?:list<string>}
+ */
+function session_restart_operating_session($dbc, $session_nbr, $root = null, $backup = null)
+{
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
+    $current = (int) session_get_db_session($dbc);
+    if ($session_nbr < 1 || $session_nbr !== $current) {
+        return [
+            'ok' => false,
+            'message' => 'Restart Session is only allowed for the current (last) operating session.',
+        ];
+    }
+    if (session_is_locked($session_nbr)) {
+        $locked = session_locked_backup_names($session_nbr);
+
+        return [
+            'ok' => false,
+            'message' => 'Session '
+                . $session_nbr
+                . ' is locked ('
+                . implode(', ', $locked)
+                . '); Restart Session is disabled. Remove or rename the *_locked backup to allow restart.',
+            'locked' => $locked,
+        ];
+    }
+    $candidates = session_restart_backup_candidates($session_nbr);
+    if ($candidates === []) {
+        $prev = $session_nbr - 1;
+        return [
+            'ok' => false,
+            'message' => 'No database backup found containing session number '
+                . $prev
+                . ' (needed to restore the start of session '
+                . $session_nbr
+                . ').',
+        ];
+    }
+    $backup = trim((string) $backup);
+    if ($backup === '') {
+        if (count($candidates) > 1) {
+            return [
+                'ok' => false,
+                'message' => 'Multiple backups match session '
+                    . ($session_nbr - 1)
+                    . '; choose one before restarting.',
+                'candidates' => $candidates,
+            ];
+        }
+        $snapshot = $candidates[0];
+    } elseif (!in_array($backup, $candidates, true)) {
+        return [
+            'ok' => false,
+            'message' => 'Selected backup is not a valid restart candidate: ' . $backup,
+            'candidates' => $candidates,
+        ];
+    } else {
+        $snapshot = $backup;
+    }
+
+    require_once __DIR__ . '/operational_steps_catalog.php';
+    // Safety undo dump so the operator can re-restore if needed.
+    $undo = 'rewind_undo_' . date('Ymd_His');
+    if (is_file(__DIR__ . '/backup_tables.php')) {
+        require_once __DIR__ . '/backup_tables.php';
+        if (function_exists('backup_tables')) {
+            backup_tables($dbc, $undo);
+        }
+    } elseif (function_exists('warm_start_backup')) {
+        warm_start_backup($dbc, $undo);
+    }
+
+    list($ok, $msg) = operational_steps_restore_backup($dbc, $snapshot);
+    if (!$ok) {
+        return ['ok' => false, 'message' => $msg, 'snapshot' => $snapshot];
+    }
+
+    // Re-open may be required after aggressive restores; re-check session.
+    $dbc = open_db();
+    $prev = $session_nbr - 1;
+    $restored_session = (int) session_get_db_session($dbc);
+    if ($restored_session !== $prev && !($prev < 1 && $restored_session === 0)) {
+        // Snapshot should set session_nbr to PREV; force it if dump omitted settings.
+        mysqli_query(
+            $dbc,
+            'UPDATE settings SET setting_value = "' . (int) max(0, $prev)
+            . '" WHERE setting_name = "session_nbr"'
+        );
+        $restored_session = (int) session_get_db_session($dbc);
+    }
+
+    $ts = __DIR__ . '/plugins/track_scale/track_scale_helpers.php';
+    if (is_readable($ts)) {
+        require_once $ts;
+        if (function_exists('track_scale_reset_cached_weights')) {
+            track_scale_reset_cached_weights($dbc, true);
+        }
+    }
+
+    $removed = [];
+    $max_scan = max($session_nbr, $current);
+    for ($s = $session_nbr; $s <= $max_scan + 20; $s++) {
+        $dir = session_dir_for($s, $root);
+        if (!is_dir($dir)) {
+            if ($s > $max_scan) {
+                break;
+            }
+            continue;
+        }
+        session_rrmdir($dir);
+        $removed[] = 'session_' . $s;
+    }
+
+    return [
+        'ok' => true,
+        'message' => 'Session ' . $session_nbr . ' restarted: restored '
+            . $snapshot . ' (start of session ' . $session_nbr
+            . ', no steps run). Undo dump: ' . $undo . '.',
+        'previous_session' => $restored_session,
+        'snapshot' => $snapshot,
+        'removed' => $removed,
+        'undo' => $undo,
+    ];
+}
+
+/**
+ * Backup basenames that look like an end-of-session dump for overview session N
+ * and are eligible to lock (not already *_locked).
+ *
+ * @return list<string>
+ */
+function session_lock_backup_candidates($session_nbr)
+{
+    $session_nbr = (int) $session_nbr;
+    if ($session_nbr < 0) {
+        return [];
+    }
+    $dir = session_restart_backups_dir();
+    if (!is_dir($dir)) {
+        return [];
+    }
+    $matches = [];
+    foreach (scandir($dir) ?: [] as $name) {
+        if (session_restart_backup_name_excluded($name)) {
+            continue;
+        }
+        // Rolling STS dumps are extensionless (hart_session2); skip *.sql etc.
+        if (strpos($name, '.') !== false) {
+            continue;
+        }
+        if (preg_match('/_locked$/i', $name)) {
+            continue;
+        }
+        $path = $dir . '/' . $name;
+        if (!is_file($path)) {
+            continue;
+        }
+        if (!session_restart_backup_name_matches_session($name, $session_nbr)) {
+            continue;
+        }
+        $matches[] = $name;
+    }
+    usort($matches, static function ($a, $b) use ($session_nbr) {
+        $a_end = (bool) preg_match('/(?<![0-9])' . preg_quote((string) $session_nbr, '/') . '$/', $a);
+        $b_end = (bool) preg_match('/(?<![0-9])' . preg_quote((string) $session_nbr, '/') . '$/', $b);
+        if ($a_end !== $b_end) {
+            return $a_end ? -1 : 1;
+        }
+
+        return strcasecmp($a, $b);
+    });
+
+    return $matches;
+}
+
+/** Locked companion name for a rolling backup (hart_session2 → hart_session2_locked). */
+function session_lock_backup_target_name($backup_name)
+{
+    $name = basename(trim((string) $backup_name));
+    if ($name === '' || $name === '.' || $name === '..') {
+        return '';
+    }
+    if (preg_match('/_locked$/i', $name)) {
+        return $name;
+    }
+
+    return $name . '_locked';
+}
+
+/**
+ * Copy a backup SQL dump (+ optional _photos dir) to its *_locked companion.
+ * Filesystem only — does not restore or otherwise touch the live database.
+ *
+ * @return array{ok:bool, message:string, source?:string, locked?:string, photos?:int}
+ */
+function session_lock_backup($session_nbr, $backup = null)
+{
+    $session_nbr = (int) $session_nbr;
+    $candidates = session_lock_backup_candidates($session_nbr);
+    if ($candidates === []) {
+        return [
+            'ok' => false,
+            'message' => 'No unlocked backup found containing session number '
+                . $session_nbr
+                . ' to lock.',
+        ];
+    }
+    $backup = trim((string) $backup);
+    if ($backup === '') {
+        if (count($candidates) > 1) {
+            return [
+                'ok' => false,
+                'message' => 'Multiple backups match session '
+                    . $session_nbr
+                    . '; choose one before locking.',
+                'candidates' => $candidates,
+            ];
+        }
+        $source = $candidates[0];
+    } elseif (!in_array($backup, $candidates, true)) {
+        return [
+            'ok' => false,
+            'message' => 'Selected backup is not a valid lock candidate: ' . $backup,
+            'candidates' => $candidates,
+        ];
+    } else {
+        $source = $backup;
+    }
+
+    $locked = session_lock_backup_target_name($source);
+    if ($locked === '') {
+        return ['ok' => false, 'message' => 'Invalid lock target name.'];
+    }
+
+    $dir = session_restart_backups_dir();
+    $src_path = $dir . '/' . $source;
+    $dest_path = $dir . '/' . $locked;
+    if (!is_file($src_path)) {
+        return ['ok' => false, 'message' => 'Backup file missing: ' . $source];
+    }
+    if (!@copy($src_path, $dest_path)) {
+        return ['ok' => false, 'message' => 'Failed to write locked backup: ' . $locked];
+    }
+
+    $photo_count = 0;
+    $src_photos = $dir . '/' . $source . '_photos';
+    $dest_photos = $dir . '/' . $locked . '_photos';
+    if (is_dir($src_photos)) {
+        if (is_dir($dest_photos)) {
+            session_rrmdir($dest_photos);
+        }
+        if (!@mkdir($dest_photos, 0755, true) && !is_dir($dest_photos)) {
+            return [
+                'ok' => false,
+                'message' => 'Locked SQL written, but could not create '
+                    . $locked . '_photos',
+                'source' => $source,
+                'locked' => $locked,
+            ];
+        }
+        foreach (glob($src_photos . '/{*,.*}', GLOB_BRACE) ?: [] as $file) {
+            $base = basename($file);
+            if ($base === '.' || $base === '..' || !is_file($file)) {
+                continue;
+            }
+            if (@copy($file, $dest_photos . '/' . $base)) {
+                $photo_count++;
+            }
+        }
+    }
+
+    $msg = 'Locked ' . $source . ' → ' . $locked;
+    if ($photo_count > 0) {
+        $msg .= ' (' . $photo_count . ' photo' . ($photo_count === 1 ? '' : 's') . ')';
+    }
+    $msg .= '.';
+
+    return [
+        'ok' => true,
+        'message' => $msg,
+        'source' => $source,
+        'locked' => $locked,
+        'photos' => $photo_count,
+    ];
+}
+
+/**
+ * Master switch for the rewind-archive browse/extract UI.
+ * Leave supporting helpers in place; flip to true to re-enable.
+ */
+function session_rewind_archive_feature_enabled()
+{
+    return false;
+}
+
+/** True when the operator has opted in to browsing archived session output. */
+function session_browse_archived_enabled()
+{
+    if (!session_rewind_archive_feature_enabled()) {
+        return false;
+    }
+    if (isset($_GET['archive'])) {
+        return (string) $_GET['archive'] !== '' && (string) $_GET['archive'] !== '0';
+    }
+
+    return !empty($_COOKIE['sts_browse_archived']) && (string) $_COOKIE['sts_browse_archived'] !== '0';
+}
+
+/**
+ * Directory where rewind_session.sh archives removed session output trees.
+ * Sits alongside session_state under sts/backups/.
+ */
+function session_rewind_archive_dir($root = null)
+{
+    $root = $root ?? session_web_root();
+
+    return dirname(dirname($root)) . '/rewind_archive';
+}
+
+/**
+ * Session numbers whose output was archived to rewind_archive/session_N_*.tar.gz
+ * (present on disk even when the live session_state/session_N tree was removed).
+ *
+ * @return list<int>
+ */
+function session_archived_output_numbers($root = null)
+{
+    if (!session_rewind_archive_feature_enabled()) {
+        return [];
+    }
+    $dir = session_rewind_archive_dir($root);
+    if (!is_dir($dir)) {
+        return [];
+    }
+    $nums = [];
+    foreach (glob($dir . '/session_*.tar.gz') ?: [] as $f) {
+        if (preg_match('#/session_(\d+)_#', $f, $m)) {
+            $nums[] = (int) $m[1];
+        }
+    }
+    sort($nums, SORT_NUMERIC);
+
+    return array_values(array_unique($nums));
+}
+
+/**
+ * Extract a rewind-archived session output tree back into session_state/sessions
+ * so so.php can serve it. Idempotent when the folder already exists. Returns
+ * false when no matching tarball is found.
+ */
+function session_ensure_archived_session_extracted($session_nbr, $root = null)
+{
+    if (!session_rewind_archive_feature_enabled()) {
+        return false;
+    }
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
+    if ($session_nbr < 1) {
+        return false;
+    }
+    if (is_dir(session_dir_for($session_nbr, $root))) {
+        return true;
+    }
+    $matches = glob(session_rewind_archive_dir($root) . '/session_' . $session_nbr . '_*.tar.gz') ?: [];
+    if (!$matches) {
+        return false;
+    }
+    usort($matches, static function ($a, $b) {
+        return filemtime($b) <=> filemtime($a);
+    });
+    $tarball = $matches[0];
+    $dest = session_ensure_output_root($root);
+    try {
+        $phar = new PharData($tarball);
+        $phar->extractTo($dest, null, true);
+    } catch (Throwable $e) {
+        return false;
+    }
+
+    return is_dir(session_dir_for($session_nbr, $root));
+}
+
+/**
+ * True when a session's generated output is being viewed from archives while the
+ * live DB is still at an earlier session (read-only paperwork browse).
+ */
+function session_is_archived_output_only($session_nbr, $dbc = null)
+{
+    $session_nbr = (int) $session_nbr;
+    if ($session_nbr < 1 || !session_browse_archived_enabled()) {
+        return false;
+    }
+    if ($dbc === null) {
+        require_once __DIR__ . '/open_db.php';
+        $dbc = open_db();
+    }
+    $current = (int) session_get_db_session($dbc);
+
+    return $session_nbr > $current;
+}
+
+/** Warning banner for pages showing archived session output (DB is behind). */
+function session_archived_view_banner_html($session_nbr, $current_session)
+{
+    if (!session_rewind_archive_feature_enabled()) {
+        return '';
+    }
+    $session_nbr = (int) $session_nbr;
+    $current_session = (int) $current_session;
+    if ($session_nbr <= $current_session) {
+        return '';
+    }
+
+    return '<div class="session-archived-banner noprint" role="status">'
+        . 'Viewing <strong>archived</strong> session ' . $session_nbr . ' output. '
+        . 'The live database is at session ' . $current_session . ' — switch lists and waybills here are historical paperwork only.'
+        . '</div>';
+}
+
+/**
+ * Checkbox + script to toggle archived-session browsing (cookie-backed).
+ * Shown on session overview / totals pickers after a DB rewind.
+ */
+function session_browse_archived_controls_html()
+{
+    if (!session_rewind_archive_feature_enabled()) {
+        return '';
+    }
+    $checked = session_browse_archived_enabled();
+    $archived = session_archived_output_numbers();
+    if (!$archived) {
+        return '';
+    }
+    $list = implode(', ', array_map(static function ($n) {
+        return (string) (int) $n;
+    }, $archived));
+
+    return '<div class="session-browse-archived-controls noprint">'
+        . '<label class="session-browse-archived-label">'
+        . '<input type="checkbox" id="sts-browse-archived"' . ($checked ? ' checked' : '') . '> '
+        . 'Show archived sessions</label>'
+        . '<span class="text-muted small"> (rewind archive: ' . htmlspecialchars($list) . ')</span>'
+        . '</div>'
+        . '<script>(function(){'
+        . 'var cb=document.getElementById("sts-browse-archived");'
+        . 'if(!cb)return;'
+        . 'cb.addEventListener("change",function(){'
+        . 'if(cb.checked){document.cookie="sts_browse_archived=1;path=/sts;max-age=31536000";}'
+        . 'else{document.cookie="sts_browse_archived=0;path=/sts;max-age=0";}'
+        . 'location.reload();});})();</script>';
 }
 
 /**
@@ -645,14 +1295,27 @@ function session_persist_recipe_run_stats($dbc, array $log, array $meta, $start_
     return array_keys($stats_by_session);
 }
 
-function session_list_browser_sessions($current, $root = null)
+function session_list_browser_sessions($current, $root = null, $include_archived = null)
 {
     $current = max(1, (int) $current);
-    // Only sessions up to the current DB session are browsable. Folders on disk
-    // that are ahead of the live session (e.g. left over from a run that later
-    // rewound the DB) are excluded so the browser never shows a "future"
-    // session that isn't the current operating point yet.
-    $sessions = range(1, $current);
+    $root = $root ?? session_web_root();
+    if ($include_archived === null) {
+        $include_archived = session_browse_archived_enabled();
+    }
+    $max = $current;
+    if ($include_archived) {
+        foreach (session_archived_output_numbers($root) as $n) {
+            $max = max($max, (int) $n);
+        }
+        foreach (glob(session_ensure_output_root($root) . '/session_*', GLOB_ONLYDIR) ?: [] as $d) {
+            if (preg_match('#/session_(\d+)$#', $d, $m)) {
+                $max = max($max, (int) $m[1]);
+            }
+        }
+    }
+    // Only sessions up to the current DB session are browsable unless archived
+    // output browse is enabled (rewind left session_N folders in rewind_archive).
+    $sessions = range(1, $max);
     sort($sessions, SORT_NUMERIC);
 
     return $sessions;
@@ -1000,9 +1663,31 @@ function session_nav_stylesheet_link($href = null)
     return '<link rel="stylesheet" href="' . htmlspecialchars((string) $href) . '">';
 }
 
+/**
+ * Safe print helper for generated pages. Cursor / VS Code Simple Browser
+ * (Electron) often crashes the whole window on window.print(); steer those
+ * clients to an external browser instead of calling print().
+ */
+function session_safe_print_script()
+{
+    return '<script>(function(){if(window.stsSafePrint)return;'
+        . 'window.stsSafePrint=function(){try{'
+        . 'var ua=navigator.userAgent||"";'
+        . 'if(/Electron|Cursor|VSCode|Code\\/\\d|Simple Browser/i.test(ua)'
+        . '||typeof window.acquireVsCodeApi==="function"){'
+        . 'alert("Printing from Cursor\u2019s preview can close the window. '
+        . 'Copy this page\u2019s URL into Chrome or Safari, then Print.");'
+        . 'return;}'
+        . 'window.print();'
+        . '}catch(e){alert("Print failed \u2014 open this page in an external browser.");}};'
+        . '})();</script>';
+}
+
 function session_static_head_assets($css_href = null)
 {
-    return session_bootstrap_head_links() . session_nav_stylesheet_link($css_href);
+    return session_bootstrap_head_links()
+        . session_nav_stylesheet_link($css_href)
+        . session_safe_print_script();
 }
 
 function session_nav_icon_for_label($label)
@@ -1139,6 +1824,179 @@ function session_waybill_print_all_rel_href($session_nbr, $basename)
 }
 
 /**
+ * Icon-only prev/next session button matching session_overview.php:
+ * chevron with title="Session N" (no "Session N" text in the button).
+ *
+ * @param 'prev'|'next' $direction
+ * @param string|null   $href      null/empty → disabled
+ * @param int|null      $session_nbr Target session for title attribute
+ * @param string        $btn_class
+ */
+function session_nav_chevron_btn_html($direction, $href, $session_nbr = null, $btn_class = 'btn btn-outline-dark btn-sm')
+{
+    $direction = $direction === 'next' ? 'next' : 'prev';
+    $icon = $direction === 'next' ? 'chevron-right' : 'chevron-left';
+    $btn_class = trim((string) $btn_class);
+    if ($btn_class === '') {
+        $btn_class = 'btn btn-outline-dark btn-sm';
+    }
+    $icon_html = '<i class="bi bi-' . $icon . '"></i>';
+    if ($href === null || $href === '') {
+        return '<span class="' . htmlspecialchars($btn_class, ENT_QUOTES) . ' disabled" aria-disabled="true">'
+            . $icon_html . '</span>';
+    }
+    $title = $session_nbr !== null
+        ? ('Session ' . (int) $session_nbr)
+        : ($direction === 'next' ? 'Next session' : 'Previous session');
+
+    return '<a class="' . htmlspecialchars($btn_class, ENT_QUOTES) . '" href="'
+        . htmlspecialchars((string) $href, ENT_QUOTES)
+        . '" title="' . htmlspecialchars($title, ENT_QUOTES) . '">'
+        . $icon_html . '</a>';
+}
+
+/**
+ * Absolute /sts/so.php?f=… URL for a session-relative output path.
+ * Used for <select> option values (not rewritten by so.php's href rewriter).
+ */
+function session_so_f_href($session_rel)
+{
+    $session_rel = ltrim(str_replace('\\', '/', (string) $session_rel), '/');
+    if ($session_rel === '') {
+        return '';
+    }
+
+    return '/sts/' . session_output_url($session_rel);
+}
+
+/**
+ * Relative href from a page under session_from/ to session_to/<suffix>.
+ * so.php rewrites these to so.php?f=… at serve time.
+ */
+function session_sibling_rel_href($to_session, $suffix_under_session)
+{
+    $to_session = (int) $to_session;
+    $suffix = ltrim(str_replace('\\', '/', (string) $suffix_under_session), '/');
+    if ($to_session < 1 || $suffix === '') {
+        return '';
+    }
+
+    return '../session_' . $to_session . '/' . $suffix;
+}
+
+/**
+ * Full session picker for so.php pages: skip-start, prev, select, next, skip-end
+ * (same controls as session_overview / station report). Stays on the same view
+ * via $suffix_under_session (path after session_N/, e.g. print_all.html,
+ * train_D749.print_all.html, waybills/print_all.html).
+ *
+ * Optional $suffix_by_session overrides the suffix per target session (used when
+ * a train's job key differs across sessions). Empty override disables that target.
+ *
+ * @param array<int,string>|null $suffix_by_session
+ */
+function session_nav_row_picker_html(
+    $session_nbr,
+    array $sessions,
+    $current_db,
+    $suffix_under_session,
+    $wrapper_class,
+    $btn_class = 'btn btn-outline-dark btn-sm',
+    $suffix_by_session = null
+)
+{
+    $session_nbr = (int) $session_nbr;
+    $sessions = array_values(array_map('intval', $sessions));
+    $default_suffix = ltrim(str_replace('\\', '/', (string) $suffix_under_session), '/');
+    if ($session_nbr < 1 || count($sessions) < 2 || $default_suffix === '') {
+        return '';
+    }
+
+    $rel_for = static function ($n) use ($default_suffix, $suffix_by_session) {
+        $n = (int) $n;
+        $suffix = $default_suffix;
+        if (is_array($suffix_by_session)) {
+            if (!array_key_exists($n, $suffix_by_session)) {
+                return '';
+            }
+            $suffix = ltrim(str_replace('\\', '/', (string) $suffix_by_session[$n]), '/');
+            if ($suffix === '') {
+                return '';
+            }
+        }
+
+        return session_sibling_rel_href($n, $suffix);
+    };
+    $abs_for = static function ($n) use ($default_suffix, $suffix_by_session) {
+        $n = (int) $n;
+        $suffix = $default_suffix;
+        if (is_array($suffix_by_session)) {
+            if (!array_key_exists($n, $suffix_by_session)) {
+                return '';
+            }
+            $suffix = ltrim(str_replace('\\', '/', (string) $suffix_by_session[$n]), '/');
+            if ($suffix === '') {
+                return '';
+            }
+        }
+
+        return session_so_f_href('session_' . $n . '/' . $suffix);
+    };
+
+    $prev = session_adjacent_session($sessions, $session_nbr, 'prev');
+    $next = session_adjacent_session($sessions, $session_nbr, 'next');
+    list($first, $last) = session_edge_sessions($sessions);
+    $skip_first = ($first !== null && (int) $first !== $session_nbr) ? (int) $first : null;
+    $skip_last = ($last !== null && (int) $last !== $session_nbr) ? (int) $last : null;
+
+    $skip_btn = static function ($target, $icon) use ($rel_for, $btn_class) {
+        $href = $target !== null ? $rel_for($target) : '';
+        $title = $target !== null
+            ? (($icon === 'skip-start-fill' ? 'First' : 'Last') . ' session (' . (int) $target . ')')
+            : ($icon === 'skip-start-fill' ? 'First session' : 'Last session');
+        if ($target === null || $href === '') {
+            return '<span class="' . htmlspecialchars($btn_class, ENT_QUOTES)
+                . ' session-skip-btn disabled" aria-disabled="true" title="'
+                . htmlspecialchars($title, ENT_QUOTES) . '"><i class="bi bi-'
+                . htmlspecialchars($icon, ENT_QUOTES) . '"></i></span>';
+        }
+
+        return '<a class="' . htmlspecialchars($btn_class, ENT_QUOTES)
+            . ' session-skip-btn" href="' . htmlspecialchars($href, ENT_QUOTES)
+            . '" title="' . htmlspecialchars($title, ENT_QUOTES) . '"><i class="bi bi-'
+            . htmlspecialchars($icon, ENT_QUOTES) . '"></i></a>';
+    };
+
+    $options = '';
+    foreach ($sessions as $n) {
+        $abs = $abs_for($n);
+        if ($abs === '') {
+            continue;
+        }
+        $label = 'Session ' . $n . ($n === (int) $current_db ? ' (current)' : '');
+        $options .= '<option value="' . htmlspecialchars($abs, ENT_QUOTES) . '"'
+            . ($n === $session_nbr ? ' selected' : '') . '>'
+            . htmlspecialchars($label) . '</option>';
+    }
+    if ($options === '') {
+        return '';
+    }
+
+    $html = '<div class="session-nav-row ' . htmlspecialchars($wrapper_class, ENT_QUOTES) . '">';
+    $html .= $skip_btn($skip_first, 'skip-start-fill');
+    $html .= session_nav_chevron_btn_html('prev', $prev !== null ? $rel_for($prev) : null, $prev, $btn_class);
+    $html .= '<select class="form-select form-select-sm session-nav-select" style="width:auto;display:inline-block;"'
+        . ' title="Jump to same view in another session"'
+        . ' onchange="if(this.value){window.location.href=this.value;}">'
+        . $options . '</select>';
+    $html .= session_nav_chevron_btn_html('next', $next !== null ? $rel_for($next) : null, $next, $btn_class);
+    $html .= $skip_btn($skip_last, 'skip-end-fill');
+    $html .= '</div>';
+
+    return $html;
+}
+
+/**
  * Prev/next session buttons for a waybills print-all page. Links to the same-scope
  * print-all file (session/job) in adjacent sessions; a direction is disabled when
  * that session has no such file (e.g. a job that didn't run there). Intended to be
@@ -1158,37 +2016,31 @@ function session_waybill_print_all_session_nav_html($session_nbr, $basename, $db
     }
     $current_db = session_get_db_session($dbc);
     $sessions = session_list_browser_sessions($current_db, $root);
-    $prev = session_adjacent_session($sessions, $session_nbr, 'prev');
-    $next = session_adjacent_session($sessions, $session_nbr, 'next');
-    if ($prev === null && $next === null) {
+    if (count($sessions) < 2) {
         return '';
     }
 
-    $target_exists = static function ($sess) use ($basename, $root) {
-        return is_file(session_output_fs_path('session_' . (int) $sess . '/waybills/' . $basename, $root));
-    };
-
-    $html = '<div class="session-nav-row waybill-print-all-session-nav noprint">';
-    if ($prev !== null && $target_exists($prev)) {
-        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
-            . htmlspecialchars(session_waybill_print_all_rel_href($prev, $basename))
-            . '"><i class="bi bi-chevron-left"></i> Session ' . (int) $prev . '</a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>';
+    // Prefer sessions that already have this print-all; still offer others so
+    // so.php can build on demand / show not-found rather than dumping to overview.
+    $suffix = 'waybills/' . $basename;
+    $suffix_by = [];
+    foreach ($sessions as $n) {
+        $n = (int) $n;
+        $suffix_by[$n] = $suffix;
     }
-    if ($next !== null && $target_exists($next)) {
-        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
-            . htmlspecialchars(session_waybill_print_all_rel_href($next, $basename))
-            . '">Session ' . (int) $next . ' <i class="bi bi-chevron-right"></i></a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true">Next <i class="bi bi-chevron-right"></i></span>';
-    }
-    $html .= '</div>';
 
-    return $html;
+    return session_nav_row_picker_html(
+        $session_nbr,
+        $sessions,
+        $current_db,
+        $suffix,
+        'waybill-print-all-session-nav noprint',
+        'btn btn-outline-dark btn-sm',
+        $suffix_by
+    );
 }
 
-/** Prev/next session buttons for a waybill index page. */
+/** Session picker for a waybill index page (keeps so.php waybill-index view). */
 function session_waybill_session_nav_html($session_nbr, $phase_num = null, $dbc = null, $root = null)
 {
     $root = $root ?? session_web_root();
@@ -1204,30 +2056,45 @@ function session_waybill_session_nav_html($session_nbr, $phase_num = null, $dbc 
     }
     $current_db = session_get_db_session($dbc);
     $sessions = session_list_browser_sessions($current_db, $root);
-    $prev = session_adjacent_session($sessions, $session_nbr, 'prev');
-    $next = session_adjacent_session($sessions, $session_nbr, 'next');
-    if ($prev === null && $next === null) {
+    if (count($sessions) < 2) {
         return '';
     }
+    $phase_num = $phase_num !== null ? (int) $phase_num : null;
+    $suffix = ($phase_num !== null && $phase_num > 0)
+        ? ('phase_' . session_phase_pad($phase_num) . '/waybills/index.html')
+        : 'waybills/index.html';
 
-    $html = '<div class="session-nav-row waybill-session-nav">';
-    if ($prev !== null) {
-        $html .= '<a class="btn btn-outline-dark" href="'
-            . htmlspecialchars(session_waybill_index_rel_href($prev, $phase_num))
-            . '"><i class="bi bi-chevron-left"></i> Session ' . (int) $prev . '</a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>';
+    // Waybill index pages sit one level deeper when phased; sibling href from
+    // session_N/waybills/ is ../session_M/…, but from session_N/phase_XX/waybills/
+    // it needs ../../session_M/…. session_sibling_rel_href assumes one ../ —
+    // build per-depth suffix via relative helper for the phase case.
+    if ($phase_num !== null && $phase_num > 0) {
+        $suffix_by = [];
+        foreach ($sessions as $n) {
+            $suffix_by[(int) $n] = 'phase_' . session_phase_pad($phase_num) . '/waybills/index.html';
+        }
+        // Custom relative depth: from phase_XX/waybills → ../../session_N/...
+        $html = session_nav_row_picker_html(
+            $session_nbr,
+            $sessions,
+            $current_db,
+            $suffix,
+            'waybill-session-nav',
+            'btn btn-outline-dark',
+            $suffix_by
+        );
+        // Fix relative depth: picker emits ../session_N/… but we need ../../session_N/…
+        return str_replace('href="../session_', 'href="../../session_', $html);
     }
-    if ($next !== null) {
-        $html .= '<a class="btn btn-outline-dark" href="'
-            . htmlspecialchars(session_waybill_index_rel_href($next, $phase_num))
-            . '">Session ' . (int) $next . ' <i class="bi bi-chevron-right"></i></a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark disabled" aria-disabled="true">Next <i class="bi bi-chevron-right"></i></span>';
-    }
-    $html .= '</div>';
 
-    return $html;
+    return session_nav_row_picker_html(
+        $session_nbr,
+        $sessions,
+        $current_db,
+        $suffix,
+        'waybill-session-nav',
+        'btn btn-outline-dark'
+    );
 }
 
 /** Relative href from a job print-all page to the same train/phase in another session. */
@@ -1244,7 +2111,7 @@ function session_switchlist_job_print_all_rel_href($session_nbr, $phase_num, $jo
         . '/print_all.html';
 }
 
-/** Prev/next session buttons for a per-job switch-list print-all page. */
+/** Session picker for a per-job switch-list print-all page. */
 function session_switchlist_job_print_all_session_nav_html($session_nbr, $phase_num, $job, $dbc = null, $root = null)
 {
     $root = $root ?? session_web_root();
@@ -1260,30 +2127,21 @@ function session_switchlist_job_print_all_session_nav_html($session_nbr, $phase_
     }
     $current_db = session_get_db_session($dbc);
     $sessions = session_list_browser_sessions($current_db, $root);
-    $prev = session_adjacent_session($sessions, $session_nbr, 'prev');
-    $next = session_adjacent_session($sessions, $session_nbr, 'next');
-    if ($prev === null && $next === null) {
+    if (count($sessions) < 2) {
         return '';
     }
+    $suffix = 'phase_' . session_phase_pad($phase_num) . '/' . $job . '/print_all.html';
+    // Job print-all lives at session_N/phase_XX/JOB/ — two levels deeper than
+    // session_N/, so sibling links need ../../../session_M/…
+    $html = session_nav_row_picker_html(
+        $session_nbr,
+        $sessions,
+        $current_db,
+        $suffix,
+        'switchlist-job-print-all-session-nav noprint'
+    );
 
-    $html = '<div class="session-nav-row switchlist-job-print-all-session-nav noprint">';
-    if ($prev !== null) {
-        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
-            . htmlspecialchars(session_switchlist_job_print_all_rel_href($prev, $phase_num, $job))
-            . '"><i class="bi bi-chevron-left"></i> Session ' . (int) $prev . '</a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>';
-    }
-    if ($next !== null) {
-        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
-            . htmlspecialchars(session_switchlist_job_print_all_rel_href($next, $phase_num, $job))
-            . '">Session ' . (int) $next . ' <i class="bi bi-chevron-right"></i></a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true">Next <i class="bi bi-chevron-right"></i></span>';
-    }
-    $html .= '</div>';
-
-    return $html;
+    return str_replace('href="../session_', 'href="../../../session_', $html);
 }
 
 /** Relative href from a per-train print-all page to the same train's print-all in another session. */
@@ -1319,8 +2177,8 @@ function session_switchlist_train_print_all_rel_href_by_name($target_session, $d
     return session_switchlist_train_print_all_rel_href($target_session, $groups[$display_name][0]);
 }
 
-/** Prev/next session buttons for a per-train switch-list print-all page. */
-function session_switchlist_train_print_all_session_nav_html($session_nbr, $job, $dbc = null, $root = null)
+/** Session picker for a per-train switch-list print-all page. */
+function session_switchlist_train_print_all_session_nav_html($session_nbr, $job, $dbc = null, $root = null, $style = '')
 {
     $root = $root ?? session_web_root();
     $session_nbr = (int) $session_nbr;
@@ -1334,38 +2192,39 @@ function session_switchlist_train_print_all_session_nav_html($session_nbr, $job,
     }
     $current_db = session_get_db_session($dbc);
     $sessions = session_list_browser_sessions($current_db, $root);
-    $prev = session_adjacent_session($sessions, $session_nbr, 'prev');
-    $next = session_adjacent_session($sessions, $session_nbr, 'next');
-    if ($prev === null && $next === null) {
+    if (count($sessions) < 2) {
         return '';
     }
 
-    // Match the same train across sessions by its display name, not the raw job
-    // key (which can differ per session). Each target link resolves to that
-    // session's matching train print-all; so.php builds it on demand if missing.
+    $style = trim((string) $style);
+    $style_suffix = $style !== '' ? ('_' . session_normalize_switchlist_style($style)) : '';
+
+    // Match the same train across sessions by display name (job key may differ).
     $display = session_job_display_map($session_nbr, null, $root);
     $display_name = $display[$job] ?? $job;
-    $prev_href = $prev !== null ? session_switchlist_train_print_all_rel_href_by_name($prev, $display_name, $root) : '';
-    $next_href = $next !== null ? session_switchlist_train_print_all_rel_href_by_name($next, $display_name, $root) : '';
-
-    $html = '<div class="session-nav-row switchlist-train-print-all-session-nav noprint">';
-    if ($prev !== null && $prev_href !== '') {
-        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
-            . htmlspecialchars($prev_href)
-            . '"><i class="bi bi-chevron-left"></i> Session ' . (int) $prev . '</a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>';
+    $suffix_by = [];
+    $fallback_suffix = 'train_' . $job . '.print_all' . $style_suffix . '.html';
+    foreach ($sessions as $n) {
+        $n = (int) $n;
+        $groups = session_job_group_map($n, null, $root);
+        if (!isset($groups[$display_name]) || count($groups[$display_name]) === 0) {
+            // Keep a best-effort same-key path so navigation still tries so.php
+            // (on-demand build) rather than falling back to session_overview.
+            $suffix_by[$n] = $fallback_suffix;
+            continue;
+        }
+        $suffix_by[$n] = 'train_' . $groups[$display_name][0] . '.print_all' . $style_suffix . '.html';
     }
-    if ($next !== null && $next_href !== '') {
-        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
-            . htmlspecialchars($next_href)
-            . '">Session ' . (int) $next . ' <i class="bi bi-chevron-right"></i></a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true">Next <i class="bi bi-chevron-right"></i></span>';
-    }
-    $html .= '</div>';
 
-    return $html;
+    return session_nav_row_picker_html(
+        $session_nbr,
+        $sessions,
+        $current_db,
+        $fallback_suffix,
+        'switchlist-train-print-all-session-nav noprint',
+        'btn btn-outline-dark btn-sm',
+        $suffix_by
+    );
 }
 
 /** Relative href from a session print-all page to another session's print-all (same style when set). */
@@ -1379,7 +2238,7 @@ function session_switchlist_print_all_rel_href($session_nbr, $style = '')
     return '../' . $rel . '.html';
 }
 
-/** Prev/next session buttons for a switch-list print-all page. */
+/** Session picker for a switch-list print-all page (combined or per-style). */
 function session_switchlist_print_all_session_nav_html($session_nbr, $style = '', $dbc = null, $root = null)
 {
     $root = $root ?? session_web_root();
@@ -1393,30 +2252,23 @@ function session_switchlist_print_all_session_nav_html($session_nbr, $style = ''
     }
     $current_db = session_get_db_session($dbc);
     $sessions = session_list_browser_sessions($current_db, $root);
-    $prev = session_adjacent_session($sessions, $session_nbr, 'prev');
-    $next = session_adjacent_session($sessions, $session_nbr, 'next');
-    if ($prev === null && $next === null) {
+    if (count($sessions) < 2) {
         return '';
     }
-
-    $html = '<div class="session-nav-row switchlist-print-all-session-nav noprint">';
-    if ($prev !== null) {
-        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
-            . htmlspecialchars(session_switchlist_print_all_rel_href($prev, $style))
-            . '"><i class="bi bi-chevron-left"></i> Session ' . (int) $prev . '</a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>';
+    $suffix = 'print_all';
+    $style = trim((string) $style);
+    if ($style !== '') {
+        $suffix .= '_' . session_normalize_switchlist_style($style);
     }
-    if ($next !== null) {
-        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
-            . htmlspecialchars(session_switchlist_print_all_rel_href($next, $style))
-            . '">Session ' . (int) $next . ' <i class="bi bi-chevron-right"></i></a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true">Next <i class="bi bi-chevron-right"></i></span>';
-    }
-    $html .= '</div>';
+    $suffix .= '.html';
 
-    return $html;
+    return session_nav_row_picker_html(
+        $session_nbr,
+        $sessions,
+        $current_db,
+        $suffix,
+        'switchlist-print-all-session-nav noprint'
+    );
 }
 
 /** Header nav items for a generated waybill index page. */
@@ -1426,13 +2278,16 @@ function session_waybill_index_nav_items($session_nbr, $back_href, $back_label)
     $items = [
         ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
     ];
-    // Back navigation goes to the per-session overview (the default session page).
-    // Honor a caller-supplied deeper back link, but treat the legacy totals link
-    // ('All Sessions' -> session.php) as a request for the overview instead.
-    if (!empty($back_href) && trim((string) $back_label) !== '' && $back_label !== 'All Sessions') {
+    // Back navigation is normalized to the per-session overview (session_overview
+    // .php) so waybill pages match the switch-list pages. The legacy '../index.php'
+    // back link only ever redirected there anyway; a custom label is preserved.
+    if ($session_nbr >= 1) {
+        $label = (trim((string) $back_label) !== '' && $back_label !== 'All Sessions')
+            ? (string) $back_label
+            : 'Session ' . $session_nbr;
+        $items[] = ['href' => '/sts/session_overview.php?session=' . $session_nbr, 'label' => $label, 'icon' => 'calendar-event'];
+    } elseif (!empty($back_href) && trim((string) $back_label) !== '' && $back_label !== 'All Sessions') {
         $items[] = ['href' => $back_href, 'label' => $back_label, 'icon' => 'calendar-event'];
-    } elseif ($session_nbr >= 1) {
-        $items[] = ['href' => '/sts/session_overview.php?session=' . $session_nbr, 'label' => 'Session ' . $session_nbr, 'icon' => 'calendar-event'];
     }
 
     return $items;
@@ -1823,17 +2678,29 @@ function session_compact_session_output(array &$manifest, $session_nbr, $root = 
     $phases = is_array($manifest['phases'] ?? null) ? $manifest['phases'] : [];
 
     // Keep the LAST occurrence of each slot (most recently generated wins).
+    // Preserve manifest array order (not phase_NN folder numbers) so a
+    // reconstructed earlier leg (e.g. NVL Outbound as phase_06 listed before
+    // Return as phase_04) stays in authorial / operational sequence.
     $latest = [];
+    $order = [];
+    $i = 0;
     foreach ($phases as $phase) {
         if (!is_array($phase) || (int) ($phase['phase'] ?? 0) < 1) {
             continue;
         }
-        $latest[session_phase_slot_key($phase)] = $phase;
+        $key = session_phase_slot_key($phase);
+        $latest[$key] = $phase;
+        $order[$key] = $i;
+        $i++;
     }
     $survivors = array_values($latest);
-    usort($survivors, static function ($a, $b) {
-        return (int) ($a['phase'] ?? 0) <=> (int) ($b['phase'] ?? 0);
+    usort($survivors, static function ($a, $b) use ($order) {
+        return ($order[session_phase_slot_key($a)] ?? 0)
+            <=> ($order[session_phase_slot_key($b)] ?? 0);
     });
+    // Within each train, force Starting → Outbound → Next Day even when a
+    // reconstructed Starting was appended late as a higher phase_NN.
+    $survivors = session_phases_reorder_info_within_trains($survivors, $order);
 
     $removed_phases = count($phases) - count($survivors);
 
@@ -2529,6 +3396,19 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
     $root = $options['session_root'] ?? session_web_root();
     $from_step = max(1, (int) ($options['from_step'] ?? 1));
     $to_step = min(count($recipe['steps'] ?? []), (int) ($options['to_step'] ?? count($recipe['steps'] ?? [])));
+    $skip_steps = [];
+    if (!empty($options['skip_steps'])) {
+        $raw_skip = $options['skip_steps'];
+        if (is_array($raw_skip)) {
+            $skip_steps = operational_steps_parse_step_ranges(implode(',', $raw_skip));
+        } else {
+            $skip_steps = operational_steps_parse_step_ranges((string) $raw_skip);
+        }
+    }
+    $skip_set = [];
+    foreach ($skip_steps as $sn) {
+        $skip_set[(int) $sn] = true;
+    }
     $session_nbr = function_exists('warm_start_get_session')
         ? warm_start_get_session($dbc)
         : session_get_db_session($dbc);
@@ -2598,6 +3478,12 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
         $n = $pc + 1;
         $fid = $step['function'] ?? '';
 
+        if (!empty($skip_set[$n])) {
+            $log[] = ['step' => $n, 'action' => 'skipped_range'];
+            $pc++;
+            continue;
+        }
+
         if (array_key_exists('enabled', $step) && !$step['enabled']) {
             $log[] = ['step' => $n, 'action' => 'skipped_disabled'];
             $pc++;
@@ -2608,6 +3494,19 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
             $stopped = true;
             $log[] = ['step' => $n, 'action' => 'stop'];
             break;
+        }
+        if ($fid === 'skip_steps') {
+            $extra = operational_steps_parse_step_ranges($step['params']['steps'] ?? '');
+            foreach ($extra as $sn) {
+                $skip_set[(int) $sn] = true;
+            }
+            $log[] = [
+                'step' => $n,
+                'action' => 'skip_steps',
+                'steps' => operational_steps_format_step_ranges($extra),
+            ];
+            $pc++;
+            continue;
         }
         if ($fid === 'goto') {
             $target = operational_steps_goto_resolve_step($recipe, $step['params'] ?? []);
@@ -2675,6 +3574,29 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
                 'title' => $title,
                 'info' => $info,
             ]);
+            // Don't register empty switch-list phases. Compact keys on
+            // title|info, so an empty late "Starting" snapshot would wipe an
+            // earlier same-slot list that still had cars (e.g. morning snap
+            // after corrections, then empty overnight pickup).
+            $cars_written = 0;
+            foreach ((array) $written as $wj) {
+                $cars_written += (int) ($wj['cars'] ?? 0);
+            }
+            if ($cars_written < 1) {
+                if (is_dir($phase_dir)) {
+                    session_rrmdir($phase_dir);
+                }
+                $phase_num--;
+                $log[] = [
+                    'step' => $n,
+                    'phase' => null,
+                    'written' => $written,
+                    'waybills' => 0,
+                    'skipped_empty' => true,
+                ];
+                $pc++;
+                continue;
+            }
             session_register_phase($manifest, $phase_num, [
                 'step' => $n,
                 'jobs' => $jobs,
@@ -2722,6 +3644,34 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
                 'updated' => date('c'),
             ];
             $log[] = ['step' => $n, 'phase' => $phase_num, 'waybills' => $wb];
+            $pc++;
+            continue;
+        }
+        if ($fid === 'generate_station_report') {
+            $sync_output_session();
+            $info = trim((string) ($step['params']['info'] ?? ''));
+            $snap = session_generate_station_report_phase($dbc, $session_nbr, $info, $root);
+            $manifest = session_load_manifest($session_nbr, $root);
+            $log[] = [
+                'step' => $n,
+                'action' => 'generate_station_report',
+                'info' => $info,
+                'report' => $snap,
+            ];
+            $pc++;
+            continue;
+        }
+        if ($fid === 'generate_wheel_report') {
+            $sync_output_session();
+            $info = trim((string) ($step['params']['info'] ?? ''));
+            $snap = session_generate_wheel_report_phase($dbc, $session_nbr, $info, $root);
+            $manifest = session_load_manifest($session_nbr, $root);
+            $log[] = [
+                'step' => $n,
+                'action' => 'generate_wheel_report',
+                'info' => $info,
+                'report' => $snap,
+            ];
             $pc++;
             continue;
         }
@@ -2927,6 +3877,96 @@ function session_phase_info(array $phase)
     }
 
     return '';
+}
+
+/**
+ * Sort rank for a switch-list Train Info label. Keeps operational play order
+ * (Starting → … → Next Day/Return) even when a reconstructed leg lands in a
+ * higher phase_NN folder and was appended late in the manifest.
+ */
+function session_phase_info_sort_rank($info)
+{
+    $info = strtolower(trim((string) $info));
+    if ($info === '') {
+        return 80;
+    }
+    $rules = [
+        'starting' => 10,
+        'start' => 10,
+        'inbound' => 20,
+        'outbound' => 30,
+        'return' => 40,
+        'next day' => 50,
+        'nextday' => 50,
+        'ending' => 60,
+        'end' => 60,
+    ];
+    foreach ($rules as $needle => $rank) {
+        if ($info === $needle || strpos($info, $needle) !== false) {
+            return $rank;
+        }
+    }
+
+    return 80;
+}
+
+/**
+ * Reorder phases that share a train job so Train Info plays in operational
+ * sequence (Starting first). Cross-train slots keep their relative positions.
+ *
+ * @param list<array>              $phases
+ * @param array<string,int>|null   $slot_order  Optional original order by slot key
+ * @return list<array>
+ */
+function session_phases_reorder_info_within_trains(array $phases, array $slot_order = null)
+{
+    if (count($phases) < 2) {
+        return array_values($phases);
+    }
+    $phases = array_values($phases);
+    $indices_by_job = [];
+    foreach ($phases as $i => $phase) {
+        if (!is_array($phase)) {
+            continue;
+        }
+        foreach ((array) ($phase['jobs'] ?? []) as $job) {
+            $job = trim((string) $job);
+            if ($job !== '') {
+                $indices_by_job[$job][] = $i;
+            }
+        }
+    }
+    foreach ($indices_by_job as $indices) {
+        $indices = array_values(array_unique($indices));
+        if (count($indices) < 2) {
+            continue;
+        }
+        $subset = [];
+        foreach ($indices as $i) {
+            $subset[] = $phases[$i];
+        }
+        usort($subset, static function ($a, $b) use ($slot_order) {
+            $ra = session_phase_info_sort_rank(session_phase_info($a));
+            $rb = session_phase_info_sort_rank(session_phase_info($b));
+            if ($ra !== $rb) {
+                return $ra <=> $rb;
+            }
+            if (is_array($slot_order)) {
+                $oa = $slot_order[session_phase_slot_key($a)] ?? 0;
+                $ob = $slot_order[session_phase_slot_key($b)] ?? 0;
+                if ($oa !== $ob) {
+                    return $oa <=> $ob;
+                }
+            }
+
+            return ((int) ($a['phase'] ?? 0)) <=> ((int) ($b['phase'] ?? 0));
+        });
+        foreach ($indices as $k => $i) {
+            $phases[$i] = $subset[$k];
+        }
+    }
+
+    return $phases;
 }
 
 function session_waybills_bundle_ready($session_nbr, $phase_num = null, $root = null)
@@ -3212,8 +4252,8 @@ function session_train_switchlist_legs($dbc, $session_nbr, $job, $root = null)
     // Only the latest generation token's phases for this train, so repeated
     // recipe runs that appended to the same session don't stack stale copies.
     $token_phases = session_job_latest_token_phase_nums($manifest, $job);
-    $legs = [];
-
+    $phase_rank = session_phase_display_rank($manifest);
+    $phase_nums = [];
     foreach ($job_meta['phases'] ?? [] as $p) {
         $p = (int) $p;
         if ($p < 1) {
@@ -3222,12 +4262,30 @@ function session_train_switchlist_legs($dbc, $session_nbr, $job, $root = null)
         if ($token_phases !== [] && !isset($token_phases[$p])) {
             continue;
         }
+        $phase_nums[] = $p;
+    }
+    usort($phase_nums, static function ($a, $b) use ($phase_rank) {
+        $ra = $phase_rank[$a] ?? $a;
+        $rb = $phase_rank[$b] ?? $b;
+
+        return $ra <=> $rb;
+    });
+
+    $legs = [];
+    foreach ($phase_nums as $p) {
         $phase_dir = session_phase_output_dir($session_nbr, $p, $root);
         $sections = master_sw_load_sections_cache($phase_dir, $job, $session_nbr);
         if (!is_array($sections) || count($sections) === 0) {
             continue;
         }
         $work_leg_total = count($sections);
+        $phase_info = '';
+        foreach ($manifest['phases'] ?? [] as $ph_row) {
+            if ((int) ($ph_row['phase'] ?? 0) === $p) {
+                $phase_info = session_phase_info($ph_row);
+                break;
+            }
+        }
         foreach ($sections as $idx => $section) {
             $work_leg = $idx + 1;
             $numbers = session_waybill_numbers_for_sections($dbc, [$section]);
@@ -3243,6 +4301,7 @@ function session_train_switchlist_legs($dbc, $session_nbr, $job, $root = null)
                 'workflow_phase' => $p,
                 'work_leg' => $work_leg,
                 'work_leg_total' => $work_leg_total,
+                'info' => $phase_info,
                 'label' => (string) ($section['label'] ?? ('Phase ' . $work_leg)),
                 'base_href' => session_output_url('session_' . (int) $session_nbr
                     . '/phase_' . session_phase_pad($p)
@@ -3381,11 +4440,15 @@ function session_train_print_all_primary_job($session_nbr, $job, $root = null)
  * A slot is keyed by its train(s) + recipe step + title/info (direction), and
  * because phases are stored in chronological append order, the last entry seen
  * for a key wins. Clean single-run sessions are unaffected (each key appears
- * once). Returns the surviving phase entries in phase order.
+ * once). Returns the surviving phase entries in manifest array order (the
+ * authorial / operational sequence), not sorted by phase_NN folder numbers —
+ * those can diverge when a leg is reconstructed into a later directory.
  */
 function session_latest_token_phases(array $manifest)
 {
     $latest = [];
+    $order = [];
+    $i = 0;
     foreach ($manifest['phases'] ?? [] as $phase) {
         if (!is_array($phase)) {
             continue;
@@ -3396,14 +4459,39 @@ function session_latest_token_phases(array $manifest)
         // Key on the logical slot (trains + title/info), NOT the recipe step
         // number, which can shift between runs and otherwise splits the same
         // phase into two "tokens". Later entries overwrite earlier ones.
-        $latest[session_phase_slot_key($phase)] = $phase;
+        $key = session_phase_slot_key($phase);
+        $latest[$key] = $phase;
+        $order[$key] = $i;
+        $i++;
     }
     $result = array_values($latest);
-    usort($result, static function ($a, $b) {
-        return (int) ($a['phase'] ?? 0) <=> (int) ($b['phase'] ?? 0);
+    usort($result, static function ($a, $b) use ($order) {
+        return ($order[session_phase_slot_key($a)] ?? 0)
+            <=> ($order[session_phase_slot_key($b)] ?? 0);
     });
 
-    return $result;
+    return session_phases_reorder_info_within_trains($result, $order);
+}
+
+/**
+ * Map of phase_num => 0-based display rank from session_latest_token_phases.
+ * Used where code still keys by phase folder number but must present legs in
+ * operational (manifest) order rather than numeric phase order.
+ *
+ * @return array<int,int>
+ */
+function session_phase_display_rank(array $manifest)
+{
+    $rank = [];
+    $i = 0;
+    foreach (session_latest_token_phases($manifest) as $phase) {
+        $pn = (int) ($phase['phase'] ?? 0);
+        if ($pn > 0 && !isset($rank[$pn])) {
+            $rank[$pn] = $i++;
+        }
+    }
+
+    return $rank;
 }
 
 /**
@@ -3598,7 +4686,8 @@ function session_build_switchlist_print_all($dbc, $session_nbr, $root = null)
                 $phase_title = master_sw_switchlist_title_from_cache($phase_dir, $job, $session_nbr);
             }
             $phase_info = session_phase_info($phase);
-            $display_train = master_sw_display_train_name($meta['table_name'], ['title' => $phase_title, 'info' => $phase_info]);
+            $phase_opts = ['title' => $phase_title, 'info' => $phase_info];
+            $display_train = master_sw_display_train_name($meta['table_name'], $phase_opts);
             $total = count($sections);
             for ($i = 0; $i < $total; $i++) {
                 $phases_html .= master_sw_render_print_all_phase_body(
@@ -3606,7 +4695,8 @@ function session_build_switchlist_print_all($dbc, $session_nbr, $root = null)
                     $sections[$i],
                     $i + 1,
                     $total,
-                    $display_train
+                    $display_train,
+                    $phase_opts
                 );
                 $phase_count++;
             }
@@ -3646,8 +4736,8 @@ function session_build_switchlist_print_all($dbc, $session_nbr, $root = null)
         . $session_nav
         . '<div class="page">'
         . '<div class="noprint" style="margin-bottom:12px;">'
-        . '<button onclick="window.print()">PRINT ALL SWITCH LISTS</button>'
-        . '<p style="margin:8px 0 0; color:#555; font-size:14px;">Combined view. Pick a style above to print every switch list in that layout — each starts on a new page.</p>'
+        . '<button type="button" onclick="stsSafePrint()">PRINT ALL SWITCH LISTS</button>'
+        . '<p style="margin:8px 0 0; color:#555; font-size:14px;">Combined view. Pick a style above to print every switch list in that layout — each starts on a new page. Use an external browser (Chrome/Safari) if Cursor\'s preview crashes on print.</p>'
         . '</div>'
         . $phases_html
         . '</div>'
@@ -3713,7 +4803,8 @@ function session_build_switchlist_train_print_all($dbc, $session_nbr, $job, $roo
                 $phase_title = master_sw_switchlist_title_from_cache($phase_dir, $pj, $session_nbr);
             }
             $phase_info = session_phase_info($phase);
-            $display_train = master_sw_display_train_name($meta['table_name'], ['title' => $phase_title, 'info' => $phase_info]);
+            $phase_opts = ['title' => $phase_title, 'info' => $phase_info];
+            $display_train = master_sw_display_train_name($meta['table_name'], $phase_opts);
             $total = count($sections);
             for ($i = 0; $i < $total; $i++) {
                 $phases_html .= master_sw_render_print_all_phase_body(
@@ -3721,7 +4812,8 @@ function session_build_switchlist_train_print_all($dbc, $session_nbr, $job, $roo
                     $sections[$i],
                     $i + 1,
                     $total,
-                    $display_train
+                    $display_train,
+                    $phase_opts
                 );
                 $phase_count++;
             }
@@ -3763,7 +4855,7 @@ function session_build_switchlist_train_print_all($dbc, $session_nbr, $job, $roo
         . $session_nav
         . '<div class="page">'
         . '<div class="noprint" style="margin-bottom:12px;">'
-        . '<button onclick="window.print()">PRINT ALL SWITCH LISTS</button>'
+        . '<button type="button" onclick="stsSafePrint()">PRINT ALL SWITCH LISTS</button>'
         . '<p style="margin:8px 0 0; color:#555; font-size:14px;">All phases for '
         . htmlspecialchars($train_label) . '. Pick a style above to print in that layout — each switch list starts on a new printed page.</p>'
         . '</div>'
@@ -3989,7 +5081,7 @@ function session_build_switchlist_print_all_style($dbc, $session_nbr, $style, $r
         . $session_nav
         . '<div class="page">'
         . '<div class="noprint" style="margin-bottom:12px;">'
-        . '<button onclick="window.print()">PRINT ALL SWITCH LISTS</button>'
+        . '<button type="button" onclick="stsSafePrint()">PRINT ALL SWITCH LISTS</button>'
         . '<p style="margin:8px 0 0; color:#555; font-size:14px;">Style: ' . htmlspecialchars($style_label)
         . '. Each switch list starts on a new printed page.</p>'
         . '</div>'
@@ -4098,7 +5190,7 @@ function session_build_switchlist_train_print_all_style($dbc, $session_nbr, $job
         . $session_nav
         . '<div class="page">'
         . '<div class="noprint" style="margin-bottom:12px;">'
-        . '<button onclick="window.print()">PRINT ALL SWITCH LISTS</button>'
+        . '<button type="button" onclick="stsSafePrint()">PRINT ALL SWITCH LISTS</button>'
         . '<p style="margin:8px 0 0; color:#555; font-size:14px;">All phases for '
         . htmlspecialchars($train_label) . ' · ' . htmlspecialchars($style_label)
         . '. Each switch list starts on a new printed page.</p>'
@@ -4170,10 +5262,17 @@ function session_station_report_featured_stations()
     return [];
 }
 
+/** Bump when station-report columns/filters change so cached HTML rebuilds. */
+const SESSION_STATION_REPORT_VERSION = 2;
+
 /** True when a cached station_report.html should be rebuilt. */
 function session_station_report_stale($session_nbr, $report_fs, $root = null)
 {
     if (!is_file($report_fs)) {
+        return true;
+    }
+    $cached = (string) @file_get_contents($report_fs);
+    if ($cached === '' || strpos($cached, 'data-srp-version="' . SESSION_STATION_REPORT_VERSION . '"') === false) {
         return true;
     }
     $root = $root ?? session_web_root();
@@ -4259,9 +5358,121 @@ function session_station_report_start_status($cid, $session, array $obs_status, 
 }
 
 /**
+ * Next step text from STS load/status + waybill destinations.
+ *
+ * @param array<string,mixed> $info  Keys: status, waybill, is_empty_repo, load_loc,
+ *                                   load_station, unload_loc, unload_station,
+ *                                   e_dest_loc, e_dest_station, in_train
+ */
+function session_station_report_next_step(array $info)
+{
+    $status = (string) ($info['status'] ?? '');
+    $wb = (string) ($info['waybill'] ?? '');
+    $in_train = !empty($info['in_train']);
+    $is_e = !empty($info['is_empty_repo']);
+
+    if ($is_e) {
+        $dest = trim((string) ($info['e_dest_station'] ?? '') . ' / ' . (string) ($info['e_dest_loc'] ?? ''), ' /');
+
+        return 'Reposition empty → ' . ($dest !== '' ? $dest : '?');
+    }
+    if ($status === 'Ordered' && $wb !== '') {
+        $spot = (string) ($info['load_loc'] ?: '?');
+        $st = (string) ($info['load_station'] ?: '?');
+
+        return $in_train
+            ? ('On train → set out to load at ' . $spot . ' (' . $st . ')')
+            : ('Pick up → load at ' . $spot . ' (' . $st . ')');
+    }
+    if ($status === 'Ordered' && $wb === '') {
+        return 'Hold — pool car, awaiting order generation';
+    }
+    if (in_array($status, ['Loaded', 'Loading', 'Unloading'], true) && $wb !== '') {
+        $spot = (string) ($info['unload_loc'] ?: '?');
+        $st = (string) ($info['unload_station'] ?: '?');
+        $verb = $status === 'Unloading' ? 'Unload at' : 'deliver to';
+
+        return $in_train
+            ? ('On train → ' . $verb . ' ' . $spot . ' (' . $st . ')')
+            : ('Pick up → ' . $verb . ' ' . $spot . ' (' . $st . ')');
+    }
+    if ($status === 'Loaded' && $wb === '') {
+        return 'Hold — pre-loaded resident, awaiting matching order';
+    }
+    if ($status === 'Empty') {
+        return 'Reserve empty — available for fill/reposition';
+    }
+
+    return '';
+}
+
+/**
+ * Merge switch-list Session-N action with DB-derived next step.
+ * Returns [action_text, conflict_text].
+ *
+ * @param string $session_action  Switch-list line, or '' if none
+ * @param string $next_step       DB next step, or ''
+ * @param string $list_waybill    Waybill from switch-list archive
+ * @param string $live_waybill    Waybill from car_orders / archive row
+ */
+function session_station_report_consolidate_action(
+    $session_action,
+    $next_step,
+    $list_waybill = '',
+    $live_waybill = ''
+) {
+    $session_action = trim((string) $session_action);
+    $next_step = trim((string) $next_step);
+    $list_waybill = trim((string) $list_waybill);
+    $live_waybill = trim((string) $live_waybill);
+
+    $conflict = '';
+    if ($session_action !== '' && $list_waybill !== '' && $live_waybill !== '' && $list_waybill !== $live_waybill) {
+        $conflict = 'List wb ' . $list_waybill . ' ≠ order ' . $live_waybill;
+    } elseif ($session_action !== '' && $live_waybill === '' && $list_waybill === '') {
+        // On a list but no order anywhere — soft hint, not always a hard error
+        // (some legs carry empties). Leave conflict empty unless list claimed a wb.
+    } elseif ($session_action !== '' && $live_waybill === '' && $list_waybill !== '') {
+        $conflict = 'On switch list (' . $list_waybill . ') but no live order';
+    }
+
+    if ($session_action === '' && $next_step === '') {
+        return ['—', $conflict];
+    }
+    if ($session_action === '') {
+        return [$next_step, $conflict];
+    }
+    if ($next_step === '') {
+        return [$session_action, $conflict];
+    }
+
+    // Compatible: session action already encodes pick-up job; keep it and append
+    // the DB verb/destination when it adds a distinct load/deliver cue.
+    $session_l = strtolower($session_action);
+    $next_l = strtolower($next_step);
+    $overlap = false;
+    foreach (['load at', 'deliver to', 'unload at', 'reposition'] as $needle) {
+        if (strpos($next_l, $needle) !== false) {
+            $pos = strpos($next_l, $needle);
+            $tail = trim(substr($next_step, $pos + strlen($needle)));
+            $dest_code = preg_replace('/\s*\(.*$/', '', $tail);
+            if ($dest_code !== '' && strpos($session_l, strtolower($dest_code)) !== false) {
+                $overlap = true;
+                break;
+            }
+        }
+    }
+    if ($overlap && $conflict === '') {
+        return [$session_action, $conflict];
+    }
+
+    return [$session_action . ' · ' . $next_step, $conflict];
+}
+
+/**
  * Assemble per-car rows for the start-of-session station report.
  *
- * @return array{by_station: array<string,list<array>>, station_order: list<string>, total: int}|null
+ * @return array{by_station: array<string,list<array>>, station_order: list<string>, total: int, in_train_count: int, conflict_count: int}|null
  */
 function session_station_report_data($dbc, $session_nbr, $root = null)
 {
@@ -4292,14 +5503,33 @@ function session_station_report_data($dbc, $session_nbr, $root = null)
         $dbc,
         'SELECT cars.id AS id, cars.reporting_marks AS marks, cars.current_location_id AS cur,
                 cars.status AS live_status, cc.code AS car_code,
-                homeloc.code AS home_code, homest.station AS home_station
+                homeloc.code AS home_code, homest.station AS home_station,
+                jobs.name AS job_name,
+                co.waybill_number AS waybill,
+                s.code AS ship_code, com.code AS commodity,
+                lld.code AS load_loc, sld.station AS load_station,
+                lul.code AS unload_loc, sul.station AS unload_station,
+                le.code AS e_dest_loc, se.station AS e_dest_station
          FROM cars
          LEFT JOIN car_codes cc ON cc.id = cars.car_code_id
          LEFT JOIN locations homeloc ON homeloc.id = cars.home_location
-         LEFT JOIN routing homest ON homest.id = homeloc.station'
+         LEFT JOIN routing homest ON homest.id = homeloc.station
+         LEFT JOIN jobs ON jobs.id = cars.handled_by_job_id
+         LEFT JOIN car_orders co ON co.car = cars.id
+         LEFT JOIN shipments s ON s.id = co.shipment
+              AND (co.waybill_number IS NULL OR SUBSTR(co.waybill_number, 5, 1) != "E")
+         LEFT JOIN commodities com ON com.id = s.consignment
+         LEFT JOIN locations lld ON lld.id = s.loading_location
+         LEFT JOIN routing sld ON sld.id = lld.station
+         LEFT JOIN locations lul ON lul.id = s.unloading_location
+         LEFT JOIN routing sul ON sul.id = lul.station
+         LEFT JOIN locations le ON le.id = co.shipment
+              AND co.waybill_number IS NOT NULL AND SUBSTR(co.waybill_number, 5, 1) = "E"
+         LEFT JOIN routing se ON se.id = le.station'
     );
     while ($row = mysqli_fetch_assoc($rs)) {
         $cid = (int) $row['id'];
+        $wb = (string) ($row['waybill'] ?? '');
         $cars[$cid] = [
             'marks' => (string) $row['marks'],
             'car_code' => (string) ($row['car_code'] ?? ''),
@@ -4307,6 +5537,17 @@ function session_station_report_data($dbc, $session_nbr, $root = null)
             'live_status' => (string) ($row['live_status'] ?? ''),
             'home' => $row['home_station'] !== null && $row['home_station'] !== ''
                 ? (string) $row['home_station'] : (string) ($row['home_code'] ?? ''),
+            'job_name' => (string) ($row['job_name'] ?? ''),
+            'waybill' => $wb,
+            'is_empty_repo' => $wb !== '' && strtoupper(substr($wb, 4, 1)) === 'E',
+            'ship_code' => (string) ($row['ship_code'] ?? ''),
+            'commodity' => (string) ($row['commodity'] ?? ''),
+            'load_loc' => (string) ($row['load_loc'] ?? ''),
+            'load_station' => (string) ($row['load_station'] ?? ''),
+            'unload_loc' => (string) ($row['unload_loc'] ?? ''),
+            'unload_station' => (string) ($row['unload_station'] ?? ''),
+            'e_dest_loc' => (string) ($row['e_dest_loc'] ?? ''),
+            'e_dest_station' => (string) ($row['e_dest_station'] ?? ''),
         ];
         $by_marks[(string) $row['marks']] = $cid;
     }
@@ -4315,6 +5556,10 @@ function session_station_report_data($dbc, $session_nbr, $root = null)
     $obs_status = [];
     $session_work = [];
     $pre_dest = [];
+    $in_train_jobs = []; // cid => job name when seen in-train on session switch lists
+    $archive_waybill = []; // cid => waybill from earliest session_nbr master row
+    $archive_load = [];
+    $archive_unload = [];
 
     $sess_dirs = [];
     foreach (glob($root . '/session_*', GLOB_ONLYDIR) ?: [] as $d) {
@@ -4333,6 +5578,10 @@ function session_station_report_data($dbc, $session_nbr, $root = null)
                 continue;
             }
             $job = (string) ($d['job'] ?? '');
+            $phase = 0;
+            if (preg_match('#phase_(\d+)#', $f, $pm)) {
+                $phase = (int) $pm[1];
+            }
             foreach ($d['sections'] as $sec) {
                 foreach (($sec['cars'] ?? []) as $car) {
                     $marks = (string) ($car['reporting_marks'] ?? ($car[0] ?? ''));
@@ -4342,17 +5591,42 @@ function session_station_report_data($dbc, $session_nbr, $root = null)
                     $cid = $by_marks[$marks];
                     $loc = (int) ($car['current_location_id'] ?? ($car[14] ?? 0));
                     $status = (string) ($car['status'] ?? ($car[2] ?? ''));
-                    if (!isset($obs[$cid][$sn]) && $loc > 0) {
-                        $obs[$cid][$sn] = $loc;
+                    // Record station spots; also record explicit in-train (loc 0)
+                    // for this session so we do not fall back to a later location.
+                    if (!array_key_exists($sn, $obs[$cid] ?? [])) {
+                        if ($loc > 0) {
+                            $obs[$cid][$sn] = $loc;
+                        } elseif ($sn === $session_nbr) {
+                            $obs[$cid][$sn] = 0;
+                            if ($job !== '') {
+                                $in_train_jobs[$cid] = $job;
+                            }
+                        }
                     }
                     if (!isset($obs_status[$cid][$sn]) && $status !== '') {
                         $obs_status[$cid][$sn] = $status;
                     }
-                    if ($sn === $session_nbr && !isset($session_work[$cid])) {
-                        $session_work[$cid] = [
-                            'job' => $job,
-                            'dest_loc' => session_station_report_dest_loc($car, $code_to_loc),
-                        ];
+                    if ($sn === $session_nbr) {
+                        $wb = (string) ($car['waybill_number'] ?? '');
+                        if ($wb !== '' && !isset($archive_waybill[$cid])) {
+                            $archive_waybill[$cid] = $wb;
+                            $archive_load[$cid] = (string) ($car['loading_location'] ?? '');
+                            $archive_unload[$cid] = (string) ($car['unloading_location'] ?? '');
+                        }
+                        if (!isset($session_work[$cid])
+                            || ($phase > 0 && $phase < (int) ($session_work[$cid]['phase'] ?? PHP_INT_MAX))
+                        ) {
+                            $session_work[$cid] = [
+                                'job' => $job,
+                                'phase' => $phase,
+                                'dest_loc' => session_station_report_dest_loc($car, $code_to_loc),
+                                'waybill' => $wb,
+                                'in_train' => ($loc === 0),
+                            ];
+                            if ($loc === 0 && $job !== '') {
+                                $in_train_jobs[$cid] = $job;
+                            }
+                        }
                     }
                     if ($sn < $session_nbr) {
                         $dest = session_station_report_dest_loc($car, $code_to_loc);
@@ -4365,24 +5639,107 @@ function session_station_report_data($dbc, $session_nbr, $root = null)
         }
     }
 
+    $current_db = (int) session_get_db_session($dbc);
+    $use_live_orders = ($session_nbr === $current_db);
+
     $featured = session_station_report_featured_stations();
     $by_station = [];
+    $in_train_count = 0;
+    $conflict_count = 0;
     foreach ($cars as $cid => $car) {
         $loc_id = session_station_report_start_loc($cid, $session_nbr, $obs, $pre_dest, $car);
+        // Explicit in-train from this session's lists wins over later yard spots.
+        if (array_key_exists($session_nbr, $obs[$cid] ?? []) && (int) $obs[$cid][$session_nbr] === 0) {
+            $loc_id = 0;
+        }
         $loc = $locations[$loc_id] ?? null;
         $loc_code = $loc['code'] ?? ($loc_id > 0 ? 'loc#' . $loc_id : '');
         $st = $loc ? ($stations[$loc['station_id']] ?? null) : null;
-        $station_name = $loc_code === '' ? 'On train / off-layout' : ($st['name'] ?? 'Unknown station');
-        $sort = $st['sort'] ?? 99999;
+        $in_train = ($loc_id <= 0);
+        if ($in_train) {
+            $job_label = $in_train_jobs[$cid]
+                ?? (($use_live_orders && $car['job_name'] !== '') ? $car['job_name'] : '');
+            $station_name = $job_label !== ''
+                ? ('In train · ' . $job_label)
+                : 'On train / off-layout';
+            $loc_code = $job_label !== '' ? $job_label : 'IN-TRAIN';
+            $sort = -1;
+            $in_train_count++;
+        } else {
+            $station_name = $st['name'] ?? 'Unknown station';
+            $sort = $st['sort'] ?? 99999;
+        }
         $status = session_station_report_start_status($cid, $session_nbr, $obs_status, $car);
 
+        // Prefer live order for the current DB session; otherwise archive wb from
+        // switch-list masters. Live destination fields still fill gaps.
+        $waybill = '';
+        if ($use_live_orders && $car['waybill'] !== '') {
+            $waybill = $car['waybill'];
+        } elseif (isset($archive_waybill[$cid])) {
+            $waybill = $archive_waybill[$cid];
+        } elseif ($car['waybill'] !== '') {
+            $waybill = $car['waybill'];
+        }
+        $is_e = $waybill !== '' && strtoupper(substr($waybill, 4, 1)) === 'E';
+
+        $load_loc = $car['load_loc'];
+        $load_station = $car['load_station'];
+        $unload_loc = $car['unload_loc'];
+        $unload_station = $car['unload_station'];
+        if ($load_loc === '' && isset($archive_load[$cid]) && $archive_load[$cid] !== '') {
+            $load_loc = $archive_load[$cid];
+        }
+        if ($unload_loc === '' && isset($archive_unload[$cid]) && $archive_unload[$cid] !== '') {
+            $unload_loc = $archive_unload[$cid];
+        }
+
+        $next = session_station_report_next_step([
+            'status' => $status,
+            'waybill' => $waybill,
+            'is_empty_repo' => $is_e,
+            'load_loc' => $load_loc,
+            'load_station' => $load_station,
+            'unload_loc' => $unload_loc,
+            'unload_station' => $unload_station,
+            'e_dest_loc' => $car['e_dest_loc'],
+            'e_dest_station' => $car['e_dest_station'],
+            'in_train' => $in_train,
+        ]);
+
         $stays = !isset($session_work[$cid]);
-        if ($stays) {
-            $action = '—';
-        } else {
+        $session_action = '';
+        $list_wb = '';
+        if (!$stays) {
             $w = $session_work[$cid];
             $dest = $w['dest_loc'] ? ($locations[$w['dest_loc']]['code'] ?? '') : '';
-            $action = 'Pick up · ' . ($w['job'] ?: '?') . ($dest !== '' ? ' → ' . $dest : '');
+            $list_wb = (string) ($w['waybill'] ?? '');
+            if (!empty($w['in_train'])) {
+                $session_action = 'In train · ' . ($w['job'] ?: '?')
+                    . ($dest !== '' ? ' → ' . $dest : '');
+            } else {
+                $session_action = 'Pick up · ' . ($w['job'] ?: '?')
+                    . ($dest !== '' ? ' → ' . $dest : '');
+            }
+        }
+
+        list($action, $conflict) = session_station_report_consolidate_action(
+            $session_action,
+            $next,
+            $list_wb,
+            $waybill
+        );
+        if ($conflict !== '') {
+            $conflict_count++;
+        }
+
+        $ship_disp = '';
+        if ($waybill !== '') {
+            if ($is_e) {
+                $ship_disp = 'reposition';
+            } else {
+                $ship_disp = trim($car['ship_code'] . ($car['commodity'] !== '' ? ' · ' . $car['commodity'] : ''));
+            }
         }
 
         $by_station[$station_name][] = [
@@ -4392,8 +5749,12 @@ function session_station_report_data($dbc, $session_nbr, $root = null)
             'car_code' => $car['car_code'],
             'status' => $status,
             'home' => $car['home'],
+            'waybill' => $waybill,
+            'shipment' => $ship_disp,
             'action' => $action,
+            'conflict' => $conflict,
             'stays' => $stays,
+            'placement' => $in_train ? 'train' : 'station',
         ];
     }
 
@@ -4403,8 +5764,15 @@ function session_station_report_data($dbc, $session_nbr, $root = null)
     unset($rows);
 
     $station_order = [];
+    // Pin in-train buckets first, then featured yards, then the rest.
+    foreach (array_keys($by_station) as $name) {
+        if (strpos($name, 'In train') === 0 || $name === 'On train / off-layout') {
+            $station_order[] = $name;
+        }
+    }
+    sort($station_order);
     foreach ($featured as $f) {
-        if (isset($by_station[$f])) {
+        if (isset($by_station[$f]) && !in_array($f, $station_order, true)) {
             $station_order[] = $f;
         }
     }
@@ -4424,6 +5792,8 @@ function session_station_report_data($dbc, $session_nbr, $root = null)
         'station_order' => $station_order,
         'featured' => $featured,
         'total' => count($cars),
+        'in_train_count' => $in_train_count,
+        'conflict_count' => $conflict_count,
     ];
 }
 
@@ -4443,7 +5813,7 @@ function session_station_report_status_html($status)
 /**
  * Render the station report HTML for a session.
  *
- * @param array{by_station: array, station_order: list<string>, featured: list<string>, total: int} $data
+ * @param array{by_station: array, station_order: list<string>, featured: list<string>, total: int, in_train_count?: int, conflict_count?: int} $data
  */
 function session_station_report_render_html($session_nbr, array $data)
 {
@@ -4452,7 +5822,13 @@ function session_station_report_render_html($session_nbr, array $data)
     $station_order = $data['station_order'];
     $featured = $data['featured'];
     $total = (int) $data['total'];
+    $in_train_count = (int) ($data['in_train_count'] ?? 0);
+    $conflict_count = (int) ($data['conflict_count'] ?? 0);
     $session_nav = (string) ($data['session_nav'] ?? '');
+    $phase_nav = (string) ($data['phase_nav'] ?? '');
+    $phase_label = trim((string) ($data['phase_label'] ?? ''));
+    $phase_num = (int) ($data['phase_num'] ?? 0);
+    $is_snapshot = !empty($data['snapshot']) || !empty($data['live']);
     $generated_at = date('M j, Y g:i A');
 
     // Distinct load statuses (for the status filter dropdown), in a friendly order.
@@ -4471,18 +5847,26 @@ function session_station_report_render_html($session_nbr, array $data)
         return [$status_rank[$a] ?? 99, $a] <=> [$status_rank[$b] ?? 99, $b];
     });
 
+    $title_phase = $phase_label !== '' ? (' — ' . $phase_label) : '';
+    $subtitle = $is_snapshot
+        ? ('Live snapshot' . ($phase_label !== '' ? ' · ' . htmlspecialchars($phase_label, ENT_QUOTES) : '')
+            . ' of cars by station for Session ' . $session_nbr . '.')
+        : ('Where every car was staged before Session ' . $session_nbr
+            . ' work began, reconstructed from the switch-list archives'
+            . ($in_train_count > 0 ? ' (including ' . $in_train_count . ' in-train)' : '') . '.');
+
     ob_start();
     ?><!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-srp-version="<?= (int) SESSION_STATION_REPORT_VERSION ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Station Car Report — Start of Session <?= $session_nbr ?></title>
+<title>Station Car Report<?= $title_phase ?> — Session <?= $session_nbr ?></title>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background:#f8f9fa; font-size:13px; }
-  main { max-width: 1100px; margin: 0 auto; padding: 1rem 1rem 2.5rem; }
+  main { max-width: 1280px; margin: 0 auto; padding: 1rem 1rem 2.5rem; }
   h1 { font-size: 1.15rem; font-weight: 600; margin-bottom:.5rem; }
   .subtitle { color:#6c757d; font-size:.8rem; margin-bottom:.5rem; }
   .station-card { background:#fff; border-radius:.5rem; box-shadow:0 2px 6px rgba(0,0,0,.08); margin-bottom:1rem; overflow:hidden; }
@@ -4491,13 +5875,16 @@ function session_station_report_render_html($session_nbr, array $data)
     background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); }
   .station-head .count { font-weight:500; font-size:.8rem; opacity:.9; }
   .featured .station-head { background:linear-gradient(135deg,#0d6efd 0%,#0a58ca 100%); }
+  .in-train-card .station-head { background:linear-gradient(135deg,#0f766e 0%,#115e59 100%); }
   table { margin:0; font-size:.8rem; }
   th { font-size:.68rem; text-transform:uppercase; letter-spacing:.03em; color:#495057; }
   td, th { padding:.3rem .6rem !important; vertical-align:middle; }
   .track { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.78rem; color:#0a58ca; }
   .marks { font-weight:600; }
+  .wb { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.78rem; white-space:nowrap; }
   .stay { color:#198754; font-weight:500; }
   .act { color:#b02a37; }
+  .conflict { color:#a00; font-weight:600; font-size:.72rem; }
   .legend { font-size:.78rem; color:#6c757d; }
   .status-empty { display:inline-block; background:#ffeaa7; color:#333; padding:1px 6px; border-radius:3px; font-weight:600; font-size:.72rem; }
   .status-loaded { display:inline-block; background:#a8e6cf; color:#333; padding:1px 6px; border-radius:3px; font-weight:600; font-size:.72rem; }
@@ -4527,7 +5914,7 @@ function session_station_report_render_html($session_nbr, array $data)
     .noprint{display:none;}
     .srp-filters{display:none;}
     h1{margin:0;}
-    .station-head, .featured .station-head,
+    .station-head, .featured .station-head, .in-train-card .station-head,
     .status-empty, .status-loaded, .status-loading, .status-unloading, .status-ordered {
       -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact;
     }
@@ -4540,21 +5927,24 @@ function session_station_report_render_html($session_nbr, array $data)
     <div class="d-flex flex-wrap align-items-center gap-2 w-100">
       <a class="btn btn-outline-light btn-sm" href="/sts/index.html"><i class="bi bi-house"></i> STS Main Menu</a>
       <a class="btn btn-outline-light btn-sm" href="index.php"><i class="bi bi-calendar-event"></i> Session <?= $session_nbr ?></a>
+<?php if (session_car_report_phases($session_nbr, 'wheel') !== []): ?>
       <a class="btn btn-outline-light btn-sm" href="wheel_report.html" title="Wheel report"><i class="bi bi-arrow-left-right"></i> Wheel Report</a>
+<?php endif; ?>
       <button type="button" class="btn btn-outline-light btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
       <a class="btn btn-outline-light btn-sm ms-auto" href="/sts/session-sitemap.html"><i class="bi bi-diagram-3"></i> Site Map</a>
     </div>
   </div>
 </nav>
 <main>
-  <h1>Station Car Report — Start of Session <?= $session_nbr ?></h1>
-  <p class="subtitle noprint">Where every car was staged before Session <?= $session_nbr ?> work began, reconstructed from the switch-list archives. <?= $total ?> cars total. Generated <?= htmlspecialchars($generated_at, ENT_QUOTES) ?>.</p>
-  <p class="legend noprint"><span class="stay">—</span> = stays put (not on a Session <?= $session_nbr ?> switch list) &nbsp;·&nbsp; <span class="act">Pick up · JOB → DEST</span> = handled on a Session <?= $session_nbr ?> switch list.</p>
+  <h1>Station Car Report<?= $phase_label !== '' ? ' — ' . htmlspecialchars($phase_label, ENT_QUOTES) : '' ?> — Session <?= $session_nbr ?></h1>
+  <p class="subtitle noprint"><?= $subtitle ?> <?= $total ?> cars total<?= $conflict_count > 0 ? ' · <span class="conflict">' . $conflict_count . ' list/DB conflict' . ($conflict_count === 1 ? '' : 's') . '</span>' : '' ?>. Generated <?= htmlspecialchars($generated_at, ENT_QUOTES) ?>.</p>
+  <p class="legend noprint"><span class="stay">—</span> = no switch-list work and no DB next step &nbsp;·&nbsp; <span class="act">Pick up · JOB → DEST</span> = switch-list assignment &nbsp;·&nbsp; DB next step is merged into Action when it adds load/deliver guidance.</p>
   <?= $session_nav ?>
+  <?= $phase_nav ?>
   <div class="srp-filters noprint">
     <div class="field grow">
       <label for="srp-search">Search</label>
-      <input type="search" id="srp-search" placeholder="Reporting marks, car code, track…">
+      <input type="search" id="srp-search" placeholder="Reporting marks, waybill, track…">
     </div>
     <div class="field">
       <label for="srp-station">Station</label>
@@ -4575,6 +5965,14 @@ function session_station_report_render_html($session_nbr, array $data)
       </select>
     </div>
     <div class="field">
+      <label for="srp-placement">Placement</label>
+      <select id="srp-placement">
+        <option value="">All (<?= $total ?>)</option>
+        <option value="train">In-train (<?= $in_train_count ?>)</option>
+        <option value="station">In-station (<?= max(0, $total - $in_train_count) ?>)</option>
+      </select>
+    </div>
+    <div class="field">
       <label for="srp-handling">Handling</label>
       <select id="srp-handling">
         <option value="">All cars</option>
@@ -4588,29 +5986,52 @@ function session_station_report_render_html($session_nbr, array $data)
 <?php foreach ($station_order as $name):
     $rows = $by_station[$name];
     $is_featured = in_array($name, $featured, true);
+    $is_train = (strpos($name, 'In train') === 0 || $name === 'On train / off-layout');
     $stays = count(array_filter($rows, static fn($r) => $r['stays']));
+    $card_class = ($is_featured ? ' featured' : '') . ($is_train ? ' in-train-card' : '');
 ?>
-  <div class="station-card<?= $is_featured ? ' featured' : '' ?>" data-station="<?= htmlspecialchars($name, ENT_QUOTES) ?>">
+  <div class="station-card<?= $card_class ?>" data-station="<?= htmlspecialchars($name, ENT_QUOTES) ?>" data-placement="<?= $is_train ? 'train' : 'station' ?>">
     <div class="station-head">
-      <span><i class="bi bi-geo-alt"></i> <?= htmlspecialchars($name, ENT_QUOTES) ?></span>
+      <span><i class="bi bi-<?= $is_train ? 'train-front' : 'geo-alt' ?>"></i> <?= htmlspecialchars($name, ENT_QUOTES) ?></span>
       <span class="count" data-total="<?= count($rows) ?>" data-stays="<?= $stays ?>"><?= count($rows) ?> car<?= count($rows) === 1 ? '' : 's' ?> · <?= $stays ?> staying</span>
     </div>
     <div class="table-responsive">
       <table class="table table-sm table-hover">
         <thead><tr>
-          <th>Track</th><th>Reporting Marks</th><th>Car Code</th><th>Status</th><th>Home</th><th>Session <?= $session_nbr ?> action</th>
+          <th>Track</th><th>Reporting Marks</th><th>Car Code</th><th>Status</th><th>Waybill</th><th>Home</th><th>Action</th>
         </tr></thead>
         <tbody>
 <?php foreach ($rows as $r):
-    $search = strtolower(trim($r['marks'] . ' ' . $r['car_code'] . ' ' . $r['loc'] . ' ' . $r['action']));
+    $search = strtolower(trim($r['marks'] . ' ' . $r['car_code'] . ' ' . $r['loc'] . ' '
+        . ($r['waybill'] ?? '') . ' ' . ($r['shipment'] ?? '') . ' ' . $r['action']));
+    $action_cls = $r['stays'] ? 'stay' : 'act';
+    if (!empty($r['conflict'])) {
+        $action_cls = 'conflict';
+    }
 ?>
-          <tr data-search="<?= htmlspecialchars($search, ENT_QUOTES) ?>" data-status="<?= htmlspecialchars($r['status'], ENT_QUOTES) ?>" data-handling="<?= $r['stays'] ? 'stay' : 'work' ?>">
+          <tr data-search="<?= htmlspecialchars($search, ENT_QUOTES) ?>" data-status="<?= htmlspecialchars($r['status'], ENT_QUOTES) ?>" data-handling="<?= $r['stays'] ? 'stay' : 'work' ?>" data-placement="<?= htmlspecialchars($r['placement'] ?? ($is_train ? 'train' : 'station'), ENT_QUOTES) ?>">
             <td class="track"><?= htmlspecialchars($r['loc'], ENT_QUOTES) ?></td>
             <td class="marks"><?= htmlspecialchars($r['marks'], ENT_QUOTES) ?></td>
             <td><?= htmlspecialchars($r['car_code'], ENT_QUOTES) ?></td>
             <td><?= session_station_report_status_html($r['status']) ?></td>
+            <td class="wb"><?php
+                $wb = (string) ($r['waybill'] ?? '');
+                if ($wb === '') {
+                    echo '—';
+                } else {
+                    echo htmlspecialchars($wb, ENT_QUOTES);
+                    if (!empty($r['shipment'])) {
+                        echo '<div class="text-muted" style="font-size:.7rem;font-weight:400">'
+                            . htmlspecialchars((string) $r['shipment'], ENT_QUOTES) . '</div>';
+                    }
+                }
+            ?></td>
             <td><?= htmlspecialchars($r['home'], ENT_QUOTES) ?></td>
-            <td class="<?= $r['stays'] ? 'stay' : 'act' ?>"><?= htmlspecialchars($r['action'], ENT_QUOTES) ?></td>
+            <td class="<?= $action_cls ?>"><?= htmlspecialchars($r['action'], ENT_QUOTES) ?><?php
+                if (!empty($r['conflict'])) {
+                    echo '<div class="conflict">' . htmlspecialchars((string) $r['conflict'], ENT_QUOTES) . '</div>';
+                }
+            ?></td>
           </tr>
 <?php endforeach; ?>
         </tbody>
@@ -4624,6 +6045,7 @@ function session_station_report_render_html($session_nbr, array $data)
   var search = document.getElementById('srp-search');
   var station = document.getElementById('srp-station');
   var status = document.getElementById('srp-status');
+  var placement = document.getElementById('srp-placement');
   var handling = document.getElementById('srp-handling');
   var clear = document.getElementById('srp-clear');
   var summary = document.getElementById('srp-summary');
@@ -4633,11 +6055,13 @@ function session_station_report_render_html($session_nbr, array $data)
     var q = (search.value || '').trim().toLowerCase();
     var st = station.value || '';
     var stat = status.value || '';
+    var place = placement.value || '';
     var hand = handling.value || '';
     var shownCars = 0, shownStations = 0;
 
     cards.forEach(function (card) {
       var cardStation = card.getAttribute('data-station');
+      var cardPlace = card.getAttribute('data-placement') || '';
       var rows = Array.prototype.slice.call(card.querySelectorAll('tbody tr'));
       var visible = 0;
       rows.forEach(function (row) {
@@ -4645,10 +6069,13 @@ function session_station_report_render_html($session_nbr, array $data)
         if (q && row.getAttribute('data-search').indexOf(q) === -1) { ok = false; }
         if (ok && stat && row.getAttribute('data-status') !== stat) { ok = false; }
         if (ok && hand && row.getAttribute('data-handling') !== hand) { ok = false; }
+        if (ok && place && row.getAttribute('data-placement') !== place) { ok = false; }
         row.classList.toggle('srp-hidden', !ok);
         if (ok) { visible++; }
       });
-      var stationHidden = (st && cardStation !== st) || visible === 0;
+      var stationHidden = (st && cardStation !== st)
+        || (place && cardPlace !== place)
+        || visible === 0;
       card.classList.toggle('srp-hidden', stationHidden);
       var countEl = card.querySelector('.count');
       if (countEl) {
@@ -4660,18 +6087,18 @@ function session_station_report_render_html($session_nbr, array $data)
       if (!stationHidden) { shownStations++; shownCars += visible; }
     });
 
-    var filtered = q || st || stat || hand;
+    var filtered = q || st || stat || place || hand;
     summary.textContent = filtered
       ? ('Showing ' + shownCars + ' car' + (shownCars === 1 ? '' : 's') + ' across ' + shownStations + ' station' + (shownStations === 1 ? '' : 's') + '.')
       : '';
   }
 
-  [search, station, status, handling].forEach(function (el) {
+  [search, station, status, placement, handling].forEach(function (el) {
     el.addEventListener('input', apply);
     el.addEventListener('change', apply);
   });
   clear.addEventListener('click', function () {
-    search.value = ''; station.value = ''; status.value = ''; handling.value = '';
+    search.value = ''; station.value = ''; status.value = ''; placement.value = ''; handling.value = '';
     apply();
   });
   apply();
@@ -4761,6 +6188,7 @@ function session_build_station_report($dbc, $session_nbr, $root = null)
     }
 
     $data['session_nav'] = session_station_report_session_nav_html($session_nbr, $dbc, $root);
+    $data['phase_nav'] = session_car_report_phase_nav_html($session_nbr, 'station', null, $root);
 
     $rel = 'session_' . $session_nbr . '/station_report.html';
     $fs = session_output_fs_path($rel, $root);
@@ -4773,24 +6201,433 @@ function session_build_station_report($dbc, $session_nbr, $root = null)
     return $rel;
 }
 
-/* -------------------------------------------------------------------------
- * Wheel report — end-of-session train consists.
+/** Manifest key for station vs wheel report phase lists. */
+function session_car_report_manifest_key($kind)
+{
+    return ($kind === 'wheel') ? 'wheel_reports' : 'station_reports';
+}
+
+/** Basename stem: station_report / wheel_report. */
+function session_car_report_file_stem($kind)
+{
+    return ($kind === 'wheel') ? 'wheel_report' : 'station_report';
+}
+
+function session_car_report_phase_pad($phase_num)
+{
+    return str_pad((int) $phase_num, 2, '0', STR_PAD_LEFT);
+}
+
+/** Display label for a car-report phase: Info text, or "Phase N". */
+function session_car_report_phase_label($info, $phase_num)
+{
+    $info = trim((string) $info);
+    if ($info !== '') {
+        return $info;
+    }
+
+    return 'Phase ' . (int) $phase_num;
+}
+
+/**
+ * Registered catalog-generated car-report phases for a session.
  *
- * Mirrors the STS "Reports → Wheel Report" page (cars assigned to each job/
- * train, including cars physically in train and staging outbound awaiting pickup)
- * as a static per-session snapshot.
+ * @return list<array{phase:int, info:string, label:string, file:string, rel:string}>
+ */
+function session_car_report_phases($session_nbr, $kind, $root = null)
+{
+    $root = $root ?? session_web_root();
+    $manifest = session_load_manifest($session_nbr, $root);
+    $key = session_car_report_manifest_key($kind);
+    $stem = session_car_report_file_stem($kind);
+    $out = [];
+    foreach ((array) ($manifest[$key] ?? []) as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $phase = (int) ($row['phase'] ?? 0);
+        if ($phase < 1) {
+            continue;
+        }
+        $file = (string) ($row['file'] ?? ($stem . '_' . session_car_report_phase_pad($phase) . '.html'));
+        $info = (string) ($row['info'] ?? '');
+        $out[] = [
+            'phase' => $phase,
+            'info' => $info,
+            'label' => session_car_report_phase_label($info, $phase),
+            'file' => $file,
+            'rel' => 'session_' . (int) $session_nbr . '/' . $file,
+        ];
+    }
+    usort($out, static fn($a, $b) => $a['phase'] <=> $b['phase']);
+
+    return $out;
+}
+
+/**
+ * Phase picker for station/wheel report pages. Independent numbering per kind.
  *
- * Current DB session: live query (handled_by_job_id), validated against
- * wheel_report.php. Historical sessions: archive reconstruction — cars with
- * current_location_id = 0 on a job switch list are in train; STG-DEMMLER
- * phases titled "D749" / info "Inbound" are staging outbound merged onto D749
- * at Demmler Yard (inbound train for the next session).
+ * @param int|null $current_phase  Active phase, or null for the unscoped default file
+ */
+function session_car_report_phase_nav_html($session_nbr, $kind, $current_phase = null, $root = null)
+{
+    $phases = session_car_report_phases($session_nbr, $kind, $root);
+    if (count($phases) < 1) {
+        return '';
+    }
+    $session_nbr = (int) $session_nbr;
+    $stem = session_car_report_file_stem($kind);
+    $current_phase = $current_phase !== null ? (int) $current_phase : null;
+    if ($current_phase === null && $phases !== []) {
+        // Default station_report.html / wheel_report.html mirrors the latest phase.
+        $current_phase = (int) $phases[count($phases) - 1]['phase'];
+    }
+
+    $html = '<div class="session-nav-row station-report-phase-nav noprint">';
+    $html .= '<span class="station-report-nav-label">Phase</span>';
+    $html .= '<select class="form-select form-select-sm station-report-jump" aria-label="Jump to report phase" '
+        . 'onchange="if(this.value){window.location.href=\'so.php?f=session_' . $session_nbr
+        . '/' . $stem . '_\'+this.value+\'.html\';}">';
+    foreach ($phases as $p) {
+        $sel = ((int) $p['phase'] === $current_phase) ? ' selected' : '';
+        $html .= '<option value="' . session_car_report_phase_pad($p['phase']) . '"' . $sel . '>'
+            . htmlspecialchars($p['label'], ENT_QUOTES) . '</option>';
+    }
+    $html .= '</select>';
+    $html .= '</div>';
+
+    return $html;
+}
+
+/**
+ * Append a catalog-generated car-report phase to the session manifest.
  *
- * TODO (deferred, see command catalog): expose a catalog step that builds/
- * pins these station + wheel report snapshots for a session so a run can bake
- * them into the session bundle. session_build_wheel_report()/
- * session_build_station_report() are already single-call, catalog-friendly.
- * ---------------------------------------------------------------------- */
+ * @return array{phase:int, info:string, label:string, file:string, rel:string}
+ */
+function session_register_car_report_phase(array &$manifest, $session_nbr, $kind, $info, $root = null)
+{
+    $key = session_car_report_manifest_key($kind);
+    $stem = session_car_report_file_stem($kind);
+    if (!isset($manifest[$key]) || !is_array($manifest[$key])) {
+        $manifest[$key] = [];
+    }
+    $next = 1;
+    foreach ($manifest[$key] as $row) {
+        $next = max($next, (int) ($row['phase'] ?? 0) + 1);
+    }
+    $info = trim((string) $info);
+    $file = $stem . '_' . session_car_report_phase_pad($next) . '.html';
+    $entry = [
+        'phase' => $next,
+        'info' => $info,
+        'label' => session_car_report_phase_label($info, $next),
+        'file' => $file,
+        'generated_at' => date('c'),
+    ];
+    $manifest[$key][] = $entry;
+    $entry['rel'] = 'session_' . (int) $session_nbr . '/' . $file;
+
+    return $entry;
+}
+
+/**
+ * Live-DB station snapshot (for catalog Generate Station Report steps).
+ * Cars sit at their current track or in-train when current_location_id = 0.
+ *
+ * @return array{by_station: array, station_order: list<string>, featured: list<string>, total: int, in_train_count: int, conflict_count: int, live: bool}
+ */
+function session_station_report_data_live($dbc)
+{
+    $locations = [];
+    $rs = mysqli_query($dbc, 'SELECT id, code, station FROM locations');
+    while ($row = mysqli_fetch_assoc($rs)) {
+        $locations[(int) $row['id']] = [
+            'code' => (string) $row['code'],
+            'station_id' => (int) $row['station'],
+        ];
+    }
+    $stations = [];
+    $rs = mysqli_query($dbc, 'SELECT id, station, sort_seq FROM routing');
+    while ($row = mysqli_fetch_assoc($rs)) {
+        $stations[(int) $row['id']] = [
+            'name' => (string) $row['station'],
+            'sort' => (int) $row['sort_seq'],
+        ];
+    }
+
+    $sql = 'SELECT cars.id AS id, cars.reporting_marks AS marks, cars.current_location_id AS cur,
+                   cars.status AS status, cc.code AS car_code,
+                   homeloc.code AS home_code, homest.station AS home_station,
+                   jobs.name AS job_name,
+                   co.waybill_number AS waybill,
+                   s.code AS ship_code, com.code AS commodity,
+                   lld.code AS load_loc, sld.station AS load_station,
+                   lul.code AS unload_loc, sul.station AS unload_station,
+                   le.code AS e_dest_loc, se.station AS e_dest_station
+            FROM cars
+            LEFT JOIN car_codes cc ON cc.id = cars.car_code_id
+            LEFT JOIN locations homeloc ON homeloc.id = cars.home_location
+            LEFT JOIN routing homest ON homest.id = homeloc.station
+            LEFT JOIN jobs ON jobs.id = cars.handled_by_job_id
+            LEFT JOIN car_orders co ON co.car = cars.id
+            LEFT JOIN shipments s ON s.id = co.shipment
+                 AND (co.waybill_number IS NULL OR SUBSTR(co.waybill_number, 5, 1) != "E")
+            LEFT JOIN commodities com ON com.id = s.consignment
+            LEFT JOIN locations lld ON lld.id = s.loading_location
+            LEFT JOIN routing sld ON sld.id = lld.station
+            LEFT JOIN locations lul ON lul.id = s.unloading_location
+            LEFT JOIN routing sul ON sul.id = lul.station
+            LEFT JOIN locations le ON le.id = co.shipment
+                 AND co.waybill_number IS NOT NULL AND SUBSTR(co.waybill_number, 5, 1) = "E"
+            LEFT JOIN routing se ON se.id = le.station
+            WHERE cars.status != "Unavailable"';
+    $rs = mysqli_query($dbc, $sql);
+
+    $featured = session_station_report_featured_stations();
+    $by_station = [];
+    $in_train_count = 0;
+    $total = 0;
+    while ($row = mysqli_fetch_assoc($rs)) {
+        $total++;
+        $loc_id = (int) $row['cur'];
+        $status = (string) ($row['status'] ?? '');
+        $waybill = (string) ($row['waybill'] ?? '');
+        $is_e = $waybill !== '' && strtoupper(substr($waybill, 4, 1)) === 'E';
+        $in_train = ($loc_id <= 0);
+        $job_name = (string) ($row['job_name'] ?? '');
+
+        if ($in_train) {
+            $station_name = $job_name !== '' ? ('In train · ' . $job_name) : 'On train / off-layout';
+            $loc_code = $job_name !== '' ? $job_name : 'IN-TRAIN';
+            $sort = -1;
+            $in_train_count++;
+        } else {
+            $loc = $locations[$loc_id] ?? null;
+            $loc_code = $loc['code'] ?? ('loc#' . $loc_id);
+            $st = $loc ? ($stations[$loc['station_id']] ?? null) : null;
+            $station_name = $st['name'] ?? 'Unknown station';
+            $sort = $st['sort'] ?? 99999;
+        }
+
+        $next = session_station_report_next_step([
+            'status' => $status,
+            'waybill' => $waybill,
+            'is_empty_repo' => $is_e,
+            'load_loc' => (string) ($row['load_loc'] ?? ''),
+            'load_station' => (string) ($row['load_station'] ?? ''),
+            'unload_loc' => (string) ($row['unload_loc'] ?? ''),
+            'unload_station' => (string) ($row['unload_station'] ?? ''),
+            'e_dest_loc' => (string) ($row['e_dest_loc'] ?? ''),
+            'e_dest_station' => (string) ($row['e_dest_station'] ?? ''),
+            'in_train' => $in_train,
+        ]);
+        list($action) = session_station_report_consolidate_action('', $next, '', $waybill);
+
+        $ship_disp = '';
+        if ($waybill !== '') {
+            $ship_disp = $is_e
+                ? 'reposition'
+                : trim((string) ($row['ship_code'] ?? '')
+                    . (!empty($row['commodity']) ? ' · ' . $row['commodity'] : ''));
+        }
+
+        $home = ($row['home_station'] !== null && $row['home_station'] !== '')
+            ? (string) $row['home_station']
+            : (string) ($row['home_code'] ?? '');
+
+        $by_station[$station_name][] = [
+            'sort' => $sort,
+            'loc' => $loc_code,
+            'marks' => (string) $row['marks'],
+            'car_code' => (string) ($row['car_code'] ?? ''),
+            'status' => $status,
+            'home' => $home,
+            'waybill' => $waybill,
+            'shipment' => $ship_disp,
+            'action' => $action !== '' ? $action : '—',
+            'conflict' => '',
+            'stays' => true,
+            'placement' => $in_train ? 'train' : 'station',
+        ];
+    }
+
+    foreach ($by_station as &$rows) {
+        usort($rows, static fn($a, $b) => [$a['loc'], $a['marks']] <=> [$b['loc'], $b['marks']]);
+    }
+    unset($rows);
+
+    $station_order = [];
+    foreach (array_keys($by_station) as $name) {
+        if (strpos($name, 'In train') === 0 || $name === 'On train / off-layout') {
+            $station_order[] = $name;
+        }
+    }
+    sort($station_order);
+    foreach ($featured as $f) {
+        if (isset($by_station[$f]) && !in_array($f, $station_order, true)) {
+            $station_order[] = $f;
+        }
+    }
+    $rest = [];
+    foreach ($by_station as $name => $rows) {
+        if (!in_array($name, $station_order, true)) {
+            $rest[$name] = $rows[0]['sort'] ?? 99999;
+        }
+    }
+    asort($rest);
+    foreach (array_keys($rest) as $name) {
+        $station_order[] = $name;
+    }
+
+    return [
+        'by_station' => $by_station,
+        'station_order' => $station_order,
+        'featured' => $featured,
+        'total' => $total,
+        'in_train_count' => $in_train_count,
+        'conflict_count' => 0,
+        'live' => true,
+    ];
+}
+
+/**
+ * Catalog step: append a live station-report phase for the current session.
+ *
+ * @return array{phase:int, info:string, label:string, file:string, rel:string, total:int}|null
+ */
+function session_generate_station_report_phase($dbc, $session_nbr, $info = '', $root = null)
+{
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
+    if ($session_nbr < 1) {
+        return null;
+    }
+    session_ensure_writable_dir(session_dir_for($session_nbr, $root));
+    $manifest = session_load_manifest($session_nbr, $root);
+    $entry = session_register_car_report_phase($manifest, $session_nbr, 'station', $info, $root);
+    session_save_manifest($session_nbr, $manifest, $root);
+
+    $data = session_station_report_data_live($dbc);
+    $data['session_nav'] = session_station_report_session_nav_html($session_nbr, $dbc, $root);
+    $data['phase_nav'] = session_car_report_phase_nav_html($session_nbr, 'station', $entry['phase'], $root);
+    $data['phase_label'] = $entry['label'];
+    $data['phase_num'] = $entry['phase'];
+    $data['snapshot'] = true;
+
+    $html = session_station_report_render_html($session_nbr, $data);
+    $rel = $entry['rel'];
+    $fs = session_output_fs_path($rel, $root);
+    if (file_put_contents($fs, $html) === false) {
+        return null;
+    }
+    // Keep the unscoped alias pointed at the latest catalog snapshot.
+    $alias = session_output_fs_path('session_' . $session_nbr . '/station_report.html', $root);
+    @file_put_contents($alias, $html);
+
+    // Refresh phase nav on earlier phase pages (so new phases appear in their dropdowns).
+    session_car_report_refresh_phase_navs($session_nbr, 'station', $root);
+    $entry['total'] = (int) ($data['total'] ?? 0);
+
+    return $entry;
+}
+
+/**
+ * Catalog step: append a live wheel-report phase for the current session.
+ *
+ * @return array{phase:int, info:string, label:string, file:string, rel:string, total:int}|null
+ */
+function session_generate_wheel_report_phase($dbc, $session_nbr, $info = '', $root = null)
+{
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
+    if ($session_nbr < 1) {
+        return null;
+    }
+    session_ensure_writable_dir(session_dir_for($session_nbr, $root));
+    $manifest = session_load_manifest($session_nbr, $root);
+    $entry = session_register_car_report_phase($manifest, $session_nbr, 'wheel', $info, $root);
+    session_save_manifest($session_nbr, $manifest, $root);
+
+    // Always live for catalog snapshots — state at the moment the step runs.
+    $data = session_wheel_report_data_live($dbc);
+    if ($data === null) {
+        return null;
+    }
+    $data['session_nav'] = session_wheel_report_session_nav_html($session_nbr, $dbc, $root);
+    $data['phase_nav'] = session_car_report_phase_nav_html($session_nbr, 'wheel', $entry['phase'], $root);
+    $data['phase_label'] = $entry['label'];
+    $data['phase_num'] = $entry['phase'];
+    $data['snapshot'] = true;
+
+    $html = session_wheel_report_render_html($session_nbr, $data);
+    $rel = $entry['rel'];
+    $fs = session_output_fs_path($rel, $root);
+    if (file_put_contents($fs, $html) === false) {
+        return null;
+    }
+    $alias = session_output_fs_path('session_' . $session_nbr . '/wheel_report.html', $root);
+    @file_put_contents($alias, $html);
+
+    session_car_report_refresh_phase_navs($session_nbr, 'wheel', $root);
+    $entry['total'] = (int) ($data['total'] ?? 0);
+
+    return $entry;
+}
+
+/**
+ * Rewrite phase-nav markup inside previously written phase HTML files so the
+ * dropdown always lists every phase registered for this report kind.
+ */
+function session_car_report_refresh_phase_navs($session_nbr, $kind, $root = null)
+{
+    $root = $root ?? session_web_root();
+    $phases = session_car_report_phases($session_nbr, $kind, $root);
+    foreach ($phases as $p) {
+        $fs = session_output_fs_path($p['rel'], $root);
+        if (!is_file($fs)) {
+            continue;
+        }
+        $html = (string) file_get_contents($fs);
+        $nav = session_car_report_phase_nav_html($session_nbr, $kind, $p['phase'], $root);
+        if ($nav === '') {
+            continue;
+        }
+        if (strpos($html, 'station-report-phase-nav') !== false) {
+            $html = preg_replace(
+                '#<div class="session-nav-row station-report-phase-nav[^"]*">.*?</div>#s',
+                $nav,
+                $html,
+                1
+            );
+        } elseif (strpos($html, 'station-report-session-nav') !== false
+            || strpos($html, 'wheel-report-session-nav') !== false) {
+            $html = preg_replace(
+                '#(<div class="session-nav-row (?:station|wheel)-report-session-nav[^"]*">.*?</div>)#s',
+                '$1' . $nav,
+                $html,
+                1
+            );
+        }
+        @file_put_contents($fs, $html);
+    }
+    // Alias (unscoped) file
+    $stem = session_car_report_file_stem($kind);
+    $alias_fs = session_output_fs_path('session_' . (int) $session_nbr . '/' . $stem . '.html', $root);
+    if (is_file($alias_fs) && $phases !== []) {
+        $latest = $phases[count($phases) - 1];
+        $nav = session_car_report_phase_nav_html($session_nbr, $kind, $latest['phase'], $root);
+        $html = (string) file_get_contents($alias_fs);
+        if ($nav !== '' && strpos($html, 'station-report-phase-nav') !== false) {
+            $html = preg_replace(
+                '#<div class="session-nav-row station-report-phase-nav[^"]*">.*?</div>#s',
+                $nav,
+                $html,
+                1
+            );
+            @file_put_contents($alias_fs, $html);
+        }
+    }
+}
 
 /** L/E column for wheel report rows. */
 function session_wheel_report_le_from_status($status)
@@ -5232,14 +7069,18 @@ function session_wheel_report_render_html($session_nbr, array $data)
     $job_order = $data['job_order'];
     $total = (int) $data['total'];
     $session_nav = (string) ($data['session_nav'] ?? '');
+    $phase_nav = (string) ($data['phase_nav'] ?? '');
+    $phase_label = trim((string) ($data['phase_label'] ?? ''));
     $generated_at = date('M j, Y g:i A');
     $is_live = !empty($data['live']);
+    $is_snapshot = !empty($data['snapshot']) || $is_live;
     $job_order = array_values(array_filter($job_order, static fn($j) => !empty($by_job[$j])));
     $train_count = count($job_order);
     $total = 0;
     foreach ($job_order as $j) {
         $total += count($by_job[$j]);
     }
+    $title_phase = $phase_label !== '' ? (' — ' . $phase_label) : '';
 
     ob_start();
     ?><!DOCTYPE html>
@@ -5247,7 +7088,7 @@ function session_wheel_report_render_html($session_nbr, array $data)
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Wheel Report — Start of Session <?= $session_nbr ?></title>
+<title>Wheel Report<?= $title_phase ?> — Session <?= $session_nbr ?></title>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
 <style>
@@ -5304,7 +7145,9 @@ function session_wheel_report_render_html($session_nbr, array $data)
     <div class="d-flex flex-wrap align-items-center gap-2 w-100">
       <a class="btn btn-outline-light btn-sm" href="/sts/index.html"><i class="bi bi-house"></i> STS Main Menu</a>
       <a class="btn btn-outline-light btn-sm" href="index.php"><i class="bi bi-calendar-event"></i> Session <?= $session_nbr ?></a>
+<?php if (session_car_report_phases($session_nbr, 'station') !== []): ?>
       <a class="btn btn-outline-light btn-sm" href="station_report.html" title="Station car report"><i class="bi bi-arrow-left-right"></i> Station Report</a>
+<?php endif; ?>
       <button type="button" class="btn btn-outline-light btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
       <select class="form-select form-select-sm wr-train-select ms-auto" id="wr-train" aria-label="Train">
         <option value="">All trains</option>
@@ -5317,9 +7160,15 @@ function session_wheel_report_render_html($session_nbr, array $data)
   </div>
 </nav>
 <main>
-  <h1>Wheel Report — Start of Session <?= $session_nbr ?></h1>
-  <p class="subtitle noprint">Cars assigned to each train/job at the start of Session <?= $session_nbr ?><?= $is_live ? ' (live database snapshot)' : ', reconstructed from switch-list archives' ?>. <?= $total ?> car<?= $total === 1 ? '' : 's' ?> across <?= $train_count ?> train<?= $train_count === 1 ? '' : 's' ?>. Generated <?= htmlspecialchars($generated_at, ENT_QUOTES) ?>.</p>
+  <h1>Wheel Report<?= $phase_label !== '' ? ' — ' . htmlspecialchars($phase_label, ENT_QUOTES) : '' ?> — Session <?= $session_nbr ?></h1>
+  <p class="subtitle noprint"><?= $is_snapshot
+      ? ('Live snapshot' . ($phase_label !== '' ? ' · ' . htmlspecialchars($phase_label, ENT_QUOTES) : '')
+          . ' of cars assigned to each train/job for Session ' . $session_nbr . '.')
+      : ('Cars assigned to each train/job at the start of Session ' . $session_nbr
+          . ($is_live ? ' (live database snapshot)' : ', reconstructed from switch-list archives') . '.')
+  ?> <?= $total ?> car<?= $total === 1 ? '' : 's' ?> across <?= $train_count ?> train<?= $train_count === 1 ? '' : 's' ?>. Generated <?= htmlspecialchars($generated_at, ENT_QUOTES) ?>.</p>
   <?= $session_nav ?>
+  <?= $phase_nav ?>
 <?php if ($train_count === 0): ?>
   <div class="no-cars">No cars were assigned to any train at the start of Session <?= $session_nbr ?>.</div>
 <?php else: ?>
@@ -5456,6 +7305,7 @@ function session_build_wheel_report($dbc, $session_nbr, $root = null)
     }
 
     $data['session_nav'] = session_wheel_report_session_nav_html($session_nbr, $dbc, $root);
+    $data['phase_nav'] = session_car_report_phase_nav_html($session_nbr, 'wheel', null, $root);
 
     $rel = 'session_' . $session_nbr . '/wheel_report.html';
     $fs = session_output_fs_path($rel, $root);

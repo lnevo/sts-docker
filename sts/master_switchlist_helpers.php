@@ -50,6 +50,26 @@ function master_sw_display_train_name($table_name, array $options = [])
     return $info !== '' ? $train . ' ' . $info : $train;
 }
 
+/**
+ * Operator-facing phase heading. When Train Info is set (Starting/Outbound/…),
+ * that already names the leg — omit the redundant "Phase X of Y" suffix
+ * (especially "Phase 1 of 1").
+ */
+function master_sw_phase_heading_label($display_train, $phase_index, $phase_total, array $options = [])
+{
+    $display_train = (string) $display_train;
+    if (master_sw_switchlist_info($options) !== '') {
+        return $display_train;
+    }
+    $phase_index = (int) $phase_index;
+    $phase_total = (int) $phase_total;
+    if ($phase_index > 0 && $phase_total > 0) {
+        return $display_train . ' — Phase ' . $phase_index . ' of ' . $phase_total;
+    }
+
+    return $display_train;
+}
+
 function master_sw_switchlist_sql($job_id, $table_name)
 {
     $job_id = (int) $job_id;
@@ -250,28 +270,66 @@ function master_sw_car_id_by_marks($dbc, $marks)
 function master_sw_car_destinations($dbc, $car_id)
 {
     $car_id = (int) $car_id;
+    $order_rs = mysqli_query(
+        $dbc,
+        'SELECT waybill_number, shipment
+         FROM car_orders
+         WHERE car = "' . $car_id . '"
+           AND waybill_number IS NOT NULL
+           AND waybill_number != ""
+         ORDER BY waybill_number DESC
+         LIMIT 1'
+    );
+    if (!$order_rs || mysqli_num_rows($order_rs) === 0) {
+        return null;
+    }
+    $order = mysqli_fetch_assoc($order_rs);
+    $waybill = (string) ($order['waybill_number'] ?? '');
+    $shipment_or_loc = (int) ($order['shipment'] ?? 0);
+    if ($shipment_or_loc <= 0) {
+        return null;
+    }
+
+    // Empty/non-revenue waybills store the destination LOCATION id in car_orders.shipment
+    // (not a shipments.id). Joining shipments.id = that value remaps e.g. SHEN-COKE-SHIPPING
+    // (location 6) onto an unrelated revenue lane and shows Island industries by mistake.
+    $is_empty_wb = isset($waybill[4]) && $waybill[4] === 'E';
+    if ($is_empty_wb) {
+        $rs = mysqli_query(
+            $dbc,
+            'SELECT "" AS loading_station,
+                    "" AS loading_location,
+                    routing.station AS unloading_station,
+                    locations.code AS unloading_location
+             FROM locations
+             LEFT JOIN routing ON routing.id = locations.station
+             WHERE locations.id = "' . $shipment_or_loc . '"
+             LIMIT 1'
+        );
+        if (!$rs || mysqli_num_rows($rs) === 0) {
+            return null;
+        }
+        return mysqli_fetch_assoc($rs);
+    }
+
     $rs = mysqli_query(
         $dbc,
         'SELECT loading_sta.station AS loading_station,
                 loading_loc.code AS loading_location,
                 unloading_sta.station AS unloading_station,
                 unloading_loc.code AS unloading_location
-         FROM car_orders
-         INNER JOIN shipments ON shipments.id = car_orders.shipment
+         FROM shipments
          LEFT JOIN locations loading_loc ON loading_loc.id = shipments.loading_location
          LEFT JOIN routing loading_sta ON loading_sta.id = loading_loc.station
          LEFT JOIN locations unloading_loc ON unloading_loc.id = shipments.unloading_location
          LEFT JOIN routing unloading_sta ON unloading_sta.id = unloading_loc.station
-         WHERE car_orders.car = "' . $car_id . '"
-           AND car_orders.waybill_number IS NOT NULL
-           AND car_orders.waybill_number != ""
-         ORDER BY car_orders.waybill_number DESC
+         WHERE shipments.id = "' . $shipment_or_loc . '"
          LIMIT 1'
     );
     if (!$rs || mysqli_num_rows($rs) === 0) {
         return null;
     }
-    return mysqli_fetch_array($rs);
+    return mysqli_fetch_assoc($rs);
 }
 
 function master_sw_enrich_row_destinations($dbc, array $row)
@@ -516,6 +574,22 @@ function master_sw_row_destination_style($dbc, $row)
     } elseif ($row['status'] === 'Loaded') {
         $location = $row['unloading_location'] ?? '';
     }
+    if ($location === '') {
+        return '';
+    }
+    return set_colors($dbc, $location);
+}
+
+/** Color swatch for the From cell (current location), matching To / set_colors. */
+function master_sw_row_from_style($dbc, $row)
+{
+    if (!function_exists('set_colors')) {
+        return '';
+    }
+    if ((int) ($row['current_location_id'] ?? 0) <= 0) {
+        return '';
+    }
+    $location = trim((string) ($row['current_location'] ?? ''));
     if ($location === '') {
         return '';
     }
@@ -1490,7 +1564,7 @@ function master_sw_generate_phased($dbc, $job_name, array $sections, $output_dir
     ];
 }
 
-function master_sw_render_print_all_phase_body($dbc, array $section, $phase_index, $phase_total, $display_train)
+function master_sw_render_print_all_phase_body($dbc, array $section, $phase_index, $phase_total, $display_train, array $options = [])
 {
     // Destination color swatches come from set_colors(); load it so the print-all
     // pages get the same colored "To" cells as the per-phase switch lists.
@@ -1534,6 +1608,7 @@ function master_sw_render_print_all_phase_body($dbc, array $section, $phase_inde
         $from = ((int) $row['current_location_id'] > 0)
             ? '<u>' . htmlspecialchars($row['current_station']) . '</u><br>' . htmlspecialchars($row['current_location'])
             : 'In Train';
+        $from_style = master_sw_row_from_style($dbc, $row);
 
         $to = '';
         if ($dest_station !== '') {
@@ -1545,7 +1620,7 @@ function master_sw_render_print_all_phase_body($dbc, array $section, $phase_inde
     <td style="text-align: center">' . htmlspecialchars(substr($row['car_code'], 0, 4)) . '</td>
     <td style="text-align: center">' . htmlspecialchars($el) . '</td>
     <td>' . $contents . '</td>
-    <td>' . $from . '</td>
+    <td' . ($from_style !== '' ? ' style="' . $from_style . '"' : '') . '>' . $from . '</td>
     <td' . ($dest_style !== '' ? ' style="' . $dest_style . '"' : '') . '>' . $to . '</td>
     <td style="text-align: center">' . (master_sw_section_pickup_mark($row, $section) !== '' ? '<b>' . master_sw_section_pickup_mark($row, $section) . '</b>' : '') . '</td>
     <td style="text-align: center">' . ($left_at !== '' ? '<b>' . htmlspecialchars($left_at) . '</b>' : '') . '</td>
@@ -1563,8 +1638,10 @@ function master_sw_render_print_all_phase_body($dbc, array $section, $phase_inde
         }
     }
 
+    $heading = master_sw_phase_heading_label($display_train, $phase_index, $phase_total, $options);
+
     return '<section class="print-all-phase">
-  <h2>' . htmlspecialchars($display_train) . ' — Phase ' . (int) $phase_index . ' of ' . (int) $phase_total . '</h2>
+  <h2>' . htmlspecialchars($heading) . '</h2>
   <table>
     <tr>
       <th style="width: 60px;">Rptg<br>Marks</th>
@@ -1606,7 +1683,8 @@ function master_sw_render_print_all($dbc, $job_name, array $sections, $job_dir, 
             $sections[$i],
             $i + 1,
             $phase_total,
-            $display_train
+            $display_train,
+            $options
         );
     }
 
@@ -1767,7 +1845,9 @@ function master_sw_render_mobile($dbc, $job_name, array $sections, $output_path,
 <?php
     if ($single_phase && isset($sections[0]['label'])) {
         echo str_pad('Train: ' . $display_train . '  Session ' . $session_nbr, $page_width, ' ', STR_PAD_BOTH) . '<br />';
-        echo str_pad('Phase ' . $phase_index . ' of ' . $phase_total, $page_width, ' ', STR_PAD_BOTH) . '<br />';
+        if (master_sw_switchlist_info($options) === '') {
+            echo str_pad('Phase ' . $phase_index . ' of ' . $phase_total, $page_width, ' ', STR_PAD_BOTH) . '<br />';
+        }
     } else {
         echo str_pad('Train: ' . $display_train . '  Session ' . $session_nbr, $page_width, ' ', STR_PAD_BOTH) . '<br />';
     }
@@ -1856,6 +1936,7 @@ function master_sw_render_table_section_rows($dbc, array $section, &$loads, &$em
         $from = ((int) $row['current_location_id'] > 0)
             ? '<u>' . htmlspecialchars($row['current_station']) . '</u><br>' . htmlspecialchars($row['current_location'])
             : 'In Train';
+        $from_style = master_sw_row_from_style($dbc, $row);
 
         $to = '';
         if ($dest_station !== '') {
@@ -1867,7 +1948,7 @@ function master_sw_render_table_section_rows($dbc, array $section, &$loads, &$em
     <td style="text-align: center">' . htmlspecialchars(substr($row['car_code'], 0, 4)) . '</td>
     <td style="text-align: center">' . htmlspecialchars($el) . '</td>
     <td>' . $contents . '</td>
-    <td>' . $from . '</td>
+    <td' . ($from_style !== '' ? ' style="' . $from_style . '"' : '') . '>' . $from . '</td>
     <td' . ($dest_style !== '' ? ' style="' . $dest_style . '"' : '') . '>' . $to . '</td>
     <td style="text-align: center">' . (master_sw_section_pickup_mark($row, $section) !== '' ? '<b>' . master_sw_section_pickup_mark($row, $section) . '</b>' : '') . '</td>
     <td style="text-align: center">' . ($left_at !== '' ? '<b>' . htmlspecialchars($left_at) . '</b>' : '') . '</td>
@@ -1933,6 +2014,7 @@ function master_sw_render_phase_shell_start($dbc, $job_name, $style, array $opti
         'phase_total' => $phase_total,
         'nav' => $nav,
         'single_phase' => $phase_index > 0,
+        'has_train_info' => master_sw_switchlist_info($options) !== '',
     ];
 }
 
@@ -1963,7 +2045,7 @@ function master_sw_render_full($dbc, $job_name, array $sections, $output_path, a
 <table id="consist" style="width:100%; border-collapse:collapse;">
   <tr><td colspan="8"><h2 style="text-align:center;"><?= htmlspecialchars($rr_initials) ?></h2><h3 style="text-align:center;">Switchlist</h3></td></tr>
   <tr>
-    <td colspan="4"><b>Train: <?= htmlspecialchars($shell['table_name']) ?></b><br>Session <?= htmlspecialchars($shell['session_nbr']) ?><?php if ($shell['single_phase']) { ?><br>Phase <?= (int) $shell['phase_index'] ?> of <?= (int) $shell['phase_total'] ?><?php } ?><br><br></td>
+    <td colspan="4"><b>Train: <?= htmlspecialchars($shell['table_name']) ?></b><br>Session <?= htmlspecialchars($shell['session_nbr']) ?><?php if ($shell['single_phase'] && empty($shell['has_train_info'])) { ?><br>Phase <?= (int) $shell['phase_index'] ?> of <?= (int) $shell['phase_total'] ?><?php } ?><br><br></td>
     <td colspan="4"><b>Dpt (station/date/time)</b><br><br><br></td>
   </tr>
   <tr>
@@ -2469,7 +2551,7 @@ function master_sw_render_halfsheet($dbc, $job_name, array $sections, $output_pa
 <table>
 <tr><td style="vertical-align: top;">
 <?php if ($single_phase) { ?>
-<h2 style="text-align:center; font-size:16px;"><?= htmlspecialchars($display_train) ?> — Phase <?= (int) $phase_index ?> of <?= (int) $phase_total ?></h2>
+<h2 style="text-align:center; font-size:16px;"><?= htmlspecialchars(master_sw_phase_heading_label($display_train, $phase_index, $phase_total, $options)) ?></h2>
 <?php } else { ?>
 <h2 style="text-align: center;"><?= htmlspecialchars($rr_initials) ?></h2>
 <h3 style="text-align: center;">Master Switchlist</h3>

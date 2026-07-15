@@ -37,15 +37,36 @@ if ($jobs) {
     foreach ($jobs as $job) {
         $train_counts[$job] = session_train_output_counts($dbc_trains, $selected, $job, $root);
     }
-    $session_print_all_rel = session_build_switchlist_print_all($dbc_trains, $selected, $root);
+    $archived_only = session_is_archived_output_only($selected);
+    $candidate = 'session_' . (int) $selected . '/print_all.html';
+    if ($archived_only && is_file(session_output_fs_path($candidate, $root))) {
+        $session_print_all_rel = $candidate;
+    } elseif (!$archived_only) {
+        $session_print_all_rel = session_build_switchlist_print_all($dbc_trains, $selected, $root);
+    }
     mysqli_close($dbc_trains);
 }
 $selected_manifest_stats = $manifest['run_stats'] ?? [];
-// Cumulative roll-up of operations, cars moved, cars by station, and generated
-// output across sessions 1..selected. The operations dashboard is kept as the
-// selected session's own snapshot (state at that time), not aggregated.
+// Cumulative roll-up of generated output / operations across sessions 1..selected.
+// Cars-moved and station tallies use THIS session's run_stats so a rebuild of
+// session N does not hide its trains behind session 1's leftover summary.
 $run_stats = session_aggregate_run_stats_through($selected, $root);
-$run_stats['dashboard'] = $selected_manifest_stats['dashboard'] ?? [];
+$own = is_array($selected_manifest_stats) ? $selected_manifest_stats : [];
+if (session_run_stats_has_data($own)) {
+    if (!empty($own['move_summary']) && is_array($own['move_summary'])) {
+        $run_stats['move_summary'] = $own['move_summary'];
+    }
+    if (!empty($own['station_counts']) && is_array($own['station_counts'])) {
+        $run_stats['station_counts'] = $own['station_counts'];
+    }
+    if (array_key_exists('on_train_count', $own)) {
+        $run_stats['on_train_count'] = (int) $own['on_train_count'];
+    }
+    if (!empty($own['updated'])) {
+        $run_stats['updated'] = $own['updated'];
+    }
+}
+$run_stats['dashboard'] = $own['dashboard'] ?? [];
 if ($selected === $current) {
     require_once $sts_dir . '/operations_stats.php';
     $dbc_stats = open_db();
@@ -125,7 +146,13 @@ session_render_nav_bar([
           <select name="session" id="session-select">
             <?php foreach ($sessions as $n): ?>
               <option value="<?php echo (int) $n; ?>"<?php echo $n === $selected ? ' selected' : ''; ?>>
-                Session <?php echo (int) $n; ?><?php echo $n === $current ? ' (current)' : ''; ?>
+                Session <?php echo (int) $n; ?><?php
+                  if ($n === $current) {
+                      echo ' (current)';
+                  } elseif ($n > $current) {
+                      echo ' (archived)';
+                  }
+                ?>
               </option>
             <?php endforeach; ?>
           </select>
@@ -138,6 +165,7 @@ session_render_nav_bar([
           <noscript><button type="submit" class="btn btn-outline-dark btn-sm">Go</button></noscript>
         </div>
       </form>
+      <?php echo session_browse_archived_controls_html(); ?>
     </div>
 
     <div class="card">

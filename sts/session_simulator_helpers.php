@@ -107,6 +107,7 @@ function session_simulator_run_recipe_range($dbc, array $recipe, $from_step, $to
     return session_run_recipe($dbc, $recipe, [
         'from_step' => (int) $from_step,
         'to_step' => (int) $to_step,
+        'skip_steps' => $options['skip_steps'] ?? '',
         'format' => $options['format'] ?? 'all',
         'config' => array_merge(session_simulator_merge_config($options['config'] ?? []), [
             'recipe' => $recipe,
@@ -128,15 +129,26 @@ function session_simulator_run($dbc, array $recipe, array $options = [])
     $total = count($recipe['steps'] ?? []);
     $start = max(1, (int) ($options['start_step'] ?? 1));
     $stop = max($start, min((int) ($options['stop_step'] ?? $total), $total));
+    $skip_steps = $options['skip_steps'] ?? '';
+    if (is_array($skip_steps)) {
+        $skip_steps = implode(',', $skip_steps);
+    }
+    $skip_steps = trim((string) $skip_steps);
     $repeat = max(1, (int) ($options['session_count'] ?? 1));
     $cycles = [];
     $warnings = [];
 
     for ($cycle = 0; $cycle < $repeat; $cycle++) {
         if ($repeat > 1 && $cycle > 0) {
-            $warnings[] = 'Cycle ' . ($cycle + 1) . ': steps ' . $start . '–' . $stop . '.';
+            $msg = 'Cycle ' . ($cycle + 1) . ': steps ' . $start . '–' . $stop;
+            if ($skip_steps !== '') {
+                $msg .= ' (skip ' . $skip_steps . ')';
+            }
+            $warnings[] = $msg . '.';
         }
-        $run = session_simulator_run_recipe_range($dbc, $recipe, $start, $stop, $options);
+        $run = session_simulator_run_recipe_range($dbc, $recipe, $start, $stop, array_merge($options, [
+            'skip_steps' => $skip_steps,
+        ]));
         if (!empty($run['error'])) {
             $warnings[] = $run['error'];
         }
@@ -173,6 +185,7 @@ function session_simulator_run($dbc, array $recipe, array $options = [])
         'mode' => $repeat > 1 ? 'repeat' : 'run',
         'start_step' => $start,
         'stop_step' => $stop,
+        'skip_steps' => $skip_steps,
         'session_count' => $repeat,
         'session' => $last['session'] ?? '',
         'sessions' => array_values(array_unique(array_column($cycles, 'session'))),

@@ -61,6 +61,42 @@ function generate_orders_apply_seed($seed)
 }
 
 /**
+ * Optional scarce-lane pause (env, for traffic experiments):
+ *   STS_SCARCE_PAUSE_UNFILLED=35
+ *   STS_SCARCE_PAUSE_CODES=HC,XM,FM,GA,GD,FC   (comma list; empty = default set)
+ * When unfilled exceeds the threshold, due shipments of those car codes are
+ * skipped without advancing last_ship_date (true pause). Coke lanes exempt.
+ */
+function generate_orders_scarce_pause_codes()
+{
+    $raw = getenv('STS_SCARCE_PAUSE_CODES');
+    if ($raw === false || trim((string) $raw) === '') {
+        return ['HC', 'XM', 'FM', 'GA', 'GD', 'FC'];
+    }
+    $codes = [];
+    foreach (explode(',', (string) $raw) as $c) {
+        $c = strtoupper(trim($c));
+        if ($c !== '') {
+            $codes[$c] = true;
+        }
+    }
+    return array_keys($codes);
+}
+
+function generate_orders_scarce_pause_active($dbc)
+{
+    $threshold = getenv('STS_SCARCE_PAUSE_UNFILLED');
+    if ($threshold === false || $threshold === '' || !ctype_digit((string) $threshold)) {
+        return false;
+    }
+    $threshold = (int) $threshold;
+    if ($threshold <= 0) {
+        return false;
+    }
+    return generate_orders_count_unfilled($dbc) > $threshold;
+}
+
+/**
  * Core automatic generation loop (matches generate.php).
  *
  * $max_new (soft cap): when > 0, generate at most this many new car orders this
@@ -78,12 +114,16 @@ function generate_orders_run_automatic($dbc, $session_number, $waybill_counter =
     $orders_created = 0;
     $session_number = (int) $session_number;
     $max_new = max(0, (int) $max_new);
+    $scarce_pause = generate_orders_scarce_pause_active($dbc);
+    $scarce_codes = $scarce_pause ? array_fill_keys(generate_orders_scarce_pause_codes(), true) : [];
 
     $rs_shipments = mysqli_query(
         $dbc,
-        'SELECT id, last_ship_date, min_interval, max_interval, min_amount, max_amount
-         FROM shipments
-         ORDER BY id'
+        'SELECT s.id, s.last_ship_date, s.min_interval, s.max_interval, s.min_amount, s.max_amount,
+                s.code AS shipment_code, cc.code AS car_code
+         FROM shipments s
+         LEFT JOIN car_codes cc ON cc.id = s.car_code
+         ORDER BY s.id'
     );
     if (!$rs_shipments) {
         return 0;
@@ -114,6 +154,15 @@ function generate_orders_run_automatic($dbc, $session_number, $waybill_counter =
         $ship_date = (int) $row['last_ship_date'] + $interval;
         if ($ship_date > $session_number) {
             continue;
+        }
+
+        if ($scarce_pause) {
+            $ship_code = (string) ($row['shipment_code'] ?? '');
+            $car_code = strtoupper((string) ($row['car_code'] ?? ''));
+            if (stripos($ship_code, 'COKE-') !== 0 && isset($scarce_codes[$car_code])) {
+                // Leave last_ship_date alone so the lane stays due when backlog eases.
+                continue;
+            }
         }
 
         mysqli_query(

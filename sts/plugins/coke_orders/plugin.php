@@ -12,7 +12,7 @@ return [
     'catalog_steps_callback' => 'coke_orders_catalog_definitions',
 
     'catalog_adder' => [
-        'before' => ['replenish_coke_orders'],
+        // Keep replenish out of the step-adder; recipes that already use it still run.
     ],
 
     'import_text_guessers' => [

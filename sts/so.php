@@ -11,9 +11,10 @@
  *   so.php?f=session_3/phase_01/CK1/phase_01_mobile.html
  *
  * For HTML documents, relative links inside the file are rewritten so navigation
- * between generated pages keeps flowing through so.php, links to the per-session
- * overview go to session_overview.php, and links to app files (session.php,
- * /sts/index.html, etc.) resolve normally.
+ * between generated pages keeps flowing through so.php. Session picker controls
+ * (skip / prev / select / next) stay on the same so.php view (switch list, train,
+ * waybill, …). Bare session_N/index.php|html links still go to session_overview.php.
+ * App files (session.php, /sts/index.html, etc.) resolve normally.
  */
 
 require_once __DIR__ . '/session_helpers.php';
@@ -36,19 +37,31 @@ if (preg_match('#^session_(\d+)/index\.(php|html)$#', $rel, $m)) {
 }
 
 // If the DB was rewound, requests for a session past the current one point at
-// output that no longer represents live state. Bounce to the latest overview.
+// output that no longer represents live state — unless archived browse is on.
+$req_session_nbr = null;
 if (preg_match('#^session_(\d+)/#', $rel, $sm)) {
-    session_redirect_if_beyond_current((int) $sm[1]);
+    $req_session_nbr = (int) $sm[1];
+    session_redirect_if_beyond_current($req_session_nbr, null, true, $rel);
 }
 
 $fs = session_output_fs_path($rel);
+$archived_output_only = $req_session_nbr !== null && session_is_archived_output_only($req_session_nbr);
 // Print-all bundles are built on demand (they aren't pre-generated for every
 // train/session). If a requested bundle is missing — e.g. following a prev/next
 // session link to a session whose overview was never opened — build it now so
 // navigation never dead-ends on "Not found". Also rebuild when the session's
 // manifest is newer than the cached bundle, so a bundle always reflects the
 // current "latest generation token" even while a session is being (re)generated.
-if (!is_file($fs) || so_print_all_bundle_stale($rel, $fs) || so_station_report_stale($rel, $fs) || so_wheel_report_stale($rel, $fs)) {
+// Skip on-demand rebuild for archived output (would use the live DB, not history).
+if (
+    !$archived_output_only
+    && (
+        !is_file($fs)
+        || so_print_all_bundle_stale($rel, $fs)
+        || so_station_report_stale($rel, $fs)
+        || so_wheel_report_stale($rel, $fs)
+    )
+) {
     $built = so_build_print_all_on_demand($rel);
     if ($built === null) {
         $built = so_build_station_report_on_demand($rel);
@@ -96,6 +109,9 @@ if ($ext === 'html' || $ext === 'htm') {
     $html = so_refresh_waybill_session_nav($html, $rel);
     $html = so_refresh_waybill_print_all_session_nav($html, $rel);
     $html = so_inject_waybill_memo_filter($html, $rel);
+    $html = so_inject_waybill_phase_filter($html, $rel);
+    $html = so_inject_waybill_selection_index($html, $rel);
+    $html = so_inject_waybill_selection_print($html, $rel);
     $html = so_refresh_switchlist_print_all_session_nav($html, $rel);
     $html = so_refresh_switchlist_job_print_all_session_nav($html, $rel);
     $html = so_refresh_switchlist_train_print_all_session_nav($html, $rel);
@@ -106,6 +122,36 @@ if ($ext === 'html' || $ext === 'htm') {
     // style selector.
     if (!empty($_GET['embed'])) {
         $html = preg_replace('#<nav\b[^>]*>.*?</nav>#is', '', $html, 1);
+    } else {
+        // Add a "Phase" filter alongside the Train/Style dropdowns on the
+        // combined/per-train print-all switch-list pages so an operator can view
+        // one phase at a time. Injected at serve time (like the waybill memo
+        // filter) so it works on every previously generated page and is dropped
+        // in embed mode, where the surrounding page owns navigation.
+        $html = so_inject_switchlist_phase_filter($html, $rel);
+    }
+    if ($archived_output_only) {
+        require_once __DIR__ . '/open_db.php';
+        $dbc_banner = open_db();
+        $banner = session_archived_view_banner_html($req_session_nbr, session_get_db_session($dbc_banner));
+        mysqli_close($dbc_banner);
+        if ($banner !== '') {
+            $html = preg_replace('#<body([^>]*)>#', '<body$1>' . $banner, $html, 1);
+        }
+    }
+    // Cursor / Electron Simple Browser crashes on window.print(). Rewrite legacy
+    // PRINT buttons to stsSafePrint() (injected via session_static_head_assets /
+    // a serve-time script fallback below).
+    if (strpos($html, 'window.print()') !== false || strpos($html, 'stsSafePrint') !== false) {
+        $html = str_replace('onclick="window.print()"', 'onclick="stsSafePrint()"', $html);
+        $html = str_replace("onclick='window.print()'", "onclick='stsSafePrint()'", $html);
+        if (strpos($html, 'function(){if(window.stsSafePrint)') === false
+            && strpos($html, 'window.stsSafePrint=') === false) {
+            $html = str_replace('</head>', session_safe_print_script() . '</head>', $html);
+            if (strpos($html, 'window.stsSafePrint=') === false) {
+                $html = str_replace('</body>', session_safe_print_script() . '</body>', $html);
+            }
+        }
     }
     echo so_rewrite_html($html, $dir);
 } else {
@@ -159,14 +205,23 @@ function so_print_all_bundle_stale($rel, $fs)
 
 function so_station_report_stale($rel, $fs)
 {
-    if (!preg_match('#^session_(\d+)/station_report\.html$#', $rel, $m)) {
+    if (!preg_match('#^session_(\d+)/station_report(?:_(\d+))?\.html$#', $rel, $m)) {
+        return false;
+    }
+    // Numbered catalog snapshots are frozen — never auto-rebuild from archives.
+    if (!empty($m[2])) {
         return false;
     }
     if (!is_file($fs)) {
         return false;
     }
+    $session_nbr = (int) $m[1];
+    // If catalog phases exist, the unscoped alias is the latest live snapshot.
+    if (session_car_report_phases($session_nbr, 'station') !== []) {
+        return false;
+    }
 
-    return session_station_report_stale((int) $m[1], $fs);
+    return session_station_report_stale($session_nbr, $fs);
 }
 
 function so_build_station_report_on_demand($rel)
@@ -174,24 +229,40 @@ function so_build_station_report_on_demand($rel)
     if (!preg_match('#^session_(\d+)/station_report\.html$#', $rel, $m)) {
         return null;
     }
-    require_once __DIR__ . '/open_db.php';
-    $dbc = open_db();
-    $built = session_build_station_report($dbc, (int) $m[1]);
-    mysqli_close($dbc);
+    $session_nbr = (int) $m[1];
+    // Only surface catalog-generated snapshots — no archive invent on first click.
+    $phases = session_car_report_phases($session_nbr, 'station');
+    if ($phases === []) {
+        return null;
+    }
+    $latest = $phases[count($phases) - 1];
+    $latest_fs = session_output_fs_path($latest['rel']);
+    if (!is_file($latest_fs)) {
+        return null;
+    }
+    $alias = session_output_fs_path($rel);
+    @copy($latest_fs, $alias);
 
-    return $built;
+    return $rel;
 }
 
 function so_wheel_report_stale($rel, $fs)
 {
-    if (!preg_match('#^session_(\d+)/wheel_report\.html$#', $rel, $m)) {
+    if (!preg_match('#^session_(\d+)/wheel_report(?:_(\d+))?\.html$#', $rel, $m)) {
+        return false;
+    }
+    if (!empty($m[2])) {
         return false;
     }
     if (!is_file($fs)) {
         return false;
     }
+    $session_nbr = (int) $m[1];
+    if (session_car_report_phases($session_nbr, 'wheel') !== []) {
+        return false;
+    }
 
-    return session_wheel_report_stale((int) $m[1], $fs);
+    return session_wheel_report_stale($session_nbr, $fs);
 }
 
 function so_build_wheel_report_on_demand($rel)
@@ -199,12 +270,20 @@ function so_build_wheel_report_on_demand($rel)
     if (!preg_match('#^session_(\d+)/wheel_report\.html$#', $rel, $m)) {
         return null;
     }
-    require_once __DIR__ . '/open_db.php';
-    $dbc = open_db();
-    $built = session_build_wheel_report($dbc, (int) $m[1]);
-    mysqli_close($dbc);
+    $session_nbr = (int) $m[1];
+    $phases = session_car_report_phases($session_nbr, 'wheel');
+    if ($phases === []) {
+        return null;
+    }
+    $latest = $phases[count($phases) - 1];
+    $latest_fs = session_output_fs_path($latest['rel']);
+    if (!is_file($latest_fs)) {
+        return null;
+    }
+    $alias = session_output_fs_path($rel);
+    @copy($latest_fs, $alias);
 
-    return $built;
+    return $rel;
 }
 
 function so_build_print_all_on_demand($rel)
@@ -284,7 +363,7 @@ function so_refresh_waybill_session_nav($html, $rel)
  */
 function so_refresh_waybill_print_all_session_nav($html, $rel)
 {
-    if (!preg_match('#^session_(\d+)/waybills/(.+\.print_all\.html)$#', $rel, $m)) {
+    if (!preg_match('#^session_(\d+)/waybills/([^/]*print_all\.html)$#', $rel, $m)) {
         return $html;
     }
     $session_nbr = (int) $m[1];
@@ -367,6 +446,391 @@ function so_inject_waybill_memo_filter($html, $rel)
 }
 
 /**
+ * Add a "Phase" filter dropdown next to the Train dropdown on waybill print-all
+ * pages (session-wide and per-train bundles). Selecting a phase shows only the
+ * waybills captured for that phase; "All phases" (default) shows everything.
+ *
+ * Injected at serve time so it works on every previously generated page without
+ * regeneration. Per-phase bundles (phase_XX_<job>.print_all.html) already show
+ * a single phase and are left alone. The control always appears when the scoped
+ * page has at least one phase (including exactly one).
+ */
+function so_inject_waybill_phase_filter($html, $rel)
+{
+    if (!preg_match('#^session_(\d+)/waybills/([^/]*print_all\.html)$#', $rel, $m)) {
+        return $html;
+    }
+    if (strpos($html, 'id="wb-phase-select"') !== false) {
+        return $html; // already injected
+    }
+
+    $sess = (int) $m[1];
+    $basename = (string) $m[2];
+    $phase_scope_job = null;
+    if ($basename === 'print_all.html') {
+        // session-wide bundle
+    } elseif (preg_match('#^job_(.+)\.print_all\.html$#', $basename, $jm)) {
+        $phase_scope_job = rawurldecode((string) $jm[1]);
+    } else {
+        return $html; // per-phase bundle — already single-phase
+    }
+
+    $wb_to_phase = [];
+    $phase_jobs = [];
+    $store = session_waybill_store_load($sess);
+    foreach (($store['groups'] ?? []) as $key => $nums) {
+        [$job, $phase] = array_pad(explode('|', (string) $key, 2), 2, '');
+        $phase = (int) $phase;
+        if ($phase_scope_job !== null && (string) $job !== $phase_scope_job) {
+            continue;
+        }
+        foreach ((array) $nums as $n) {
+            $wb_to_phase[(string) $n] = $phase;
+        }
+        $phase_jobs[$phase][(string) $job] = true;
+    }
+    if (count($phase_jobs) < 1) {
+        return $html;
+    }
+
+    ksort($phase_jobs);
+    $opts = '<option value="">All phases</option>';
+    foreach ($phase_jobs as $ph => $jobs) {
+        $label = 'Phase ' . (int) $ph;
+        if ($phase_scope_job === null) {
+            $job_list = implode(', ', array_keys($jobs));
+            if ($job_list !== '') {
+                $label .= ' · ' . $job_list;
+            }
+        }
+        $opts .= '<option value="' . (int) $ph . '">' . htmlspecialchars($label) . '</option>';
+    }
+
+    $phase_control = '<label for="wb-phase-select" class="text-white-50 small mb-0">Phase</label>'
+        . '<select id="wb-phase-select" class="form-select form-select-sm" style="width:auto;">'
+        . $opts . '</select>';
+
+    $count = 0;
+    if (strpos($html, 'wb-train-select') !== false) {
+        $html = preg_replace(
+            '#(<select id="wb-train-select"[^>]*>.*?</select>)#s',
+            '$1' . $phase_control,
+            $html,
+            1,
+            $count
+        );
+    }
+    if ($count === 0) {
+        $html = preg_replace(
+            '#(<div class="noprint waybill-print-controls">)#',
+            '<div class="noprint d-inline-flex align-items-center gap-2 me-3" style="margin-bottom:12px;">'
+            . $phase_control . '</div>$1',
+            $html,
+            1,
+            $count
+        );
+    }
+    if ($count === 0) {
+        return $html;
+    }
+
+    $map_json = json_encode($wb_to_phase, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+    $script = '<script>(function(){'
+        . 'var sel=document.getElementById("wb-phase-select");'
+        . 'if(!sel)return;'
+        . 'var map=' . $map_json . ';'
+        . 'var sheets=[].slice.call(document.querySelectorAll(".waybill-print .waybill-sheet"));'
+        . 'var wbRaw=new URLSearchParams(location.search).get("wb");'
+        . 'var wbSet=null;'
+        . 'if(wbRaw){wbSet={};wbRaw.split(",").forEach(function(x){x=x.trim();if(x)wbSet[x]=1;});}'
+        . 'var muted=document.querySelector("main .muted");'
+        . 'var mutedDefault=muted?(muted.textContent||""):"";'
+        . 'function wbNum(s){var m=(s.textContent||"").match(/WAYBILL No\\.\\s*([0-9A-Za-z\\-]+)/);return m?m[1]:"";}'
+        . 'sheets.forEach(function(s){var n=wbNum(s);if(n&&map[n]!=null)s.setAttribute("data-wb-phase",String(map[n]));});'
+        . 'function apply(){var v=sel.value;var vis=[];'
+        . 'sheets.forEach(function(s){'
+        . 'var n=wbNum(s);'
+        . 'var phaseOk=(v===""||s.getAttribute("data-wb-phase")===v);'
+        . 'var wbOk=!wbSet||!n||wbSet[n];'
+        . 'var show=phaseOk&&wbOk;'
+        . 's.style.display=show?"":"none";'
+        . 'if(show)vis.push(s);});'
+        . 'vis.forEach(function(s,i){var last=(i===vis.length-1);'
+        . 's.style.pageBreakAfter=last?"auto":"always";s.style.breakAfter=last?"auto":"page";});'
+        . 'if(muted){if(v===""){muted.textContent=mutedDefault;}'
+        . 'else{muted.textContent=vis.length+" waybill"+(vis.length===1?"":"s")+" \\u00b7 each prints on its own page.";}}}'
+        . 'sel.addEventListener("change",apply);'
+        . '})();</script>';
+
+    return str_replace('</body>', $script . '</body>', $html);
+}
+
+/**
+ * Add a selection checkbox to each waybill on a waybill index/list page, plus a
+ * "Print selected" control, so an operator can print a custom subset. Selecting
+ * waybills and clicking "Print selected" opens the same scope's print-all bundle
+ * with a ?wb=<comma-list> filter (handled by so_inject_waybill_selection_print()).
+ *
+ * Injected at serve time (like the memo/phase filters) so it works on every
+ * previously generated index — session, per-phase, and per-train — without
+ * regeneration. The nav bar's own <li> items are class-tagged, so the checkbox
+ * transform (which matches only bare "<li><a href=...>") never touches them.
+ *
+ * On the session-wide list (waybills/index.html) and a per-train all-phases list
+ * (waybills/job_<JOB>.index.html) a "Phase" dropdown is added too, driven by the
+ * waybill store's JOB|PHASE groups. Per-phase lists already show a single phase,
+ * so they get checkboxes only.
+ */
+function so_inject_waybill_selection_index($html, $rel)
+{
+    if (!preg_match('#^session_\d+/(?:phase_\d+/)?waybills/(?:[^/]*\.)?index\.html$#', $rel)) {
+        return $html;
+    }
+    if (strpos($html, 'wb-pick') !== false) {
+        return $html; // already injected
+    }
+
+    // Phase filter scope: session-wide list, or a per-train all-phases list.
+    $show_phase = false;
+    $sess = 0;
+    $phase_scope_job = null;
+    if (preg_match('#^session_(\d+)/waybills/index\.html$#', $rel, $sm)) {
+        $show_phase = true;
+        $sess = (int) $sm[1];
+    } elseif (preg_match('#^session_(\d+)/waybills/job_(.+)\.index\.html$#', $rel, $sm)) {
+        $show_phase = true;
+        $sess = (int) $sm[1];
+        $phase_scope_job = rawurldecode((string) $sm[2]);
+    }
+
+    // Build waybill -> phases and phase -> jobs maps from the frozen store.
+    $wb_phases = [];
+    $phase_jobs = [];
+    if ($show_phase) {
+        $store = session_waybill_store_load($sess);
+        foreach (($store['groups'] ?? []) as $key => $nums) {
+            [$job, $phase] = array_pad(explode('|', (string) $key, 2), 2, '');
+            $phase = (int) $phase;
+            if ($phase_scope_job !== null && (string) $job !== $phase_scope_job) {
+                continue;
+            }
+            foreach ((array) $nums as $n) {
+                $wb_phases[(string) $n][$phase] = true;
+            }
+            $phase_jobs[$phase][(string) $job] = true;
+        }
+        if (count($phase_jobs) < 1) {
+            $show_phase = false; // no phase data in the store
+        }
+    }
+
+    $count = 0;
+    $html = preg_replace_callback(
+        '#<li><a href="([^"]+)">([^<]+)</a></li>#',
+        static function ($mm) use ($show_phase, $wb_phases) {
+            $href = $mm[1];
+            $num = $mm[2];
+            $data = '';
+            if ($show_phase) {
+                $phs = isset($wb_phases[$num]) ? array_keys($wb_phases[$num]) : [];
+                sort($phs);
+                $data = ' data-wb-phase="' . htmlspecialchars(implode(' ', $phs), ENT_QUOTES) . '"';
+            }
+            return '<li class="wb-pick-row"' . $data . '><label class="wb-pick-label">'
+                . '<input type="checkbox" class="wb-pick" value="' . $num . '">'
+                . '<a href="' . $href . '">' . $num . '</a></label></li>';
+        },
+        $html,
+        -1,
+        $count
+    );
+    if ($count === 0) {
+        return $html; // no selectable waybills on this page
+    }
+
+    $phase_select = '';
+    if ($show_phase) {
+        ksort($phase_jobs);
+        $opts = '<option value="">All phases</option>';
+        foreach ($phase_jobs as $ph => $jobs) {
+            $label = 'Phase ' . (int) $ph;
+            if ($phase_scope_job === null) {
+                $job_list = implode(', ', array_keys($jobs));
+                if ($job_list !== '') {
+                    $label .= ' · ' . $job_list;
+                }
+            }
+            $opts .= '<option value="' . (int) $ph . '">' . htmlspecialchars($label) . '</option>';
+        }
+        $phase_select = '<label for="wb-phase-select" class="wb-phase-label">Phase</label>'
+            . '<select id="wb-phase-select" class="form-select form-select-sm" style="width:auto;">'
+            . $opts . '</select>';
+    }
+
+    $controls = '<div class="noprint wb-select-controls">'
+        . $phase_select
+        . '<button type="button" id="wb-print-selected" class="btn btn-dark btn-sm" disabled>'
+        . '<i class="bi bi-printer"></i> Print selected (0)</button>'
+        . '<a href="#" id="wb-select-all">Select all</a>'
+        . '<a href="#" id="wb-clear">Clear</a>'
+        . '</div>';
+    $html = preg_replace(
+        '#(<p><a href="[^"]*"><strong>Print all waybills</strong></a></p>)#',
+        '$1' . $controls,
+        $html,
+        1
+    );
+
+    $style = '<style>'
+        . '.wb-pick-label{display:inline-flex;align-items:center;gap:8px;cursor:pointer;}'
+        . '.wb-pick-row{margin:3px 0;list-style:none;}'
+        . '.wb-select-controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:.35rem 0 .85rem;}'
+        . '.wb-select-controls a{font-size:.85rem;}'
+        . '.wb-phase-label{font-size:.85rem;margin-right:-8px;}'
+        . '@media print{.wb-select-controls,.wb-pick{display:none!important}}'
+        . '</style>';
+
+    $script = '<script>(function(){'
+        . 'var picks=[].slice.call(document.querySelectorAll(".wb-pick"));'
+        . 'if(!picks.length)return;'
+        . 'var printAll=null;'
+        . '[].slice.call(document.querySelectorAll("a")).forEach(function(a){'
+        . 'if(!printAll&&/print all waybills/i.test(a.textContent||""))printAll=a;});'
+        . 'var btn=document.getElementById("wb-print-selected");'
+        . 'var selAll=document.getElementById("wb-select-all");'
+        . 'var clr=document.getElementById("wb-clear");'
+        . 'var phaseSel=document.getElementById("wb-phase-select");'
+        . 'function rowOf(c){return c.closest?c.closest("li"):c.parentNode.parentNode;}'
+        . 'function visible(c){var r=rowOf(c);return !r||r.style.display!=="none";}'
+        . 'function sel(){return picks.filter(function(c){return c.checked;}).map(function(c){return c.value;});}'
+        . 'function upd(){var n=sel().length;if(btn){btn.disabled=n===0;'
+        . 'btn.innerHTML=\'<i class="bi bi-printer"></i> Print selected (\'+n+\')\';}}'
+        . 'picks.forEach(function(c){c.addEventListener("change",upd);});'
+        . 'if(selAll)selAll.addEventListener("click",function(e){e.preventDefault();picks.forEach(function(c){if(visible(c))c.checked=true;});upd();});'
+        . 'if(clr)clr.addEventListener("click",function(e){e.preventDefault();picks.forEach(function(c){c.checked=false;});upd();});'
+        . 'if(phaseSel)phaseSel.addEventListener("change",function(){var v=phaseSel.value;'
+        . 'picks.forEach(function(c){var r=rowOf(c);if(!r)return;'
+        . 'var ph=(r.getAttribute("data-wb-phase")||"").split(/\\s+/);'
+        . 'var show=(v===""||ph.indexOf(v)>=0);'
+        . 'r.style.display=show?"":"none";if(!show&&c.checked)c.checked=false;});upd();});'
+        . 'if(btn)btn.addEventListener("click",function(e){e.preventDefault();var s=sel();if(!s.length||!printAll)return;'
+        . 'var base=printAll.getAttribute("href");'
+        . 'var url=base+(base.indexOf("?")>=0?"&":"?")+"wb="+encodeURIComponent(s.join(","));'
+        . 'window.location.href=url;});'
+        . 'upd();'
+        . '})();</script>';
+
+    return str_replace('</body>', $style . $script . '</body>', $html);
+}
+
+/**
+ * Companion to so_inject_waybill_selection_index(): when a waybills print-all
+ * page is opened with a ?wb=<comma-list> filter, show only those waybills. Each
+ * sheet is matched by its "WAYBILL No." text, so a waybill's empty-repositioning
+ * sheet and its loaded sheet (which share a number) are kept together. Adds a
+ * "Showing N selected · Show all" banner and relabels the print button.
+ */
+function so_inject_waybill_selection_print($html, $rel)
+{
+    if (!preg_match('#^session_\d+/(?:phase_\d+/)?waybills/[^/]*print_all\.html$#', $rel)) {
+        return $html;
+    }
+    if (strpos($html, 'wb-selection-filter') !== false) {
+        return $html;
+    }
+
+    $script = '<script id="wb-selection-filter">(function(){'
+        . 'var params=new URLSearchParams(location.search);'
+        . 'var raw=params.get("wb");'
+        . 'if(!raw)return;'
+        . 'var wrap=document.querySelector(".waybill-print");'
+        . 'if(!wrap)return;'
+        . 'var set={};raw.split(",").forEach(function(x){x=x.trim();if(x)set[x]=1;});'
+        . 'var sheets=[].slice.call(wrap.querySelectorAll(".waybill-sheet"));'
+        . 'var shown={},vis=[];'
+        . 'sheets.forEach(function(s){var m=(s.textContent||"").match(/WAYBILL No\\.\\s*([0-9A-Za-z\\-]+)/);'
+        . 'var n=m?m[1]:null;if(n&&set[n]){s.style.display="";shown[n]=1;vis.push(s);}else{s.style.display="none";}});'
+        . 'vis.forEach(function(s,i){var last=(i===vis.length-1);'
+        . 's.style.pageBreakAfter=last?"auto":"always";s.style.breakAfter=last?"auto":"page";});'
+        . 'var nsel=Object.keys(shown).length;'
+        . 'params.delete("wb");var showAll=location.pathname+(params.toString()?("?"+params.toString()):"");'
+        . 'var banner=document.createElement("div");banner.className="noprint";'
+        . 'banner.style.cssText="margin:.5rem 0;padding:.5rem .75rem;background:#fff3cd;border:1px solid #ffe69c;border-radius:6px;font:14px system-ui,-apple-system,sans-serif;";'
+        . 'banner.innerHTML="Showing "+nsel+" selected waybill"+(nsel===1?"":"s")+" &middot; <a href=\\""+showAll+"\\">Show all</a>";'
+        . 'wrap.parentNode.insertBefore(banner,wrap);'
+        . 'var pb=document.querySelector(".waybill-print-controls button");'
+        . 'if(pb)pb.innerHTML=\'<i class="bi bi-printer"></i> Print selected\';'
+        . 'var cnt=document.querySelector("main .muted");'
+        . 'if(cnt)cnt.textContent=nsel+" selected waybill"+(nsel===1?"":"s")+" \\u00b7 each prints on its own page.";'
+        . '})();</script>';
+
+    return str_replace('</body>', $script . '</body>', $html);
+}
+
+/**
+ * Add a "Phase" filter dropdown next to the existing Train/Style dropdowns on the
+ * combined and per-train print-all switch-list pages (print_all[_style].html and
+ * train_<job>.print_all[_style].html). Selecting a phase shows only that switch
+ * list; "All phases" (default) shows everything.
+ *
+ * Injected at serve time — like the waybill memo filter — so it works on every
+ * previously generated page without regeneration. The options are built client
+ * side from each rendered `.print-all-phase` section's heading, so the filter
+ * needs no server-side phase data and stays correct as pages are regenerated.
+ * The control always appears when at least one phase section is present
+ * (including exactly one).
+ */
+function so_inject_switchlist_phase_filter($html, $rel)
+{
+    if (!preg_match('#^session_\d+/(?:print_all(?:_[a-z0-9_-]+)?|train_.+\.print_all(?:_[a-z0-9_-]+)?)\.html$#', $rel)) {
+        return $html;
+    }
+    if (strpos($html, 'sw-phase-select') !== false) {
+        return $html; // already injected
+    }
+    // Only inject when the Train/Style controls cluster is present (skip embed
+    // and any non-standard page that lacks it).
+    if (strpos($html, 'sw-style-status') === false) {
+        return $html;
+    }
+
+    $control = '<label for="sw-phase-select" class="text-white-50 small mb-0">Phase</label>'
+        . '<select id="sw-phase-select" class="form-select form-select-sm" style="width:auto;">'
+        . '<option value="">All phases</option></select>';
+    $count = 0;
+    $html = preg_replace(
+        '#(<span id="sw-style-status"[^>]*></span>)#',
+        $control . '$1',
+        $html,
+        1,
+        $count
+    );
+    if ($count === 0) {
+        return $html;
+    }
+
+    $script = '<script>(function(){'
+        . 'var sel=document.getElementById("sw-phase-select");'
+        . 'var lab=document.querySelector("label[for=\\"sw-phase-select\\"]");'
+        . 'if(!sel)return;'
+        . 'var secs=Array.prototype.slice.call(document.querySelectorAll(".page .print-all-phase"));'
+        . 'if(secs.length<1){sel.style.display="none";if(lab)lab.style.display="none";return;}'
+        . 'secs.forEach(function(s,i){'
+        . 'var h=s.querySelector("h2");'
+        . 'var t=h?(h.textContent||"").trim():("Phase "+(i+1));'
+        // Drop redundant " — Phase N of M" when Train Info already names the leg.
+        . 't=t.replace(/\\s*[\\u2014\\-]\\s*Phase\\s+\\d+\\s+of\\s+\\d+\\s*$/i,"").trim()||t;'
+        . 's.setAttribute("data-sw-phase",String(i));'
+        . 'var o=document.createElement("option");o.value=String(i);o.textContent=t;sel.appendChild(o);});'
+        . 'function apply(){var v=sel.value;secs.forEach(function(s){'
+        . 's.style.display=(v===""||s.getAttribute("data-sw-phase")===v)?"":"none";});}'
+        . 'sel.addEventListener("change",apply);apply();'
+        . '})();</script>';
+
+    return str_replace('</body>', $script . '</body>', $html);
+}
+
+/**
  * Rebuild the prev/next session nav on a switch-list print-all page from the
  * current set of sessions (combined or per-style). Replaces an existing row if
  * present, or inserts one right after the top nav when missing.
@@ -442,12 +906,13 @@ function so_refresh_switchlist_job_print_all_session_nav($html, $rel)
  */
 function so_refresh_switchlist_train_print_all_session_nav($html, $rel)
 {
-    if (!preg_match('#^session_(\d+)/train_(.+)\.print_all(?:_[a-z0-9_-]+)?\.html$#', $rel, $m)) {
+    if (!preg_match('#^session_(\d+)/train_(.+)\.print_all(?:_([a-z0-9_-]+))?\.html$#', $rel, $m)) {
         return $html;
     }
     $session_nbr = (int) $m[1];
     $job = rawurldecode((string) $m[2]);
-    $nav = session_switchlist_train_print_all_session_nav_html($session_nbr, $job);
+    $style = isset($m[3]) ? (string) $m[3] : '';
+    $nav = session_switchlist_train_print_all_session_nav_html($session_nbr, $job, null, null, $style);
     if ($nav === '') {
         return $html;
     }
@@ -478,45 +943,87 @@ function so_refresh_switchlist_train_print_all_session_nav($html, $rel)
  */
 function so_refresh_station_report_session_nav($html, $rel)
 {
-    if (!preg_match('#^session_(\d+)/station_report\.html$#', $rel, $m)) {
+    if (!preg_match('#^session_(\d+)/station_report(?:_(\d+))?\.html$#', $rel, $m)) {
         return $html;
     }
-    if (strpos($html, 'station-report-session-nav') === false) {
+    $session_nbr = (int) $m[1];
+    $phase_num = isset($m[2]) && $m[2] !== '' ? (int) $m[2] : null;
+    if (strpos($html, 'station-report-session-nav') !== false) {
+        $nav = session_station_report_session_nav_html($session_nbr);
+        if ($nav !== '') {
+            $html = preg_replace(
+                '#<div class="session-nav-row station-report-session-nav[^"]*">.*?</div>#s',
+                $nav,
+                $html,
+                1
+            );
+        }
+    }
+    $phase_nav = session_car_report_phase_nav_html($session_nbr, 'station', $phase_num);
+    if ($phase_nav === '') {
         return $html;
     }
-    $nav = session_station_report_session_nav_html((int) $m[1]);
-    if ($nav === '') {
-        return $html;
+    if (strpos($html, 'station-report-phase-nav') !== false) {
+        return preg_replace(
+            '#<div class="session-nav-row station-report-phase-nav[^"]*">.*?</div>#s',
+            $phase_nav,
+            $html,
+            1
+        );
+    }
+    if (strpos($html, 'station-report-session-nav') !== false) {
+        return preg_replace(
+            '#(<div class="session-nav-row station-report-session-nav[^"]*">.*?</div>)#s',
+            '$1' . $phase_nav,
+            $html,
+            1
+        );
     }
 
-    return preg_replace(
-        '#<div class="session-nav-row station-report-session-nav[^"]*">.*?</div>#s',
-        $nav,
-        $html,
-        1
-    );
+    return $html;
 }
 
 /** Same idea as so_refresh_station_report_session_nav(), for wheel reports. */
 function so_refresh_wheel_report_session_nav($html, $rel)
 {
-    if (!preg_match('#^session_(\d+)/wheel_report\.html$#', $rel, $m)) {
+    if (!preg_match('#^session_(\d+)/wheel_report(?:_(\d+))?\.html$#', $rel, $m)) {
         return $html;
     }
-    if (strpos($html, 'wheel-report-session-nav') === false) {
+    $session_nbr = (int) $m[1];
+    $phase_num = isset($m[2]) && $m[2] !== '' ? (int) $m[2] : null;
+    if (strpos($html, 'wheel-report-session-nav') !== false) {
+        $nav = session_wheel_report_session_nav_html($session_nbr);
+        if ($nav !== '') {
+            $html = preg_replace(
+                '#<div class="session-nav-row wheel-report-session-nav[^"]*">.*?</div>#s',
+                $nav,
+                $html,
+                1
+            );
+        }
+    }
+    $phase_nav = session_car_report_phase_nav_html($session_nbr, 'wheel', $phase_num);
+    if ($phase_nav === '') {
         return $html;
     }
-    $nav = session_wheel_report_session_nav_html((int) $m[1]);
-    if ($nav === '') {
-        return $html;
+    if (strpos($html, 'station-report-phase-nav') !== false) {
+        return preg_replace(
+            '#<div class="session-nav-row station-report-phase-nav[^"]*">.*?</div>#s',
+            $phase_nav,
+            $html,
+            1
+        );
+    }
+    if (strpos($html, 'wheel-report-session-nav') !== false) {
+        return preg_replace(
+            '#(<div class="session-nav-row wheel-report-session-nav[^"]*">.*?</div>)#s',
+            '$1' . $phase_nav,
+            $html,
+            1
+        );
     }
 
-    return preg_replace(
-        '#<div class="session-nav-row wheel-report-session-nav[^"]*">.*?</div>#s',
-        $nav,
-        $html,
-        1
-    );
+    return $html;
 }
 
 function so_normalize_path($path)
