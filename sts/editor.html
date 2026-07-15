@@ -7,7 +7,7 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
   <link rel="stylesheet" href="session-nav.css">
-  <link rel="stylesheet" href="workflow-ui.css?v=53">
+  <link rel="stylesheet" href="workflow-ui.css?v=55">
 </head>
 <body>
   <nav class="navbar navbar-dark noprint" style="background-color: #343a40;">
@@ -57,17 +57,18 @@
     <div class="panel" id="simulator">
       <h2>Simulator</h2>
       <p class="run-instructions">
-        Pick a <strong>Section</strong> (from section labels in the recipe) or leave <strong>All</strong> for the full workflow.
-        Use <strong>Goto section</strong> to skip forward over steps (e.g. skip setup on repeat sessions).
-        Use simulator <strong>Repeat</strong> to run a section multiple times. Switch-list format is set on each
+        Check one or more <strong>Sections</strong> to preview and run (from section labels in the recipe).
+        Gaps fill <strong>Skip steps</strong> (editable, e.g. <code>1-2,5,8-10</code>); skipping every step in a section unchecks it.
+        Use simulator <strong>Repeat</strong> to run the selection multiple times. Switch-list format is set on each
         <em>Generate Switch Lists</em> step. DB session: <strong id="run-db-session">—</strong>.
         View output in <a href="/sts/session_overview.php">Sessions</a> after a run.
       </p>
       <div class="run-bar">
-        <label class="run-field run-field-wide">
-          <span class="inline-lbl">Section</span>
-          <select id="run-section" class="field-select"></select>
-        </label>
+        <div class="run-field run-field-wide">
+          <span class="inline-lbl">Sections</span>
+          <div id="run-section-host"></div>
+          <input type="hidden" id="run-section" value="">
+        </div>
         <label class="run-field">
           <span class="inline-lbl">Start step</span>
           <input type="number" id="run-start" class="field-input" min="1" value="1">
@@ -75,6 +76,10 @@
         <label class="run-field">
           <span class="inline-lbl">Stop step</span>
           <input type="number" id="run-stop" class="field-input" min="1" value="1">
+        </label>
+        <label class="run-field run-field-skip" id="run-skip-wrap">
+          <span class="inline-lbl">Skip steps</span>
+          <input type="text" id="run-skip" class="field-input" placeholder="e.g. 1-2,5,8-10" title="Comma-separated steps/ranges to skip" value="" autocomplete="off">
         </label>
         <button type="button" class="btn btn-outline-dark btn-sm" id="btn-run">Run</button>
         <div class="run-repeat-group">
@@ -142,7 +147,7 @@
       <div id="steps-preview" class="steps-preview" hidden></div>
     </div>
   </div>
-  <script src="workflow-shared.js?v=83"></script>
+  <script src="workflow-shared.js?v=86"></script>
   <script>
 (function () {
   const W = WorkflowUI;
@@ -194,7 +199,13 @@
     W.syncRunRangeHighlight();
     W.syncStepVisibility();
   });
-  W.el('run-section')?.addEventListener('change', () => W.applyRunSection());
+  W.el('run-skip')?.addEventListener('input', () => {
+    // Live preview/highlight only — wait for blur/change before unchecking sections.
+    W.applyRunSkipEdit({ normalize: false, syncSections: false });
+  });
+  W.el('run-skip')?.addEventListener('change', () => {
+    W.applyRunSkipEdit({ normalize: true, syncSections: true });
+  });
   W.el('btn-run')?.addEventListener('click', () => {
     W.runWorkflow({ saveFirst: true }).catch((e) => W.setStatus(e.message, 'err'));
   });

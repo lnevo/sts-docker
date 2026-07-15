@@ -272,34 +272,39 @@
       const toggle = root.querySelector('[data-cdd-toggle]');
       const selected = Array.from(root.querySelectorAll('[data-cdd-opt]:checked')).map((n) => n.value);
       if (hidden) hidden.value = selected.join(',');
-      if (toggle) {
-        toggle.textContent = this.checkboxDropdownSummary(
-          selected,
-          null,
-          root.getAttribute('data-empty-label') || 'Any',
-          root.getAttribute('data-summary-label') || 'selected'
-        );
-        // Prefer labels from option nodes when re-summarizing without opts array.
-        if (selected.length && selected.length <= 2) {
-          const labels = Array.from(root.querySelectorAll('[data-cdd-opt]:checked')).map((n) => {
-            const lab = n.closest('label');
-            const span = lab && lab.querySelector('.cdd-opt-lbl');
-            return (span ? span.textContent : n.value || '').trim();
-          }).filter(Boolean);
-          if (labels.length) toggle.textContent = labels.join(', ');
-        } else if (!selected.length) {
-          toggle.textContent = root.getAttribute('data-empty-label') || 'Any';
-        } else {
-          toggle.textContent = selected.length + ' ' + (root.getAttribute('data-summary-label') || 'selected');
-        }
-        toggle.title = selected.length
-          ? Array.from(root.querySelectorAll('[data-cdd-opt]:checked')).map((n) => {
-              const lab = n.closest('label');
-              const span = lab && lab.querySelector('.cdd-opt-lbl');
-              return (span ? span.textContent : n.value || '').trim();
-            }).filter(Boolean).join(', ')
-          : (root.getAttribute('data-empty-label') || 'Any');
+      if (!toggle) return;
+
+      const emptyLabel = root.getAttribute('data-empty-label') || 'Any';
+      const summaryLabel = root.getAttribute('data-summary-label') || 'selected';
+      const allLabel = root.getAttribute('data-all-label') || '';
+      const countOnly = root.getAttribute('data-count-summary') === '1';
+      const optionCount = root.querySelectorAll('[data-cdd-opt]').length;
+      const selectedLabels = () => Array.from(root.querySelectorAll('[data-cdd-opt]:checked')).map((n) => {
+        const lab = n.closest('label');
+        const span = lab && lab.querySelector('.cdd-opt-lbl');
+        return (span ? span.textContent : n.value || '').trim();
+      }).filter(Boolean);
+
+      let text;
+      if (!selected.length) {
+        text = emptyLabel;
+      } else if (allLabel && optionCount > 0 && selected.length >= optionCount) {
+        text = allLabel;
+      } else if (countOnly) {
+        const unit = summaryLabel === 'sections' && selected.length === 1 ? 'section' : summaryLabel;
+        text = selected.length + ' ' + unit;
+      } else if (selected.length <= 2) {
+        const labels = selectedLabels();
+        text = labels.length
+          ? labels.join(', ')
+          : this.checkboxDropdownSummary(selected, null, emptyLabel, summaryLabel);
+      } else {
+        text = selected.length + ' ' + summaryLabel;
       }
+      toggle.textContent = text;
+      toggle.title = selected.length
+        ? (allLabel && selected.length >= optionCount ? allLabel : selectedLabels().join(', '))
+        : emptyLabel;
     },
 
     closeAllCheckboxDropdowns(except) {
@@ -325,7 +330,19 @@
       const selectedSet = new Set(selected.map(String));
       const emptyLabel = p.empty_label || 'Any';
       const summaryLabel = p.summary_label || 'selected';
-      const summary = this.checkboxDropdownSummary(selected, opts, emptyLabel, summaryLabel);
+      const allLabel = p.all_label || '';
+      const countOnly = !!p.count_summary;
+      let summary;
+      if (!selected.length) {
+        summary = emptyLabel;
+      } else if (allLabel && opts.length && selected.length >= opts.length) {
+        summary = allLabel;
+      } else if (countOnly) {
+        const unit = summaryLabel === 'sections' && selected.length === 1 ? 'section' : summaryLabel;
+        summary = selected.length + ' ' + unit;
+      } else {
+        summary = this.checkboxDropdownSummary(selected, opts, emptyLabel, summaryLabel);
+      }
 
       let menu = '<div class="checkbox-dropdown-menu" data-cdd-menu hidden>';
       menu += '<div class="checkbox-dropdown-search-wrap">'
@@ -362,7 +379,10 @@
       return '<div class="inline-field inline-field-checkbox-dropdown'
         + (visibleLabels ? ' inline-field-labeled' : '') + '">' + lbl
         + '<div class="checkbox-dropdown" data-checkbox-dropdown data-empty-label="'
-        + this.escapeHtml(emptyLabel) + '" data-summary-label="' + this.escapeHtml(summaryLabel) + '">'
+        + this.escapeHtml(emptyLabel) + '" data-summary-label="' + this.escapeHtml(summaryLabel) + '"'
+        + (allLabel ? (' data-all-label="' + this.escapeHtml(allLabel) + '"') : '')
+        + (countOnly ? ' data-count-summary="1"' : '')
+        + '>'
         + '<button type="button" class="field-select checkbox-dropdown-toggle" data-cdd-toggle '
         + 'aria-haspopup="listbox" aria-expanded="false" id="' + id + '-toggle">'
         + this.escapeHtml(summary) + '</button>'
@@ -1402,6 +1422,10 @@
       if (step.function === 'text_instruction') {
         return (step.params?.instruction || '').trim();
       }
+      if (step.function === 'skip_steps') {
+        const ranges = String(step.params?.steps || '').trim();
+        return ranges ? ('Skip Steps ' + ranges) : 'Skip Steps';
+      }
       if (step.function === 'generate_switchlists') {
         const p = step.params || {};
         const jobs = String(p.jobs || 'all').trim() || 'all';
@@ -1738,7 +1762,7 @@
 
     isExecutableStep(step) {
       const fid = step?.function || '';
-      if (['section_label', 'text_instruction', 'marker', 'goto', 'if_then'].includes(fid)) {
+      if (['section_label', 'text_instruction', 'marker', 'goto', 'if_then', 'skip_steps'].includes(fid)) {
         return false;
       }
       const def = this.catalogMap[fid];
@@ -1832,6 +1856,7 @@
       const steps = this.recipe.steps || [];
       const executed = new Set();
       if (!steps.length) return executed;
+      const skipSet = this.getRunSkipSet();
       let pc = Math.max(0, fromStep - 1);
       const end = Math.min(steps.length, toStep);
       const maxIter = Math.max(500, (end - fromStep + 1) * 100);
@@ -1842,13 +1867,23 @@
           pc++;
           continue;
         }
+        const n = pc + 1;
+        if (skipSet.has(n)) {
+          pc++;
+          continue;
+        }
         const fid = step.function || '';
         if (fid === 'stop') {
-          if (this.isExecutableStep(step)) executed.add(pc + 1);
+          if (this.isExecutableStep(step)) executed.add(n);
           break;
         }
+        if (fid === 'skip_steps') {
+          this.parseStepRanges(step.params?.steps || '').forEach((sn) => skipSet.add(sn));
+          pc++;
+          continue;
+        }
         if (fid === 'goto') {
-          const target = this.resolveGotoTarget(step, pc + 1);
+          const target = this.resolveGotoTarget(step, n);
           if (target >= 1 && target <= steps.length) {
             pc = target - 1;
           } else {
@@ -1859,7 +1894,7 @@
         if (fid === 'if_then') {
           const ok = this.evaluateCondition(step.params || {});
           if (ok && this.ifThenHasGoto(step)) {
-            const target = this.resolveGotoTarget({ params: step.params || {} }, pc + 1);
+            const target = this.resolveGotoTarget({ params: step.params || {} }, n);
             if (target >= 1 && target <= steps.length) {
               pc = target - 1;
             } else {
@@ -1871,7 +1906,7 @@
           continue;
         }
         if (this.isExecutableStep(step)) {
-          executed.add(pc + 1);
+          executed.add(n);
         }
         pc++;
       }
@@ -1883,6 +1918,7 @@
       const step = this.recipe.steps[idx];
       if (!step || !this.isExecutableStep(step)) return false;
       const stepNum = idx + 1;
+      if (this.getRunSkipSet().has(stepNum)) return false;
       const { start, stop } = this.getRunStepRange();
       if (stepNum < start || stepNum > stop) return false;
       if (!this.executionPathSteps) {
@@ -1914,22 +1950,266 @@
       }
     },
 
-    getRunStepRange() {
+    parseStepRanges(text) {
+      const out = new Set();
+      String(text || '').split(',').forEach((part) => {
+        part = part.trim();
+        if (!part) return;
+        const m = part.match(/^(\d+)\s*-\s*(\d+)$/);
+        if (m) {
+          let a = parseInt(m[1], 10);
+          let b = parseInt(m[2], 10);
+          if (a > b) {
+            const t = a;
+            a = b;
+            b = t;
+          }
+          for (let n = a; n <= b; n++) {
+            if (n >= 1) out.add(n);
+          }
+          return;
+        }
+        if (/^\d+$/.test(part)) {
+          const n = parseInt(part, 10);
+          if (n >= 1) out.add(n);
+        }
+      });
+      return out;
+    },
+
+    formatStepRanges(nums) {
+      const list = Array.from(nums || []).map((n) => parseInt(n, 10)).filter((n) => n >= 1);
+      list.sort((a, b) => a - b);
+      const uniq = [];
+      list.forEach((n) => {
+        if (!uniq.length || uniq[uniq.length - 1] !== n) uniq.push(n);
+      });
+      if (!uniq.length) return '';
+      const parts = [];
+      let start = uniq[0];
+      let prev = uniq[0];
+      for (let i = 1; i <= uniq.length; i++) {
+        const n = i < uniq.length ? uniq[i] : null;
+        if (n !== null && n === prev + 1) {
+          prev = n;
+          continue;
+        }
+        parts.push(start === prev ? String(start) : (start + '-' + prev));
+        if (n === null) break;
+        start = prev = n;
+      }
+      return parts.join(',');
+    },
+
+    getSelectedRunSectionIds() {
+      const host = this.el('run-section-host');
+      if (!host) {
+        const raw = (this.el('run-section')?.value || '').trim();
+        return raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      }
+      const checked = Array.from(host.querySelectorAll('[data-cdd-opt]:checked')).map((n) => n.value);
+      return checked.filter((id) => id && id !== 'all');
+    },
+
+    getRunCoverage() {
       const total = Math.max(1, this.recipe.steps?.length || 1);
-      let start = parseInt(this.el('run-start')?.value, 10) || 1;
-      let stop = parseInt(this.el('run-stop')?.value, 10) || total;
+      const sections = this.editorSections();
+      let selectedIds = this.getSelectedRunSectionIds();
+      if (!sections.length) {
+        return {
+          start: 1,
+          stop: total,
+          total,
+          selectedIds: [],
+          included: null,
+          skipSteps: [],
+          skipStr: '',
+          all: true,
+        };
+      }
+      // None selected — operator must pick sections (distinct from All).
+      if (!selectedIds.length) {
+        return {
+          start: 1,
+          stop: total,
+          total,
+          selectedIds: [],
+          included: new Set(),
+          skipSteps: [],
+          skipStr: '',
+          all: false,
+          none: true,
+        };
+      }
+      // Every section checked ⇒ full contiguous range, no skip.
+      if (selectedIds.length >= sections.length) {
+        selectedIds = sections.map((s) => s.id);
+        return {
+          start: 1,
+          stop: total,
+          total,
+          selectedIds,
+          included: null,
+          skipSteps: [],
+          skipStr: '',
+          all: true,
+          none: false,
+        };
+      }
+      const selected = sections.filter((s) => selectedIds.indexOf(s.id) >= 0);
+      let start = total;
+      let stop = 1;
+      const included = new Set();
+      selected.forEach((s) => {
+        start = Math.min(start, s.start);
+        stop = Math.max(stop, s.stop);
+        for (let n = s.start; n <= s.stop; n++) included.add(n);
+      });
       start = Math.max(1, Math.min(start, total));
       stop = Math.max(start, Math.min(stop, total));
-      return { start, stop, total };
+      const skipSteps = [];
+      for (let n = start; n <= stop; n++) {
+        if (!included.has(n)) skipSteps.push(n);
+      }
+      return {
+        start,
+        stop,
+        total,
+        selectedIds: selected.map((s) => s.id),
+        included,
+        skipSteps,
+        skipStr: this.formatStepRanges(skipSteps),
+        all: false,
+        none: false,
+      };
+    },
+
+    getRunSkipSet() {
+      // Skip field is source of truth once shown/edited; section gaps only seed it.
+      const manual = (this.el('run-skip')?.value || '').trim();
+      if (manual) return this.parseStepRanges(manual);
+      return new Set(this.getRunCoverage().skipSteps || []);
+    },
+
+    normalizeRunSkipField(opts) {
+      opts = opts || {};
+      const skipEl = this.el('run-skip');
+      if (!skipEl) return '';
+      const total = Math.max(1, this.recipe.steps?.length || 1);
+      const parsed = this.parseStepRanges(skipEl.value);
+      const clamped = [];
+      parsed.forEach((n) => {
+        if (n >= 1 && n <= total) clamped.push(n);
+      });
+      const str = this.formatStepRanges(clamped);
+      if (opts.write !== false) {
+        // Preserve free typing until blur/change normalize.
+        if (opts.force || skipEl !== document.activeElement) {
+          skipEl.value = str;
+        }
+      }
+      return str;
+    },
+
+    /**
+     * After skip edits: optionally uncheck any section whose every step is skipped.
+     * Does not rewrite the skip field from section gaps (avoids clobbering custom skips).
+     */
+    applyRunSkipEdit(opts) {
+      opts = opts || {};
+      if (this._applyingRunSection) return;
+      this._applyingRunSkip = true;
+      try {
+        if (opts.normalize) {
+          this.normalizeRunSkipField({ force: true });
+        }
+        const syncSections = opts.syncSections !== false;
+        const skipSet = this.getRunSkipSet();
+        const host = this.el('run-section-host');
+        const root = host && host.querySelector('[data-checkbox-dropdown]');
+        const sections = this.editorSections();
+        let changed = false;
+        if (syncSections && root && sections.length) {
+          const optsByValue = {};
+          root.querySelectorAll('[data-cdd-opt]').forEach((n) => { optsByValue[n.value] = n; });
+          sections.forEach((sec) => {
+            const opt = optsByValue[sec.id];
+            if (!opt || !opt.checked) return;
+            let fullySkipped = true;
+            for (let n = sec.start; n <= sec.stop; n++) {
+              if (!skipSet.has(n)) {
+                fullySkipped = false;
+                break;
+              }
+            }
+            if (fullySkipped && sec.stop >= sec.start) {
+              opt.checked = false;
+              changed = true;
+            }
+          });
+          if (changed) this.syncCheckboxDropdown(root);
+        }
+
+        // Recompute start/stop from remaining checked sections; keep skip as-is.
+        const coverage = this.getRunCoverage();
+        const startEl = this.el('run-start');
+        const stopEl = this.el('run-stop');
+        const hidden = this.el('run-section');
+        const total = coverage.total;
+        if (!coverage.none) {
+          if (startEl && startEl.dataset.userSet !== '1') {
+            startEl.min = '1';
+            startEl.max = String(total);
+            startEl.value = String(coverage.start);
+          }
+          if (stopEl && stopEl.dataset.userSet !== '1') {
+            stopEl.min = '1';
+            stopEl.max = String(total);
+            stopEl.value = String(coverage.stop);
+          }
+        }
+        if (hidden) {
+          hidden.value = coverage.all ? '' : coverage.selectedIds.join(',');
+        }
+        if (this.previewMode) this.renderStepsPreview();
+        this.syncRunRangeHighlight();
+        this.syncStepVisibility();
+      } finally {
+        this._applyingRunSkip = false;
+      }
+    },
+
+    getRunStepRange() {
+      const coverage = this.getRunCoverage();
+      const total = coverage.total;
+      let start = parseInt(this.el('run-start')?.value, 10) || coverage.start;
+      let stop = parseInt(this.el('run-stop')?.value, 10) || coverage.stop;
+      start = Math.max(1, Math.min(start, total));
+      stop = Math.max(start, Math.min(stop, total));
+      const skipStr = (this.el('run-skip')?.value || coverage.skipStr || '').trim();
+      return {
+        start,
+        stop,
+        total,
+        skipStr,
+        included: coverage.included,
+        all: coverage.all,
+        none: !!coverage.none,
+      };
     },
 
     syncRunRangeHighlight() {
       const list = this.el('steps-list');
       if (!list) return;
-      const { start, stop } = this.getRunStepRange();
+      const { start, stop, included } = this.getRunStepRange();
+      const skipSet = this.getRunSkipSet();
       list.querySelectorAll('.step-row[data-idx]').forEach((row) => {
         const stepNum = parseInt(row.dataset.idx, 10) + 1;
-        row.classList.toggle('run-range', stepNum >= start && stepNum <= stop);
+        const inSpan = stepNum >= start && stepNum <= stop;
+        const isSkip = skipSet.has(stepNum);
+        const inRun = inSpan && !isSkip && (included == null || included.has(stepNum));
+        row.classList.toggle('run-range', inRun);
+        row.classList.toggle('run-skip', inSpan && isSkip);
       });
     },
 
@@ -2355,46 +2635,160 @@
       return sections;
     },
 
-    syncRunSectionSelect() {
-      const sel = this.el('run-section');
-      if (!sel) return;
-      this.runSections = this.buildRunSections();
-      const current = sel.value || 'all';
-      let html = '';
-      this.runSections.forEach((s) => {
-        const text = s.id === 'all' ? 'All' : this.truncateSectionLabel(s.label);
-        html += '<option value="' + this.escapeHtml(s.id) + '" title="' + this.escapeHtml(s.label) + '">' +
-          this.escapeHtml(text) + ' (steps ' + s.start + '–' + s.stop + ')</option>';
+    ensureRunSectionDropdownHandlers() {
+      if (this._runSectionHandlers) return;
+      this._runSectionHandlers = true;
+      this.ensureCheckboxDropdownDocHandlers();
+      const host = this.el('run-section-host');
+      if (!host) return;
+      host.addEventListener('click', (e) => {
+        const toggle = e.target.closest('[data-cdd-toggle]');
+        if (toggle && host.contains(toggle)) {
+          e.preventDefault();
+          const root = toggle.closest('[data-checkbox-dropdown]');
+          const menu = root && root.querySelector('[data-cdd-menu]');
+          if (!root || !menu) return;
+          const willOpen = menu.hidden;
+          this.closeAllCheckboxDropdowns(willOpen ? root : null);
+          menu.hidden = !willOpen;
+          root.classList.toggle('open', willOpen);
+          toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+          if (willOpen) {
+            const search = menu.querySelector('[data-cdd-search]');
+            if (search) {
+              search.value = '';
+              menu.querySelectorAll('[data-cdd-option]').forEach((opt) => { opt.hidden = false; });
+              queueMicrotask(() => search.focus());
+            }
+          }
+          return;
+        }
+        const allBtn = e.target.closest('[data-cdd-all]');
+        if (allBtn && host.contains(allBtn)) {
+          e.preventDefault();
+          const root = allBtn.closest('[data-checkbox-dropdown]');
+          root.querySelectorAll('[data-cdd-opt]').forEach((n) => {
+            if (!n.closest('[data-cdd-option]')?.hidden) n.checked = true;
+          });
+          this.syncCheckboxDropdown(root);
+          this.applyRunSection();
+          return;
+        }
+        const noneBtn = e.target.closest('[data-cdd-none]');
+        if (noneBtn && host.contains(noneBtn)) {
+          e.preventDefault();
+          const root = noneBtn.closest('[data-checkbox-dropdown]');
+          root.querySelectorAll('[data-cdd-opt]').forEach((n) => { n.checked = false; });
+          this.syncCheckboxDropdown(root);
+          this.applyRunSection();
+        }
       });
-      sel.innerHTML = html;
-      if (this.runSections.some((s) => s.id === current)) {
-        sel.value = current;
-      } else {
-        sel.value = 'all';
+      host.addEventListener('input', (e) => {
+        if (!e.target.matches('[data-cdd-search]')) return;
+        const q = e.target.value.trim().toLowerCase();
+        const menu = e.target.closest('[data-cdd-menu]');
+        if (!menu) return;
+        menu.querySelectorAll('[data-cdd-option]').forEach((opt) => {
+          const label = (opt.querySelector('.cdd-opt-lbl')?.textContent || '').toLowerCase();
+          opt.hidden = q !== '' && label.indexOf(q) < 0;
+        });
+      });
+      host.addEventListener('change', (e) => {
+        if (!e.target.matches('[data-cdd-opt]')) return;
+        this.syncCheckboxDropdown(e.target.closest('[data-checkbox-dropdown]'));
+        this.applyRunSection();
+      });
+    },
+
+    syncRunSectionSelect() {
+      const host = this.el('run-section-host');
+      const hidden = this.el('run-section');
+      if (!host) return;
+      this.ensureRunSectionDropdownHandlers();
+      this.runSections = this.buildRunSections();
+      const sections = this.editorSections();
+      const prev = this.getSelectedRunSectionIds();
+      const prevSet = new Set(prev);
+      const hadControls = !!host.querySelector('[data-cdd-opt]');
+      // First paint defaults to All; afterwards honor None vs partial vs All.
+      const selectAll = !hadControls
+        ? true
+        : (sections.length > 0 && prev.length >= sections.length);
+      const selectNone = hadControls && !prev.length;
+      const selectedCsv = selectAll
+        ? sections.map((s) => s.id).join(',')
+        : (selectNone ? '' : prev.filter((id) => sections.some((s) => s.id === id)).join(','));
+      const opts = sections.map((s) => ({
+        value: s.id,
+        label: this.truncateSectionLabel(s.label) + ' (steps ' + s.start + '–' + s.stop + ')',
+      }));
+      const param = {
+        key: 'run_sections',
+        label: '',
+        type: 'checkbox_dropdown',
+        empty_label: '-- Select Sections --',
+        all_label: 'All Sections',
+        summary_label: 'sections',
+        count_summary: true,
+        default: selectedCsv,
+      };
+      // optionsForParam won't know these; inject via temporary dynamic override.
+      const prevJobs = this.optionsForParam;
+      this.optionsForParam = (p, context) => {
+        if (p && p.key === 'run_sections') return opts;
+        return prevJobs.call(this, p, context);
+      };
+      host.innerHTML = this.checkboxDropdownFieldHtml(param, selectedCsv, 'run', 'run_sections', false, null);
+      this.optionsForParam = prevJobs;
+      const root = host.querySelector('[data-checkbox-dropdown]');
+      if (root) {
+        root.querySelectorAll('[data-cdd-opt]').forEach((n) => {
+          n.checked = selectAll ? true : prevSet.has(n.value);
+        });
+        this.syncCheckboxDropdown(root);
+      }
+      if (hidden) {
+        hidden.value = selectAll ? '' : selectedCsv;
       }
     },
 
     applyRunSection() {
-      const id = this.el('run-section')?.value || 'all';
-      const sec = (this.runSections || this.buildRunSections()).find((s) => s.id === id);
-      if (!sec) return;
-      const startEl = this.el('run-start');
-      const stopEl = this.el('run-stop');
-      const total = Math.max(1, this.recipe.steps?.length || 1);
-      if (startEl) {
-        delete startEl.dataset.userSet;
-        startEl.min = '1';
-        startEl.max = String(total);
-        startEl.value = String(sec.start);
+      if (this._applyingRunSkip) return;
+      this._applyingRunSection = true;
+      try {
+        const coverage = this.getRunCoverage();
+        const startEl = this.el('run-start');
+        const stopEl = this.el('run-stop');
+        const skipEl = this.el('run-skip');
+        const hidden = this.el('run-section');
+        const total = coverage.total;
+        if (startEl) {
+          delete startEl.dataset.userSet;
+          startEl.min = '1';
+          startEl.max = String(total);
+          startEl.value = String(coverage.start);
+        }
+        if (stopEl) {
+          delete stopEl.dataset.userSet;
+          stopEl.min = '1';
+          stopEl.max = String(total);
+          stopEl.value = String(coverage.stop);
+        }
+        // Section selection reseeds skip from gaps (custom in-section skips are reset).
+        if (skipEl && skipEl !== document.activeElement) {
+          skipEl.value = coverage.skipStr;
+        }
+        if (hidden) {
+          hidden.value = coverage.all ? '' : coverage.selectedIds.join(',');
+        }
+        if (this.previewMode) {
+          this.renderStepsPreview();
+        }
+        this.syncRunRangeHighlight();
+        this.syncStepVisibility();
+      } finally {
+        this._applyingRunSection = false;
       }
-      if (stopEl) {
-        delete stopEl.dataset.userSet;
-        stopEl.min = '1';
-        stopEl.max = String(total);
-        stopEl.value = String(sec.stop);
-      }
-      this.syncRunRangeHighlight();
-      this.syncStepVisibility();
     },
 
     syncRunDefaults() {
@@ -2413,6 +2807,11 @@
         if (stopEl) {
           stopEl.min = '1';
           stopEl.max = String(total);
+        }
+        // Preserve editable skip unless empty (then seed gaps from sections).
+        const skipEl = this.el('run-skip');
+        if (skipEl && !String(skipEl.value || '').trim()) {
+          skipEl.value = this.getRunCoverage().skipStr;
         }
       }
       const sessionText = this.runOptions?.current_session ?? '—';
@@ -2438,41 +2837,43 @@
       if (options.saveFirst) {
         await this.saveRecipe();
       }
-      const total = Math.max(1, this.recipe.steps?.length || 1);
-      let start = parseInt(this.el('run-start')?.value, 10) || 1;
-      let stop = parseInt(this.el('run-stop')?.value, 10) || total;
+      const coverage = this.getRunCoverage();
+      if (coverage.none) {
+        throw new Error('Select at least one section to run');
+      }
+      const total = coverage.total;
+      let start = parseInt(this.el('run-start')?.value, 10) || coverage.start;
+      let stop = parseInt(this.el('run-stop')?.value, 10) || coverage.stop;
       start = Math.max(1, Math.min(start, total));
       stop = Math.max(start, Math.min(stop, total));
       if (stop < start) {
         throw new Error('Stop step must be at or after start step');
       }
+      const skipStr = (this.el('run-skip')?.value || coverage.skipStr || '').trim();
       this.clearRunCompleteActions();
-      this.setStatus(
-        repeat > 1 ? ('Running ' + repeat + ' cycles (steps ' + start + '–' + stop + ')…') : ('Running steps ' + start + '–' + stop + '…'),
-        'info'
-      );
-      const sectionId = this.el('run-section')?.value || 'all';
+      let statusMsg = repeat > 1
+        ? ('Running ' + repeat + ' cycles (steps ' + start + '–' + stop + ')')
+        : ('Running steps ' + start + '–' + stop);
+      if (skipStr) statusMsg += ' (skip ' + skipStr + ')';
+      statusMsg += '…';
+      this.setStatus(statusMsg, 'info');
       const runBody = {
         recipe: this.recipe,
         save_recipe: true,
         session_count: repeat,
         workflow_file: this.activeWorkflow,
+        start_step: start,
+        stop_step: stop,
+        skip_steps: skipStr,
       };
-      let d;
-      if (sectionId === 'all') {
-        d = await this.simulatorApi('run', 'POST', Object.assign(runBody, {
-          start_step: start,
-          stop_step: stop,
-        }));
-      } else {
-        d = await this.simulatorApi('run_section', 'POST', Object.assign(runBody, {
-          section_id: sectionId,
-          start_step: start,
-          stop_step: stop,
-        }));
-      }
+      // Multi-section (or gaps) always uses the range runner with skip_steps.
+      const d = await this.simulatorApi('run', 'POST', runBody);
       const lines = (d.summary || []).slice();
-      if (d.start_step) lines.unshift('Steps ' + d.start_step + '–' + d.stop_step);
+      if (d.start_step) {
+        let head = 'Steps ' + d.start_step + '–' + d.stop_step;
+        if (d.skip_steps) head += ' (skip ' + d.skip_steps + ')';
+        lines.unshift(head);
+      }
       if (d.warnings?.length) lines.push('', ...d.warnings);
       if (d.index_url) lines.push('', 'Sessions: ' + d.index_url);
       if (d.session_url) lines.push('Latest: ' + d.session_url);
@@ -2546,21 +2947,34 @@
       const name = (this.recipe.name || this.activeWorkflow || 'workflow').trim() || 'workflow';
       const file = (this.activeWorkflow || '').trim();
       const esc = (s) => this.escapeHtml(s);
+      const coverage = this.getRunCoverage();
+      const { start, stop, skipStr } = this.getRunStepRange();
+      const skipSet = this.getRunSkipSet();
 
       let body = '';
       if (!steps.length) {
         body = '<p class="wf-preview-empty">No steps in this workflow.</p>';
+      } else if (coverage.none) {
+        body = '<p class="wf-preview-empty">Select one or more sections to preview.</p>';
       } else {
         body = '<ol class="wf-preview-steps">';
-        steps.forEach((step, idx) => {
-          const n = idx + 1;
+        let pendingSkip = [];
+        const flushSkip = () => {
+          if (!pendingSkip.length) return;
+          const ranges = this.formatStepRanges(pendingSkip);
+          body += '<li class="wf-preview-step wf-preview-skip">'
+            + '<div class="wf-preview-cmd"><span class="wf-preview-num">—</span> '
+            + esc('Skip Steps ' + ranges)
+            + '</div></li>';
+          pendingSkip = [];
+        };
+        const appendStep = (step, idx, n) => {
           const disabled = step && Object.prototype.hasOwnProperty.call(step, 'enabled') && !step.enabled;
           let cmd = (this.compileOne(step, idx) || step?.function || '—').trim();
           if (cmd.indexOf('[object Object]') >= 0) {
             cmd = cmd.split('[object Object]').join('').replace(/\s+/g, ' ').trim() || (step?.function || '—');
           }
           const remarks = (this.rowRemarksText(step) || '').trim();
-          // Only expand filter_group leftovers for steps that don't already compile filters in.
           const expandsOwnFilters = [
             'pick_up_cars', 'set_out_cars', 'fill_orders', 'load_unload',
             'reposition_empties', 'auto_assign_locals',
@@ -2594,16 +3008,31 @@
             body += '<div class="wf-preview-remarks">remarks: ' + esc(remarks) + '</div>';
           }
           body += '</li>';
-        });
+        };
+
+        const scoped = !coverage.all || skipSet.size > 0;
+        for (let idx = 0; idx < steps.length; idx++) {
+          const n = idx + 1;
+          if (scoped && (n < start || n > stop)) continue;
+          if (skipSet.has(n)) {
+            pendingSkip.push(n);
+            continue;
+          }
+          flushSkip();
+          appendStep(steps[idx], idx, n);
+        }
+        flushSkip();
         body += '</ol>';
       }
 
-      host.innerHTML = '<div class="wf-preview-meta">'
-        + esc(name)
+      let meta = esc(name)
         + ' · ' + steps.length + ' step' + (steps.length === 1 ? '' : 's')
-        + (file ? (' · ' + esc(file)) : '')
-        + '</div>'
-        + body;
+        + (file ? (' · ' + esc(file)) : '');
+      if (!coverage.all || skipStr) {
+        meta += ' · run ' + start + '–' + stop;
+        if (skipStr) meta += ' (skip ' + esc(skipStr) + ')';
+      }
+      host.innerHTML = '<div class="wf-preview-meta">' + meta + '</div>' + body;
     },
 
     async copyPreviewContents() {

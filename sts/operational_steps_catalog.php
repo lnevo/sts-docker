@@ -48,7 +48,7 @@ function operational_steps_catalog_adder_order()
             'restart_session', 'reset_session',
             'import_data', 'remove_backup', 'wipe_database',
         ],
-        'workflow' => ['section_label', 'text_instruction', 'if_then', 'stop'],
+        'workflow' => ['section_label', 'text_instruction', 'if_then', 'skip_steps', 'stop'],
     ];
     if (defined('STS_CATALOG_CORE_ONLY') && STS_CATALOG_CORE_ONLY) {
         return $base;
@@ -1650,6 +1650,26 @@ function operational_steps_catalog_definitions()
             'params' => [],
         ],
         [
+            'id' => 'skip_steps',
+            'category' => 'workflow',
+            'adder' => true,
+            'adder_group' => 'workflow',
+            'label' => 'Skip steps',
+            'gui_template' => 'Skip Steps {steps}',
+            'description' => 'Do not run the listed steps (comma-separated numbers and ranges, e.g. 1-2,5,8-10). Useful when previewing/running non-contiguous sections.',
+            'runnable' => true,
+            'dispatch' => 'skip_steps',
+            'params' => [
+                operational_steps_catalog_text_param(
+                    'steps',
+                    'Steps',
+                    '',
+                    true,
+                    'e.g. 1-2,5,8-10'
+                ),
+            ],
+        ],
+        [
             'id' => 'goto',
             'category' => 'workflow',
             'adder' => false,
@@ -2685,6 +2705,80 @@ function operational_steps_goto_target_allowed($from_step, $target, $total_steps
     $target = (int) $target;
     $total_steps = (int) $total_steps;
     return $target > $from_step && $target >= 1 && $target <= $total_steps;
+}
+
+/**
+ * Parse "1-2,5,8-10" into a sorted unique list of 1-based step numbers.
+ *
+ * @return int[]
+ */
+function operational_steps_parse_step_ranges($text)
+{
+    $out = [];
+    $text = trim((string) $text);
+    if ($text === '') {
+        return $out;
+    }
+    foreach (preg_split('/\s*,\s*/', $text) as $part) {
+        $part = trim((string) $part);
+        if ($part === '') {
+            continue;
+        }
+        if (preg_match('/^(\d+)\s*-\s*(\d+)$/', $part, $m)) {
+            $a = (int) $m[1];
+            $b = (int) $m[2];
+            if ($a > $b) {
+                $tmp = $a;
+                $a = $b;
+                $b = $tmp;
+            }
+            for ($n = $a; $n <= $b; $n++) {
+                if ($n >= 1) {
+                    $out[$n] = $n;
+                }
+            }
+            continue;
+        }
+        if (preg_match('/^\d+$/', $part)) {
+            $n = (int) $part;
+            if ($n >= 1) {
+                $out[$n] = $n;
+            }
+        }
+    }
+    $list = array_values($out);
+    sort($list, SORT_NUMERIC);
+    return $list;
+}
+
+/**
+ * Collapse step numbers into compact ranges ("1-2,5,8-10").
+ *
+ * @param int[] $nums
+ */
+function operational_steps_format_step_ranges(array $nums)
+{
+    $nums = array_values(array_unique(array_map('intval', $nums)));
+    sort($nums, SORT_NUMERIC);
+    if ($nums === []) {
+        return '';
+    }
+    $parts = [];
+    $start = $nums[0];
+    $prev = $nums[0];
+    for ($i = 1, $len = count($nums); $i <= $len; $i++) {
+        $n = $i < $len ? $nums[$i] : null;
+        if ($n !== null && $n === $prev + 1) {
+            $prev = $n;
+            continue;
+        }
+        $parts[] = ($start === $prev) ? (string) $start : ($start . '-' . $prev);
+        if ($n === null) {
+            break;
+        }
+        $start = $prev = $n;
+    }
+    return implode(',', $parts);
 }
 
 function operational_steps_normalize_goto_sections(array $recipe)
@@ -4640,6 +4734,13 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
             if (function_exists('session_reset_all_output')) {
                 $result['cleared_sessions'] = session_reset_all_output();
             }
+            break;
+        case 'skip_steps':
+            $result['skipped'] = true;
+            $result['steps'] = operational_steps_format_step_ranges(
+                operational_steps_parse_step_ranges($params['steps'] ?? '')
+            );
+            $result['reason'] = 'handled by recipe runner';
             break;
         default:
             return ['skipped' => true, 'reason' => 'no handler'];

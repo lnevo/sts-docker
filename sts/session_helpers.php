@@ -2923,6 +2923,19 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
     $root = $options['session_root'] ?? session_web_root();
     $from_step = max(1, (int) ($options['from_step'] ?? 1));
     $to_step = min(count($recipe['steps'] ?? []), (int) ($options['to_step'] ?? count($recipe['steps'] ?? [])));
+    $skip_steps = [];
+    if (!empty($options['skip_steps'])) {
+        $raw_skip = $options['skip_steps'];
+        if (is_array($raw_skip)) {
+            $skip_steps = operational_steps_parse_step_ranges(implode(',', $raw_skip));
+        } else {
+            $skip_steps = operational_steps_parse_step_ranges((string) $raw_skip);
+        }
+    }
+    $skip_set = [];
+    foreach ($skip_steps as $sn) {
+        $skip_set[(int) $sn] = true;
+    }
     $session_nbr = function_exists('warm_start_get_session')
         ? warm_start_get_session($dbc)
         : session_get_db_session($dbc);
@@ -2992,6 +3005,12 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
         $n = $pc + 1;
         $fid = $step['function'] ?? '';
 
+        if (!empty($skip_set[$n])) {
+            $log[] = ['step' => $n, 'action' => 'skipped_range'];
+            $pc++;
+            continue;
+        }
+
         if (array_key_exists('enabled', $step) && !$step['enabled']) {
             $log[] = ['step' => $n, 'action' => 'skipped_disabled'];
             $pc++;
@@ -3002,6 +3021,19 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
             $stopped = true;
             $log[] = ['step' => $n, 'action' => 'stop'];
             break;
+        }
+        if ($fid === 'skip_steps') {
+            $extra = operational_steps_parse_step_ranges($step['params']['steps'] ?? '');
+            foreach ($extra as $sn) {
+                $skip_set[(int) $sn] = true;
+            }
+            $log[] = [
+                'step' => $n,
+                'action' => 'skip_steps',
+                'steps' => operational_steps_format_step_ranges($extra),
+            ];
+            $pc++;
+            continue;
         }
         if ($fid === 'goto') {
             $target = operational_steps_goto_resolve_step($recipe, $step['params'] ?? []);

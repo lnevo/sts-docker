@@ -48,6 +48,7 @@ try {
             $result = session_simulator_run($dbc, $recipe, [
                 'start_step' => (int) ($body['start_step'] ?? 0),
                 'stop_step' => (int) ($body['stop_step'] ?? 0),
+                'skip_steps' => $body['skip_steps'] ?? '',
                 'session_count' => (int) ($body['session_count'] ?? 1),
                 'format' => $body['format'] ?? 'all',
                 'config' => is_array($body['config'] ?? null) ? $body['config'] : [],
@@ -69,6 +70,7 @@ try {
             $result = session_simulator_run_section($dbc, $recipe, $section_id, [
                 'start_step' => (int) ($body['start_step'] ?? 0),
                 'stop_step' => (int) ($body['stop_step'] ?? 0),
+                'skip_steps' => $body['skip_steps'] ?? '',
                 'session_count' => (int) ($body['session_count'] ?? 1),
                 'format' => $body['format'] ?? 'all',
                 'min_sessions' => (int) ($body['min_sessions'] ?? 3),
