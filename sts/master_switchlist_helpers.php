@@ -560,6 +560,22 @@ function master_sw_row_destination_style($dbc, $row)
     return set_colors($dbc, $location);
 }
 
+/** Color swatch for the From cell (current location), matching To / set_colors. */
+function master_sw_row_from_style($dbc, $row)
+{
+    if (!function_exists('set_colors')) {
+        return '';
+    }
+    if ((int) ($row['current_location_id'] ?? 0) <= 0) {
+        return '';
+    }
+    $location = trim((string) ($row['current_location'] ?? ''));
+    if ($location === '') {
+        return '';
+    }
+    return set_colors($dbc, $location);
+}
+
 function master_sw_sections_cache_path($output_dir, $job_name, $session_nbr)
 {
     return rtrim($output_dir, '/') . '/' . $job_name . '_session_' . $session_nbr . '_master.json';
@@ -1572,6 +1588,7 @@ function master_sw_render_print_all_phase_body($dbc, array $section, $phase_inde
         $from = ((int) $row['current_location_id'] > 0)
             ? '<u>' . htmlspecialchars($row['current_station']) . '</u><br>' . htmlspecialchars($row['current_location'])
             : 'In Train';
+        $from_style = master_sw_row_from_style($dbc, $row);
 
         $to = '';
         if ($dest_station !== '') {
@@ -1583,7 +1600,7 @@ function master_sw_render_print_all_phase_body($dbc, array $section, $phase_inde
     <td style="text-align: center">' . htmlspecialchars(substr($row['car_code'], 0, 4)) . '</td>
     <td style="text-align: center">' . htmlspecialchars($el) . '</td>
     <td>' . $contents . '</td>
-    <td>' . $from . '</td>
+    <td' . ($from_style !== '' ? ' style="' . $from_style . '"' : '') . '>' . $from . '</td>
     <td' . ($dest_style !== '' ? ' style="' . $dest_style . '"' : '') . '>' . $to . '</td>
     <td style="text-align: center">' . (master_sw_section_pickup_mark($row, $section) !== '' ? '<b>' . master_sw_section_pickup_mark($row, $section) . '</b>' : '') . '</td>
     <td style="text-align: center">' . ($left_at !== '' ? '<b>' . htmlspecialchars($left_at) . '</b>' : '') . '</td>
@@ -1894,6 +1911,7 @@ function master_sw_render_table_section_rows($dbc, array $section, &$loads, &$em
         $from = ((int) $row['current_location_id'] > 0)
             ? '<u>' . htmlspecialchars($row['current_station']) . '</u><br>' . htmlspecialchars($row['current_location'])
             : 'In Train';
+        $from_style = master_sw_row_from_style($dbc, $row);
 
         $to = '';
         if ($dest_station !== '') {
@@ -1905,7 +1923,7 @@ function master_sw_render_table_section_rows($dbc, array $section, &$loads, &$em
     <td style="text-align: center">' . htmlspecialchars(substr($row['car_code'], 0, 4)) . '</td>
     <td style="text-align: center">' . htmlspecialchars($el) . '</td>
     <td>' . $contents . '</td>
-    <td>' . $from . '</td>
+    <td' . ($from_style !== '' ? ' style="' . $from_style . '"' : '') . '>' . $from . '</td>
     <td' . ($dest_style !== '' ? ' style="' . $dest_style . '"' : '') . '>' . $to . '</td>
     <td style="text-align: center">' . (master_sw_section_pickup_mark($row, $section) !== '' ? '<b>' . master_sw_section_pickup_mark($row, $section) . '</b>' : '') . '</td>
     <td style="text-align: center">' . ($left_at !== '' ? '<b>' . htmlspecialchars($left_at) . '</b>' : '') . '</td>

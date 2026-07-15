@@ -36,7 +36,7 @@ function operational_steps_catalog_adder_categories()
 function operational_steps_catalog_adder_order()
 {
     $base = [
-        'before' => ['generate_orders', 'fill_orders', 'reposition_empties'],
+        'before' => ['cancel_orders', 'generate_orders', 'fill_orders', 'reposition_empties'],
         'during' => [
             'auto_assign_locals', 'release_yard_cars', 'pick_up_cars', 'set_out_cars',
         ],
@@ -347,11 +347,13 @@ function operational_steps_catalog_auto_assign_jobs_param()
     return [
         'key' => 'jobs',
         'label' => 'Jobs',
-        'type' => 'jobs_multiselect',
+        'type' => 'checkbox_dropdown',
         'options_from' => 'jobs',
         'required' => false,
         'default' => '',
         'visible_label' => true,
+        'empty_label' => 'Any',
+        'summary_label' => 'jobs',
     ];
 }
 
@@ -427,33 +429,195 @@ function operational_steps_normalize_destination_filter($destination)
     return $destination;
 }
 
+/**
+ * Parse one or more destination filter tokens (comma-separated or array).
+ * Tokens stay as station::Name / location::Name (same as Pickup final dest).
+ *
+ * @return list<string>
+ */
+function operational_steps_normalize_destination_filters($destination)
+{
+    if (is_array($destination)) {
+        $parts = $destination;
+    } else {
+        $raw = trim((string) $destination);
+        if ($raw === '') {
+            return [];
+        }
+        $parts = array_map('trim', explode(',', $raw));
+    }
+    $out = [];
+    $seen = [];
+    foreach ($parts as $part) {
+        $normalized = operational_steps_normalize_destination_filter($part);
+        if ($normalized === '' || isset($seen[$normalized])) {
+            continue;
+        }
+        $seen[$normalized] = true;
+        $out[] = $normalized;
+    }
+    return $out;
+}
+
+/** Compact storage form: comma-joined tokens, or '' when unrestricted. */
+function operational_steps_normalize_destination_filter_list($destination)
+{
+    return implode(',', operational_steps_normalize_destination_filters($destination));
+}
+
+/**
+ * Generic comma-list normalizer (jobs, stations, locations).
+ * Drops blanks and all/any sentinels.
+ *
+ * @return list<string>
+ */
+function operational_steps_normalize_csv_list($value)
+{
+    if (is_array($value)) {
+        $parts = $value;
+    } else {
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return [];
+        }
+        $parts = array_map('trim', explode(',', $raw));
+    }
+    $out = [];
+    $seen = [];
+    foreach ($parts as $part) {
+        $part = trim((string) $part);
+        if ($part === '' || strcasecmp($part, 'all') === 0 || strcasecmp($part, 'any') === 0) {
+            continue;
+        }
+        $key = strtolower($part);
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $out[] = $part;
+    }
+    return $out;
+}
+
+function operational_steps_normalize_csv_list_string($value)
+{
+    return implode(',', operational_steps_normalize_csv_list($value));
+}
+
+/** @return list<string> station names */
+function operational_steps_normalize_station_filters($station)
+{
+    return operational_steps_normalize_csv_list($station);
+}
+
+function operational_steps_normalize_station_filter_list($station)
+{
+    return operational_steps_normalize_csv_list_string($station);
+}
+
+/** @return list<int> */
+function operational_steps_resolve_station_ids($dbc, $station)
+{
+    $ids = [];
+    $seen = [];
+    foreach (operational_steps_normalize_station_filters($station) as $name) {
+        $id = operational_steps_location_station_id($dbc, $name);
+        if ($id > 0 && !isset($seen[$id])) {
+            $seen[$id] = true;
+            $ids[] = $id;
+        }
+    }
+    return $ids;
+}
+
+function operational_steps_normalize_job_list($job)
+{
+    return operational_steps_normalize_csv_list($job);
+}
+
+function operational_steps_normalize_job_list_string($job)
+{
+    return operational_steps_normalize_csv_list_string($job);
+}
+
+function operational_steps_normalize_setout_locations($location)
+{
+    if (is_array($location)) {
+        $parts = $location;
+    } else {
+        $raw = trim((string) $location);
+        if ($raw === '') {
+            return [];
+        }
+        $parts = array_map('trim', explode(',', $raw));
+    }
+    $out = [];
+    $seen = [];
+    foreach ($parts as $part) {
+        $loc = operational_steps_normalize_setout_location($part);
+        // Keep remnant "remainder" / Final Destination as a real token.
+        if ($loc === '' && trim((string) $part) === '') {
+            continue;
+        }
+        if ($loc === '' && strcasecmp(trim((string) $part), 'any') === 0) {
+            continue;
+        }
+        if ($loc === '' && strcasecmp(trim((string) $part), 'auto') === 0) {
+            continue;
+        }
+        // Empty after normalize only from any/auto; remainder stays "remainder".
+        $token = $loc;
+        if ($token === '' && strcasecmp(trim((string) $part), 'remainder') === 0) {
+            $token = 'remainder';
+        }
+        if ($token === '') {
+            continue;
+        }
+        if (isset($seen[strtolower($token)])) {
+            continue;
+        }
+        $seen[strtolower($token)] = true;
+        $out[] = $token;
+    }
+    return $out;
+}
+
+function operational_steps_normalize_setout_location_list($location)
+{
+    return implode(',', operational_steps_normalize_setout_locations($location));
+}
+
 function operational_steps_destination_filter_label($destination)
 {
-    $destination = operational_steps_normalize_destination_filter($destination);
-    if ($destination === '') {
+    $destinations = operational_steps_normalize_destination_filters($destination);
+    if ($destinations === []) {
         return '';
     }
-    if (strpos($destination, 'station::') === 0) {
-        return substr($destination, 9);
+    $labels = [];
+    foreach ($destinations as $destination) {
+        if (strpos($destination, 'station::') === 0) {
+            $labels[] = substr($destination, 9);
+        } elseif (strpos($destination, 'location::') === 0) {
+            $labels[] = substr($destination, 10);
+        } else {
+            $labels[] = $destination;
+        }
     }
-    if (strpos($destination, 'location::') === 0) {
-        return substr($destination, 10);
-    }
-    return $destination;
+    return implode(', ', $labels);
 }
 
 function operational_steps_compile_auto_assign_gui(array $params)
 {
     $jobs = operational_steps_normalize_auto_assign_jobs($params);
-    $station = trim((string) ($params['station'] ?? ''));
-    $destination = operational_steps_normalize_destination_filter($params['destination'] ?? '');
+    $stations = operational_steps_normalize_station_filters($params['station'] ?? '');
+    $destination = operational_steps_normalize_destination_filter_list($params['destination'] ?? '');
     if ($jobs === '') {
         $line = 'Assign Cars';
     } else {
         $line = 'Assign Cars ' . str_replace(',', ', ', $jobs);
     }
-    if ($station !== '' && strcasecmp($station, 'all') !== 0) {
-        $line .= ' at ' . $station;
+    if ($stations !== []) {
+        $line .= ' at ' . implode(', ', $stations);
     }
     $dest_label = operational_steps_destination_filter_label($destination);
     if ($dest_label !== '') {
@@ -462,15 +626,26 @@ function operational_steps_compile_auto_assign_gui(array $params)
     return $line;
 }
 
-/** Filter car ids to those currently at locations on a routing station. */
+/** Filter car ids to those currently at locations on one or more routing stations (OR). */
 function operational_steps_filter_car_ids_at_station($dbc, array $car_ids, $station_id)
 {
-    $station_id = (int) $station_id;
-    if ($station_id <= 0 || $car_ids === []) {
+    if ($car_ids === []) {
+        return $car_ids;
+    }
+    if (is_array($station_id)) {
+        $station_ids = array_values(array_unique(array_filter(array_map('intval', $station_id))));
+    } else {
+        $station_ids = [(int) $station_id];
+        $station_ids = array_values(array_filter($station_ids));
+    }
+    if ($station_ids === []) {
         return $car_ids;
     }
     $location_ids = [];
-    $rs = mysqli_query($dbc, 'SELECT id FROM locations WHERE station = ' . $station_id);
+    $rs = mysqli_query(
+        $dbc,
+        'SELECT id FROM locations WHERE station IN (' . implode(',', $station_ids) . ')'
+    );
     while ($rs && ($row = mysqli_fetch_array($rs))) {
         $location_ids[] = (int) $row['id'];
     }
@@ -494,16 +669,25 @@ function operational_steps_filter_car_ids_at_station($dbc, array $car_ids, $stat
 function operational_steps_filter_car_ids_by_destination($dbc, array $car_ids, $destination, $job_name = '')
 {
     require_once __DIR__ . '/operations_train_car_filters.php';
-    $destination = operational_steps_normalize_destination_filter($destination);
-    if ($destination === '' || $car_ids === []) {
+    $destinations = operational_steps_normalize_destination_filters($destination);
+    if ($destinations === [] || $car_ids === []) {
         return $car_ids;
     }
-    $filters = ['final_destination' => $destination];
     $filtered = [];
+    $seen = [];
     foreach ($car_ids as $car_id) {
         $car_id = (int) $car_id;
-        if ($car_id > 0 && operational_steps_train_car_passes_filters($dbc, $car_id, $job_name, $filters)) {
-            $filtered[] = $car_id;
+        if ($car_id <= 0 || isset($seen[$car_id])) {
+            continue;
+        }
+        foreach ($destinations as $token) {
+            if (operational_steps_train_car_passes_filters($dbc, $car_id, $job_name, [
+                'final_destination' => $token,
+            ])) {
+                $seen[$car_id] = true;
+                $filtered[] = $car_id;
+                break;
+            }
         }
     }
     return $filtered;
@@ -514,15 +698,21 @@ function operational_steps_auto_assign_jobs($dbc, array $job_names, $station_id 
 {
     require_once __DIR__ . '/drop_down_list_functions.php';
     $assigned = 0;
-    $destination = operational_steps_normalize_destination_filter($destination);
+    $destination = operational_steps_normalize_destination_filter_list($destination);
+    if (is_array($station_id)) {
+        $station_ids = array_values(array_unique(array_filter(array_map('intval', $station_id))));
+    } else {
+        $sid = (int) $station_id;
+        $station_ids = $sid > 0 ? [$sid] : [];
+    }
     foreach ($job_names as $job_name) {
         $job_name = trim((string) $job_name);
         if ($job_name === '') {
             continue;
         }
         $eligible = array_keys(auto_assign_eligible_car_ids_for_job($dbc, $job_name, true));
-        if ($station_id > 0) {
-            $eligible = operational_steps_filter_car_ids_at_station($dbc, $eligible, $station_id);
+        if ($station_ids !== []) {
+            $eligible = operational_steps_filter_car_ids_at_station($dbc, $eligible, $station_ids);
         }
         if ($destination !== '') {
             $eligible = operational_steps_filter_car_ids_by_destination($dbc, $eligible, $destination, $job_name);
@@ -1127,8 +1317,9 @@ function operational_steps_setout_auto_assign_destinations($location)
 
 function operational_steps_normalize_generate_orders_params(array $params)
 {
+    $shipments = operational_steps_normalize_csv_list($params['shipment'] ?? '');
     $normalized = [
-        'shipment' => trim((string) ($params['shipment'] ?? '')),
+        'shipment' => implode(',', $shipments),
         'max_unfilled' => trim((string) ($params['max_unfilled'] ?? '')),
         'max_new' => trim((string) ($params['max_new'] ?? '')),
         'seed' => trim((string) ($params['seed'] ?? '')),
@@ -1154,7 +1345,7 @@ function operational_steps_compile_generate_orders_gui(array $params)
     $params = operational_steps_normalize_generate_orders_params($params);
     $parts = [];
     if ($params['shipment'] !== '') {
-        $parts[] = $params['shipment'];
+        $parts[] = str_replace(',', ', ', $params['shipment']);
     }
     if ($params['increment_session'] === '1') {
         $parts[] = 'increment session';
@@ -1214,8 +1405,7 @@ function operational_steps_fetch_dynamic_options($dbc)
     $backups = operational_steps_list_backup_files();
 
     $setout_extras = [
-        ['value' => '', 'label' => 'Final Destination'],
-        ['value' => 'remainder', 'label' => 'remainder (clear train)'],
+        ['value' => 'remainder', 'label' => 'Final Destination'],
     ];
     // Station / station-location tokens (same as Pickup filters), plus legacy bare codes.
     $setout_locations = $setout_extras;
@@ -1525,18 +1715,20 @@ function operational_steps_catalog_definitions()
             'adder_group' => 'before',
             'label' => 'Generate Car Orders',
             'gui_template' => 'Generate Orders {shipment}',
-            'description' => 'Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or set Shipment for a single manual order. Max unfilled orders skips generation entirely when the unfilled backlog is above the limit (hard gate). Max new orders/session is a soft cap: it still generates every session but stops after that many new orders, serving due shipments in random order and leaving the rest due for later — this spreads demand smoothly and avoids the burst-then-starve pattern a hard gate causes. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore.',
+            'description' => 'Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or check one or more Shipments for manual orders (multi-select). Leave unchecked for AUTOMATIC generation. Max unfilled orders skips generation entirely when the unfilled backlog is above the limit (hard gate). Max new orders/session is a soft cap: it still generates every session but stops after that many new orders, serving due shipments in random order and leaving the rest due for later — this spreads demand smoothly and avoids the burst-then-starve pattern a hard gate causes. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore.',
             'runnable' => true,
             'dispatch' => 'generate_orders',
             'params' => [
                 [
                     'key' => 'shipment',
-                    'label' => 'Shipment',
-                    'type' => 'shipment',
+                    'label' => 'Shipment (manual)',
+                    'type' => 'checkbox_dropdown',
                     'options_from' => 'shipments',
-                    'allow_custom' => true,
                     'required' => false,
                     'default' => '',
+                    'visible_label' => true,
+                    'empty_label' => 'Automatic',
+                    'summary_label' => 'shipments',
                 ],
                 [
                     'key' => 'increment_session',
@@ -1592,6 +1784,76 @@ function operational_steps_catalog_definitions()
             'dispatch' => 'increment_session',
             'gui_path' => '/sts/generate.php',
             'params' => [],
+        ],
+        [
+            'id' => 'cancel_orders',
+            'category' => 'operations',
+            'adder' => true,
+            'adder_group' => 'before',
+            'label' => 'Cancel Orders',
+            'gui_template' => 'Cancel Orders when unfilled > {threshold} down to {target} ({order})',
+            'description' => 'When unfilled (non-E) orders exceed Threshold, cancel unfilled orders down to Target so the generate max_unfilled gate can reopen. Keeps COKE-* orders by default. Choose Oldest first (stale backlog) or Newest first (drop recent surge). Does not invent capacity — pairs with fill/reposition and fleet balance.',
+            'runnable' => true,
+            'dispatch' => 'cancel_orders',
+            'params' => [
+                ['key' => 'threshold', 'label' => 'Threshold', 'type' => 'number', 'default' => '40', 'required' => true, 'min' => 0],
+                ['key' => 'target', 'label' => 'Target', 'type' => 'number', 'default' => '30', 'required' => true, 'min' => 0],
+                [
+                    'key' => 'order',
+                    'label' => 'Cancel order',
+                    'type' => 'select',
+                    'options' => [
+                        ['value' => 'oldest_first', 'label' => 'Oldest first'],
+                        ['value' => 'newest_first', 'label' => 'Newest first'],
+                    ],
+                    'default' => 'oldest_first',
+                ],
+                [
+                    'key' => 'keep_coke',
+                    'label' => 'Keep coke orders',
+                    'type' => 'select',
+                    'options' => [
+                        ['value' => '1', 'label' => 'Yes'],
+                        ['value' => '0', 'label' => 'No'],
+                    ],
+                    'default' => '1',
+                ],
+            ],
+        ],
+        [
+            'id' => 'drain_unfilled_orders',
+            'category' => 'operations',
+            'adder' => false,
+            'adder_group' => 'before',
+            'label' => 'Cancel Orders (legacy)',
+            'gui_template' => 'Cancel Orders when unfilled > {threshold} down to {target} ({order})',
+            'description' => 'Legacy recipe id for Cancel Orders. Prefer cancel_orders in the editor.',
+            'runnable' => true,
+            'dispatch' => 'cancel_orders',
+            'params' => [
+                ['key' => 'threshold', 'label' => 'Threshold', 'type' => 'number', 'default' => '40', 'required' => true, 'min' => 0],
+                ['key' => 'target', 'label' => 'Target', 'type' => 'number', 'default' => '30', 'required' => true, 'min' => 0],
+                [
+                    'key' => 'order',
+                    'label' => 'Cancel order',
+                    'type' => 'select',
+                    'options' => [
+                        ['value' => 'oldest_first', 'label' => 'Oldest first'],
+                        ['value' => 'newest_first', 'label' => 'Newest first'],
+                    ],
+                    'default' => 'oldest_first',
+                ],
+                [
+                    'key' => 'keep_coke',
+                    'label' => 'Keep coke orders',
+                    'type' => 'select',
+                    'options' => [
+                        ['value' => '1', 'label' => 'Yes'],
+                        ['value' => '0', 'label' => 'No'],
+                    ],
+                    'default' => '1',
+                ],
+            ],
         ],
         [
             'id' => 'fill_orders',
@@ -1668,23 +1930,34 @@ function operational_steps_catalog_definitions()
             'adder_group' => 'during',
             'label' => 'Assign Cars',
             'gui_template' => 'Assign Cars {jobs} {station} {destination}',
-            'description' => 'Assign eligible cars to selected job(s)/train(s). Hold Ctrl/Cmd to select multiple. Optional station filter limits to cars currently at one yard; optional destination filter limits to cars bound for a station/location (same tokens as Pickup final dest). Prefer destination-scoped assigns + Pick Up all over filtered pickups.',
+            'description' => 'Assign eligible cars to selected job(s)/train(s). Jobs and destinations use checkbox dropdowns (multi-select). Optional station filters limit to cars currently at those yards (OR); destination filters limit to cars bound for those stations/locations (OR — same tokens as Pickup final dest). Prefer multi-destination assigns + Pick Up all over many single-destination steps.',
             'runnable' => true,
             'dispatch' => 'auto_assign_locals',
             'gui_path' => '/sts/auto_assign.php',
             'params' => [
                 operational_steps_catalog_auto_assign_jobs_param(),
-                array_merge(operational_steps_catalog_station_param(false, 'Station filter', ''), [
+                [
+                    'key' => 'station',
+                    'label' => 'Station filter',
+                    'type' => 'checkbox_dropdown',
+                    'options_from' => 'stations',
+                    'required' => false,
+                    'default' => '',
+                    'visible_label' => true,
                     'suppress_all_station_option' => true,
-                ]),
+                    'empty_label' => 'Any',
+                    'summary_label' => 'stations',
+                ],
                 [
                     'key' => 'destination',
                     'label' => 'Destination filter',
-                    'type' => 'station_location',
+                    'type' => 'checkbox_dropdown',
                     'options_from' => 'station_locations',
                     'required' => false,
                     'default' => '',
                     'visible_label' => true,
+                    'empty_label' => 'Any',
+                    'summary_label' => 'destinations',
                 ],
             ],
         ],
@@ -1712,12 +1985,32 @@ function operational_steps_catalog_definitions()
             'adder_group' => 'during',
             'label' => 'Pick Up Cars',
             'gui_template' => 'Pick Up Cars {job} {location_suffix}',
-            'description' => 'Pick up assigned cars onto a job train. Optional car filters match the Pick Up Cars page. Leave job blank for all locals (staging excluded).',
+            'description' => 'Pick up assigned cars onto a job train. Job and location use checkbox dropdowns (multi-select, OR). Optional car filters match the Pick Up Cars page. Leave jobs unchecked for all locals (staging excluded).',
             'runnable' => true,
             'dispatch' => 'pick_up_cars',
             'params' => [
-                operational_steps_catalog_job_param(false),
-                operational_steps_catalog_location_param(false, 'Location (optional)', true),
+                [
+                    'key' => 'job',
+                    'label' => 'Job',
+                    'type' => 'checkbox_dropdown',
+                    'options_from' => 'jobs',
+                    'required' => false,
+                    'default' => '',
+                    'visible_label' => true,
+                    'empty_label' => 'Locals (all)',
+                    'summary_label' => 'jobs',
+                ],
+                [
+                    'key' => 'location',
+                    'label' => 'Location (optional)',
+                    'type' => 'checkbox_dropdown',
+                    'options_from' => 'locations',
+                    'required' => false,
+                    'default' => '',
+                    'visible_label' => true,
+                    'empty_label' => 'Any',
+                    'summary_label' => 'locations',
+                ],
                 [
                     'key' => 'car_filters',
                     'label' => 'Car filters',
@@ -1734,21 +2027,31 @@ function operational_steps_catalog_definitions()
             'adder_group' => 'during',
             'label' => 'Set Out Cars',
             'gui_template' => 'Set Out Cars {job} {location}',
-            'description' => 'Set out cars from a job train. Choose Final Destination to spot each car at its loading or unloading location. Or pick a station / station-location to spot matching train cars there. Optional car filters match the Set Out Cars page. Leave job and location blank for all locals.',
+            'description' => 'Set out cars from a job train. Job and set-out location use checkbox dropdowns (multi-select, OR). Choose Final Destination to spot each car at its loading or unloading location, or pick station/location codes. Optional car filters (including multi Final dest.) match the Set Out Cars page. Leave jobs and locations unchecked for all locals.',
             'runnable' => true,
             'dispatch' => 'set_out_cars',
             'params' => [
-                operational_steps_catalog_job_param(false),
                 [
-                    'key' => 'location',
-                    'label' => 'Set out at',
-                    'type' => 'setout_location',
-                    'options_from' => 'setout_locations',
-                    'allow_custom' => true,
-                    'suppress_any_option' => true,
+                    'key' => 'job',
+                    'label' => 'Job',
+                    'type' => 'checkbox_dropdown',
+                    'options_from' => 'jobs',
                     'required' => false,
                     'default' => '',
                     'visible_label' => true,
+                    'empty_label' => 'Locals (all)',
+                    'summary_label' => 'jobs',
+                ],
+                [
+                    'key' => 'location',
+                    'label' => 'Set out at',
+                    'type' => 'checkbox_dropdown',
+                    'options_from' => 'setout_locations',
+                    'required' => false,
+                    'default' => '',
+                    'visible_label' => true,
+                    'empty_label' => 'Any',
+                    'summary_label' => 'locations',
                 ],
                 [
                     'key' => 'car_filters',
@@ -1794,17 +2097,17 @@ function operational_steps_catalog_definitions()
                 operational_steps_catalog_switchlist_format_param(),
                 operational_steps_catalog_text_param(
                     'title',
-                    'Override Train',
+                    'Train',
                     '',
                     false,
-                    'Replaces the train name on printed switch lists and consolidates every phase/leg with the same value into one train (e.g. LOCAL1).'
+                    'Optional train name override (consolidates phases with the same value).'
                 ),
                 operational_steps_catalog_text_param(
                     'info',
-                    'Switch list info',
+                    'Info',
                     '',
                     false,
-                    'Extra note shown next to the train name on this switch list only (e.g. Inbound, Outbound, Departure). Does not affect consolidation.'
+                    'Note beside the train name (e.g. Inbound, Outbound, Next Day).'
                 ),
             ],
         ],
@@ -2473,10 +2776,13 @@ function operational_steps_compile_gui(array $def, array $params)
         return 'Set Out Cars locals';
     }
     if (($def['id'] ?? '') === 'set_out_cars') {
-        $job = trim((string) ($params['job'] ?? ''));
-        $loc = operational_steps_normalize_setout_location($params['location'] ?? '');
-        if ($job !== '' && $loc === '') {
-            return 'Set Out Cars ' . $job . ' Final Destination';
+        $jobs = operational_steps_normalize_job_list($params['job'] ?? '');
+        $locs = operational_steps_normalize_setout_locations($params['location'] ?? '');
+        if ($jobs !== [] && $locs === []) {
+            return 'Set Out Cars ' . implode(', ', $jobs) . ' Final Destination';
+        }
+        if ($jobs !== [] && $locs === ['remainder']) {
+            return 'Set Out Cars ' . implode(', ', $jobs) . ' Final Destination';
         }
     }
     $template = $def['gui_template'] ?? $def['label'];
@@ -2504,14 +2810,31 @@ function operational_steps_compile_gui(array $def, array $params)
     }
     if (($def['id'] ?? '') === 'auto_assign_locals') {
         $merged['jobs'] = operational_steps_normalize_auto_assign_jobs($params);
-        $station = trim((string) ($params['station'] ?? ''));
-        if ($station !== '' && strcasecmp($station, 'all') !== 0) {
-            $merged['station'] = $station;
+        $stations = operational_steps_normalize_station_filters($params['station'] ?? '');
+        if ($stations !== []) {
+            $merged['station'] = implode(', ', $stations);
         }
         $dest_label = operational_steps_destination_filter_label($params['destination'] ?? '');
         if ($dest_label !== '') {
             $merged['destination'] = '→ ' . $dest_label;
         }
+    }
+    if (($def['id'] ?? '') === 'pick_up_cars') {
+        $jobs = operational_steps_normalize_job_list($params['job'] ?? '');
+        $locs = operational_steps_normalize_csv_list($params['location'] ?? '');
+        $merged['job'] = $jobs !== [] ? implode(', ', $jobs) : '';
+        $merged['location'] = $locs !== [] ? implode(', ', $locs) : '';
+        $merged['location_suffix'] = $merged['location'];
+    }
+    if (($def['id'] ?? '') === 'set_out_cars') {
+        $jobs = operational_steps_normalize_job_list($params['job'] ?? '');
+        $locs = operational_steps_normalize_setout_locations($params['location'] ?? '');
+        $merged['job'] = $jobs !== [] ? implode(', ', $jobs) : '';
+        $loc_labels = [];
+        foreach ($locs as $loc) {
+            $loc_labels[] = ($loc === 'remainder') ? 'Final Destination' : $loc;
+        }
+        $merged['location'] = $loc_labels !== [] ? implode(', ', $loc_labels) : '';
     }
     return preg_replace_callback('/\{(\w+)\}/', function ($m) use ($merged) {
         $key = $m[1];
@@ -3398,6 +3721,21 @@ function operational_steps_normalize_step(array $step)
         $params['car_filters'] = operational_steps_normalize_fill_car_filters($params);
         $params['percent'] = (string) (int) operational_steps_normalize_percent($params, 100);
     }
+    if ($fid === 'cancel_orders' || $fid === 'drain_unfilled_orders') {
+        $threshold = max(0, (int) ($params['threshold'] ?? 40));
+        $target = max(0, (int) ($params['target'] ?? 30));
+        if ($target > $threshold) {
+            $target = $threshold;
+        }
+        $params['threshold'] = (string) $threshold;
+        $params['target'] = (string) $target;
+        $keep = (string) ($params['keep_coke'] ?? '1');
+        $params['keep_coke'] = ($keep === '' || $keep === '1') ? '1' : '0';
+        $order = strtolower(trim((string) ($params['order'] ?? 'oldest_first')));
+        $params['order'] = in_array($order, ['newest_first', 'newest', 'desc', 'new'], true)
+            ? 'newest_first'
+            : 'oldest_first';
+    }
     if ($fid === 'reposition_empties') {
         $params['mode'] = trim((string) ($params['mode'] ?? 'reposition_to_home'));
         if ($params['mode'] === '') {
@@ -3411,13 +3749,13 @@ function operational_steps_normalize_step(array $step)
     }
     if ($fid === 'auto_assign_locals') {
         $params['jobs'] = operational_steps_normalize_auto_assign_jobs($params);
-        $station = trim((string) ($params['station'] ?? ''));
-        if ($station === '' || strcasecmp($station, 'all') === 0) {
+        $station = operational_steps_normalize_station_filter_list($params['station'] ?? '');
+        if ($station === '') {
             unset($params['station']);
         } else {
             $params['station'] = $station;
         }
-        $destination = operational_steps_normalize_destination_filter($params['destination'] ?? '');
+        $destination = operational_steps_normalize_destination_filter_list($params['destination'] ?? '');
         if ($destination === '') {
             unset($params['destination']);
         } else {
@@ -3433,7 +3771,13 @@ function operational_steps_normalize_step(array $step)
     }
     plugins_normalize_step_params($fid, $params);
     if ($fid === 'set_out_cars') {
-        $loc = operational_steps_normalize_setout_location($params['location'] ?? '');
+        $job = operational_steps_normalize_job_list_string($params['job'] ?? '');
+        if ($job === '') {
+            unset($params['job']);
+        } else {
+            $params['job'] = $job;
+        }
+        $loc = operational_steps_normalize_setout_location_list($params['location'] ?? '');
         if ($loc === '') {
             unset($params['location']);
         } else {
@@ -3442,6 +3786,18 @@ function operational_steps_normalize_step(array $step)
         $params['car_filters'] = operational_steps_normalize_train_car_filters($params);
     }
     if ($fid === 'pick_up_cars') {
+        $job = operational_steps_normalize_job_list_string($params['job'] ?? '');
+        if ($job === '') {
+            unset($params['job']);
+        } else {
+            $params['job'] = $job;
+        }
+        $loc = operational_steps_normalize_csv_list_string($params['location'] ?? '');
+        if ($loc === '') {
+            unset($params['location']);
+        } else {
+            $params['location'] = $loc;
+        }
         $params['car_filters'] = operational_steps_normalize_train_car_filters($params);
     }
 
@@ -3908,11 +4264,27 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
             break;
         case 'generate_orders':
             require_once __DIR__ . '/generate_order_helpers.php';
-            $shipment = trim($params['shipment'] ?? '');
             $gen_params = operational_steps_normalize_generate_orders_params($params);
-            if ($shipment !== '') {
+            $shipments = operational_steps_normalize_csv_list($gen_params['shipment'] ?? '');
+            if ($shipments !== []) {
                 require_once __DIR__ . '/session_helpers.php';
-                $result = array_merge($result, session_manual_generate_shipment($dbc, $shipment));
+                $generated = 0;
+                $by_shipment = [];
+                $errors = [];
+                foreach ($shipments as $shipment) {
+                    $one = session_manual_generate_shipment($dbc, $shipment);
+                    $generated += (int) ($one['generated'] ?? 0);
+                    $by_shipment[$shipment] = (int) ($one['generated'] ?? 0);
+                    if (!empty($one['error'])) {
+                        $errors[] = $one['error'];
+                    }
+                }
+                $result['generated'] = $generated;
+                $result['shipment'] = implode(',', $shipments);
+                $result['generated_by_shipment'] = $by_shipment;
+                if ($errors !== []) {
+                    $result['error'] = implode('; ', $errors);
+                }
             } else {
                 $run = generate_orders_resolve_automatic_run($dbc, $gen_params);
                 $session = (int) $run['session'];
@@ -3949,6 +4321,34 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
             require_once __DIR__ . '/generate_order_helpers.php';
             $prev = generate_orders_get_session($dbc);
             $result['session'] = generate_orders_set_session($dbc, $prev + 1);
+            break;
+        case 'cancel_orders':
+        case 'drain_unfilled_orders':
+            require_once __DIR__ . '/drain_unfilled_orders.php';
+            $threshold = max(0, (int) ($params['threshold'] ?? 40));
+            $target = max(0, (int) ($params['target'] ?? 30));
+            $keep_coke = (($params['keep_coke'] ?? '1') === '' || (string) ($params['keep_coke'] ?? '1') === '1');
+            $order = strtolower(trim((string) ($params['order'] ?? 'oldest_first')));
+            if (!in_array($order, ['newest_first', 'oldest_first'], true)) {
+                $order = in_array($order, ['newest', 'desc', 'new'], true) ? 'newest_first' : 'oldest_first';
+            }
+            $drain = cancel_orders($dbc, [
+                'threshold' => $threshold,
+                'target' => $target,
+                'keep_coke' => $keep_coke,
+                'order' => $order,
+            ]);
+            $result['threshold'] = $threshold;
+            $result['target'] = $target;
+            $result['keep_coke'] = $keep_coke ? 1 : 0;
+            $result['order'] = (string) ($drain['order'] ?? $order);
+            $result['unfilled_before'] = (int) ($drain['before'] ?? 0);
+            $result['unfilled_after'] = (int) ($drain['after'] ?? 0);
+            $result['canceled'] = (int) ($drain['canceled'] ?? 0);
+            if (!empty($drain['skipped'])) {
+                $result['skipped'] = true;
+                $result['reason'] = (string) ($drain['reason'] ?? '');
+            }
             break;
         case 'fill_orders':
             require_once __DIR__ . '/fill_order_helpers.php';
@@ -3994,17 +4394,15 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
             break;
         case 'auto_assign_locals':
             $job_names = operational_steps_resolve_auto_assign_jobs($dbc, $params, $config);
-            $station_key = trim($params['station'] ?? '');
-            $station_id = ($station_key !== '' && strcasecmp($station_key, 'all') !== 0)
-                ? operational_steps_location_station_id($dbc, $station_key)
-                : 0;
-            $destination = operational_steps_normalize_destination_filter($params['destination'] ?? '');
+            $station_key = operational_steps_normalize_station_filter_list($params['station'] ?? '');
+            $station_ids = operational_steps_resolve_station_ids($dbc, $station_key);
+            $destination = operational_steps_normalize_destination_filter_list($params['destination'] ?? '');
             $result['jobs'] = $job_names;
             $result['station'] = $station_key;
             if ($destination !== '') {
                 $result['destination'] = $destination;
             }
-            $result['assigned'] = operational_steps_auto_assign_jobs($dbc, $job_names, $station_id, $destination);
+            $result['assigned'] = operational_steps_auto_assign_jobs($dbc, $job_names, $station_ids, $destination);
             break;
         case 'release_yard_cars':
             $job = trim((string) ($params['job'] ?? ''));
@@ -4032,9 +4430,10 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
             }
             break;
         case 'pick_up_cars':
-            $job = trim($params['job'] ?? '');
+            $jobs = operational_steps_normalize_job_list($params['job'] ?? '');
+            $locations = operational_steps_normalize_csv_list($params['location'] ?? '');
             $filters = operational_steps_normalize_train_car_filters($params);
-            if ($job === '') {
+            if ($jobs === []) {
                 $staging = warm_start_staging_job_names($dbc, $config);
                 $picked_up_by_job = [];
                 $result['picked_up'] = warm_start_pickup_cars($dbc, 1.0, $staging, true, [], $picked_up_by_job);
@@ -4042,46 +4441,89 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
                     $result['picked_up_by_job'] = $picked_up_by_job;
                 }
             } else {
-                $result['job'] = $job;
-                $station = operational_steps_location_station_id($dbc, $params['location'] ?? '');
-                if ($station > 0) {
-                    $result['picked_up'] = warm_start_pickup_job_at_station($dbc, $job, $station, $filters);
-                } else {
-                    $result['picked_up'] = warm_start_pickup_job($dbc, $job, $filters);
+                $result['job'] = implode(',', $jobs);
+                if ($locations !== []) {
+                    $result['location'] = implode(',', $locations);
                 }
+                $picked = 0;
+                foreach ($jobs as $job) {
+                    if ($locations === []) {
+                        $picked += warm_start_pickup_job($dbc, $job, $filters);
+                        continue;
+                    }
+                    $resolved_any = false;
+                    foreach ($locations as $loc) {
+                        $station = operational_steps_location_station_id($dbc, $loc);
+                        if ($station > 0) {
+                            $picked += warm_start_pickup_job_at_station($dbc, $job, $station, $filters);
+                            $resolved_any = true;
+                        }
+                    }
+                    if (!$resolved_any) {
+                        $picked += warm_start_pickup_job($dbc, $job, $filters);
+                    }
+                }
+                $result['picked_up'] = $picked;
             }
             if (operational_steps_train_car_filters_active($filters)) {
                 $result['car_filters'] = array_filter($filters);
             }
             break;
         case 'set_out_cars':
-            $job = trim($params['job'] ?? '');
-            $loc = operational_steps_normalize_setout_location($params['location'] ?? '');
+            $jobs = operational_steps_normalize_job_list($params['job'] ?? '');
+            $locs = operational_steps_normalize_setout_locations($params['location'] ?? '');
             $filters = operational_steps_normalize_train_car_filters($params);
-            if ($job === '' && $loc === '') {
+            if ($jobs === [] && $locs === []) {
                 $staging = warm_start_staging_job_names($dbc, $config);
                 $set_out_by_job = [];
                 $result['set_out'] = warm_start_setout_cars($dbc, 1.0, $staging, true, [], $set_out_by_job);
                 if ($set_out_by_job !== []) {
                     $result['set_out_by_job'] = $set_out_by_job;
                 }
-            } elseif ($job !== '' && operational_steps_setout_auto_assign_destinations($loc)) {
-                $result['job'] = $job;
-                $result['set_out'] = warm_start_setout_all_job_train($dbc, $job, $filters);
-                $result['assign_destinations'] = true;
-            } elseif ($loc !== '') {
-                $result['job'] = $job;
-                $loc_id = operational_steps_resolve_location_id($dbc, $loc);
-                if ($loc_id > 0) {
-                    $result['set_out'] = warm_start_setout_job_at_location($dbc, $job, $loc_id, $filters);
-                    $result['location_id'] = $loc_id;
-                } else {
-                    $result['skipped'] = true;
-                    $result['reason'] = 'unknown setout location: ' . $loc;
-                }
-            } else {
+            } elseif ($jobs === []) {
                 $result['skipped'] = true;
                 $result['reason'] = 'missing job param';
+            } else {
+                $result['job'] = implode(',', $jobs);
+                if ($locs !== []) {
+                    $result['location'] = implode(',', $locs);
+                }
+                $set_out = 0;
+                $unknown = [];
+                foreach ($jobs as $job) {
+                    $did_final = false;
+                    $concrete = [];
+                    if ($locs === []) {
+                        // Preserve prior "job + blank location" = Final Destination.
+                        $set_out += warm_start_setout_all_job_train($dbc, $job, $filters);
+                        $result['assign_destinations'] = true;
+                        continue;
+                    }
+                    foreach ($locs as $loc) {
+                        if (operational_steps_setout_auto_assign_destinations($loc)) {
+                            if (!$did_final) {
+                                $set_out += warm_start_setout_all_job_train($dbc, $job, $filters);
+                                $result['assign_destinations'] = true;
+                                $did_final = true;
+                            }
+                            continue;
+                        }
+                        $concrete[] = $loc;
+                    }
+                    foreach ($concrete as $loc) {
+                        $loc_id = operational_steps_resolve_location_id($dbc, $loc);
+                        if ($loc_id > 0) {
+                            $set_out += warm_start_setout_job_at_location($dbc, $job, $loc_id, $filters);
+                        } else {
+                            $unknown[] = $loc;
+                        }
+                    }
+                }
+                $result['set_out'] = $set_out;
+                if ($unknown !== [] && $set_out === 0) {
+                    $result['skipped'] = true;
+                    $result['reason'] = 'unknown setout location: ' . implode(', ', array_unique($unknown));
+                }
             }
             if (operational_steps_train_car_filters_active($filters)) {
                 $result['car_filters'] = array_filter($filters);
@@ -4261,6 +4703,18 @@ function operational_steps_format_dispatch_log_line(array $entry)
         if ($unfilled > 0) {
             $messages[] = sprintf('%d order(s) still need manual attention.', $unfilled);
         }
+    }
+
+    if (($dispatch === 'cancel_orders' || $dispatch === 'drain_unfilled_orders')
+        && array_key_exists('canceled', $entry)
+    ) {
+        $messages[] = sprintf(
+            'Canceled %d unfilled order(s) %s (%d → %d).',
+            (int) $entry['canceled'],
+            (string) ($entry['order'] ?? 'oldest_first'),
+            (int) ($entry['unfilled_before'] ?? 0),
+            (int) ($entry['unfilled_after'] ?? 0)
+        );
     }
 
     if (array_key_exists('repositioned', $entry)) {

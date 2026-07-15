@@ -196,14 +196,17 @@ function session_session_index_href($session_nbr)
  * Guard against viewing a session that no longer exists. Simulations rewind the
  * live session counter, so links/URLs captured earlier can point past the current
  * session. When the requested session exceeds the current DB session, redirect to
- * the latest session's overview and exit. Returns the current DB session number
- * for callers that want it (when no redirect was needed).
+ * the latest live session — preferring the same so.php relative path (switch list,
+ * train bundle, waybill page, etc.) so the browser stays in that view. Falls back
+ * to the session overview when no path is known. Returns the current DB session
+ * number for callers that want it (when no redirect was needed).
  *
  * @param int          $session_nbr Requested session.
  * @param mysqli|null  $dbc         Optional open handle (a fresh one is used if null).
  * @param bool         $exit        When true (default) send the redirect and exit.
+ * @param string|null  $rel_path    Optional so.php relative path (session_N/…).
  */
-function session_redirect_if_beyond_current($session_nbr, $dbc = null, $exit = true)
+function session_redirect_if_beyond_current($session_nbr, $dbc = null, $exit = true, $rel_path = null)
 {
     $session_nbr = (int) $session_nbr;
     if ($dbc === null) {
@@ -219,7 +222,12 @@ function session_redirect_if_beyond_current($session_nbr, $dbc = null, $exit = t
             }
         }
         if ($exit) {
-            header('Location: /sts/session_overview.php?session=' . $current);
+            $rel_path = ltrim(str_replace('\\', '/', (string) $rel_path), '/');
+            if ($rel_path !== '' && preg_match('#^session_\d+/(.*)$#', $rel_path, $m) && $m[1] !== '') {
+                header('Location: /sts/so.php?f=session_' . $current . '/' . $m[1]);
+            } else {
+                header('Location: /sts/session_overview.php?session=' . $current);
+            }
             exit;
         }
         return $current;
@@ -1322,32 +1330,176 @@ function session_waybill_print_all_rel_href($session_nbr, $basename)
 }
 
 /**
- * "Jump to session" dropdown for the session-nav rows on generated print-all
- * pages (switch lists and waybills). Every option navigates to that session's
- * per-session overview (session_overview.php), so both page families share one
- * consistent session picker. Rendered as a bare <select> (no wrapping element)
- * so it drops cleanly between the prev/next buttons and doesn't disturb the
- * serve-time nav-row refresh in so.php (which replaces the row up to its first
- * closing </div>). Returns '' when there is only a single session.
+ * Icon-only prev/next session button matching session_overview.php:
+ * chevron with title="Session N" (no "Session N" text in the button).
+ *
+ * @param 'prev'|'next' $direction
+ * @param string|null   $href      null/empty → disabled
+ * @param int|null      $session_nbr Target session for title attribute
+ * @param string        $btn_class
  */
-function session_nav_row_session_select_html($session_nbr, array $sessions, $current_db = 0)
+function session_nav_chevron_btn_html($direction, $href, $session_nbr = null, $btn_class = 'btn btn-outline-dark btn-sm')
 {
-    $session_nbr = (int) $session_nbr;
-    if (count($sessions) < 2) {
+    $direction = $direction === 'next' ? 'next' : 'prev';
+    $icon = $direction === 'next' ? 'chevron-right' : 'chevron-left';
+    $btn_class = trim((string) $btn_class);
+    if ($btn_class === '') {
+        $btn_class = 'btn btn-outline-dark btn-sm';
+    }
+    $icon_html = '<i class="bi bi-' . $icon . '"></i>';
+    if ($href === null || $href === '') {
+        return '<span class="' . htmlspecialchars($btn_class, ENT_QUOTES) . ' disabled" aria-disabled="true">'
+            . $icon_html . '</span>';
+    }
+    $title = $session_nbr !== null
+        ? ('Session ' . (int) $session_nbr)
+        : ($direction === 'next' ? 'Next session' : 'Previous session');
+
+    return '<a class="' . htmlspecialchars($btn_class, ENT_QUOTES) . '" href="'
+        . htmlspecialchars((string) $href, ENT_QUOTES)
+        . '" title="' . htmlspecialchars($title, ENT_QUOTES) . '">'
+        . $icon_html . '</a>';
+}
+
+/**
+ * Absolute /sts/so.php?f=… URL for a session-relative output path.
+ * Used for <select> option values (not rewritten by so.php's href rewriter).
+ */
+function session_so_f_href($session_rel)
+{
+    $session_rel = ltrim(str_replace('\\', '/', (string) $session_rel), '/');
+    if ($session_rel === '') {
         return '';
     }
-    $options = '';
-    foreach ($sessions as $n) {
-        $n = (int) $n;
-        $label = 'Session ' . $n . ($n === (int) $current_db ? ' (current)' : '');
-        $options .= '<option value="' . $n . '"' . ($n === $session_nbr ? ' selected' : '') . '>'
-            . htmlspecialchars($label) . '</option>';
+
+    return '/sts/' . session_output_url($session_rel);
+}
+
+/**
+ * Relative href from a page under session_from/ to session_to/<suffix>.
+ * so.php rewrites these to so.php?f=… at serve time.
+ */
+function session_sibling_rel_href($to_session, $suffix_under_session)
+{
+    $to_session = (int) $to_session;
+    $suffix = ltrim(str_replace('\\', '/', (string) $suffix_under_session), '/');
+    if ($to_session < 1 || $suffix === '') {
+        return '';
     }
 
-    return '<select class="form-select form-select-sm session-nav-select" style="width:auto;display:inline-block;"'
-        . ' title="Jump to session overview"'
-        . ' onchange="if(this.value){window.location.href=\'/sts/session_overview.php?session=\'+this.value;}">'
+    return '../session_' . $to_session . '/' . $suffix;
+}
+
+/**
+ * Full session picker for so.php pages: skip-start, prev, select, next, skip-end
+ * (same controls as session_overview / station report). Stays on the same view
+ * via $suffix_under_session (path after session_N/, e.g. print_all.html,
+ * train_D749.print_all.html, waybills/print_all.html).
+ *
+ * Optional $suffix_by_session overrides the suffix per target session (used when
+ * a train's job key differs across sessions). Empty override disables that target.
+ *
+ * @param array<int,string>|null $suffix_by_session
+ */
+function session_nav_row_picker_html(
+    $session_nbr,
+    array $sessions,
+    $current_db,
+    $suffix_under_session,
+    $wrapper_class,
+    $btn_class = 'btn btn-outline-dark btn-sm',
+    $suffix_by_session = null
+)
+{
+    $session_nbr = (int) $session_nbr;
+    $sessions = array_values(array_map('intval', $sessions));
+    $default_suffix = ltrim(str_replace('\\', '/', (string) $suffix_under_session), '/');
+    if ($session_nbr < 1 || count($sessions) < 2 || $default_suffix === '') {
+        return '';
+    }
+
+    $rel_for = static function ($n) use ($default_suffix, $suffix_by_session) {
+        $n = (int) $n;
+        $suffix = $default_suffix;
+        if (is_array($suffix_by_session)) {
+            if (!array_key_exists($n, $suffix_by_session)) {
+                return '';
+            }
+            $suffix = ltrim(str_replace('\\', '/', (string) $suffix_by_session[$n]), '/');
+            if ($suffix === '') {
+                return '';
+            }
+        }
+
+        return session_sibling_rel_href($n, $suffix);
+    };
+    $abs_for = static function ($n) use ($default_suffix, $suffix_by_session) {
+        $n = (int) $n;
+        $suffix = $default_suffix;
+        if (is_array($suffix_by_session)) {
+            if (!array_key_exists($n, $suffix_by_session)) {
+                return '';
+            }
+            $suffix = ltrim(str_replace('\\', '/', (string) $suffix_by_session[$n]), '/');
+            if ($suffix === '') {
+                return '';
+            }
+        }
+
+        return session_so_f_href('session_' . $n . '/' . $suffix);
+    };
+
+    $prev = session_adjacent_session($sessions, $session_nbr, 'prev');
+    $next = session_adjacent_session($sessions, $session_nbr, 'next');
+    list($first, $last) = session_edge_sessions($sessions);
+    $skip_first = ($first !== null && (int) $first !== $session_nbr) ? (int) $first : null;
+    $skip_last = ($last !== null && (int) $last !== $session_nbr) ? (int) $last : null;
+
+    $skip_btn = static function ($target, $icon) use ($rel_for, $btn_class) {
+        $href = $target !== null ? $rel_for($target) : '';
+        $title = $target !== null
+            ? (($icon === 'skip-start-fill' ? 'First' : 'Last') . ' session (' . (int) $target . ')')
+            : ($icon === 'skip-start-fill' ? 'First session' : 'Last session');
+        if ($target === null || $href === '') {
+            return '<span class="' . htmlspecialchars($btn_class, ENT_QUOTES)
+                . ' session-skip-btn disabled" aria-disabled="true" title="'
+                . htmlspecialchars($title, ENT_QUOTES) . '"><i class="bi bi-'
+                . htmlspecialchars($icon, ENT_QUOTES) . '"></i></span>';
+        }
+
+        return '<a class="' . htmlspecialchars($btn_class, ENT_QUOTES)
+            . ' session-skip-btn" href="' . htmlspecialchars($href, ENT_QUOTES)
+            . '" title="' . htmlspecialchars($title, ENT_QUOTES) . '"><i class="bi bi-'
+            . htmlspecialchars($icon, ENT_QUOTES) . '"></i></a>';
+    };
+
+    $options = '';
+    foreach ($sessions as $n) {
+        $abs = $abs_for($n);
+        if ($abs === '') {
+            continue;
+        }
+        $label = 'Session ' . $n . ($n === (int) $current_db ? ' (current)' : '');
+        $options .= '<option value="' . htmlspecialchars($abs, ENT_QUOTES) . '"'
+            . ($n === $session_nbr ? ' selected' : '') . '>'
+            . htmlspecialchars($label) . '</option>';
+    }
+    if ($options === '') {
+        return '';
+    }
+
+    $html = '<div class="session-nav-row ' . htmlspecialchars($wrapper_class, ENT_QUOTES) . '">';
+    $html .= $skip_btn($skip_first, 'skip-start-fill');
+    $html .= session_nav_chevron_btn_html('prev', $prev !== null ? $rel_for($prev) : null, $prev, $btn_class);
+    $html .= '<select class="form-select form-select-sm session-nav-select" style="width:auto;display:inline-block;"'
+        . ' title="Jump to same view in another session"'
+        . ' onchange="if(this.value){window.location.href=this.value;}">'
         . $options . '</select>';
+    $html .= session_nav_chevron_btn_html('next', $next !== null ? $rel_for($next) : null, $next, $btn_class);
+    $html .= $skip_btn($skip_last, 'skip-end-fill');
+    $html .= '</div>';
+
+    return $html;
 }
 
 /**
@@ -1370,38 +1522,31 @@ function session_waybill_print_all_session_nav_html($session_nbr, $basename, $db
     }
     $current_db = session_get_db_session($dbc);
     $sessions = session_list_browser_sessions($current_db, $root);
-    $prev = session_adjacent_session($sessions, $session_nbr, 'prev');
-    $next = session_adjacent_session($sessions, $session_nbr, 'next');
-    if ($prev === null && $next === null) {
+    if (count($sessions) < 2) {
         return '';
     }
 
-    $target_exists = static function ($sess) use ($basename, $root) {
-        return is_file(session_output_fs_path('session_' . (int) $sess . '/waybills/' . $basename, $root));
-    };
-
-    $html = '<div class="session-nav-row waybill-print-all-session-nav noprint">';
-    if ($prev !== null && $target_exists($prev)) {
-        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
-            . htmlspecialchars(session_waybill_print_all_rel_href($prev, $basename))
-            . '"><i class="bi bi-chevron-left"></i> Session ' . (int) $prev . '</a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>';
+    // Prefer sessions that already have this print-all; still offer others so
+    // so.php can build on demand / show not-found rather than dumping to overview.
+    $suffix = 'waybills/' . $basename;
+    $suffix_by = [];
+    foreach ($sessions as $n) {
+        $n = (int) $n;
+        $suffix_by[$n] = $suffix;
     }
-    $html .= session_nav_row_session_select_html($session_nbr, $sessions, $current_db);
-    if ($next !== null && $target_exists($next)) {
-        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
-            . htmlspecialchars(session_waybill_print_all_rel_href($next, $basename))
-            . '">Session ' . (int) $next . ' <i class="bi bi-chevron-right"></i></a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true">Next <i class="bi bi-chevron-right"></i></span>';
-    }
-    $html .= '</div>';
 
-    return $html;
+    return session_nav_row_picker_html(
+        $session_nbr,
+        $sessions,
+        $current_db,
+        $suffix,
+        'waybill-print-all-session-nav noprint',
+        'btn btn-outline-dark btn-sm',
+        $suffix_by
+    );
 }
 
-/** Prev/next session buttons for a waybill index page. */
+/** Session picker for a waybill index page (keeps so.php waybill-index view). */
 function session_waybill_session_nav_html($session_nbr, $phase_num = null, $dbc = null, $root = null)
 {
     $root = $root ?? session_web_root();
@@ -1417,30 +1562,45 @@ function session_waybill_session_nav_html($session_nbr, $phase_num = null, $dbc 
     }
     $current_db = session_get_db_session($dbc);
     $sessions = session_list_browser_sessions($current_db, $root);
-    $prev = session_adjacent_session($sessions, $session_nbr, 'prev');
-    $next = session_adjacent_session($sessions, $session_nbr, 'next');
-    if ($prev === null && $next === null) {
+    if (count($sessions) < 2) {
         return '';
     }
+    $phase_num = $phase_num !== null ? (int) $phase_num : null;
+    $suffix = ($phase_num !== null && $phase_num > 0)
+        ? ('phase_' . session_phase_pad($phase_num) . '/waybills/index.html')
+        : 'waybills/index.html';
 
-    $html = '<div class="session-nav-row waybill-session-nav">';
-    if ($prev !== null) {
-        $html .= '<a class="btn btn-outline-dark" href="'
-            . htmlspecialchars(session_waybill_index_rel_href($prev, $phase_num))
-            . '"><i class="bi bi-chevron-left"></i> Session ' . (int) $prev . '</a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>';
+    // Waybill index pages sit one level deeper when phased; sibling href from
+    // session_N/waybills/ is ../session_M/…, but from session_N/phase_XX/waybills/
+    // it needs ../../session_M/…. session_sibling_rel_href assumes one ../ —
+    // build per-depth suffix via relative helper for the phase case.
+    if ($phase_num !== null && $phase_num > 0) {
+        $suffix_by = [];
+        foreach ($sessions as $n) {
+            $suffix_by[(int) $n] = 'phase_' . session_phase_pad($phase_num) . '/waybills/index.html';
+        }
+        // Custom relative depth: from phase_XX/waybills → ../../session_N/...
+        $html = session_nav_row_picker_html(
+            $session_nbr,
+            $sessions,
+            $current_db,
+            $suffix,
+            'waybill-session-nav',
+            'btn btn-outline-dark',
+            $suffix_by
+        );
+        // Fix relative depth: picker emits ../session_N/… but we need ../../session_N/…
+        return str_replace('href="../session_', 'href="../../session_', $html);
     }
-    if ($next !== null) {
-        $html .= '<a class="btn btn-outline-dark" href="'
-            . htmlspecialchars(session_waybill_index_rel_href($next, $phase_num))
-            . '">Session ' . (int) $next . ' <i class="bi bi-chevron-right"></i></a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark disabled" aria-disabled="true">Next <i class="bi bi-chevron-right"></i></span>';
-    }
-    $html .= '</div>';
 
-    return $html;
+    return session_nav_row_picker_html(
+        $session_nbr,
+        $sessions,
+        $current_db,
+        $suffix,
+        'waybill-session-nav',
+        'btn btn-outline-dark'
+    );
 }
 
 /** Relative href from a job print-all page to the same train/phase in another session. */
@@ -1457,7 +1617,7 @@ function session_switchlist_job_print_all_rel_href($session_nbr, $phase_num, $jo
         . '/print_all.html';
 }
 
-/** Prev/next session buttons for a per-job switch-list print-all page. */
+/** Session picker for a per-job switch-list print-all page. */
 function session_switchlist_job_print_all_session_nav_html($session_nbr, $phase_num, $job, $dbc = null, $root = null)
 {
     $root = $root ?? session_web_root();
@@ -1473,31 +1633,21 @@ function session_switchlist_job_print_all_session_nav_html($session_nbr, $phase_
     }
     $current_db = session_get_db_session($dbc);
     $sessions = session_list_browser_sessions($current_db, $root);
-    $prev = session_adjacent_session($sessions, $session_nbr, 'prev');
-    $next = session_adjacent_session($sessions, $session_nbr, 'next');
-    if ($prev === null && $next === null) {
+    if (count($sessions) < 2) {
         return '';
     }
+    $suffix = 'phase_' . session_phase_pad($phase_num) . '/' . $job . '/print_all.html';
+    // Job print-all lives at session_N/phase_XX/JOB/ — two levels deeper than
+    // session_N/, so sibling links need ../../../session_M/…
+    $html = session_nav_row_picker_html(
+        $session_nbr,
+        $sessions,
+        $current_db,
+        $suffix,
+        'switchlist-job-print-all-session-nav noprint'
+    );
 
-    $html = '<div class="session-nav-row switchlist-job-print-all-session-nav noprint">';
-    if ($prev !== null) {
-        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
-            . htmlspecialchars(session_switchlist_job_print_all_rel_href($prev, $phase_num, $job))
-            . '"><i class="bi bi-chevron-left"></i> Session ' . (int) $prev . '</a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>';
-    }
-    $html .= session_nav_row_session_select_html($session_nbr, $sessions, $current_db);
-    if ($next !== null) {
-        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
-            . htmlspecialchars(session_switchlist_job_print_all_rel_href($next, $phase_num, $job))
-            . '">Session ' . (int) $next . ' <i class="bi bi-chevron-right"></i></a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true">Next <i class="bi bi-chevron-right"></i></span>';
-    }
-    $html .= '</div>';
-
-    return $html;
+    return str_replace('href="../session_', 'href="../../../session_', $html);
 }
 
 /** Relative href from a per-train print-all page to the same train's print-all in another session. */
@@ -1533,8 +1683,8 @@ function session_switchlist_train_print_all_rel_href_by_name($target_session, $d
     return session_switchlist_train_print_all_rel_href($target_session, $groups[$display_name][0]);
 }
 
-/** Prev/next session buttons for a per-train switch-list print-all page. */
-function session_switchlist_train_print_all_session_nav_html($session_nbr, $job, $dbc = null, $root = null)
+/** Session picker for a per-train switch-list print-all page. */
+function session_switchlist_train_print_all_session_nav_html($session_nbr, $job, $dbc = null, $root = null, $style = '')
 {
     $root = $root ?? session_web_root();
     $session_nbr = (int) $session_nbr;
@@ -1548,39 +1698,39 @@ function session_switchlist_train_print_all_session_nav_html($session_nbr, $job,
     }
     $current_db = session_get_db_session($dbc);
     $sessions = session_list_browser_sessions($current_db, $root);
-    $prev = session_adjacent_session($sessions, $session_nbr, 'prev');
-    $next = session_adjacent_session($sessions, $session_nbr, 'next');
-    if ($prev === null && $next === null) {
+    if (count($sessions) < 2) {
         return '';
     }
 
-    // Match the same train across sessions by its display name, not the raw job
-    // key (which can differ per session). Each target link resolves to that
-    // session's matching train print-all; so.php builds it on demand if missing.
+    $style = trim((string) $style);
+    $style_suffix = $style !== '' ? ('_' . session_normalize_switchlist_style($style)) : '';
+
+    // Match the same train across sessions by display name (job key may differ).
     $display = session_job_display_map($session_nbr, null, $root);
     $display_name = $display[$job] ?? $job;
-    $prev_href = $prev !== null ? session_switchlist_train_print_all_rel_href_by_name($prev, $display_name, $root) : '';
-    $next_href = $next !== null ? session_switchlist_train_print_all_rel_href_by_name($next, $display_name, $root) : '';
-
-    $html = '<div class="session-nav-row switchlist-train-print-all-session-nav noprint">';
-    if ($prev !== null && $prev_href !== '') {
-        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
-            . htmlspecialchars($prev_href)
-            . '"><i class="bi bi-chevron-left"></i> Session ' . (int) $prev . '</a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>';
+    $suffix_by = [];
+    $fallback_suffix = 'train_' . $job . '.print_all' . $style_suffix . '.html';
+    foreach ($sessions as $n) {
+        $n = (int) $n;
+        $groups = session_job_group_map($n, null, $root);
+        if (!isset($groups[$display_name]) || count($groups[$display_name]) === 0) {
+            // Keep a best-effort same-key path so navigation still tries so.php
+            // (on-demand build) rather than falling back to session_overview.
+            $suffix_by[$n] = $fallback_suffix;
+            continue;
+        }
+        $suffix_by[$n] = 'train_' . $groups[$display_name][0] . '.print_all' . $style_suffix . '.html';
     }
-    $html .= session_nav_row_session_select_html($session_nbr, $sessions, $current_db);
-    if ($next !== null && $next_href !== '') {
-        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
-            . htmlspecialchars($next_href)
-            . '">Session ' . (int) $next . ' <i class="bi bi-chevron-right"></i></a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true">Next <i class="bi bi-chevron-right"></i></span>';
-    }
-    $html .= '</div>';
 
-    return $html;
+    return session_nav_row_picker_html(
+        $session_nbr,
+        $sessions,
+        $current_db,
+        $fallback_suffix,
+        'switchlist-train-print-all-session-nav noprint',
+        'btn btn-outline-dark btn-sm',
+        $suffix_by
+    );
 }
 
 /** Relative href from a session print-all page to another session's print-all (same style when set). */
@@ -1594,7 +1744,7 @@ function session_switchlist_print_all_rel_href($session_nbr, $style = '')
     return '../' . $rel . '.html';
 }
 
-/** Prev/next session buttons for a switch-list print-all page. */
+/** Session picker for a switch-list print-all page (combined or per-style). */
 function session_switchlist_print_all_session_nav_html($session_nbr, $style = '', $dbc = null, $root = null)
 {
     $root = $root ?? session_web_root();
@@ -1608,31 +1758,23 @@ function session_switchlist_print_all_session_nav_html($session_nbr, $style = ''
     }
     $current_db = session_get_db_session($dbc);
     $sessions = session_list_browser_sessions($current_db, $root);
-    $prev = session_adjacent_session($sessions, $session_nbr, 'prev');
-    $next = session_adjacent_session($sessions, $session_nbr, 'next');
-    if ($prev === null && $next === null) {
+    if (count($sessions) < 2) {
         return '';
     }
-
-    $html = '<div class="session-nav-row switchlist-print-all-session-nav noprint">';
-    if ($prev !== null) {
-        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
-            . htmlspecialchars(session_switchlist_print_all_rel_href($prev, $style))
-            . '"><i class="bi bi-chevron-left"></i> Session ' . (int) $prev . '</a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>';
+    $suffix = 'print_all';
+    $style = trim((string) $style);
+    if ($style !== '') {
+        $suffix .= '_' . session_normalize_switchlist_style($style);
     }
-    $html .= session_nav_row_session_select_html($session_nbr, $sessions, $current_db);
-    if ($next !== null) {
-        $html .= '<a class="btn btn-outline-dark btn-sm" href="'
-            . htmlspecialchars(session_switchlist_print_all_rel_href($next, $style))
-            . '">Session ' . (int) $next . ' <i class="bi bi-chevron-right"></i></a>';
-    } else {
-        $html .= '<span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true">Next <i class="bi bi-chevron-right"></i></span>';
-    }
-    $html .= '</div>';
+    $suffix .= '.html';
 
-    return $html;
+    return session_nav_row_picker_html(
+        $session_nbr,
+        $sessions,
+        $current_db,
+        $suffix,
+        'switchlist-print-all-session-nav noprint'
+    );
 }
 
 /** Header nav items for a generated waybill index page. */

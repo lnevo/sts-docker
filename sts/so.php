@@ -11,9 +11,10 @@
  *   so.php?f=session_3/phase_01/CK1/phase_01_mobile.html
  *
  * For HTML documents, relative links inside the file are rewritten so navigation
- * between generated pages keeps flowing through so.php, links to the per-session
- * overview go to session_overview.php, and links to app files (session.php,
- * /sts/index.html, etc.) resolve normally.
+ * between generated pages keeps flowing through so.php. Session picker controls
+ * (skip / prev / select / next) stay on the same so.php view (switch list, train,
+ * waybill, …). Bare session_N/index.php|html links still go to session_overview.php.
+ * App files (session.php, /sts/index.html, etc.) resolve normally.
  */
 
 require_once __DIR__ . '/session_helpers.php';
@@ -40,7 +41,7 @@ if (preg_match('#^session_(\d+)/index\.(php|html)$#', $rel, $m)) {
 $req_session_nbr = null;
 if (preg_match('#^session_(\d+)/#', $rel, $sm)) {
     $req_session_nbr = (int) $sm[1];
-    session_redirect_if_beyond_current($req_session_nbr);
+    session_redirect_if_beyond_current($req_session_nbr, null, true, $rel);
 }
 
 $fs = session_output_fs_path($rel);
@@ -869,12 +870,13 @@ function so_refresh_switchlist_job_print_all_session_nav($html, $rel)
  */
 function so_refresh_switchlist_train_print_all_session_nav($html, $rel)
 {
-    if (!preg_match('#^session_(\d+)/train_(.+)\.print_all(?:_[a-z0-9_-]+)?\.html$#', $rel, $m)) {
+    if (!preg_match('#^session_(\d+)/train_(.+)\.print_all(?:_([a-z0-9_-]+))?\.html$#', $rel, $m)) {
         return $html;
     }
     $session_nbr = (int) $m[1];
     $job = rawurldecode((string) $m[2]);
-    $nav = session_switchlist_train_print_all_session_nav_html($session_nbr, $job);
+    $style = isset($m[3]) ? (string) $m[3] : '';
+    $nav = session_switchlist_train_print_all_session_nav_html($session_nbr, $job, null, null, $style);
     if ($nav === '') {
         return $html;
     }

@@ -301,10 +301,89 @@ $track_scale_ui = [
         .sensor-card.adjustment-locked .cal-adj-group {
             opacity: 0.45;
         }
-        .sensor-card .cal-position-btn.active {
+        .sensor-card .cal-position-btn.active,
+        .sensor-card .cal-position-btn.cal-weigh-phase {
             background-color: #0d6efd;
             border-color: #0d6efd;
             color: #fff;
+        }
+        .sensor-card .cal-position-btn.cal-weigh-phase:hover:not(:disabled) {
+            background-color: #0b5ed7;
+            border-color: #0a58ca;
+            color: #fff;
+        }
+        .sensor-card .sensor-title-short {
+            display: none;
+        }
+        .cal-sensor-row > [class*="col-"] {
+            flex: 0 0 33.333333%;
+            max-width: 33.333333%;
+            min-width: 0;
+        }
+        @media (max-width: 575.98px) {
+            .cal-sensor-row {
+                --bs-gutter-x: 0.45rem;
+                --bs-gutter-y: 0.45rem;
+            }
+            .cal-sensor-row .sensor-card {
+                padding: 0.45rem 0.4rem;
+            }
+            .cal-sensor-row .sensor-card > .mb-2 {
+                margin-bottom: 0.35rem !important;
+            }
+            .cal-sensor-row .sensor-card .sensor-card-title {
+                font-size: 0.78rem;
+                line-height: 1.15;
+                display: block;
+            }
+            .cal-sensor-row .sensor-card .sensor-title-full {
+                display: none;
+            }
+            .cal-sensor-row .sensor-card .sensor-title-short {
+                display: inline;
+            }
+            .cal-sensor-row .sensor-card .scale-display {
+                padding: 0.4rem 0.35rem;
+                margin-bottom: 0.35rem !important;
+            }
+            .cal-sensor-row .sensor-card .scale-display .label {
+                font-size: 0.6rem;
+            }
+            .cal-sensor-row .sensor-card .scale-display .value {
+                font-size: 1.05rem;
+            }
+            .cal-sensor-row .sensor-card .scale-display .unit {
+                font-size: 0.7rem;
+            }
+            .cal-sensor-row .sensor-card .sensor-error-line {
+                font-size: 0.7rem;
+                margin-bottom: 0.35rem !important;
+            }
+            .cal-sensor-row .sensor-card .cal-position-btn {
+                font-size: 0.72rem;
+                padding: 0.35rem 0.25rem;
+                min-height: 2.15rem;
+                margin-bottom: 0 !important;
+            }
+            .cal-sensor-row .sensor-card .cal-position-btn .bi {
+                display: none;
+            }
+            .cal-central-panel .cal-central-stack {
+                column-gap: 0.55rem;
+                row-gap: 1.15rem;
+            }
+            .cal-central-panel .cal-stat-label {
+                font-size: 0.62rem;
+            }
+            .cal-central-panel .cal-stat-value {
+                font-size: 1rem;
+            }
+            .cal-central-panel .cal-stat-error .cal-stat-value {
+                font-size: 1.1rem;
+            }
+            .cal-central-panel .cal-central-adj-wrap {
+                max-width: 100%;
+            }
         }
         .cal-track-wrap {
             margin-bottom: 1rem;
@@ -530,12 +609,20 @@ $track_scale_ui = [
         }
         .cal-central-controls {
             display: block;
+            margin-bottom: 0;
         }
         .cal-central-panel {
             border: 2px solid #198754;
             border-radius: 0.5rem;
             background: #f8fff9;
             padding: 1rem 1.15rem;
+        }
+        /* Blank band below the adjustment panel (outside the green box) */
+        .cal-central-below-spacer {
+            display: block;
+            width: 100%;
+            min-height: 1.35rem;
+            margin: 0 0 0.85rem;
         }
         .cal-central-panel .cal-central-layout {
             display: flex;
@@ -550,7 +637,7 @@ $track_scale_ui = [
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
             column-gap: 1.25rem;
-            row-gap: 0.85rem;
+            row-gap: 1.35rem;
             align-items: start;
             justify-items: center;
         }
@@ -564,6 +651,20 @@ $track_scale_ui = [
             text-align: center;
             min-width: 0;
             width: 100%;
+            padding: 0.55rem 0.5rem 0.65rem;
+            border: 1px solid #c5d4ca;
+            border-radius: 0.4rem;
+            background: #eef5f0;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+        }
+        /* Error stays neutral until a weigh reading exists; then red / green by value */
+        .cal-central-panel .cal-stat-error.is-nonzero {
+            border-color: #e2b4b8;
+            background: #f8ecee;
+        }
+        .cal-central-panel .cal-stat-error.is-zero {
+            border-color: #a6d4b5;
+            background: #e4f6ea;
         }
         .cal-central-panel .cal-stat-label {
             font-size: 0.72rem;
@@ -588,52 +689,198 @@ $track_scale_ui = [
         }
         .cal-central-panel .cal-stat-error .cal-stat-value {
             font-size: 1.4rem;
+        }
+        .cal-central-panel .cal-stat-error.is-nonzero .cal-stat-value {
             color: #b02a37;
         }
-        .cal-central-panel .cal-central-adj-wrap {
-            grid-column: 1 / 3;
+        .cal-central-panel .cal-stat-error.is-zero .cal-stat-value {
+            color: #146c43;
+        }
+        /* Own grid row so stack row-gap centers it evenly between stats and slider */
+        .cal-central-panel .cal-central-adj-value-row {
+            grid-column: 1 / -1;
             width: 100%;
+            max-width: 44rem;
+            justify-self: center;
             display: flex;
-            justify-content: stretch;
+            flex-direction: row;
+            flex-wrap: nowrap;
+            align-items: baseline;
+            justify-content: center;
+            text-align: center;
+            gap: 0.45rem;
+            margin: 0;
+            padding: 0;
+        }
+        .cal-central-panel .cal-central-adj-wrap {
+            grid-column: 1 / -1;
+            width: 100%;
+            max-width: 44rem;
+            justify-self: center;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0;
+            margin: 0;
+        }
+        .cal-central-panel .cal-central-adj-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: #6c757d;
+        }
+        .cal-central-panel .cal-central-adj-value {
+            font-size: 1.65rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+            color: #212529;
+            line-height: 1.1;
+        }
+        .cal-central-panel .cal-central-adj-value .unit {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #6c757d;
+            margin-left: 0.2rem;
         }
         .cal-central-panel .cal-central-adj {
             width: 100%;
+            display: flex;
             flex-wrap: nowrap;
+            align-items: stretch;
+            gap: 0.7rem;
+        }
+        /* Scrollbar strip: only the drag track lives here — no number text on top. */
+        .cal-central-panel .cal-central-adj-slider-cell {
+            flex: 1 1 auto;
+            min-width: 0;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            column-gap: 0.55rem;
+            padding: 0.45rem 0.65rem;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 0.5rem;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+        }
+        .cal-central-panel .cal-central-adj-end {
+            flex: 0 0 auto;
+            font-size: 0.8rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+            color: #495057;
+            user-select: none;
+            line-height: 1;
+        }
+        .cal-central-panel .cal-central-adj-slider-track {
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            height: 2.4rem;
+        }
+        .cal-central-panel .cal-central-adj-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 2.4rem;
+            margin: 0;
+            background: transparent;
+            cursor: pointer;
+        }
+        .cal-central-panel .cal-central-adj-slider:focus {
+            outline: none;
+        }
+        .cal-central-panel .cal-central-adj-slider:focus-visible::-webkit-slider-thumb {
+            box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.35);
+        }
+        .cal-central-panel .cal-central-adj-slider::-webkit-slider-runnable-track {
+            height: 0.85rem;
+            border-radius: 999px;
+            background: linear-gradient(180deg, #f1f3f5 0%, #e9ecef 100%);
+            border: 1px solid #ced4da;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+        }
+        .cal-central-panel .cal-central-adj-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 1.75rem;
+            height: 1.75rem;
+            margin-top: calc((0.85rem - 1.75rem) / 2);
+            border-radius: 50%;
+            background: #0d6efd;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+        }
+        .cal-central-panel .cal-central-adj-slider::-moz-range-track {
+            height: 0.85rem;
+            border-radius: 999px;
+            background: linear-gradient(180deg, #f1f3f5 0%, #e9ecef 100%);
+            border: 1px solid #ced4da;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+        }
+        .cal-central-panel .cal-central-adj-slider::-moz-range-thumb {
+            width: 1.75rem;
+            height: 1.75rem;
+            border-radius: 50%;
+            background: #0d6efd;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+        }
+        .cal-central-panel .cal-central-adj-slider:disabled {
+            cursor: not-allowed;
+            opacity: 0.45;
         }
         .cal-central-panel .cal-central-adj > .cal-central-adj-btn[data-fine="0"][data-direction="down"] {
-            margin-right: 0.55rem !important;
-            border-top-right-radius: var(--bs-border-radius) !important;
-            border-bottom-right-radius: var(--bs-border-radius) !important;
-        }
-        .cal-central-panel .cal-central-adj > .cal-central-adj-btn[data-fine="1"][data-direction="down"] {
-            margin-left: 0 !important;
-            border-top-left-radius: var(--bs-border-radius) !important;
-            border-bottom-left-radius: var(--bs-border-radius) !important;
-        }
-        .cal-central-panel .cal-central-adj > .cal-central-adj-btn[data-fine="1"][data-direction="up"] {
-            border-top-right-radius: var(--bs-border-radius) !important;
-            border-bottom-right-radius: var(--bs-border-radius) !important;
+            margin-right: 0.35rem !important;
         }
         .cal-central-panel .cal-central-adj > .cal-central-adj-btn[data-fine="0"][data-direction="up"] {
-            margin-left: 0.55rem !important;
-            border-top-left-radius: var(--bs-border-radius) !important;
-            border-bottom-left-radius: var(--bs-border-radius) !important;
+            margin-left: 0.35rem !important;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-central-adj {
+            gap: 0.9rem;
         }
         .cal-central-panel .cal-central-adj .btn {
-            min-width: 2.6rem;
-            min-height: 2.75rem;
-            font-size: 1.1rem;
+            flex: 0 0 auto;
+            min-width: 3.5rem;
+            min-height: 3.85rem;
+            font-size: 1.55rem;
             font-weight: 700;
             font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
             letter-spacing: -0.04em;
-            padding-left: 0.4rem;
-            padding-right: 0.4rem;
+            padding-left: 0.35rem;
+            padding-right: 0.35rem;
         }
-        .cal-central-panel .cal-central-adj .form-control {
-            font-size: 1.25rem;
-            font-weight: 700;
-            min-height: 2.75rem;
-            text-align: center;
+        /* After base slider styles so phone width can actually override display:grid */
+        @media (max-width: 767.98px) {
+            .cal-central-panel .cal-central-adj-slider-cell {
+                display: none !important;
+            }
+            .cal-central-panel .cal-central-adj-wrap {
+                max-width: 100%;
+                width: 100%;
+            }
+            .cal-central-panel .cal-central-adj {
+                width: 100%;
+                justify-content: stretch;
+                gap: 0.4rem;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            .cal-central-panel .cal-central-adj > .cal-central-adj-btn[data-fine="0"][data-direction="down"],
+            .cal-central-panel .cal-central-adj > .cal-central-adj-btn[data-fine="0"][data-direction="up"] {
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+            }
+            .cal-central-panel .cal-central-adj .btn {
+                flex: 1 1 0;
+                /* Keep the large default size; don't collapse as the row narrows */
+                min-width: 3.5rem;
+                padding-left: 0.15rem;
+                padding-right: 0.15rem;
+            }
         }
         /* Large-controls sizing for the shared calibrate layout */
         body.track-scale-accessible .cal-central-panel {
@@ -654,24 +901,50 @@ $track_scale_ui = [
         body.track-scale-accessible .cal-central-panel .cal-central-stack {
             max-width: 58rem;
             column-gap: 1.75rem;
-            row-gap: 1rem;
+            row-gap: 1.55rem;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-central-adj-wrap,
+        body.track-scale-accessible .cal-central-panel .cal-central-adj-value-row {
+            max-width: 52rem;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-central-adj-value {
+            font-size: 2rem;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-central-adj-slider-cell {
+            padding: 0.65rem 0.85rem;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-central-adj-slider-track,
+        body.track-scale-accessible .cal-central-panel .cal-central-adj-slider {
+            height: 3rem;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-central-adj-slider::-webkit-slider-runnable-track,
+        body.track-scale-accessible .cal-central-panel .cal-central-adj-slider::-moz-range-track {
+            height: 1.15rem;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-central-adj-slider::-webkit-slider-thumb {
+            width: 2.25rem;
+            height: 2.25rem;
+            margin-top: calc((1.15rem - 2.25rem) / 2);
+        }
+        body.track-scale-accessible .cal-central-panel .cal-central-adj-slider::-moz-range-thumb {
+            width: 2.25rem;
+            height: 2.25rem;
+        }
+        body.track-scale-accessible .cal-central-panel .cal-central-adj-end {
+            font-size: 1rem;
         }
         body.track-scale-accessible .cal-central-panel .cal-central-adj > .cal-central-adj-btn[data-fine="0"][data-direction="down"] {
-            margin-right: 0.75rem !important;
+            margin-right: 0.55rem !important;
         }
         body.track-scale-accessible .cal-central-panel .cal-central-adj > .cal-central-adj-btn[data-fine="0"][data-direction="up"] {
-            margin-left: 0.75rem !important;
+            margin-left: 0.55rem !important;
         }
         body.track-scale-accessible .cal-central-panel .cal-central-adj .btn {
-            min-width: 3.35rem;
-            min-height: 3.65rem;
-            font-size: 1.45rem;
+            min-width: 3.75rem;
+            min-height: 3.85rem;
+            font-size: 1.55rem;
             padding-left: 0.5rem;
             padding-right: 0.5rem;
-        }
-        body.track-scale-accessible .cal-central-panel .cal-central-adj .form-control {
-            font-size: 1.75rem;
-            min-height: 3.65rem;
         }
         body.track-scale-accessible .sensor-card .cal-position-btn {
             font-size: 1.2rem;
@@ -679,7 +952,8 @@ $track_scale_ui = [
             padding: 0.75rem 0.85rem;
         }
         body.track-scale-accessible #calSaveBtn,
-        body.track-scale-accessible #calResetBtn {
+        body.track-scale-accessible #calResetBtn,
+        body.track-scale-accessible #calResetAdjBtn {
             font-size: 1.2rem;
             min-height: 3.1rem;
             padding: 0.7rem 1.15rem;
@@ -951,10 +1225,10 @@ $track_scale_ui = [
                         </div>
                     </div>
                 </div>
-                <div class="row g-3 mb-3">
-                    <div class="col-md-4">
+                <div class="row g-2 g-md-3 mb-3 cal-sensor-row">
+                    <div class="col-4">
                         <div class="sensor-card" id="sensorCard-left">
-                            <div class="mb-2"><strong>Left sensor</strong></div>
+                            <div class="mb-2"><strong class="sensor-card-title"><span class="sensor-title-full">Left sensor</span><span class="sensor-title-short">Left</span></strong></div>
                             <div class="scale-display mb-2">
                                 <div class="label">Reading</div>
                                 <div><span class="value" id="sensorDisplay-left">—</span> <span class="unit">t</span></div>
@@ -966,9 +1240,9 @@ $track_scale_ui = [
                             </button>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-4">
                         <div class="sensor-card" id="sensorCard-center">
-                            <div class="mb-2"><strong>Center sensor</strong></div>
+                            <div class="mb-2"><strong class="sensor-card-title"><span class="sensor-title-full">Center sensor</span><span class="sensor-title-short">Center</span></strong></div>
                             <div class="scale-display mb-2">
                                 <div class="label">Reading</div>
                                 <div><span class="value" id="sensorDisplay-center">—</span> <span class="unit">t</span></div>
@@ -980,9 +1254,9 @@ $track_scale_ui = [
                             </button>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-4">
                         <div class="sensor-card" id="sensorCard-right">
-                            <div class="mb-2"><strong>Right sensor</strong></div>
+                            <div class="mb-2"><strong class="sensor-card-title"><span class="sensor-title-full">Right sensor</span><span class="sensor-title-short">Right</span></strong></div>
                             <div class="scale-display mb-2">
                                 <div class="label">Reading</div>
                                 <div><span class="value" id="sensorDisplay-right">—</span> <span class="unit">t</span></div>
@@ -996,7 +1270,7 @@ $track_scale_ui = [
                     </div>
                 </div>
 
-                <div class="cal-central-controls mb-3">
+                <div class="cal-central-controls">
                     <div class="cal-central-panel">
                         <div class="cal-central-layout">
                             <div class="cal-central-stack">
@@ -1006,16 +1280,16 @@ $track_scale_ui = [
                                             <div class="cal-stat-label">Sensor</div>
                                             <div class="cal-stat-value text-capitalize" id="calCentralSensor">—</div>
                                         </div>
-                                        <div class="cal-stat cal-stat-error">
-                                            <div class="cal-stat-label">Error</div>
-                                            <div class="cal-stat-value">
-                                                <span id="calCentralError">—</span> <span class="unit">t</span>
-                                            </div>
-                                        </div>
                                         <div class="cal-stat">
                                             <div class="cal-stat-label">Reading</div>
                                             <div class="cal-stat-value">
                                                 <span id="calCentralReading">—</span> <span class="unit">t</span>
+                                            </div>
+                                        </div>
+                                        <div class="cal-stat cal-stat-error">
+                                            <div class="cal-stat-label">Error</div>
+                                            <div class="cal-stat-value">
+                                                <span id="calCentralError">—</span> <span class="unit">t</span>
                                             </div>
                                         </div>
                                         <div class="cal-stat">
@@ -1026,25 +1300,43 @@ $track_scale_ui = [
                                         </div>
                                     </div>
                                 </div>
+                                <div class="cal-central-adj-value-row" aria-live="polite">
+                                    <span class="cal-central-adj-label">Adjustment</span>
+                                    <span class="cal-central-adj-value">
+                                        <span id="calCentralAdjValue">0.00</span>
+                                        <span class="unit">t</span>
+                                    </span>
+                                </div>
                                 <div class="cal-central-adj-wrap">
-                                    <div class="input-group cal-central-adj">
+                                    <div class="cal-central-adj">
+                                        <button type="button" class="btn btn-outline-secondary cal-central-adj-btn" id="calCentralAdjMinBtn" data-jump="min" disabled aria-label="Jump to minimum adjustment">|&lt;&lt;</button>
                                         <button type="button" class="btn btn-outline-secondary cal-central-adj-btn" id="calCentralAdjCoarseDown" data-direction="down" data-fine="0" disabled aria-label="Adjust down 0.10">&lt;&lt;</button>
                                         <button type="button" class="btn btn-outline-secondary cal-central-adj-btn" id="calCentralAdjFineDown" data-direction="down" data-fine="1" disabled aria-label="Adjust down 0.01">&lt;</button>
-                                        <input type="text" class="form-control" id="calCentralAdjInput" value="0.00" readonly aria-label="Adjustment tons">
+                                        <div class="cal-central-adj-slider-cell" title="Drag to adjust">
+                                            <span class="cal-central-adj-end" id="calCentralAdjMin">-2.50</span>
+                                            <div class="cal-central-adj-slider-track">
+                                                <input type="range" class="cal-central-adj-slider" id="calCentralAdjSlider" min="-2.5" max="2.5" step="0.01" value="0" disabled aria-label="Adjustment scrollbar tons">
+                                            </div>
+                                            <span class="cal-central-adj-end" id="calCentralAdjMax">2.50</span>
+                                        </div>
                                         <button type="button" class="btn btn-outline-secondary cal-central-adj-btn" id="calCentralAdjFineUp" data-direction="up" data-fine="1" disabled aria-label="Adjust up 0.01">&gt;</button>
                                         <button type="button" class="btn btn-outline-secondary cal-central-adj-btn" id="calCentralAdjCoarseUp" data-direction="up" data-fine="0" disabled aria-label="Adjust up 0.10">&gt;&gt;</button>
+                                        <button type="button" class="btn btn-outline-secondary cal-central-adj-btn" id="calCentralAdjMaxBtn" data-jump="max" disabled aria-label="Jump to maximum adjustment">&gt;&gt;|</button>
                                     </div>
+                                    <input type="hidden" id="calCentralAdjInput" value="0.00">
                                 </div>
                             </div>
                         </div>
                     </div>
+                    <div class="cal-central-below-spacer" aria-hidden="true"></div>
                 </div>
 
-                <div class="d-flex flex-wrap gap-2 align-items-center">
+                <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
                     <button type="button" class="btn btn-success btn-sm" id="calSaveBtn" disabled>
                         <i class="bi bi-lock"></i> Save calibration
                     </button>
                     <button type="button" class="btn btn-outline-danger btn-sm" id="calResetBtn">Reset calibration</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="calResetAdjBtn" disabled>Reset adjustment</button>
                     <span id="calStatus" class="small ms-2"></span>
                 </div>
             </div>
@@ -1058,6 +1350,7 @@ const CONFIG = <?php echo json_encode($config, JSON_UNESCAPED_SLASHES); ?>;
 const TRACK_SCALE_UI = <?php echo json_encode($track_scale_ui, JSON_UNESCAPED_SLASHES); ?>;
 const PRECISION = CONFIG.precision ?? 2;
 const ACCESSIBLE_UI_KEY = 'track_scale_accessible_ui';
+const SCALE_MODE_KEY = 'track_scale_mode';
 
 function applyAccessibleUi(enabled) {
     document.body.classList.toggle('track-scale-accessible', !!enabled);
@@ -1544,15 +1837,41 @@ function hideError() {
     document.getElementById('carsListError').classList.add('d-none');
 }
 
-function setMode(mode) {
+function setMode(mode, options) {
+    options = options || {};
+    mode = (mode === 'calibrate') ? 'calibrate' : 'weigh';
+    const weighRadio = document.getElementById('modeWeigh');
+    const calRadio = document.getElementById('modeCalibrate');
+    if (weighRadio) weighRadio.checked = mode === 'weigh';
+    if (calRadio) calRadio.checked = mode === 'calibrate';
     document.getElementById('weighPanel').classList.toggle('active', mode === 'weigh');
     document.getElementById('calibratePanel').classList.toggle('active', mode === 'calibrate');
     document.body.classList.toggle('mode-calibrate', mode === 'calibrate');
+    if (!options.skipSave) {
+        try {
+            localStorage.setItem(SCALE_MODE_KEY, mode);
+        } catch (e) {
+            /* ignore quota / private mode */
+        }
+    }
     if (mode === 'calibrate') {
         refreshCalibrationState();
     } else {
         refreshCalibrationMeta();
     }
+}
+
+function restoreScaleMode() {
+    let mode = 'weigh';
+    try {
+        const saved = localStorage.getItem(SCALE_MODE_KEY);
+        if (saved === 'calibrate' || saved === 'weigh') {
+            mode = saved;
+        }
+    } catch (e) {
+        mode = 'weigh';
+    }
+    setMode(mode, { skipSave: true });
 }
 
 async function refreshCalibrationMeta() {
@@ -1563,10 +1882,8 @@ async function refreshCalibrationMeta() {
 }
 
 document.getElementById('modeWeigh').addEventListener('change', () => setMode('weigh'));
-document.getElementById('modeCalibrate').addEventListener('change', () => {
-    setMode('calibrate');
-    refreshCalibrationState();
-});
+document.getElementById('modeCalibrate').addEventListener('change', () => setMode('calibrate'));
+restoreScaleMode();
 
 async function apiGet(action, params = {}) {
     const qs = new URLSearchParams({ action, ...params });
@@ -1955,7 +2272,17 @@ function renderCalibration(cal) {
 
         const posBtn = card.querySelector('.cal-position-btn');
         posBtn.classList.toggle('active', carHere);
+        posBtn.classList.toggle('cal-weigh-phase', carHere);
+        posBtn.classList.toggle('btn-primary', carHere);
+        posBtn.classList.toggle('btn-outline-primary', !carHere);
+        posBtn.dataset.phase = carHere ? 'weigh' : 'place';
         posBtn.disabled = !testCarAtScale || calibrationLocked;
+        posBtn.innerHTML = carHere
+            ? '<i class="bi bi-speedometer"></i> Weigh'
+            : '<i class="bi bi-truck"></i> Place Car';
+        posBtn.setAttribute('aria-label', carHere
+            ? ('Weigh test car on ' + pos + ' sensor')
+            : ('Place test car on ' + pos + ' sensor'));
 
         const weighBtn = card.querySelector('.cal-weigh-btn');
         if (weighBtn) {
@@ -2035,38 +2362,95 @@ function renderCalibration(cal) {
     } else if (cal.scale_car_position) {
         statusEl.textContent = accessible
             ? (cal.scale_car_position + ' — zero the error, then next sensor')
-            : ('Car at ' + cal.scale_car_position + ' — adjust to zero error, then Place Car on the next sensor.');
+            : ('Car at ' + cal.scale_car_position + ' — Weigh, zero the error, then Place Car on the next sensor.');
     } else {
         statusEl.textContent = accessible
-            ? 'Place Car on a sensor'
-            : 'Place Car on a sensor to weigh that position.';
+            ? 'Place Car, then Weigh'
+            : 'Place Car on a sensor, then Weigh that position.';
+    }
+}
+
+function syncCalErrorStat(sensor) {
+    const errorEl = document.getElementById('calCentralError');
+    const errorBox = errorEl ? errorEl.closest('.cal-stat-error') : null;
+    if (!errorEl) return;
+    if (!errorBox) {
+        errorEl.textContent = sensor && sensor.has_reading ? fmt(sensor.error_tons) : '—';
+        return;
+    }
+    errorBox.classList.remove('is-zero', 'is-nonzero');
+    if (!sensor || !sensor.has_reading
+        || sensor.error_tons === null || sensor.error_tons === undefined) {
+        errorEl.textContent = '—';
+        return;
+    }
+    const err = Number(sensor.error_tons);
+    errorEl.textContent = fmt(err);
+    if (sensor.is_zero || Math.abs(err) < (Math.pow(10, -PRECISION) / 2)) {
+        errorBox.classList.add('is-zero');
+    } else {
+        errorBox.classList.add('is-nonzero');
+    }
+}
+
+const ADJ_SLIDER_MIN = -2.5;
+const ADJ_SLIDER_MAX = 2.5;
+
+function clampAdjTons(valueTons) {
+    const tons = Number(valueTons);
+    const safe = Number.isFinite(tons) ? tons : 0;
+    return Math.min(ADJ_SLIDER_MAX, Math.max(ADJ_SLIDER_MIN, safe));
+}
+
+function syncCalAdjDisplay(valueTons, options) {
+    options = options || {};
+    const safe = clampAdjTons(valueTons);
+    const text = fmt(safe);
+    const adjInput = document.getElementById('calCentralAdjInput');
+    const adjValue = document.getElementById('calCentralAdjValue');
+    const slider = document.getElementById('calCentralAdjSlider');
+    const minEl = document.getElementById('calCentralAdjMin');
+    const maxEl = document.getElementById('calCentralAdjMax');
+    if (adjInput) adjInput.value = text;
+    if (adjValue) adjValue.textContent = text;
+    if (minEl) minEl.textContent = fmt(ADJ_SLIDER_MIN);
+    if (maxEl) maxEl.textContent = fmt(ADJ_SLIDER_MAX);
+    if (slider && !options.skipSlider) {
+        slider.min = String(ADJ_SLIDER_MIN);
+        slider.max = String(ADJ_SLIDER_MAX);
+        const step = (CONFIG.calibration && CONFIG.calibration.fine_adjust_step_tons) || 0.01;
+        slider.step = String(step);
+        slider.value = String(safe);
     }
 }
 
 function syncCalCentralControls(sensor, testCarAtScale, calibrationLocked) {
     const sensorEl = document.getElementById('calCentralSensor');
-    const errorEl = document.getElementById('calCentralError');
     const readingEl = document.getElementById('calCentralReading');
     const expectedEl = document.getElementById('calCentralExpected');
     const adjInput = document.getElementById('calCentralAdjInput');
+    const slider = document.getElementById('calCentralAdjSlider');
     const adjBtns = document.querySelectorAll('.cal-central-adj-btn');
+    const resetAdjBtn = document.getElementById('calResetAdjBtn');
     if (!sensorEl || !adjInput) {
         return;
     }
 
     if (!sensor) {
         sensorEl.textContent = '—';
-        errorEl.textContent = '—';
+        syncCalErrorStat(null);
         if (readingEl) readingEl.textContent = '—';
         if (expectedEl) expectedEl.textContent = '—';
-        adjInput.value = '0.00';
+        syncCalAdjDisplay(0);
         adjBtns.forEach(btn => { btn.disabled = true; });
+        if (slider) slider.disabled = true;
+        if (resetAdjBtn) resetAdjBtn.disabled = true;
         return;
     }
 
     const locked = calibrationLocked || !!sensor.adjustment_locked || !sensor.has_reading;
     sensorEl.textContent = sensor.position || '—';
-    errorEl.textContent = sensor.has_reading ? fmt(sensor.error_tons) : '—';
+    syncCalErrorStat(sensor);
     if (readingEl) {
         // Freeze the panel reading at the raw weighed value; sensor LEDs track adjustment.
         if (sensor.has_reading
@@ -2083,8 +2467,14 @@ function syncCalCentralControls(sensor, testCarAtScale, calibrationLocked) {
                 ? fmt(sensor.expected_tons)
                 : '—';
     }
-    adjInput.value = fmt(sensor.adjustment_tons);
+    if (!slider || document.activeElement !== slider) {
+        syncCalAdjDisplay(sensor.adjustment_tons);
+    } else {
+        syncCalAdjDisplay(sensor.adjustment_tons, { skipSlider: true });
+    }
     adjBtns.forEach(btn => { btn.disabled = locked; });
+    if (slider) slider.disabled = locked;
+    if (resetAdjBtn) resetAdjBtn.disabled = locked;
 }
 
 function getActiveCalSensorPosition() {
@@ -2092,7 +2482,7 @@ function getActiveCalSensorPosition() {
     return activeBtn ? activeBtn.dataset.sensor : null;
 }
 
-async function placeCarAndWeigh(position) {
+async function placeCalCar(position) {
     const statusEl = document.getElementById('calStatus');
     const setData = await apiPost('calibrate_set_position', { position });
     if (!setData.success) {
@@ -2101,7 +2491,13 @@ async function placeCarAndWeigh(position) {
         return;
     }
     renderCalibration(setData.calibration);
+    statusEl.textContent = document.body.classList.contains('track-scale-accessible')
+        ? (position + ' — ready to weigh')
+        : ('Car placed on ' + position + ' — press Weigh.');
+}
 
+async function weighCalPosition(position) {
+    const statusEl = document.getElementById('calStatus');
     const weighData = await apiPost('calibrate_read', { position });
     if (!weighData.success) {
         statusEl.innerHTML =
@@ -2109,6 +2505,12 @@ async function placeCarAndWeigh(position) {
         return;
     }
     renderCalibration(weighData.calibration);
+}
+
+/** @deprecated kept for any leftover callers — prefer phase-specific helpers */
+async function placeCarAndWeigh(position) {
+    await placeCalCar(position);
+    await weighCalPosition(position);
 }
 
 async function adjustSensor(sensor, direction, fineTune) {
@@ -2125,6 +2527,47 @@ async function adjustSensor(sensor, direction, fineTune) {
     renderCalibration(data.calibration);
 }
 
+let calAdjSliderTimer = null;
+let calAdjSliderInFlight = false;
+let calAdjSliderPending = null;
+
+async function setSensorAdjustmentTons(sensor, tons) {
+    const payload = { sensor, adjustment_tons: clampAdjTons(tons) };
+    const data = await apiPost('calibrate_adjust', payload);
+    if (!data.success) {
+        document.getElementById('calStatus').innerHTML =
+            `<span class="text-danger">${data.error || 'Adjust failed'}</span>`;
+        return false;
+    }
+    renderCalibration(data.calibration);
+    return true;
+}
+
+function queueSensorAdjustmentFromSlider(tons) {
+    const pos = getActiveCalSensorPosition();
+    if (!pos) return;
+    syncCalAdjDisplay(tons, { skipSlider: true });
+    calAdjSliderPending = { sensor: pos, tons: Number(tons) };
+    if (calAdjSliderTimer) clearTimeout(calAdjSliderTimer);
+    calAdjSliderTimer = setTimeout(flushSensorAdjustmentFromSlider, 80);
+}
+
+async function flushSensorAdjustmentFromSlider() {
+    calAdjSliderTimer = null;
+    if (calAdjSliderInFlight || !calAdjSliderPending) return;
+    const next = calAdjSliderPending;
+    calAdjSliderPending = null;
+    calAdjSliderInFlight = true;
+    try {
+        await setSensorAdjustmentTons(next.sensor, next.tons);
+    } finally {
+        calAdjSliderInFlight = false;
+        if (calAdjSliderPending) {
+            flushSensorAdjustmentFromSlider();
+        }
+    }
+}
+
 async function resetSensorAdjustment(sensor) {
     const data = await apiPost('calibrate_adjust_reset', { sensor });
     if (!data.success) {
@@ -2138,7 +2581,12 @@ async function resetSensorAdjustment(sensor) {
 document.querySelectorAll('.cal-position-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         if (btn.disabled) return;
-        placeCarAndWeigh(btn.dataset.sensor);
+        const position = btn.dataset.sensor;
+        if (btn.dataset.phase === 'weigh' || btn.classList.contains('cal-weigh-phase')) {
+            weighCalPosition(position);
+        } else {
+            placeCalCar(position);
+        }
     });
 });
 
@@ -2163,8 +2611,38 @@ document.querySelectorAll('.cal-adj-reset-btn').forEach(btn => {
             if (btn.disabled) return;
             const pos = getActiveCalSensorPosition();
             if (!pos) return;
+            if (btn.dataset.jump === 'min') {
+                setSensorAdjustmentTons(pos, ADJ_SLIDER_MIN);
+                return;
+            }
+            if (btn.dataset.jump === 'max') {
+                setSensorAdjustmentTons(pos, ADJ_SLIDER_MAX);
+                return;
+            }
             adjustSensor(pos, btn.dataset.direction, btn.dataset.fine === '1');
         });
+    });
+    const slider = document.getElementById('calCentralAdjSlider');
+    if (slider) {
+        slider.addEventListener('input', () => {
+            if (slider.disabled) return;
+            queueSensorAdjustmentFromSlider(slider.value);
+        });
+        slider.addEventListener('change', () => {
+            if (slider.disabled) return;
+            const pos = getActiveCalSensorPosition();
+            if (!pos) return;
+            if (calAdjSliderTimer) clearTimeout(calAdjSliderTimer);
+            calAdjSliderPending = { sensor: pos, tons: clampAdjTons(slider.value) };
+            flushSensorAdjustmentFromSlider();
+        });
+    }
+    document.getElementById('calResetAdjBtn')?.addEventListener('click', () => {
+        const btn = document.getElementById('calResetAdjBtn');
+        if (!btn || btn.disabled) return;
+        const pos = getActiveCalSensorPosition();
+        if (!pos) return;
+        resetSensorAdjustment(pos);
     });
 })();
 

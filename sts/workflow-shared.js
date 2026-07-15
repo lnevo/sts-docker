@@ -21,9 +21,21 @@
     hideNonExecute: false,
     executionPathSteps: null,
     dirty: false,
-    previewMode: false,
+    previewMode: true,
 
     el(id) { return document.getElementById(id); },
+
+    ensureCheckboxDropdownDocHandlers() {
+      if (this._cddDocHandlers) return;
+      this._cddDocHandlers = true;
+      document.addEventListener('click', (e) => {
+        if (e.target.closest('[data-checkbox-dropdown]')) return;
+        this.closeAllCheckboxDropdowns();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') this.closeAllCheckboxDropdowns();
+      });
+    },
 
     markDirty() {
       this.dirty = true;
@@ -231,7 +243,133 @@
     },
 
     resolveAutoAssignJobsValue(val) {
+      return this.resolveCsvValues(val);
+    },
+
+    resolveCsvValues(val) {
+      if (Array.isArray(val)) {
+        return val.map((s) => String(s).trim()).filter(Boolean);
+      }
       return String(val || '').split(',').map((s) => s.trim()).filter(Boolean);
+    },
+
+    checkboxDropdownSummary(selected, opts, emptyLabel, summaryLabel) {
+      const empty = emptyLabel || 'Any';
+      if (!selected.length) return empty;
+      const labelFor = (v) => {
+        const hit = (opts || []).find((o) => String(o.value != null ? o.value : o) === String(v));
+        if (!hit) return String(v);
+        return String(hit.label != null ? hit.label : (hit.value != null ? hit.value : hit));
+      };
+      if (selected.length === 1) return labelFor(selected[0]);
+      if (selected.length <= 2) return selected.map(labelFor).join(', ');
+      return selected.length + ' ' + (summaryLabel || 'selected');
+    },
+
+    syncCheckboxDropdown(root) {
+      if (!root) return;
+      const hidden = root.querySelector('[data-param]');
+      const toggle = root.querySelector('[data-cdd-toggle]');
+      const selected = Array.from(root.querySelectorAll('[data-cdd-opt]:checked')).map((n) => n.value);
+      if (hidden) hidden.value = selected.join(',');
+      if (toggle) {
+        toggle.textContent = this.checkboxDropdownSummary(
+          selected,
+          null,
+          root.getAttribute('data-empty-label') || 'Any',
+          root.getAttribute('data-summary-label') || 'selected'
+        );
+        // Prefer labels from option nodes when re-summarizing without opts array.
+        if (selected.length && selected.length <= 2) {
+          const labels = Array.from(root.querySelectorAll('[data-cdd-opt]:checked')).map((n) => {
+            const lab = n.closest('label');
+            const span = lab && lab.querySelector('.cdd-opt-lbl');
+            return (span ? span.textContent : n.value || '').trim();
+          }).filter(Boolean);
+          if (labels.length) toggle.textContent = labels.join(', ');
+        } else if (!selected.length) {
+          toggle.textContent = root.getAttribute('data-empty-label') || 'Any';
+        } else {
+          toggle.textContent = selected.length + ' ' + (root.getAttribute('data-summary-label') || 'selected');
+        }
+        toggle.title = selected.length
+          ? Array.from(root.querySelectorAll('[data-cdd-opt]:checked')).map((n) => {
+              const lab = n.closest('label');
+              const span = lab && lab.querySelector('.cdd-opt-lbl');
+              return (span ? span.textContent : n.value || '').trim();
+            }).filter(Boolean).join(', ')
+          : (root.getAttribute('data-empty-label') || 'Any');
+      }
+    },
+
+    closeAllCheckboxDropdowns(except) {
+      document.querySelectorAll('[data-checkbox-dropdown].open').forEach((root) => {
+        if (except && root === except) return;
+        root.classList.remove('open');
+        const menu = root.querySelector('[data-cdd-menu]');
+        if (menu) menu.hidden = true;
+        const toggle = root.querySelector('[data-cdd-toggle]');
+        if (toggle) toggle.setAttribute('aria-expanded', 'false');
+      });
+    },
+
+    checkboxDropdownFieldHtml(p, val, rowIdx, dataParamKey, visibleLabels, step) {
+      const paramKey = dataParamKey || p.key;
+      const id = 'r' + rowIdx + '-' + paramKey.replace(/\./g, '-');
+      const lblClass = visibleLabels ? 'inline-lbl inline-lbl-visible' : 'inline-lbl';
+      const lbl = (visibleLabels && p.label)
+        ? '<span class="' + lblClass + '">' + this.escapeHtml(p.label) + '</span>'
+        : '';
+      const opts = this.optionsForParam(p, { rowIdx, step, paramKey });
+      const selected = this.resolveCsvValues(val != null ? val : (p.default != null ? p.default : ''));
+      const selectedSet = new Set(selected.map(String));
+      const emptyLabel = p.empty_label || 'Any';
+      const summaryLabel = p.summary_label || 'selected';
+      const summary = this.checkboxDropdownSummary(selected, opts, emptyLabel, summaryLabel);
+
+      let menu = '<div class="checkbox-dropdown-menu" data-cdd-menu hidden>';
+      menu += '<div class="checkbox-dropdown-search-wrap">'
+        + '<input type="search" class="checkbox-dropdown-search" data-cdd-search placeholder="Filter…" autocomplete="off">'
+        + '</div>';
+      menu += '<div class="checkbox-dropdown-actions">'
+        + '<button type="button" class="checkbox-dropdown-action" data-cdd-all>All</button>'
+        + '<button type="button" class="checkbox-dropdown-action" data-cdd-none>None</button>'
+        + '</div>';
+      menu += '<div class="checkbox-dropdown-list" data-cdd-list>';
+      opts.forEach((o) => {
+        const v = o.value != null ? o.value : o;
+        const l = o.label != null ? o.label : o;
+        const oid = id + '-opt-' + String(v).replace(/[^a-zA-Z0-9_-]/g, '_');
+        menu += '<label class="checkbox-dropdown-option" data-cdd-option>'
+          + '<input type="checkbox" data-cdd-opt value="' + this.escapeHtml(String(v)) + '"'
+          + (selectedSet.has(String(v)) ? ' checked' : '') + ' id="' + this.escapeHtml(oid) + '">'
+          + '<span class="cdd-opt-lbl">' + this.escapeHtml(String(l)) + '</span></label>';
+      });
+      selected.forEach((v) => {
+        if (!opts.some((o) => String(o.value != null ? o.value : o) === String(v))) {
+          const oid = id + '-opt-extra-' + String(v).replace(/[^a-zA-Z0-9_-]/g, '_');
+          menu += '<label class="checkbox-dropdown-option" data-cdd-option>'
+            + '<input type="checkbox" data-cdd-opt value="' + this.escapeHtml(String(v)) + '" checked id="'
+            + this.escapeHtml(oid) + '">'
+            + '<span class="cdd-opt-lbl">' + this.escapeHtml(String(v)) + '</span></label>';
+        }
+      });
+      if (!opts.length && !selected.length) {
+        menu += '<div class="checkbox-dropdown-empty">No options</div>';
+      }
+      menu += '</div></div>';
+
+      return '<div class="inline-field inline-field-checkbox-dropdown'
+        + (visibleLabels ? ' inline-field-labeled' : '') + '">' + lbl
+        + '<div class="checkbox-dropdown" data-checkbox-dropdown data-empty-label="'
+        + this.escapeHtml(emptyLabel) + '" data-summary-label="' + this.escapeHtml(summaryLabel) + '">'
+        + '<button type="button" class="field-select checkbox-dropdown-toggle" data-cdd-toggle '
+        + 'aria-haspopup="listbox" aria-expanded="false" id="' + id + '-toggle">'
+        + this.escapeHtml(summary) + '</button>'
+        + menu
+        + '<input type="hidden" data-param="' + this.escapeHtml(paramKey) + '" id="' + id
+        + '" value="' + this.escapeHtml(selected.join(',')) + '">'
+        + '</div></div>';
     },
 
     optionsForParam(p, context) {
@@ -305,6 +443,9 @@
       const opts = this.optionsForParam(p, { rowIdx, step, paramKey });
       val = val != null ? val : (p.default != null ? p.default : '');
 
+      if (p.type === 'checkbox_dropdown' || p.type === 'jobs_multiselect') {
+        return this.checkboxDropdownFieldHtml(p, val, rowIdx, dataParamKey, visibleLabels, step);
+      }
       if (p.type === 'select' && p.options) {
         let h = '<label class="inline-field' + (visibleLabels ? ' inline-field-labeled' : '') + '">' + lbl +
           '<select class="field-select" data-param="' + this.escapeHtml(paramKey) + '" id="' + id + '">';
@@ -373,25 +514,6 @@
           '<input type="number" class="field-input field-percent" data-param="' + this.escapeHtml(paramKey) + '" id="' + id + '" value="' +
           this.escapeHtml(String(val)) + '" min="' + min + '" max="' + max + '" step="' + step + '">' +
           '<span class="field-percent-suffix">%</span></span></label>';
-      }
-      if (p.type === 'jobs_multiselect') {
-        const opts = this.optionsForParam(p, { rowIdx, step });
-        const selected = this.resolveAutoAssignJobsValue(val);
-        const selectedSet = new Set(selected.map(String));
-        let h = '<label class="inline-field inline-field-multiselect' + (visibleLabels ? ' inline-field-labeled' : '') + '">' + lbl +
-          '<select multiple class="field-select field-multiselect" data-param="' + this.escapeHtml(paramKey) + '" id="' + id + '" size="4">';
-        opts.forEach((o) => {
-          const v = o.value != null ? o.value : o;
-          const l = o.label != null ? o.label : o;
-          h += '<option value="' + this.escapeHtml(String(v)) + '"' +
-            (selectedSet.has(String(v)) ? ' selected' : '') + '>' + this.escapeHtml(String(l)) + '</option>';
-        });
-        selected.forEach((v) => {
-          if (!opts.some((o) => String(o.value != null ? o.value : o) === String(v))) {
-            h += '<option value="' + this.escapeHtml(String(v)) + '" selected>' + this.escapeHtml(String(v)) + '</option>';
-          }
-        });
-        return h + '</select></label>';
       }
       return '<label class="inline-field' + (visibleLabels ? ' inline-field-labeled' : '') + '">' + lbl +
         '<input type="text" class="field-input" data-param="' + this.escapeHtml(paramKey) + '" id="' + id + '" value="' +
@@ -619,7 +741,7 @@
     compileGenerateOrdersTitle(params) {
       params = params || {};
       const parts = [];
-      const shipment = String(params.shipment || '').trim();
+      const shipment = this.resolveCsvValues(params.shipment).join(', ');
       if (shipment) parts.push(shipment);
       if (String(params.increment_session || '') === '1') parts.push('increment session');
       const maxUnfilled = String(params.max_unfilled || '').trim();
@@ -632,11 +754,92 @@
 
     compileAutoAssignTitle(params) {
       params = params || {};
-      const jobs = String(params.jobs || '').trim();
-      if (!jobs) {
-        return 'Assign Cars';
+      const jobs = this.resolveCsvValues(params.jobs).join(', ');
+      let line = jobs ? ('Assign Cars ' + jobs) : 'Assign Cars';
+      const stations = this.resolveCsvValues(params.station).filter((s) => s.toLowerCase() !== 'all');
+      if (stations.length) {
+        line += ' at ' + stations.join(', ');
       }
-      return 'Assign Cars ' + jobs.split(',').map((s) => s.trim()).filter(Boolean).join(', ');
+      const destLabels = this.resolveCsvValues(params.destination).map((token) => {
+        if (token.indexOf('station::') === 0) return token.slice(9);
+        if (token.indexOf('location::') === 0) return token.slice(10);
+        return token;
+      }).filter(Boolean);
+      if (destLabels.length) {
+        line += ' → ' + destLabels.join(', ');
+      }
+      return line;
+    },
+
+    formatStationLocationToken(token) {
+      token = String(token || '').trim();
+      if (token.indexOf('station::') === 0) return token.slice(9);
+      if (token.indexOf('location::') === 0) return token.slice(10);
+      if (token === 'remainder') return 'Final Destination';
+      return token;
+    },
+
+    /** Pretty value for preview/compile — expands filter objects to active keys only. */
+    formatParamDisplay(val, paramDef) {
+      if (val == null) return '';
+      if (typeof val === 'object' && !Array.isArray(val)) {
+        const fields = (paramDef && paramDef.fields) || [];
+        const labelFor = (key) => {
+          const f = fields.find((x) => x.key === key);
+          return (f && f.label) || key;
+        };
+        const parts = [];
+        Object.keys(val).forEach((key) => {
+          const raw = val[key];
+          if (raw == null || typeof raw === 'object') return;
+          const text = String(raw).trim();
+          if (!text) return;
+          const pretty = this.resolveCsvValues(text)
+            .map((t) => this.formatStationLocationToken(t))
+            .filter(Boolean)
+            .join(', ');
+          if (!pretty) return;
+          parts.push(labelFor(key) + '=' + pretty);
+        });
+        return parts.join('; ');
+      }
+      if (Array.isArray(val)) {
+        return val.map((v) => this.formatParamDisplay(v, paramDef)).filter(Boolean).join(', ');
+      }
+      const text = String(val).trim();
+      if (!text || text === '[object Object]') return '';
+      const type = paramDef && paramDef.type;
+      const from = paramDef && paramDef.options_from;
+      if (type === 'select' && Array.isArray(paramDef.options)) {
+        // Keep the common "all" format chip short (not "All styles").
+        if (paramDef.key === 'format' && text === 'all') {
+          return 'All';
+        }
+        const opt = paramDef.options.find((o) => {
+          const ov = (o && typeof o === 'object') ? (o.value != null ? o.value : o.label) : o;
+          return String(ov) === text;
+        });
+        if (opt && typeof opt === 'object' && opt.label != null) {
+          return String(opt.label);
+        }
+      }
+      if (
+        type === 'checkbox_dropdown'
+        || type === 'jobs_multiselect'
+        || type === 'station_location'
+        || type === 'setout_location'
+        || from === 'station_locations'
+        || from === 'setout_locations'
+        || from === 'stations'
+        || from === 'locations'
+        || from === 'jobs'
+      ) {
+        return this.resolveCsvValues(text)
+          .map((t) => this.formatStationLocationToken(t))
+          .filter(Boolean)
+          .join(', ');
+      }
+      return text;
     },
 
     compileTrainCarFiltersTitle(filters) {
@@ -653,8 +856,10 @@
         unloading_location: 'unload',
       };
       Object.keys(labels).forEach((key) => {
-        const v = String(filters[key] || '').trim();
-        if (v) parts.push(labels[key] + '=' + v);
+        const raw = String(filters[key] || '').trim();
+        if (!raw) return;
+        const pretty = this.resolveCsvValues(raw).map((t) => this.formatStationLocationToken(t)).join(', ');
+        if (pretty) parts.push(labels[key] + '=' + pretty);
       });
       return parts.length ? parts.join('; ') : '';
     },
@@ -812,7 +1017,7 @@
           if (p.type === 'filter_group') {
             return this.filterGroupHtml(p, values[p.key] || {}, rowIdx);
           }
-          return this.inlineParamFieldHtml(p, values[p.key], rowIdx, undefined, !!p.visible_label, step);
+          return this.inlineParamFieldHtml(p, values[p.key], rowIdx, undefined, true, step);
         });
       return fields.length ? fields.join('') : '<span class="inline-empty">No parameters</span>';
     },
@@ -1050,13 +1255,13 @@
             '</div>' +
           '</div>' +
           '<button type="button" class="btn-icon btn-insert-before" title="Add step below step ' + (idx + 1) + '">+</button>' +
-          '<label class="inline-field row-command">' +
-            '<span class="inline-lbl">Command</span>' +
+          '<label class="inline-field row-command inline-field-labeled">' +
+            '<span class="inline-lbl inline-lbl-visible">Command</span>' +
             this.commandSelectHtml(step, rowKey) +
           '</label>' +
           '<div class="row-params">' + this.paramsHtmlForStep(step, rowKey) + '</div>' +
-          '<label class="inline-field row-remarks">' +
-            '<span class="inline-lbl">Remarks</span>' +
+          '<label class="inline-field row-remarks inline-field-labeled">' +
+            '<span class="inline-lbl inline-lbl-visible">Remarks</span>' +
             '<input type="text" class="field-input field-remarks" data-notes placeholder="Optional remarks" value="' +
             this.escapeHtml(this.rowRemarksText(step)) + '">' +
           '</label>' +
@@ -1111,8 +1316,8 @@
           params[k] = String(!isNaN(fraction) ? (fraction <= 1 ? Math.round(fraction * 100) : Math.round(fraction)) : (p.default || ''));
           return;
         }
-        if (k === 'jobs' && p.type === 'jobs_multiselect') {
-          params[k] = oldParams.jobs != null ? String(oldParams.jobs) : '';
+        if (p.type === 'jobs_multiselect' || p.type === 'checkbox_dropdown') {
+          params[k] = oldParams[k] != null ? String(oldParams[k]) : '';
           return;
         }
         if (oldParams[k] !== undefined && oldParams[k] !== '') {
@@ -1145,31 +1350,31 @@
         return this.compileAutoAssignTitle(step.params);
       }
       if (step.function === 'pick_up_cars') {
-        const job = String(step.params?.job || '').trim();
+        const jobs = this.resolveCsvValues(step.params?.job).join(', ');
+        const locs = this.resolveCsvValues(step.params?.location).join(', ');
         const filterSuffix = this.compileTrainCarFiltersTitle(step.params?.car_filters);
-        if (!job && !String(step.params?.location || '').trim()) {
+        if (!jobs && !locs) {
           return filterSuffix ? ('Pick Up Cars locals (' + filterSuffix + ')') : 'Pick Up Cars locals';
         }
         let title = '';
-        if (!job) title = 'Pick Up Cars locals';
-        else {
-          const loc = String(step.params?.location || '').trim();
-          title = loc ? ('Pick Up Cars ' + job + ' ' + loc) : ('Pick Up Cars ' + job);
-        }
+        if (!jobs) title = 'Pick Up Cars locals';
+        else title = locs ? ('Pick Up Cars ' + jobs + ' ' + locs) : ('Pick Up Cars ' + jobs);
         if (filterSuffix) title += ' (' + filterSuffix + ')';
         return title;
       }
       if (step.function === 'set_out_cars') {
-        const job = String(step.params?.job || '').trim();
-        const loc = String(step.params?.location || '').trim();
+        const jobs = this.resolveCsvValues(step.params?.job).join(', ');
+        const locTokens = this.resolveCsvValues(step.params?.location);
+        const locs = locTokens.map((t) => this.formatStationLocationToken(t)).join(', ');
         const filterSuffix = this.compileTrainCarFiltersTitle(step.params?.car_filters);
-        if (!job && !loc) return 'Set Out Cars locals';
+        if (!jobs && !locs) return 'Set Out Cars locals';
         let title = '';
-        if (job && !loc) title = 'Set Out Cars ' + job + ' Final Destination';
-        else title = this.catalogMap[step.function]
-          ? (this.catalogMap[step.function].gui_template || '')
-              .replace('{job}', job).replace('{location}', loc).replace(/\s+/g, ' ').trim()
-          : ('Set Out Cars ' + job + ' ' + loc).trim();
+        if (jobs && !locs) title = 'Set Out Cars ' + jobs + ' Final Destination';
+        else if (jobs && locTokens.length === 1 && locTokens[0] === 'remainder') {
+          title = 'Set Out Cars ' + jobs + ' Final Destination';
+        } else {
+          title = ('Set Out Cars ' + jobs + ' ' + locs).replace(/\s+/g, ' ').trim();
+        }
         if (filterSuffix) title += ' (' + filterSuffix + ')';
         return title;
       }
@@ -1212,7 +1417,10 @@
         if (step.function === 'pick_up_cars') {
           t = t.replace('{location_suffix}', p.location ? p.location : '');
         }
-        title = t.replace(/\{(\w+)\}/g, (_, k) => (p[k] != null && p[k] !== '' ? String(p[k]) : '')).replace(/\s+/g, ' ').trim();
+        title = t.replace(/\{(\w+)\}/g, (_, k) => {
+          const pdef = (def.params || []).find((pp) => pp.key === k);
+          return this.formatParamDisplay(p[k], pdef);
+        }).replace(/\s+/g, ' ').trim();
       }
       if (!title && step.instruction) title = String(step.instruction).trim();
       if (!title && step.params?.label) title = String(step.params.label).trim();
@@ -1245,7 +1453,7 @@
       }
       const cmd = def?.label || (step.function || '').replace(/_/g, ' ');
       let html = '<span class="preview-cmd">' + this.escapeHtml(cmd) + '</span>';
-      if (step.function === 'load_unload' || step.function === 'fill_orders' || step.function === 'reposition_empties' || step.function === 'generate_orders' || step.function === 'auto_assign_locals' || step.function === 'goto' || step.function === 'if_then') {
+      if (step.function === 'load_unload' || step.function === 'fill_orders' || step.function === 'reposition_empties' || step.function === 'generate_orders' || step.function === 'auto_assign_locals' || step.function === 'pick_up_cars' || step.function === 'set_out_cars' || step.function === 'goto' || step.function === 'if_then') {
         const compiled = this.compileOne(step, idx);
         if (compiled) {
           return '<span class="preview-cmd">' + this.escapeHtml(compiled) + '</span>';
@@ -1256,12 +1464,11 @@
       let pi = 0;
       pdefs.forEach((p) => {
         if (this.shouldHideInlineParam(step, p)) return;
-        const val = params[p.key];
-        if (val !== undefined && String(val).trim() !== '') {
-          html += '<span class="preview-param p-' + (pi % 5) + '" title="' + this.escapeHtml(p.label) + '">' +
-            this.escapeHtml(String(val)) + '</span>';
-          pi++;
-        }
+        const shown = this.formatParamDisplay(params[p.key], p);
+        if (!shown) return;
+        html += '<span class="preview-param p-' + (pi % 5) + '" title="' + this.escapeHtml(p.label || p.key) + '">' +
+          this.escapeHtml(shown) + '</span>';
+        pi++;
       });
       if (pi === 0) {
         const compiled = this.compileOne(step, idx);
@@ -1347,6 +1554,59 @@
         this.updateRemarksLayout(row);
         this.updateRowPreview(row, idx);
       };
+      row.addEventListener('click', (e) => {
+        const toggle = e.target.closest('[data-cdd-toggle]');
+        if (toggle && row.contains(toggle)) {
+          e.preventDefault();
+          const root = toggle.closest('[data-checkbox-dropdown]');
+          const menu = root && root.querySelector('[data-cdd-menu]');
+          if (!root || !menu) return;
+          const willOpen = menu.hidden;
+          this.closeAllCheckboxDropdowns(willOpen ? root : null);
+          menu.hidden = !willOpen;
+          root.classList.toggle('open', willOpen);
+          toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+          if (willOpen) {
+            const search = menu.querySelector('[data-cdd-search]');
+            if (search) {
+              search.value = '';
+              menu.querySelectorAll('[data-cdd-option]').forEach((opt) => { opt.hidden = false; });
+              queueMicrotask(() => search.focus());
+            }
+          }
+          return;
+        }
+        const allBtn = e.target.closest('[data-cdd-all]');
+        if (allBtn && row.contains(allBtn)) {
+          e.preventDefault();
+          const root = allBtn.closest('[data-checkbox-dropdown]');
+          root.querySelectorAll('[data-cdd-opt]').forEach((n) => {
+            if (!n.closest('[data-cdd-option]')?.hidden) n.checked = true;
+          });
+          this.syncCheckboxDropdown(root);
+          onRowEdit();
+          return;
+        }
+        const noneBtn = e.target.closest('[data-cdd-none]');
+        if (noneBtn && row.contains(noneBtn)) {
+          e.preventDefault();
+          const root = noneBtn.closest('[data-checkbox-dropdown]');
+          root.querySelectorAll('[data-cdd-opt]').forEach((n) => { n.checked = false; });
+          this.syncCheckboxDropdown(root);
+          onRowEdit();
+        }
+      });
+      row.addEventListener('input', (e) => {
+        if (e.target.matches('[data-cdd-search]')) {
+          const q = e.target.value.trim().toLowerCase();
+          const menu = e.target.closest('[data-cdd-menu]');
+          if (!menu) return;
+          menu.querySelectorAll('[data-cdd-option]').forEach((opt) => {
+            const label = (opt.querySelector('.cdd-opt-lbl')?.textContent || '').toLowerCase();
+            opt.hidden = q !== '' && label.indexOf(q) < 0;
+          });
+        }
+      });
       row.addEventListener('change', (e) => {
         const target = e.target;
         if (target.matches('[data-step-num]')) return;
@@ -1365,10 +1625,13 @@
             hidden.value = selected.join(',');
           }
         }
+        if (target.matches('[data-cdd-opt]')) {
+          this.syncCheckboxDropdown(target.closest('[data-checkbox-dropdown]'));
+        }
         onRowEdit();
       });
       row.addEventListener('input', (e) => {
-        if (e.target.matches('[data-step-num]')) return;
+        if (e.target.matches('[data-step-num]') || e.target.matches('[data-cdd-search]')) return;
         onRowEdit();
       });
       this.updateRemarksLayout(row);
@@ -1422,6 +1685,7 @@
     },
 
     renderSteps(options) {
+      this.ensureCheckboxDropdownDocHandlers();
       options = options || {};
       const scrollY = options.preserveScroll ? window.scrollY : null;
 
@@ -1896,6 +2160,7 @@
       await this.loadRecipe();
       await this.loadRunOptions();
       this.renderSteps({ skipSync: true });
+      this.showPreview();
       this.syncWorkflowSaveFilename();
       this.setStatus(
         'Loaded ' + this.activeWorkflow + ' — ' + this.recipe.steps.length + ' steps · DB session ' +
@@ -2288,9 +2553,37 @@
         steps.forEach((step, idx) => {
           const n = idx + 1;
           const disabled = step && Object.prototype.hasOwnProperty.call(step, 'enabled') && !step.enabled;
-          const cmd = (this.compileOne(step, idx) || step?.function || '—').trim();
+          let cmd = (this.compileOne(step, idx) || step?.function || '—').trim();
+          if (cmd.indexOf('[object Object]') >= 0) {
+            cmd = cmd.split('[object Object]').join('').replace(/\s+/g, ' ').trim() || (step?.function || '—');
+          }
           const remarks = (this.rowRemarksText(step) || '').trim();
-          body += '<li class="' + (disabled ? 'disabled' : '') + '">'
+          // Only expand filter_group leftovers for steps that don't already compile filters in.
+          const expandsOwnFilters = [
+            'pick_up_cars', 'set_out_cars', 'fill_orders', 'load_unload',
+            'reposition_empties', 'auto_assign_locals',
+          ].indexOf(step.function) >= 0;
+          if (!expandsOwnFilters) {
+            const filterBits = [];
+            const params = step.params || {};
+            const pdefs = (this.catalogMap[step.function] || {}).params || [];
+            pdefs.forEach((p) => {
+              if (p.type !== 'filter_group') return;
+              const shown = this.formatParamDisplay(params[p.key], p);
+              if (!shown) return;
+              if (cmd.indexOf(shown) >= 0) return;
+              filterBits.push(shown);
+            });
+            if (filterBits.length) {
+              cmd = (cmd + ' (' + filterBits.join('; ') + ')').replace(/\s+/g, ' ').trim();
+            }
+          }
+          const isSection = step.function === 'section_label';
+          const liClass = [
+            isSection ? 'wf-preview-section' : 'wf-preview-step',
+            disabled ? 'disabled' : '',
+          ].filter(Boolean).join(' ');
+          body += '<li class="' + liClass + '">'
             + '<div class="wf-preview-cmd"><span class="wf-preview-num">' + n + '.</span> '
             + esc(cmd)
             + (disabled ? ' <span class="wf-preview-tag">(disabled)</span>' : '')

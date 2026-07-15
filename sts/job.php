@@ -166,9 +166,9 @@ session_render_nav_bar([
     <p class="muted">Switch lists and the waybills for the cars on each phase.</p>
     <div class="session-nav-row session-nav-row-stats">
       <?php if ($prev_session !== null): ?>
-        <a class="btn btn-outline-dark btn-sm" href="<?php echo htmlspecialchars(session_train_browse_href($prev_session, $job_display, $selected_style, $root)); ?>"><i class="bi bi-chevron-left"></i> Session <?php echo (int) $prev_session; ?></a>
+        <?php echo session_nav_chevron_btn_html('prev', session_train_browse_href($prev_session, $job_display, $selected_style, $root), $prev_session); ?>
       <?php else: ?>
-        <span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true"><i class="bi bi-chevron-left"></i> Previous</span>
+        <?php echo session_nav_chevron_btn_html('prev', null); ?>
       <?php endif; ?>
       <label class="job-session-select-label">
         <span class="visually-hidden">Session</span>
@@ -179,9 +179,9 @@ session_render_nav_bar([
         </select>
       </label>
       <?php if ($next_session !== null): ?>
-        <a class="btn btn-outline-dark btn-sm" href="<?php echo htmlspecialchars(session_train_browse_href($next_session, $job_display, $selected_style, $root)); ?>">Session <?php echo (int) $next_session; ?> <i class="bi bi-chevron-right"></i></a>
+        <?php echo session_nav_chevron_btn_html('next', session_train_browse_href($next_session, $job_display, $selected_style, $root), $next_session); ?>
       <?php else: ?>
-        <span class="btn btn-outline-dark btn-sm disabled" aria-disabled="true">Next <i class="bi bi-chevron-right"></i></span>
+        <?php echo session_nav_chevron_btn_html('next', null); ?>
       <?php endif; ?>
       <label class="job-train-select-label">
         <span>Train</span>

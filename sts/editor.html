@@ -7,7 +7,7 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
   <link rel="stylesheet" href="session-nav.css">
-  <link rel="stylesheet" href="workflow-ui.css?v=49">
+  <link rel="stylesheet" href="workflow-ui.css?v=53">
 </head>
 <body>
   <nav class="navbar navbar-dark noprint" style="background-color: #343a40;">
@@ -141,7 +141,7 @@
       <div id="steps-preview" class="steps-preview" hidden></div>
     </div>
   </div>
-  <script src="workflow-shared.js?v=76"></script>
+  <script src="workflow-shared.js?v=82"></script>
   <script>
 (function () {
   const W = WorkflowUI;
@@ -215,6 +215,7 @@
       await W.loadRunOptions();
       W.syncInsertUi();
       W.renderSteps({ skipSync: true });
+      W.showPreview();
       const stepMsg = W.recipe.steps.length
         ? (W.activeWorkflow + ' · ' + W.recipe.steps.length + ' steps')
         : (W.workflowFiles.length

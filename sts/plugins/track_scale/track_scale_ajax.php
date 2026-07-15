@@ -294,11 +294,19 @@ try {
             if (!track_scale_sensor_has_reading($sensor)) {
                 track_scale_json_error('Weigh the scale car at this sensor before adjusting');
             }
-            $use_fine = null;
-            if (array_key_exists('fine_tune', $body)) {
-                $use_fine = !empty($body['fine_tune']);
+            if (array_key_exists('adjustment_tons', $body) && $body['adjustment_tons'] !== null && $body['adjustment_tons'] !== '') {
+                $adjustment = track_scale_set_sensor_adjustment_tons(
+                    $sensor,
+                    $body['adjustment_tons'],
+                    $config
+                );
+            } else {
+                $use_fine = null;
+                if (array_key_exists('fine_tune', $body)) {
+                    $use_fine = !empty($body['fine_tune']);
+                }
+                $adjustment = track_scale_adjust_sensor($sensor, $direction, $config, $use_fine);
             }
-            $adjustment = track_scale_adjust_sensor($sensor, $direction, $config, $use_fine);
             echo json_encode([
                 'success' => true,
                 'sensor' => $sensor,

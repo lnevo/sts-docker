@@ -83,6 +83,8 @@ function track_scale_default_config()
         'calibration' => [
             'adjust_step_tons' => 0.10,
             'fine_adjust_step_tons' => 0.01,
+            'adjust_min_tons' => -2.5,
+            'adjust_max_tons' => 2.5,
             'zero_offset_random_min_tons' => -1.9,
             'zero_offset_random_max_tons' => 1.9,
             'position_bias_tons' => [
@@ -1466,8 +1468,38 @@ function track_scale_adjust_sensor($position, $direction, $config = null, $use_f
     } else {
         $current += $step;
     }
+    $current = track_scale_clamp_sensor_adjustment_tons($current, $config);
     track_scale_set_sensor_adjustment($position, $current);
-    return track_scale_round($current, $config);
+    return $current;
+}
+
+/**
+ * Clamp sensor adjustment to the calibrate slider limits (±2.5 t).
+ */
+function track_scale_clamp_sensor_adjustment_tons($value, $config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    $cal = $config['calibration'] ?? [];
+    $min = (float) ($cal['adjust_min_tons'] ?? -2.5);
+    $max = (float) ($cal['adjust_max_tons'] ?? 2.5);
+    $tons = (float) $value;
+    if ($tons < $min) {
+        $tons = $min;
+    } elseif ($tons > $max) {
+        $tons = $max;
+    }
+    return track_scale_round($tons, $config);
+}
+
+/**
+ * Set sensor adjustment to an absolute tons value (for drag slider).
+ */
+function track_scale_set_sensor_adjustment_tons($position, $value, $config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    $rounded = track_scale_clamp_sensor_adjustment_tons($value, $config);
+    track_scale_set_sensor_adjustment($position, $rounded);
+    return $rounded;
 }
 
 function track_scale_reset_sensor_adjustment($position, $config = null)

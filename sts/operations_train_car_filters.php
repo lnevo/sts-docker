@@ -35,9 +35,11 @@ function operational_steps_train_car_filter_fields()
         [
             'key' => 'pickup_location',
             'label' => 'Pickup',
-            'type' => 'station_location',
+            'type' => 'checkbox_dropdown',
             'options_from' => 'station_locations',
             'default' => '',
+            'empty_label' => 'Any',
+            'summary_label' => 'pickup',
         ],
         [
             'key' => 'reporting_marks',
@@ -71,23 +73,29 @@ function operational_steps_train_car_filter_fields()
         [
             'key' => 'final_destination',
             'label' => 'Final dest.',
-            'type' => 'station_location',
+            'type' => 'checkbox_dropdown',
             'options_from' => 'station_locations',
             'default' => '',
+            'empty_label' => 'Any',
+            'summary_label' => 'destinations',
         ],
         [
             'key' => 'loading_location',
             'label' => 'Loading',
-            'type' => 'station_location',
+            'type' => 'checkbox_dropdown',
             'options_from' => 'station_locations',
             'default' => '',
+            'empty_label' => 'Any',
+            'summary_label' => 'loading',
         ],
         [
             'key' => 'unloading_location',
             'label' => 'Unloading',
-            'type' => 'station_location',
+            'type' => 'checkbox_dropdown',
             'options_from' => 'station_locations',
             'default' => '',
+            'empty_label' => 'Any',
+            'summary_label' => 'unloading',
         ],
     ];
 }
@@ -182,15 +190,31 @@ function operational_steps_train_car_row_matches(array $row, array $filters)
         'unloading_location' => ['unloading_station', 'unloading_location'],
     ];
     foreach ($checks as $filter_key => $cols) {
-        $needle = trim((string) ($filters[$filter_key] ?? ''));
-        if ($needle === '') {
+        $raw = trim((string) ($filters[$filter_key] ?? ''));
+        if ($raw === '') {
             continue;
         }
-        if (!operational_steps_train_car_station_location_match(
-            $needle,
-            $row[$cols[0]] ?? '',
-            $row[$cols[1]] ?? ''
-        )) {
+        // Comma-separated tokens (checkbox dropdown) match with OR.
+        if (function_exists('operational_steps_normalize_destination_filters')) {
+            $needles = operational_steps_normalize_destination_filters($raw);
+        } else {
+            $needles = array_values(array_filter(array_map('trim', explode(',', $raw))));
+        }
+        if ($needles === []) {
+            continue;
+        }
+        $matched = false;
+        foreach ($needles as $needle) {
+            if (operational_steps_train_car_station_location_match(
+                $needle,
+                $row[$cols[0]] ?? '',
+                $row[$cols[1]] ?? ''
+            )) {
+                $matched = true;
+                break;
+            }
+        }
+        if (!$matched) {
             return false;
         }
     }
