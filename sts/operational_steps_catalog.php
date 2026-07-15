@@ -38,10 +38,10 @@ function operational_steps_catalog_adder_order()
     $base = [
         'before' => ['cancel_orders', 'generate_orders', 'fill_orders', 'reposition_empties'],
         'during' => [
-            'auto_assign_locals', 'release_yard_cars', 'pick_up_cars', 'set_out_cars',
+            'auto_assign_locals', 'pick_up_cars', 'set_out_cars',
         ],
         'after' => ['load_unload'],
-        'reports' => ['generate_switchlists', 'generate_waybills'],
+        'reports' => ['generate_switchlists', 'generate_waybills', 'generate_station_report', 'generate_wheel_report'],
         'database' => [
             'restore_database', 'backup_database', 'validate_database',
             'increment_session',
@@ -1984,7 +1984,7 @@ function operational_steps_catalog_definitions()
         [
             'id' => 'release_yard_cars',
             'category' => 'operations',
-            'adder' => true,
+            'adder' => false,
             'adder_group' => 'during',
             'label' => 'Release Yard Assignments',
             'gui_template' => 'Release Yard Assignments {job} {station}',
@@ -2142,6 +2142,50 @@ function operational_steps_catalog_definitions()
             'runnable' => true,
             'dispatch' => 'generate_waybills',
             'params' => [],
+        ],
+        [
+            'id' => 'generate_station_report',
+            'category' => 'reports',
+            'adder' => true,
+            'adder_group' => 'reports',
+            'label' => 'Generate Station Report',
+            'gui_template' => 'Generate Station Report{info_suffix}',
+            'description' => 'Snapshot cars by station from the live database into this session\'s station report. '
+                . 'Each call appends a new phase (Phase 1, Phase 2, …); optional Info labels the phase '
+                . '(like Train Info on switch lists). Station-report phases are numbered independently of wheel reports.',
+            'runnable' => true,
+            'dispatch' => 'generate_station_report',
+            'params' => [
+                operational_steps_catalog_text_param(
+                    'info',
+                    'Info',
+                    '',
+                    false,
+                    'Optional phase label (e.g. Starting, After D749, End of session).'
+                ),
+            ],
+        ],
+        [
+            'id' => 'generate_wheel_report',
+            'category' => 'reports',
+            'adder' => true,
+            'adder_group' => 'reports',
+            'label' => 'Generate Wheel Report',
+            'gui_template' => 'Generate Wheel Report{info_suffix}',
+            'description' => 'Snapshot in-train / assigned cars from the live database into this session\'s wheel report. '
+                . 'Each call appends a new phase (Phase 1, Phase 2, …); optional Info labels the phase. '
+                . 'Wheel-report phases are numbered independently of station reports.',
+            'runnable' => true,
+            'dispatch' => 'generate_wheel_report',
+            'params' => [
+                operational_steps_catalog_text_param(
+                    'info',
+                    'Info',
+                    '',
+                    false,
+                    'Optional phase label (e.g. Starting, After CK1, End of session).'
+                ),
+            ],
         ],
         [
             'id' => 'render_switchlists',
@@ -2901,6 +2945,10 @@ function operational_steps_compile_gui(array $def, array $params)
             $suffix .= ' · ' . $info;
         }
         $merged['title_suffix'] = $suffix;
+    }
+    if (in_array(($def['id'] ?? ''), ['generate_station_report', 'generate_wheel_report'], true)) {
+        $info = trim((string) ($params['info'] ?? ''));
+        $merged['info_suffix'] = $info !== '' ? ' — ' . $info : '';
     }
     if (($def['id'] ?? '') === 'auto_assign_locals') {
         $merged['jobs'] = operational_steps_normalize_auto_assign_jobs($params);
@@ -4677,6 +4725,20 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
             // switch-list phase (idempotent) and rebuild the session bundle.
             $result['waybills'] = session_capture_and_refresh_waybills($dbc, $session, $root);
             break;
+        case 'generate_station_report':
+            require_once __DIR__ . '/session_helpers.php';
+            $session = warm_start_get_session($dbc);
+            $root = $config['session_root'] ?? session_web_root();
+            $info = trim((string) ($params['info'] ?? ''));
+            $result['station_report'] = session_generate_station_report_phase($dbc, $session, $info, $root);
+            break;
+        case 'generate_wheel_report':
+            require_once __DIR__ . '/session_helpers.php';
+            $session = warm_start_get_session($dbc);
+            $root = $config['session_root'] ?? session_web_root();
+            $info = trim((string) ($params['info'] ?? ''));
+            $result['wheel_report'] = session_generate_wheel_report_phase($dbc, $session, $info, $root);
+            break;
         case 'render_switchlists':
             require_once __DIR__ . '/session_helpers.php';
             require_once __DIR__ . '/master_switchlist_helpers.php';
@@ -5000,7 +5062,7 @@ function operational_steps_run_recipe_steps($dbc, array $recipe, $from_step, $to
             continue;
         }
         $fid = $step['function'] ?? '';
-        if (in_array($fid, ['generate_switchlists', 'section_label', 'text_instruction', 'marker', 'stop', 'goto', 'if_then', 'generate_waybills'], true)) {
+        if (in_array($fid, ['generate_switchlists', 'section_label', 'text_instruction', 'marker', 'stop', 'goto', 'if_then', 'generate_waybills', 'generate_station_report', 'generate_wheel_report'], true)) {
             continue;
         }
         $log[] = array_merge(

@@ -205,14 +205,23 @@ function so_print_all_bundle_stale($rel, $fs)
 
 function so_station_report_stale($rel, $fs)
 {
-    if (!preg_match('#^session_(\d+)/station_report\.html$#', $rel, $m)) {
+    if (!preg_match('#^session_(\d+)/station_report(?:_(\d+))?\.html$#', $rel, $m)) {
+        return false;
+    }
+    // Numbered catalog snapshots are frozen — never auto-rebuild from archives.
+    if (!empty($m[2])) {
         return false;
     }
     if (!is_file($fs)) {
         return false;
     }
+    $session_nbr = (int) $m[1];
+    // If catalog phases exist, the unscoped alias is the latest live snapshot.
+    if (session_car_report_phases($session_nbr, 'station') !== []) {
+        return false;
+    }
 
-    return session_station_report_stale((int) $m[1], $fs);
+    return session_station_report_stale($session_nbr, $fs);
 }
 
 function so_build_station_report_on_demand($rel)
@@ -220,24 +229,40 @@ function so_build_station_report_on_demand($rel)
     if (!preg_match('#^session_(\d+)/station_report\.html$#', $rel, $m)) {
         return null;
     }
-    require_once __DIR__ . '/open_db.php';
-    $dbc = open_db();
-    $built = session_build_station_report($dbc, (int) $m[1]);
-    mysqli_close($dbc);
+    $session_nbr = (int) $m[1];
+    // Only surface catalog-generated snapshots — no archive invent on first click.
+    $phases = session_car_report_phases($session_nbr, 'station');
+    if ($phases === []) {
+        return null;
+    }
+    $latest = $phases[count($phases) - 1];
+    $latest_fs = session_output_fs_path($latest['rel']);
+    if (!is_file($latest_fs)) {
+        return null;
+    }
+    $alias = session_output_fs_path($rel);
+    @copy($latest_fs, $alias);
 
-    return $built;
+    return $rel;
 }
 
 function so_wheel_report_stale($rel, $fs)
 {
-    if (!preg_match('#^session_(\d+)/wheel_report\.html$#', $rel, $m)) {
+    if (!preg_match('#^session_(\d+)/wheel_report(?:_(\d+))?\.html$#', $rel, $m)) {
+        return false;
+    }
+    if (!empty($m[2])) {
         return false;
     }
     if (!is_file($fs)) {
         return false;
     }
+    $session_nbr = (int) $m[1];
+    if (session_car_report_phases($session_nbr, 'wheel') !== []) {
+        return false;
+    }
 
-    return session_wheel_report_stale((int) $m[1], $fs);
+    return session_wheel_report_stale($session_nbr, $fs);
 }
 
 function so_build_wheel_report_on_demand($rel)
@@ -245,12 +270,20 @@ function so_build_wheel_report_on_demand($rel)
     if (!preg_match('#^session_(\d+)/wheel_report\.html$#', $rel, $m)) {
         return null;
     }
-    require_once __DIR__ . '/open_db.php';
-    $dbc = open_db();
-    $built = session_build_wheel_report($dbc, (int) $m[1]);
-    mysqli_close($dbc);
+    $session_nbr = (int) $m[1];
+    $phases = session_car_report_phases($session_nbr, 'wheel');
+    if ($phases === []) {
+        return null;
+    }
+    $latest = $phases[count($phases) - 1];
+    $latest_fs = session_output_fs_path($latest['rel']);
+    if (!is_file($latest_fs)) {
+        return null;
+    }
+    $alias = session_output_fs_path($rel);
+    @copy($latest_fs, $alias);
 
-    return $built;
+    return $rel;
 }
 
 function so_build_print_all_on_demand($rel)
@@ -910,45 +943,87 @@ function so_refresh_switchlist_train_print_all_session_nav($html, $rel)
  */
 function so_refresh_station_report_session_nav($html, $rel)
 {
-    if (!preg_match('#^session_(\d+)/station_report\.html$#', $rel, $m)) {
+    if (!preg_match('#^session_(\d+)/station_report(?:_(\d+))?\.html$#', $rel, $m)) {
         return $html;
     }
-    if (strpos($html, 'station-report-session-nav') === false) {
+    $session_nbr = (int) $m[1];
+    $phase_num = isset($m[2]) && $m[2] !== '' ? (int) $m[2] : null;
+    if (strpos($html, 'station-report-session-nav') !== false) {
+        $nav = session_station_report_session_nav_html($session_nbr);
+        if ($nav !== '') {
+            $html = preg_replace(
+                '#<div class="session-nav-row station-report-session-nav[^"]*">.*?</div>#s',
+                $nav,
+                $html,
+                1
+            );
+        }
+    }
+    $phase_nav = session_car_report_phase_nav_html($session_nbr, 'station', $phase_num);
+    if ($phase_nav === '') {
         return $html;
     }
-    $nav = session_station_report_session_nav_html((int) $m[1]);
-    if ($nav === '') {
-        return $html;
+    if (strpos($html, 'station-report-phase-nav') !== false) {
+        return preg_replace(
+            '#<div class="session-nav-row station-report-phase-nav[^"]*">.*?</div>#s',
+            $phase_nav,
+            $html,
+            1
+        );
+    }
+    if (strpos($html, 'station-report-session-nav') !== false) {
+        return preg_replace(
+            '#(<div class="session-nav-row station-report-session-nav[^"]*">.*?</div>)#s',
+            '$1' . $phase_nav,
+            $html,
+            1
+        );
     }
 
-    return preg_replace(
-        '#<div class="session-nav-row station-report-session-nav[^"]*">.*?</div>#s',
-        $nav,
-        $html,
-        1
-    );
+    return $html;
 }
 
 /** Same idea as so_refresh_station_report_session_nav(), for wheel reports. */
 function so_refresh_wheel_report_session_nav($html, $rel)
 {
-    if (!preg_match('#^session_(\d+)/wheel_report\.html$#', $rel, $m)) {
+    if (!preg_match('#^session_(\d+)/wheel_report(?:_(\d+))?\.html$#', $rel, $m)) {
         return $html;
     }
-    if (strpos($html, 'wheel-report-session-nav') === false) {
+    $session_nbr = (int) $m[1];
+    $phase_num = isset($m[2]) && $m[2] !== '' ? (int) $m[2] : null;
+    if (strpos($html, 'wheel-report-session-nav') !== false) {
+        $nav = session_wheel_report_session_nav_html($session_nbr);
+        if ($nav !== '') {
+            $html = preg_replace(
+                '#<div class="session-nav-row wheel-report-session-nav[^"]*">.*?</div>#s',
+                $nav,
+                $html,
+                1
+            );
+        }
+    }
+    $phase_nav = session_car_report_phase_nav_html($session_nbr, 'wheel', $phase_num);
+    if ($phase_nav === '') {
         return $html;
     }
-    $nav = session_wheel_report_session_nav_html((int) $m[1]);
-    if ($nav === '') {
-        return $html;
+    if (strpos($html, 'station-report-phase-nav') !== false) {
+        return preg_replace(
+            '#<div class="session-nav-row station-report-phase-nav[^"]*">.*?</div>#s',
+            $phase_nav,
+            $html,
+            1
+        );
+    }
+    if (strpos($html, 'wheel-report-session-nav') !== false) {
+        return preg_replace(
+            '#(<div class="session-nav-row wheel-report-session-nav[^"]*">.*?</div>)#s',
+            '$1' . $phase_nav,
+            $html,
+            1
+        );
     }
 
-    return preg_replace(
-        '#<div class="session-nav-row wheel-report-session-nav[^"]*">.*?</div>#s',
-        $nav,
-        $html,
-        1
-    );
+    return $html;
 }
 
 function so_normalize_path($path)

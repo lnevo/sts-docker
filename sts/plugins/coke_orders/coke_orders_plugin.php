@@ -64,7 +64,7 @@ function coke_orders_catalog_definitions()
         [
             'id' => 'replenish_coke_orders',
             'category' => 'operations',
-            'adder' => true,
+            'adder' => false,
             'adder_group' => 'before',
             'label' => 'Replenish Coke Orders',
             'gui_template' => 'Replenish Coke Orders (target {target_min}–{target_max})',

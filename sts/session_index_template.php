@@ -79,11 +79,11 @@ $session_wb_href = is_file(session_output_fs_path($session_wb_print_rel, $root))
         ? session_output_url($session_wb_index_rel)
         : null);
 $station_report_rel = 'session_' . (int) $session . '/station_report.html';
-$station_report_href = is_dir(session_dir_for($session, $root))
+$station_report_href = session_car_report_phases($session, 'station', $root) !== []
     ? session_output_url($station_report_rel)
     : null;
 $wheel_report_rel = 'session_' . (int) $session . '/wheel_report.html';
-$wheel_report_href = is_dir(session_dir_for($session, $root))
+$wheel_report_href = session_car_report_phases($session, 'wheel', $root) !== []
     ? session_output_url($wheel_report_rel)
     : null;
 $overview_nav = [

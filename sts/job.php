@@ -48,10 +48,16 @@ foreach ($train_members as $member_job) {
         $legs[] = $leg;
     }
 }
-// Rank by manifest/operational order, not phase_NN folder numbers (a
-// reconstructed Outbound can live in a higher-numbered folder than Return).
+// Rank by Train Info operational order (Starting first), then manifest
+// position — not phase_NN folder numbers (a reconstructed Starting can live
+// in a higher-numbered folder than Outbound/Next Day).
 $phase_rank = session_phase_display_rank($manifest);
 usort($legs, static function ($a, $b) use ($phase_rank) {
+    $ia = session_phase_info_sort_rank((string) ($a['info'] ?? ''));
+    $ib = session_phase_info_sort_rank((string) ($b['info'] ?? ''));
+    if ($ia !== $ib) {
+        return $ia <=> $ib;
+    }
     $wa = (int) $a['workflow_phase'];
     $wb = (int) $b['workflow_phase'];
     $ra = $phase_rank[$wa] ?? $wa;
@@ -71,6 +77,7 @@ $next_session = session_adjacent_session($browser_sessions, $session, 'next');
 
 // Phase print-all links across every member of the consolidated train.
 $phase_links = [];
+$phase_rank = session_phase_display_rank($manifest);
 foreach ($train_members as $member_job) {
     $member_phases = $manifest['jobs'][$member_job]['phases'] ?? [];
     // Restrict to the latest generation token so re-runs that appended phases to
@@ -81,6 +88,12 @@ foreach ($train_members as $member_job) {
             return isset($token_phase_nums[(int) $p]);
         }));
     }
+    usort($member_phases, static function ($a, $b) use ($phase_rank) {
+        $ra = $phase_rank[(int) $a] ?? (int) $a;
+        $rb = $phase_rank[(int) $b] ?? (int) $b;
+
+        return $ra <=> $rb;
+    });
     foreach (session_train_switchlist_phase_links($session, $member_job, $member_phases, $root) as $pl) {
         $phase_links[] = $pl;
     }
