@@ -222,6 +222,27 @@ h2 { margin: 0 0 12px; font-size: 16px; }
 .step-num-control-section .step-num-input {
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
+  font-weight: 700;
+  color: #1a3a5c;
+}
+.step-num-prefix {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0.85rem;
+  padding: 0 1px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #1a3a5c;
+  line-height: 1;
+  user-select: none;
+}
+.step-num-control-section {
+  gap: 2px;
+}
+.wf-preview-section .wf-preview-num {
+  font-weight: 700;
+  color: #1a3a5c;
 }
 .wf-preview-cmd .section-collapse-btn {
   display: inline-flex;
@@ -567,11 +588,17 @@ h2 { margin: 0 0 12px; font-size: 16px; }
 }
 
 .param-if-then-row,
+.param-if-then-filters-row,
 .param-goto-row {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem 0.75rem;
   align-items: end;
+}
+
+.param-if-then-filters-row .inline-field-labeled {
+  flex: 1 1 10rem;
+  min-width: 9rem;
 }
 
 .param-if-then-goto-grid .inline-field-labeled .field-select,

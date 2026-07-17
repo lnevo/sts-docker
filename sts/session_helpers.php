@@ -1303,8 +1303,10 @@ function session_list_browser_sessions($current, $root = null, $include_archived
         $include_archived = session_browse_archived_enabled();
     }
     $max = $current;
+    $archived = [];
     if ($include_archived) {
-        foreach (session_archived_output_numbers($root) as $n) {
+        $archived = session_archived_output_numbers($root);
+        foreach ($archived as $n) {
             $max = max($max, (int) $n);
         }
         foreach (glob(session_ensure_output_root($root) . '/session_*', GLOB_ONLYDIR) ?: [] as $d) {
@@ -1313,9 +1315,19 @@ function session_list_browser_sessions($current, $root = null, $include_archived
             }
         }
     }
-    // Only sessions up to the current DB session are browsable unless archived
-    // output browse is enabled (rewind left session_N folders in rewind_archive).
-    $sessions = range(1, $max);
+    // Only list sessions that actually have output on disk (or an archived
+    // tarball when browse-archived is on). Ghost numbers in range(1, current)
+    // produced dead overview / print-all nav links after rewinds and re-seeds.
+    $sessions = [];
+    $archived_set = array_fill_keys(array_map('intval', $archived), true);
+    for ($n = 1; $n <= $max; $n++) {
+        if (is_dir(session_dir_for($n, $root)) || isset($archived_set[$n])) {
+            $sessions[] = $n;
+        }
+    }
+    if (!in_array($current, $sessions, true)) {
+        $sessions[] = $current;
+    }
     sort($sessions, SORT_NUMERIC);
 
     return $sessions;
@@ -2200,25 +2212,29 @@ function session_switchlist_train_print_all_session_nav_html($session_nbr, $job,
     $style_suffix = $style !== '' ? ('_' . session_normalize_switchlist_style($style)) : '';
 
     // Match the same train across sessions by display name (job key may differ).
+    // Only offer sessions that actually have this train — otherwise prev/next
+    // and the jump list point at 404/empty print-alls.
     $display = session_job_display_map($session_nbr, null, $root);
     $display_name = $display[$job] ?? $job;
     $suffix_by = [];
     $fallback_suffix = 'train_' . $job . '.print_all' . $style_suffix . '.html';
+    $nav_sessions = [];
     foreach ($sessions as $n) {
         $n = (int) $n;
         $groups = session_job_group_map($n, null, $root);
         if (!isset($groups[$display_name]) || count($groups[$display_name]) === 0) {
-            // Keep a best-effort same-key path so navigation still tries so.php
-            // (on-demand build) rather than falling back to session_overview.
-            $suffix_by[$n] = $fallback_suffix;
             continue;
         }
+        $nav_sessions[] = $n;
         $suffix_by[$n] = 'train_' . $groups[$display_name][0] . '.print_all' . $style_suffix . '.html';
+    }
+    if (count($nav_sessions) < 2) {
+        return '';
     }
 
     return session_nav_row_picker_html(
         $session_nbr,
-        $sessions,
+        $nav_sessions,
         $current_db,
         $fallback_suffix,
         'switchlist-train-print-all-session-nav noprint',
@@ -2448,7 +2464,7 @@ function session_condition_operators()
     return ['=', '!=', '<', '<=', '>', '>='];
 }
 
-function session_evaluate_context($dbc, array $config = [])
+function session_evaluate_context($dbc, array $config = [], array $run_counters = [])
 {
     require_once __DIR__ . '/operations_stats.php';
 
@@ -2461,6 +2477,9 @@ function session_evaluate_context($dbc, array $config = [])
         'session_nbr' => $session_int,
         'session_is_odd' => $session_int % 2 === 1 ? 1 : 0,
         'session_is_even' => $session_int % 2 === 0 ? 1 : 0,
+        'filled_this_run' => (int) ($run_counters['filled_this_run'] ?? 0),
+        'generated_this_run' => (int) ($run_counters['generated_this_run'] ?? 0),
+        'repositioned_this_run' => (int) ($run_counters['repositioned_this_run'] ?? 0),
         '_dbc' => $dbc,
         '_config' => $config,
     ]);
@@ -2482,6 +2501,36 @@ function session_evaluate_condition(array $ctx, $variable, $operator, $value, ar
     }
 
     $left = (float) ($ctx[$variable] ?? 0);
+    // Optional order filters on if_then: commodity / shipment / car_code /
+    // loading / unloading / final destination (station:: / location:: tokens).
+    // When set against open_orders or unfilled_orders, count only matching
+    // revenue orders (generic catalog filters — e.g. commodity code, or
+    // final_destination=station::<name> for one destination lane).
+    if (in_array($variable, ['open_orders', 'unfilled_orders'], true)) {
+        $filters = [
+            'commodity' => trim((string) ($extra['commodity'] ?? $extra['consignment'] ?? '')),
+            'shipment' => trim((string) ($extra['shipment'] ?? '')),
+            'car_code' => trim((string) ($extra['car_code'] ?? '')),
+            'loading_location' => trim((string) ($extra['loading_location'] ?? '')),
+            'unloading_location' => trim((string) ($extra['unloading_location'] ?? '')),
+            'final_destination' => trim((string) ($extra['final_destination'] ?? '')),
+        ];
+        $has_filter = false;
+        foreach ($filters as $v) {
+            if ($v !== '') {
+                $has_filter = true;
+                break;
+            }
+        }
+        if ($has_filter) {
+            $dbc = $ctx['_dbc'] ?? null;
+            if ($dbc) {
+                require_once __DIR__ . '/operations_stats.php';
+                $left = (float) operations_count_orders($dbc, $variable, $filters);
+            }
+        }
+    }
+
     $right = (float) $value;
     switch ($operator) {
         case '=': return $left == $right;
@@ -2631,10 +2680,18 @@ function session_reset_output($session_nbr, $root = null)
         @unlink($cache);
         $removed[] = basename($cache);
     }
-    foreach (['index.html', 'print_all.html'] as $legacy) {
-        if (is_file($dir . '/' . $legacy)) {
-            @unlink($dir . '/' . $legacy);
-            $removed[] = $legacy;
+    // Station/wheel report snapshots + print-all caches must go too — otherwise
+    // re-runs append hundreds of phase HTML files and leave stale nav targets.
+    foreach (array_merge(
+        glob($dir . '/station_report*.html') ?: [],
+        glob($dir . '/wheel_report*.html') ?: [],
+        glob($dir . '/print_all*.html') ?: [],
+        glob($dir . '/train_*.print_all*.html') ?: [],
+        glob($dir . '/index.html') ?: []
+    ) as $file) {
+        if (is_file($file)) {
+            @unlink($file);
+            $removed[] = basename($file);
         }
     }
 
@@ -2695,11 +2752,9 @@ function session_compact_session_output(array &$manifest, $session_nbr, $root = 
     }
     $survivors = array_values($latest);
     usort($survivors, static function ($a, $b) use ($order) {
-        return ($order[session_phase_slot_key($a)] ?? 0)
-            <=> ($order[session_phase_slot_key($b)] ?? 0);
+        return session_phase_taken_order_cmp($a, $b, $order);
     });
-    // Within each train, force Starting → Outbound → Next Day even when a
-    // reconstructed Starting was appended late as a higher phase_NN.
+    // Keep taken / recipe order (step), not append-time folder reconstruction.
     $survivors = session_phases_reorder_info_within_trains($survivors, $order);
 
     $removed_phases = count($phases) - count($survivors);
@@ -2744,7 +2799,117 @@ function session_compact_session_output(array &$manifest, $session_nbr, $root = 
         @unlink($bundle);
     }
 
+    session_compact_car_reports($manifest, $session_nbr, $root);
+
     return ['removed_phases' => $removed_phases, 'removed_dirs' => $removed_dirs];
+}
+
+/**
+ * Collapse station/wheel report phases to the latest snapshot per Info label
+ * (e.g. one "Starting" + one "End of session") and delete orphaned HTML.
+ * Without this, re-runs of the same session number append forever and every
+ * new report rewrites hundreds of stale phase pages.
+ *
+ * Mutates $manifest in place. Does NOT save it.
+ *
+ * @return array{station_removed:int, wheel_removed:int}
+ */
+function session_compact_car_reports(array &$manifest, $session_nbr, $root = null)
+{
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
+    $dir = session_dir_for($session_nbr, $root);
+    $removed = ['station_removed' => 0, 'wheel_removed' => 0];
+
+    foreach (['station' => 'station_reports', 'wheel' => 'wheel_reports'] as $kind => $key) {
+        $rows = is_array($manifest[$key] ?? null) ? $manifest[$key] : [];
+        if ($rows === []) {
+            unset($manifest[$key]);
+            // Still scrub orphaned files left from older schemes.
+            $stem = session_car_report_file_stem($kind);
+            foreach (glob($dir . '/' . $stem . '_*.html') ?: [] as $orphan) {
+                @unlink($orphan);
+            }
+            continue;
+        }
+
+        $latest = [];
+        $order = [];
+        $i = 0;
+        foreach ($rows as $row) {
+            if (!is_array($row) || (int) ($row['phase'] ?? 0) < 1) {
+                continue;
+            }
+            $info = trim((string) ($row['info'] ?? ''));
+            $slot = $info !== '' ? $info : ('phase:' . (int) $row['phase']);
+            $latest[$slot] = $row;
+            $order[$slot] = $i;
+            $i++;
+        }
+        $survivors = array_values($latest);
+        usort($survivors, static function ($a, $b) use ($order) {
+            $ka = trim((string) ($a['info'] ?? ''));
+            $kb = trim((string) ($b['info'] ?? ''));
+            if ($ka === '') {
+                $ka = 'phase:' . (int) ($a['phase'] ?? 0);
+            }
+            if ($kb === '') {
+                $kb = 'phase:' . (int) ($b['phase'] ?? 0);
+            }
+
+            return ($order[$ka] ?? 0) <=> ($order[$kb] ?? 0);
+        });
+
+        $removed[$kind . '_removed'] = count($rows) - count($survivors);
+        $keep_files = [];
+        foreach ($survivors as $row) {
+            $file = (string) ($row['file'] ?? '');
+            if ($file !== '') {
+                $keep_files[$file] = true;
+            }
+        }
+        $stem = session_car_report_file_stem($kind);
+        foreach (glob($dir . '/' . $stem . '_*.html') ?: [] as $file) {
+            if (!isset($keep_files[basename($file)])) {
+                @unlink($file);
+            }
+        }
+        if ($survivors === []) {
+            unset($manifest[$key]);
+        } else {
+            $manifest[$key] = $survivors;
+        }
+    }
+
+    return $removed;
+}
+
+/**
+ * Delete live session_N output trees beyond the current DB session (leftovers
+ * from longer prior campaigns). Does not touch rewind_archive tarballs.
+ *
+ * @return list<string> Removed directory basenames.
+ */
+function session_prune_output_beyond_current($current, $root = null)
+{
+    $current = (int) $current;
+    $root = $root ?? session_web_root();
+    if ($current < 1 || !is_dir($root)) {
+        return [];
+    }
+    $removed = [];
+    foreach (glob(rtrim($root, '/') . '/session_*', GLOB_ONLYDIR) ?: [] as $dir) {
+        if (!preg_match('#/session_(\d+)$#', $dir, $m)) {
+            continue;
+        }
+        $n = (int) $m[1];
+        if ($n > $current) {
+            session_rrmdir($dir);
+            $removed[] = basename($dir);
+        }
+    }
+
+    return $removed;
 }
 
 /**
@@ -3447,12 +3612,35 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
             session_reset_output($session_nbr, $root);
             $manifest['phases'] = [];
             $manifest['jobs'] = [];
-            unset($manifest['waybills']);
+            unset($manifest['waybills'], $manifest['station_reports'], $manifest['wheel_reports']);
             $phase_num = 0;
             $reset_applied_for = (int) $session_nbr;
+            // Report generators reload the manifest from disk. Persist the
+            // reset first so they cannot resurrect stale switch-list phases.
+            session_save_manifest($session_nbr, $manifest, $root);
         }
     };
     $ctx = session_evaluate_context($dbc, $config);
+    $run_counters = [
+        'filled_this_run' => 0,
+        'generated_this_run' => 0,
+        'repositioned_this_run' => 0,
+    ];
+    $refresh_ctx = function () use ($dbc, $config, &$ctx, &$run_counters) {
+        $ctx = session_evaluate_context($dbc, $config, $run_counters);
+    };
+    $accumulate_run_counters = function (array $result) use (&$run_counters, $refresh_ctx) {
+        if (array_key_exists('filled', $result) && empty($result['skipped'])) {
+            $run_counters['filled_this_run'] += (int) $result['filled'];
+        }
+        if (array_key_exists('generated', $result) && empty($result['skipped'])) {
+            $run_counters['generated_this_run'] += (int) $result['generated'];
+        }
+        if (array_key_exists('repositioned', $result) && empty($result['skipped'])) {
+            $run_counters['repositioned_this_run'] += (int) $result['repositioned'];
+        }
+        $refresh_ctx();
+    };
     $log = [];
     $stopped = false;
     $loop_error = null;
@@ -3524,15 +3712,49 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
             continue;
         }
         if ($fid === 'if_then') {
+            // Re-read live dashboard + this-run counters so branches after
+            // generate/fill/reposition see post-step demand, not recipe-start state.
+            $refresh_ctx();
             $p = $step['params'] ?? [];
+            $var = (string) ($p['variable'] ?? 'session_nbr');
             $ok = session_evaluate_condition(
                 $ctx,
-                $p['variable'] ?? 'session_nbr',
+                $var,
                 $p['operator'] ?? '=',
                 $p['value'] ?? '0',
                 $p
             );
-            $log[] = ['step' => $n, 'action' => 'if_then', 'result' => $ok];
+            $left = (float) ($ctx[$var] ?? 0);
+            if (in_array($var, ['open_orders', 'unfilled_orders'], true)
+                && (
+                    trim((string) ($p['commodity'] ?? $p['consignment'] ?? '')) !== ''
+                    || trim((string) ($p['shipment'] ?? '')) !== ''
+                    || trim((string) ($p['car_code'] ?? '')) !== ''
+                    || trim((string) ($p['loading_location'] ?? '')) !== ''
+                    || trim((string) ($p['unloading_location'] ?? '')) !== ''
+                    || trim((string) ($p['final_destination'] ?? '')) !== ''
+                )
+            ) {
+                require_once __DIR__ . '/operations_stats.php';
+                $left = (float) operations_count_orders($dbc, $var, [
+                    'commodity' => trim((string) ($p['commodity'] ?? $p['consignment'] ?? '')),
+                    'shipment' => trim((string) ($p['shipment'] ?? '')),
+                    'car_code' => trim((string) ($p['car_code'] ?? '')),
+                    'loading_location' => trim((string) ($p['loading_location'] ?? '')),
+                    'unloading_location' => trim((string) ($p['unloading_location'] ?? '')),
+                    'final_destination' => trim((string) ($p['final_destination'] ?? '')),
+                ]);
+            }
+            $log[] = [
+                'step' => $n,
+                'action' => 'if_then',
+                'result' => $ok,
+                'variable' => $var,
+                'left' => $left,
+                'commodity' => trim((string) ($p['commodity'] ?? '')),
+                'shipment' => trim((string) ($p['shipment'] ?? '')),
+                'car_code' => trim((string) ($p['car_code'] ?? '')),
+            ];
             if ($ok && operational_steps_if_then_has_goto($step)) {
                 $target = operational_steps_goto_resolve_step($recipe, $p);
                 $total = count($recipe['steps']);
@@ -3684,7 +3906,7 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
         ]);
         $result = operational_steps_dispatch_step($dbc, $step, $dispatch_opts);
         $log[] = array_merge(['step' => $n], $result);
-        $ctx = session_evaluate_context($dbc, $config);
+        $accumulate_run_counters($result);
         $pc++;
     }
 
@@ -3880,15 +4102,41 @@ function session_phase_info(array $phase)
 }
 
 /**
- * Sort rank for a switch-list Train Info label. Keeps operational play order
- * (Starting → … → Next Day/Return) even when a reconstructed leg lands in a
- * higher phase_NN folder and was appended late in the manifest.
+ * Compare phases for display: recipe step (order taken), then Train Info
+ * rank, then phase folder. Blank morning info ranks before Return.
+ */
+function session_phase_taken_order_cmp(array $a, array $b, array $slot_order = null)
+{
+    $sa = (int) ($a['step'] ?? 0);
+    $sb = (int) ($b['step'] ?? 0);
+    if ($sa > 0 && $sb > 0 && $sa !== $sb) {
+        return $sa <=> $sb;
+    }
+    $ra = session_phase_info_sort_rank(session_phase_info($a));
+    $rb = session_phase_info_sort_rank(session_phase_info($b));
+    if ($ra !== $rb) {
+        return $ra <=> $rb;
+    }
+    if (is_array($slot_order)) {
+        $oa = $slot_order[session_phase_slot_key($a)] ?? PHP_INT_MAX;
+        $ob = $slot_order[session_phase_slot_key($b)] ?? PHP_INT_MAX;
+        if ($oa !== $ob) {
+            return $oa <=> $ob;
+        }
+    }
+
+    return ((int) ($a['phase'] ?? 0)) <=> ((int) ($b['phase'] ?? 0));
+}
+
+/**
+ * Legacy Train Info label ranks (fallback when recipe step is missing).
+ * Blank morning / primary leg ranks before named Return/Next Day.
  */
 function session_phase_info_sort_rank($info)
 {
     $info = strtolower(trim((string) $info));
     if ($info === '') {
-        return 80;
+        return 5;
     }
     $rules = [
         'starting' => 10,
@@ -3911,11 +4159,12 @@ function session_phase_info_sort_rank($info)
 }
 
 /**
- * Reorder phases that share a train job so Train Info plays in operational
- * sequence (Starting first). Cross-train slots keep their relative positions.
+ * Order phases as taken in the workflow (recipe step). Within a train,
+ * blank morning stays before Return even if a reconstructed folder was
+ * appended later in the manifest.
  *
  * @param list<array>              $phases
- * @param array<string,int>|null   $slot_order  Optional original order by slot key
+ * @param array<string,int>|null   $slot_order  Original append order by slot key
  * @return list<array>
  */
 function session_phases_reorder_info_within_trains(array $phases, array $slot_order = null)
@@ -3946,20 +4195,7 @@ function session_phases_reorder_info_within_trains(array $phases, array $slot_or
             $subset[] = $phases[$i];
         }
         usort($subset, static function ($a, $b) use ($slot_order) {
-            $ra = session_phase_info_sort_rank(session_phase_info($a));
-            $rb = session_phase_info_sort_rank(session_phase_info($b));
-            if ($ra !== $rb) {
-                return $ra <=> $rb;
-            }
-            if (is_array($slot_order)) {
-                $oa = $slot_order[session_phase_slot_key($a)] ?? 0;
-                $ob = $slot_order[session_phase_slot_key($b)] ?? 0;
-                if ($oa !== $ob) {
-                    return $oa <=> $ob;
-                }
-            }
-
-            return ((int) ($a['phase'] ?? 0)) <=> ((int) ($b['phase'] ?? 0));
+            return session_phase_taken_order_cmp($a, $b, $slot_order);
         });
         foreach ($indices as $k => $i) {
             $phases[$i] = $subset[$k];
@@ -4466,8 +4702,7 @@ function session_latest_token_phases(array $manifest)
     }
     $result = array_values($latest);
     usort($result, static function ($a, $b) use ($order) {
-        return ($order[session_phase_slot_key($a)] ?? 0)
-            <=> ($order[session_phase_slot_key($b)] ?? 0);
+        return session_phase_taken_order_cmp($a, $b, $order);
     });
 
     return session_phases_reorder_info_within_trains($result, $order);

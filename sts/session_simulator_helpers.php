@@ -126,6 +126,10 @@ function session_simulator_run($dbc, array $recipe, array $options = [])
         ];
     }
 
+    // Long multi-session runs must not inherit Apache/php.ini's 30s default.
+    @set_time_limit(0);
+    @ini_set('max_execution_time', '0');
+
     $total = count($recipe['steps'] ?? []);
     $start = max(1, (int) ($options['start_step'] ?? 1));
     $stop = max($start, min((int) ($options['stop_step'] ?? $total), $total));
@@ -139,6 +143,8 @@ function session_simulator_run($dbc, array $recipe, array $options = [])
     $warnings = [];
 
     for ($cycle = 0; $cycle < $repeat; $cycle++) {
+        // Refresh the budget each cycle in case an earlier step restored a limit.
+        @set_time_limit(0);
         if ($repeat > 1 && $cycle > 0) {
             $msg = 'Cycle ' . ($cycle + 1) . ': steps ' . $start . '–' . $stop;
             if ($skip_steps !== '') {

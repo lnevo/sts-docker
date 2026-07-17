@@ -7,7 +7,7 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
   <link rel="stylesheet" href="session-nav.css">
-  <link rel="stylesheet" href="workflow-ui.css?v=55">
+  <link rel="stylesheet" href="workflow-ui.css?v=56">
 </head>
 <body>
   <nav class="navbar navbar-dark noprint" style="background-color: #343a40;">
@@ -105,7 +105,7 @@
       <div class="actions-bar">
         <div class="steps-heading">
           <h2 style="margin:0;"><span id="steps-panel-title">Steps</span> <span id="step-count"></span></h2>
-          <div class="section-jump" id="steps-edit-nav">
+          <div class="section-jump noprint" id="steps-edit-nav">
             <label class="section-jump-label">
               <span class="inline-lbl">Section</span>
               <select id="editor-section" class="field-select" disabled>
@@ -113,6 +113,8 @@
               </select>
             </label>
             <button type="button" class="btn btn-outline-dark btn-sm" id="btn-goto-section" disabled>Goto</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-collapse-sections" title="Collapse all sections">Collapse all</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-expand-sections" title="Expand all sections">Expand all</button>
             <label class="section-jump-filter chk">
               <input type="checkbox" id="hide-non-execute">
               <span>Execute only</span>
@@ -147,7 +149,7 @@
       <div id="steps-preview" class="steps-preview" hidden></div>
     </div>
   </div>
-  <script src="workflow-shared.js?v=86"></script>
+  <script src="workflow-shared.js?v=90"></script>
   <script>
 (function () {
   const W = WorkflowUI;
@@ -183,6 +185,8 @@
   W.el('insert-mode')?.addEventListener('change', () => W.syncInsertUi());
   W.el('insert-step-num')?.addEventListener('input', () => W.syncInsertFromDom());
   W.el('btn-goto-section')?.addEventListener('click', () => W.scrollToEditorSection());
+  W.el('btn-collapse-sections')?.addEventListener('click', () => W.collapseAllSections());
+  W.el('btn-expand-sections')?.addEventListener('click', () => W.expandAllSections());
   W.el('editor-section')?.addEventListener('change', () => W.syncEditorSectionUi());
   W.el('hide-non-execute')?.addEventListener('change', (e) => {
     W.hideNonExecute = !!e.target.checked;

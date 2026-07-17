@@ -1775,7 +1775,7 @@ function operational_steps_catalog_definitions()
             'adder_group' => 'workflow',
             'label' => 'If … then goto …',
             'gui_template' => 'If {variable} {operator} {value} then goto {section_label}',
-            'description' => 'When the condition is true, skip forward to a later section. When false, continue to the next step. Variables match the Operations dashboard counts (session #, open/unfilled orders, unassigned, pickup/set-out pending, organize, scale, load/unload).',
+            'description' => 'When the condition is true, skip forward to a later section. When false, continue to the next step. Variables match the Operations dashboard counts (session #, open/unfilled orders, unassigned, pickup/set-out pending, organize, scale, load/unload) plus this-run counters refreshed after each step: filled_this_run, generated_this_run, repositioned_this_run. For open_orders / unfilled_orders, optional Commodity, Shipment, Car code, Loading, Unloading, or Final destination filters narrow the count so gates can target a lane without hardcoding commodities in PHP.',
             'runnable' => true,
             'dispatch' => 'if_then',
             'params' => [
@@ -1794,6 +1794,75 @@ function operational_steps_catalog_definitions()
                     'default' => '>=',
                 ],
                 ['key' => 'value', 'label' => 'Value', 'type' => 'text', 'default' => '1', 'required' => true],
+                [
+                    'key' => 'commodity',
+                    'label' => 'Commodity filter',
+                    'type' => 'commodity',
+                    'options_from' => 'commodities',
+                    'allow_custom' => true,
+                    'required' => false,
+                    'default' => '',
+                    'visible_label' => true,
+                    'empty_label' => 'Any',
+                    'summary_label' => 'commodity',
+                ],
+                [
+                    'key' => 'shipment',
+                    'label' => 'Shipment filter',
+                    'type' => 'shipment',
+                    'options_from' => 'shipments',
+                    'allow_custom' => true,
+                    'required' => false,
+                    'default' => '',
+                    'visible_label' => true,
+                    'empty_label' => 'Any',
+                    'summary_label' => 'shipment',
+                ],
+                [
+                    'key' => 'car_code',
+                    'label' => 'Car code filter',
+                    'type' => 'car_code',
+                    'options_from' => 'car_codes',
+                    'allow_custom' => true,
+                    'required' => false,
+                    'default' => '',
+                    'visible_label' => true,
+                    'empty_label' => 'Any',
+                    'summary_label' => 'car',
+                ],
+                [
+                    'key' => 'loading_location',
+                    'label' => 'Loading filter',
+                    'type' => 'checkbox_dropdown',
+                    'options_from' => 'station_locations',
+                    'required' => false,
+                    'default' => '',
+                    'visible_label' => true,
+                    'empty_label' => 'Any',
+                    'summary_label' => 'loading',
+                ],
+                [
+                    'key' => 'unloading_location',
+                    'label' => 'Unloading filter',
+                    'type' => 'checkbox_dropdown',
+                    'options_from' => 'station_locations',
+                    'required' => false,
+                    'default' => '',
+                    'visible_label' => true,
+                    'empty_label' => 'Any',
+                    'summary_label' => 'unloading',
+                ],
+                [
+                    'key' => 'final_destination',
+                    'label' => 'Final dest. filter',
+                    'type' => 'checkbox_dropdown',
+                    'options_from' => 'station_locations',
+                    'required' => false,
+                    'default' => '',
+                    'visible_label' => true,
+                    'empty_label' => 'Any',
+                    'summary_label' => 'dest',
+                ],
                 ['key' => 'section', 'label' => 'Section', 'type' => 'workflow_section', 'default' => '', 'required' => true],
                 ['key' => 'section_label', 'label' => 'Section label', 'type' => 'text', 'default' => ''],
                 ['key' => 'step', 'label' => 'Step #', 'type' => 'number', 'default' => ''],
@@ -2513,18 +2582,8 @@ function operational_steps_restore_backup($dbc, $backup_name, $default = null)
     if (!is_file($path)) {
         return [false, 'Backup not found: ' . $name];
     }
-    $sql = explode('#', file_get_contents($path));
-    foreach ($sql as $sql_cmd) {
-        if (trim($sql_cmd) === '') {
-            continue;
-        }
-        if (!mysqli_query($dbc, $sql_cmd)) {
-            if (stripos($sql_cmd, 'drop') === false) {
-                return [false, 'SQL error while restoring: ' . mysqli_error($dbc)];
-            }
-        }
-    }
-    return [true, $name . ' restored successfully.'];
+    require_once __DIR__ . '/restore_sql_helpers.php';
+    return sts_restore_sql_file($dbc, $path, $name);
 }
 
 function operational_steps_catalog_by_id()
@@ -2963,6 +3022,48 @@ function operational_steps_compile_gui(array $def, array $params)
         $var_key = (string) ($params['variable'] ?? 'session_nbr');
         $var = session_condition_variable_label($var_key);
         $line = trim('If ' . $var . ' ' . ($params['operator'] ?? '') . ' ' . ($params['value'] ?? ''));
+        $filters = [];
+        $pretty_loc = static function ($raw) {
+            $parts = preg_split('/\s*,\s*/', trim((string) $raw));
+            $out = [];
+            foreach ($parts as $part) {
+                $part = trim((string) $part);
+                if ($part === '') {
+                    continue;
+                }
+                if (strpos($part, 'station::') === 0) {
+                    $out[] = substr($part, 9);
+                } elseif (strpos($part, 'location::') === 0) {
+                    $out[] = substr($part, 10);
+                } else {
+                    $out[] = $part;
+                }
+            }
+            return implode(', ', $out);
+        };
+        foreach ([
+            'commodity' => 'commodity',
+            'shipment' => 'shipment',
+            'car_code' => 'car',
+        ] as $key => $label) {
+            $v = trim((string) ($params[$key] ?? ''));
+            if ($v !== '') {
+                $filters[] = $label . '=' . $v;
+            }
+        }
+        foreach ([
+            'loading_location' => 'loading',
+            'unloading_location' => 'unloading',
+            'final_destination' => 'dest',
+        ] as $key => $label) {
+            $v = trim((string) ($params[$key] ?? ''));
+            if ($v !== '') {
+                $filters[] = $label . '=' . $pretty_loc($v);
+            }
+        }
+        if ($filters !== []) {
+            $line .= ' (' . implode('; ', $filters) . ')';
+        }
         if (!empty($params['section_label'])) {
             $line .= ' then Goto ' . trim((string) $params['section_label']);
         } elseif (!empty($params['step'])) {

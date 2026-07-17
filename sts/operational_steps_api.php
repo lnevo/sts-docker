@@ -14,6 +14,14 @@
  *      (action in query, form field, or JSON body)
  */
 
+error_reporting(E_ALL);
+ini_set('display_errors', '0');
+ini_set('html_errors', '0');
+// Switchlist / recipe runs can exceed Apache's default 30s PHP limit.
+@set_time_limit(0);
+@ini_set('max_execution_time', '0');
+ob_start();
+
 header('Content-Type: application/json; charset=utf-8');
 
 $sts_dir = __DIR__;
@@ -28,8 +36,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 $action = $_GET['action'] ?? $_POST['action'] ?? ($body['action'] ?? '');
 
+register_shutdown_function(static function () {
+    $err = error_get_last();
+    if ($err === null) {
+        return;
+    }
+    $fatal = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+    if (!in_array($err['type'], $fatal, true)) {
+        return;
+    }
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(500);
+    }
+    echo json_encode([
+        'ok' => false,
+        'error' => $err['message'] . ' in ' . basename($err['file']) . ':' . $err['line'],
+    ], JSON_UNESCAPED_SLASHES);
+});
+
 function operational_steps_api_json($data, $code = 200)
 {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+    }
     http_response_code($code);
     echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     exit;

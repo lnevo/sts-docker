@@ -36,6 +36,27 @@
       return this.collapsedSectionIds;
     },
 
+    /** Display numbering: sections S1..Sn, other rows as execution steps 1..m (separate sequences). */
+    displayNumbers() {
+      const steps = (this.recipe && this.recipe.steps) || [];
+      let sectionCount = 0;
+      let stepCount = 0;
+      const map = steps.map((s) => {
+        if ((s && s.function) === 'section_label') {
+          sectionCount += 1;
+          return { kind: 'section', num: sectionCount };
+        }
+        stepCount += 1;
+        return { kind: 'step', num: stepCount };
+      });
+      return { map, sectionCount, stepCount };
+    },
+
+    displayInfoForIndex(idx) {
+      const { map } = this.displayNumbers();
+      return map[idx] || { kind: 'step', num: idx + 1 };
+    },
+
     ensureCheckboxDropdownDocHandlers() {
       if (this._cddDocHandlers) return;
       this._cddDocHandlers = true;
@@ -60,6 +81,24 @@
       return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     },
 
+    async parseJsonResponse(res) {
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        const snippet = String(text || '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 300);
+        throw new Error(
+          snippet
+            ? ('Server returned non-JSON (HTTP ' + res.status + '): ' + snippet)
+            : ('Invalid JSON response (HTTP ' + res.status + ')')
+        );
+      }
+    },
+
     async api(action, method, body, queryParams) {
       queryParams = queryParams || {};
       const opts = { method: method || (body ? 'POST' : 'GET'), cache: 'no-store' };
@@ -75,7 +114,7 @@
       });
       const url = opts.method === 'POST' ? this.API : this.API + '?' + params.toString();
       const res = await fetch(url, opts);
-      const data = await res.json();
+      const data = await this.parseJsonResponse(res);
       if (!res.ok || !data.ok) throw new Error(data.error || 'Request failed');
       return data;
     },
@@ -91,7 +130,7 @@
         ? this.SIMULATOR_API
         : this.SIMULATOR_API + '?action=' + encodeURIComponent(action) + '&t=' + Date.now();
       const res = await fetch(url, opts);
-      const data = await res.json();
+      const data = await this.parseJsonResponse(res);
       if (!res.ok || !data.ok) throw new Error(data.error || 'Request failed');
       return data;
     },
@@ -509,8 +548,22 @@
         let h = '<label class="inline-field' + (visibleLabels ? ' inline-field-labeled' : '') + '">' + lbl +
           '<select class="field-select" data-param="' + this.escapeHtml(paramKey) + '" id="' + id + '">';
         if (allowAny && p.type !== 'setout_location') {
-          const anyLabel = (p.type === 'station_location' || paramKey.indexOf('car_filters.') === 0) ? 'All' : 'Any';
-          h += '<option value=""' + (String(val) === '' ? ' selected' : '') + '>' + anyLabel + '</option>';
+          const anyLabel = p.empty_label
+            || ((p.type === 'station_location' || paramKey.indexOf('car_filters.') === 0) ? 'All' : 'Any');
+          h += '<option value=""' + (String(val) === '' ? ' selected' : '') + '>' + this.escapeHtml(String(anyLabel)) + '</option>';
+        }
+        // Stale workflow_section ids ("step-N") after reorder: re-resolve via
+        // section_label on the step before falling back to a raw orphan option.
+        if (
+          p.type === 'workflow_section'
+          && val
+          && !opts.some((o) => String(o.value != null ? o.value : o) === String(val))
+        ) {
+          const sections = this.buildRunSections() || [];
+          const healed = this.findSectionForGoto(sections, (step && step.params) || {});
+          if (healed && opts.some((o) => String(o.value != null ? o.value : o) === String(healed.id))) {
+            val = healed.id;
+          }
         }
         opts.forEach((o) => {
           const v = o.value != null ? o.value : o;
@@ -915,9 +968,19 @@
 
     ifThenGotoParamsHtml(step, rowIdx) {
       const def = this.catalogMap.if_then;
-      const values = step.params || {};
+      const values = Object.assign({}, step.params || {});
       const paramByKey = {};
       (def?.params || []).forEach((p) => { paramByKey[p.key] = p; });
+
+      // Prefer stable section_label when section id is blank/stale so the
+      // Goto dropdown shows the real target (e.g. After Coke Generate).
+      const sections = this.runSections || this.buildRunSections();
+      const resolved = this.findSectionForGoto(sections, values);
+      if (resolved) {
+        values.section = resolved.id;
+        values.section_label = resolved.label;
+        values.step = String(resolved.start);
+      }
 
       let html = '<div class="param-if-then-goto-grid">';
 
@@ -938,6 +1001,23 @@
       });
       html += '</div>';
 
+      // Order filters for open_orders / unfilled_orders (commodity / shipment /
+      // car code / loading / unloading / final destination).
+      html += '<div class="param-if-then-filters-row">';
+      ['commodity', 'shipment', 'car_code'].forEach((key) => {
+        const p = paramByKey[key];
+        if (!p) return;
+        html += this.inlineParamFieldHtml(p, values[key], rowIdx, undefined, true, step);
+      });
+      html += '</div>';
+      html += '<div class="param-if-then-filters-row">';
+      ['loading_location', 'unloading_location', 'final_destination'].forEach((key) => {
+        const p = paramByKey[key];
+        if (!p) return;
+        html += this.inlineParamFieldHtml(p, values[key], rowIdx, undefined, true, step);
+      });
+      html += '</div>';
+
       html += '<div class="param-goto-row">';
       if (paramByKey.section) {
         html += this.inlineParamFieldHtml(
@@ -946,9 +1026,14 @@
           rowIdx,
           undefined,
           true,
-          step
+          { ...step, params: values }
         );
       }
+      // Persist stable label/step across DOM sync (select only writes section id).
+      html += '<input type="hidden" data-param="section_label" value="'
+        + this.escapeHtml(String(values.section_label || '')) + '">';
+      html += '<input type="hidden" data-param="step" value="'
+        + this.escapeHtml(String(values.step || '')) + '">';
       html += '</div>';
 
       html += '</div>';
@@ -957,9 +1042,16 @@
 
     gotoParamsHtml(step, rowIdx) {
       const def = this.catalogMap.goto;
-      const values = step.params || {};
+      const values = Object.assign({}, step.params || {});
       const sectionParam = (def?.params || []).find((p) => p.key === 'section');
       if (!sectionParam) return '<span class="inline-empty">No parameters</span>';
+      const sections = this.runSections || this.buildRunSections();
+      const resolved = this.findSectionForGoto(sections, values);
+      if (resolved) {
+        values.section = resolved.id;
+        values.section_label = resolved.label;
+        values.step = String(resolved.start);
+      }
       let html = '<div class="param-if-then-goto-grid">';
       html += '<div class="param-goto-row">';
       html += this.inlineParamFieldHtml(
@@ -968,8 +1060,12 @@
         rowIdx,
         undefined,
         true,
-        step
+        { ...step, params: values }
       );
+      html += '<input type="hidden" data-param="section_label" value="'
+        + this.escapeHtml(String(values.section_label || '')) + '">';
+      html += '<input type="hidden" data-param="step" value="'
+        + this.escapeHtml(String(values.step || '')) + '">';
       html += '</div></div>';
       return html;
     },
@@ -1102,15 +1198,31 @@
         step.function = selectedFn;
         if (fnSelect) delete fnSelect.dataset.actualFn;
       }
-      if ((step.function === 'goto' || step.function === 'if_then') && step.params.section) {
-        const sec = this.buildRunSections().find((s) => s.id === step.params.section);
-        if (sec) {
-          step.params.section_label = sec.label;
-          step.params.step = String(sec.start);
-          if (sec.start <= idx + 1) {
-            delete step.params.section;
-            delete step.params.section_label;
-            delete step.params.step;
+      if (step.function === 'goto' || step.function === 'if_then') {
+        // DOM only stores the position-encoded section id ("step-N"). Keep the
+        // prior stable section_label so targets survive insert/delete/reorder
+        // when that id goes stale (otherwise the dropdown falls back to showing
+        // raw "step-11").
+        const prevLabel = String((prev.params || {}).section_label || '').trim();
+        if (!String(step.params.section_label || '').trim() && prevLabel) {
+          step.params.section_label = prevLabel;
+        }
+        if (!String(step.params.step || '').trim() && (prev.params || {}).step) {
+          step.params.step = String(prev.params.step);
+        }
+        if (step.params.section || step.params.section_label || step.params.step) {
+          const sections = this.buildRunSections();
+          const sec = this.findSectionForGoto(sections, step.params)
+            || sections.find((s) => s.id === step.params.section);
+          if (sec) {
+            step.params.section = sec.id;
+            step.params.section_label = sec.label;
+            step.params.step = String(sec.start);
+            if (sec.start <= idx + 1) {
+              delete step.params.section;
+              delete step.params.section_label;
+              delete step.params.step;
+            }
           }
         }
       }
@@ -1218,12 +1330,28 @@
       const n = steps.length;
       if (fromIdx < 0 || fromIdx >= n || n === 0) return fromIdx;
 
+      const { map } = this.displayNumbers();
+      const kind = (map[fromIdx] && map[fromIdx].kind) || 'step';
       let targetNum = parseInt(requestedNum, 10);
       if (isNaN(targetNum) || targetNum < 1) targetNum = 1;
-      if (targetNum > n) targetNum = n;
 
-      const toIdx = targetNum - 1;
-      if (fromIdx === toIdx) return fromIdx;
+      let toIdx = -1;
+      for (let i = 0; i < map.length; i++) {
+        if (map[i].kind === kind && map[i].num === targetNum) {
+          toIdx = i;
+          break;
+        }
+      }
+      if (toIdx < 0) {
+        // Clamp to last item of this kind.
+        for (let i = map.length - 1; i >= 0; i--) {
+          if (map[i].kind === kind) {
+            toIdx = i;
+            break;
+          }
+        }
+      }
+      if (toIdx < 0 || fromIdx === toIdx) return fromIdx;
 
       const moved = steps.splice(fromIdx, 1)[0];
       steps.splice(toIdx, 0, moved);
@@ -1273,12 +1401,22 @@
 
     stepRowInnerHtml(step, idx) {
       const rowKey = idx;
-      const stepNum = idx + 1;
-      const stepNumSize = Math.max(2, String(this.recipe.steps.length).length);
+      const recipeNum = idx + 1;
+      const { map, sectionCount, stepCount } = this.displayNumbers();
+      const disp = map[idx] || { kind: 'step', num: recipeNum };
       const isSection = step.function === 'section_label';
+      const displayMax = isSection ? Math.max(1, sectionCount) : Math.max(1, stepCount);
+      const displaySize = Math.max(2, String(displayMax).length);
       const collapseBtn = isSection
         ? ('<button type="button" class="section-collapse-btn" data-section-collapse' +
           ' aria-expanded="true" title="Collapse section">▼</button>')
+        : '';
+      const numTitle = isSection
+        ? 'Section ' + disp.num + ' — type a section number to move among sections'
+        : 'Step ' + disp.num + ' — type a step number to move among execution steps';
+      const numAria = isSection ? 'Section number' : 'Step number';
+      const prefix = isSection
+        ? '<span class="step-num-prefix" title="Section">S</span>'
         : '';
 
       return (
@@ -1286,13 +1424,18 @@
           this.remarksExpandedClass(step) + '">' +
           '<div class="step-num-control' + (isSection ? ' step-num-control-section' : '') + '">' +
             collapseBtn +
-            '<input type="number" class="step-num step-num-input field-input" data-step-num min="1" max="' + this.recipe.steps.length + '" size="' + stepNumSize + '" value="' + stepNum + '" title="Type step number to jump" aria-label="Step number">' +
+            prefix +
+            '<input type="number" class="step-num step-num-input field-input" data-step-num' +
+            ' data-display-kind="' + disp.kind + '"' +
+            ' min="1" max="' + displayMax + '" size="' + displaySize + '"' +
+            ' value="' + disp.num + '" title="' + this.escapeHtml(numTitle) + '"' +
+            ' aria-label="' + numAria + '">' +
             '<div class="step-num-arrows">' +
-              '<button type="button" class="step-num-arrow" data-step-arrow="up" title="Move step up">▲</button>' +
-              '<button type="button" class="step-num-arrow" data-step-arrow="down" title="Move step down">▼</button>' +
+              '<button type="button" class="step-num-arrow" data-step-arrow="up" title="Move up">▲</button>' +
+              '<button type="button" class="step-num-arrow" data-step-arrow="down" title="Move down">▼</button>' +
             '</div>' +
           '</div>' +
-          '<button type="button" class="btn-icon btn-insert-before" title="Add step below step ' + stepNum + '">+</button>' +
+          '<button type="button" class="btn-icon btn-insert-before" title="Add step below">+</button>' +
           '<label class="inline-field row-command inline-field-labeled">' +
             '<span class="inline-lbl inline-lbl-visible">Command</span>' +
             this.commandSelectHtml(step, rowKey) +
@@ -1307,7 +1450,7 @@
         '</div>' +
         '<div class="row-bottom">' +
           '<label class="step-include-toggle" title="Include in run. Unchecked adds this step to Skip steps.">' +
-            '<input type="checkbox" data-step-include data-step-num="' + stepNum + '" checked>' +
+            '<input type="checkbox" data-step-include data-step-num="' + recipeNum + '" checked>' +
             '<span>Run</span>' +
           '</label>' +
           '<div class="step-preview">' + this.previewHtml(step, idx) + '</div>' +
@@ -1427,6 +1570,20 @@
         const p = step.params || {};
         const v = p.variable === 'session_nbr' ? 'session #' : (p.variable || 'session #');
         let title = ('If ' + v + ' ' + (p.operator || '') + ' ' + (p.value || '')).replace(/\s+/g, ' ').trim();
+        const filterBits = [];
+        const pushFilter = (label, raw) => {
+          const text = String(raw || '').trim();
+          if (!text) return;
+          const pretty = this.resolveCsvValues(text).map((t) => this.formatStationLocationToken(t)).join(', ');
+          filterBits.push(label + '=' + pretty);
+        };
+        if (String(p.commodity || '').trim()) filterBits.push('commodity=' + String(p.commodity).trim());
+        if (String(p.shipment || '').trim()) filterBits.push('shipment=' + String(p.shipment).trim());
+        if (String(p.car_code || '').trim()) filterBits.push('car=' + String(p.car_code).trim());
+        pushFilter('loading', p.loading_location);
+        pushFilter('unloading', p.unloading_location);
+        pushFilter('dest', p.final_destination);
+        if (filterBits.length) title += ' (' + filterBits.join('; ') + ')';
         if (p.section_label) {
           title += ' then Goto ' + p.section_label;
         } else if (p.section) {
@@ -1701,7 +1858,7 @@
             scrollToIndex: newIdx,
             focusStepNum: true,
           });
-          this.setStatus('Moved step to position ' + (newIdx + 1), 'ok');
+          this.setStatus('Moved to ' + (this.recipe.steps[newIdx]?.function === 'section_label' ? 'section ' : 'step ') + (this.displayInfoForIndex(newIdx).num), 'ok');
           queueMicrotask(() => {
             stepNumHandled = false;
           });
@@ -1731,7 +1888,7 @@
             finishStepMove(newIdx);
             return;
           }
-          stepNumInput.value = String(idx + 1);
+          stepNumInput.value = String(this.displayInfoForIndex(idx).num);
         });
       }
     },
@@ -1846,17 +2003,30 @@
 
     // Re-sync each goto/if_then's stored section id + step number from its
     // (stable) section label so the displayed target follows the section when
-    // step numbers change.
+    // step numbers change. Also heal stale section ids when the label is
+    // missing but the id still resolves, or when a bare step points at a
+    // section_label row.
     renormalizeGotoTargets() {
       const steps = (this.recipe && this.recipe.steps) || [];
       if (!steps.length) return;
       const sections = this.buildRunSections();
-      steps.forEach((step) => {
+      steps.forEach((step, idx) => {
         if (!step || (step.function !== 'goto' && step.function !== 'if_then')) return;
         const p = step.params || {};
-        if (!String(p.section_label || '').trim()) return;
-        const sec = this.findSectionForGoto(sections, p);
+        let sec = this.findSectionForGoto(sections, p);
+        if (!sec && p.section) {
+          sec = sections.find((s) => s.id === p.section) || null;
+        }
+        if (!sec) {
+          const n = parseInt(p.step, 10);
+          if (n > 0) {
+            sec = sections.find((s) => s.start === n) || null;
+          }
+        }
         if (!sec) return;
+        // Keep non-section step targets (e.g. session_nbr → increment_session)
+        // when the resolved section would be a backward/invalid goto.
+        if (sec.start <= idx + 1) return;
         p.section = sec.id;
         p.section_label = sec.label;
         p.step = String(sec.start);
@@ -2286,6 +2456,21 @@
       this.applySectionCollapseUi();
     },
 
+    collapseAllSections() {
+      const set = this.ensureCollapsedSectionIds();
+      this.editorSections().forEach((s) => {
+        if (s.id) set.add(s.id);
+      });
+      this.applySectionCollapseUi();
+      this.setStatus('Collapsed all sections', 'ok');
+    },
+
+    expandAllSections() {
+      this.ensureCollapsedSectionIds().clear();
+      this.applySectionCollapseUi();
+      this.setStatus('Expanded all sections', 'ok');
+    },
+
     applySectionCollapseUi() {
       const collapsed = this.ensureCollapsedSectionIds();
       const sections = this.editorSections();
@@ -2379,8 +2564,8 @@
         return;
       }
       let html = '';
-      sections.forEach((s) => {
-        const text = this.truncateSectionLabel(s.label, 48) + ' (step ' + s.start + ')';
+      sections.forEach((s, i) => {
+        const text = 'S' + (i + 1) + ' · ' + this.truncateSectionLabel(s.label, 48);
         html += '<option value="' + this.escapeHtml(s.id) + '" title="' + this.escapeHtml(s.label) + '">' +
           this.escapeHtml(text) + '</option>';
       });
@@ -2404,7 +2589,8 @@
     scrollToEditorSection() {
       const sel = this.el('editor-section');
       if (!sel?.value) return;
-      const sec = this.editorSections().find((s) => s.id === sel.value);
+      const sections = this.editorSections();
+      const sec = sections.find((s) => s.id === sel.value);
       if (!sec) return;
       if (sec.id) {
         this.ensureCollapsedSectionIds().delete(sec.id);
@@ -2414,14 +2600,15 @@
       const idx = sec.start - 1;
       const row = list?.querySelector('.step-row[data-idx="' + idx + '"]');
       if (!row) {
-        this.setStatus('Section not found at step ' + sec.start, 'err');
+        this.setStatus('Section not found', 'err');
         return;
       }
       list.querySelectorAll('.step-row.section-highlight').forEach((n) => n.classList.remove('section-highlight'));
       row.classList.add('section-highlight');
       row.scrollIntoView({ block: 'start', behavior: 'smooth' });
       window.setTimeout(() => row.classList.remove('section-highlight'), 2500);
-      this.setStatus('Jumped to ' + this.truncateSectionLabel(sec.label, 56) + ' (step ' + sec.start + ')', 'ok');
+      const secNum = sections.findIndex((s) => s.id === sec.id) + 1;
+      this.setStatus('Jumped to S' + secNum + ' · ' + this.truncateSectionLabel(sec.label, 56), 'ok');
     },
 
     addStep() {
@@ -2534,23 +2721,30 @@
       const prevActive = this.activeWorkflow;
       const d = await this.api('list_workflows');
       this.workflowFiles = d.files || [];
+      const savedActive = d.active_workflow || '';
       if (this.workflowFiles.length === 1) {
-        this.activeWorkflow = d.active_workflow || this.workflowFiles[0];
+        this.activeWorkflow = savedActive || this.workflowFiles[0];
         this.autoLoadWorkflow = true;
         this.syncWorkflowSelect();
         return;
       }
-      this.autoLoadWorkflow = false;
       if (this.workflowFiles.length > 1) {
         if (options.keepActive && prevActive && this.workflowFiles.includes(prevActive)) {
           this.activeWorkflow = prevActive;
-          this.syncWorkflowSelect();
+        } else if (savedActive && this.workflowFiles.includes(savedActive)) {
+          this.activeWorkflow = savedActive;
         } else {
           this.activeWorkflow = '';
+        }
+        this.autoLoadWorkflow = !!this.activeWorkflow;
+        if (this.activeWorkflow) {
+          this.syncWorkflowSelect();
+        } else {
           this.syncWorkflowSelect({ preferEmpty: true });
         }
         return;
       }
+      this.autoLoadWorkflow = false;
       this.activeWorkflow = '';
       this.syncWorkflowSelect({ preferEmpty: true });
     },
@@ -2999,12 +3193,16 @@
         ? Math.max(2, parseInt(this.el('run-repeat')?.value, 10) || 2)
         : 1;
       this.syncAllStepsFromDom();
-      if (options.saveFirst) {
-        await this.saveRecipe();
+      const selectedWorkflow = this.el('workflow-file')?.value || '';
+      if (!this.activeWorkflow || (selectedWorkflow && selectedWorkflow !== this.activeWorkflow)) {
+        throw new Error('Load the selected workflow before running it');
       }
       const coverage = this.getRunCoverage();
       if (coverage.none) {
         throw new Error('Select at least one section to run');
+      }
+      if (options.saveFirst) {
+        await this.saveRecipe();
       }
       const total = coverage.total;
       let start = parseInt(this.el('run-start')?.value, 10) || coverage.start;
@@ -3098,11 +3296,14 @@
       }
       if (printBtn) printBtn.hidden = !previewing;
       if (copyBtn) copyBtn.hidden = !previewing;
-      if (editNav) editNav.hidden = previewing;
+      // Keep section jump + Collapse/Expand all visible in Preview and Edit.
+      if (editNav) editNav.hidden = false;
       if (editInsert) editInsert.hidden = previewing;
       if (addBtn) addBtn.hidden = previewing;
       if (reloadBtn) reloadBtn.hidden = previewing;
       document.body.classList.toggle('workflow-preview-mode', previewing);
+      this.syncEditorSectionSelect();
+      this.applySectionCollapseUi();
     },
 
     bindPreviewEvents(host) {
@@ -3171,6 +3372,8 @@
           }
           const isSection = step.function === 'section_label';
           const sid = this.sectionIdForStepNum(n, sections);
+          const disp = (this.displayNumbers().map[idx]) || { kind: isSection ? 'section' : 'step', num: n };
+          const displayLabel = isSection ? ('S' + disp.num) : String(disp.num);
           const liClass = [
             isSection ? 'wf-preview-section' : 'wf-preview-step',
             skipped ? 'disabled wf-preview-skipped' : '',
@@ -3182,14 +3385,14 @@
           const includeBox = '<label class="step-include-toggle wf-preview-include" title="Include in run. Unchecked adds this step to Skip steps.">'
             + '<input type="checkbox" data-step-include data-step-num="' + n + '"'
             + (skipped ? '' : ' checked')
-            + ' aria-label="Include step ' + n + ' in run"></label>';
+            + ' aria-label="Include recipe step ' + n + ' in run"></label>';
           body += '<li class="' + liClass + '"'
             + (sid ? (' data-section-id="' + esc(sid) + '"') : '')
             + ' data-step-num="' + n + '">'
             + '<div class="wf-preview-cmd">'
             + collapseBtn
             + includeBox
-            + '<span class="wf-preview-num">' + n + '.</span> '
+            + '<span class="wf-preview-num">' + displayLabel + '.</span> '
             + esc(cmd)
             + (skipped ? ' <span class="wf-preview-tag">(skipped)</span>' : '')
             + '</div>';
