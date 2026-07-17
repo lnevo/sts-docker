@@ -65,7 +65,7 @@ function generate_orders_apply_seed($seed)
  *   STS_SCARCE_PAUSE_UNFILLED=35
  *   STS_SCARCE_PAUSE_CODES=HC,XM,FM,GA,GD,FC   (comma list; empty = default set)
  * When unfilled exceeds the threshold, due shipments of those car codes are
- * skipped without advancing last_ship_date (true pause). Coke lanes exempt.
+ * skipped without advancing last_ship_date (true pause).
  */
 function generate_orders_scarce_pause_codes()
 {
@@ -97,6 +97,78 @@ function generate_orders_scarce_pause_active($dbc)
 }
 
 /**
+ * Parse CSV / list of shipment-code prefixes excluded from AUTOMATIC generate.
+ * Matching is case-insensitive prefix (e.g. "COKE-" excludes COKE-USS-BULK).
+ *
+ * @param mixed $raw
+ * @return list<string>
+ */
+function generate_orders_parse_exclude_prefixes($raw)
+{
+    if (is_array($raw)) {
+        $parts = $raw;
+    } else {
+        $parts = preg_split('/[\s,]+/', trim((string) $raw)) ?: [];
+    }
+    $out = [];
+    foreach ($parts as $p) {
+        $p = trim((string) $p);
+        if ($p !== '') {
+            $out[] = $p;
+        }
+    }
+
+    return array_values(array_unique($out));
+}
+
+/**
+ * Prefixes excluded from undifferentiated AUTOMATIC generation.
+ *
+ * Precedence: explicit override (recipe/API) → env STS_AUTO_GEN_EXCLUDE_SHIPMENT_PREFIXES
+ * → settings.auto_gen_exclude_shipment_prefixes → none (fully open automatic pool).
+ *
+ * @param mixed $override null = resolve from env/settings; string/array = use as-is
+ * @return list<string>
+ */
+function generate_orders_automatic_exclude_prefixes($dbc, $override = null)
+{
+    if ($override !== null) {
+        return generate_orders_parse_exclude_prefixes($override);
+    }
+    $env = getenv('STS_AUTO_GEN_EXCLUDE_SHIPMENT_PREFIXES');
+    if ($env !== false && trim((string) $env) !== '') {
+        return generate_orders_parse_exclude_prefixes($env);
+    }
+    $rs = mysqli_query(
+        $dbc,
+        'SELECT setting_value FROM settings
+         WHERE setting_name = "auto_gen_exclude_shipment_prefixes" LIMIT 1'
+    );
+    $row = $rs ? mysqli_fetch_assoc($rs) : null;
+    if ($row && trim((string) ($row['setting_value'] ?? '')) !== '') {
+        return generate_orders_parse_exclude_prefixes($row['setting_value']);
+    }
+
+    return [];
+}
+
+function generate_orders_shipment_excluded_by_prefix($shipment_code, array $prefixes)
+{
+    if ($prefixes === []) {
+        return false;
+    }
+    $code = (string) $shipment_code;
+    foreach ($prefixes as $prefix) {
+        $prefix = (string) $prefix;
+        if ($prefix !== '' && strncasecmp($code, $prefix, strlen($prefix)) === 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
  * Core automatic generation loop (matches generate.php).
  *
  * $max_new (soft cap): when > 0, generate at most this many new car orders this
@@ -106,9 +178,18 @@ function generate_orders_scarce_pause_active($dbc)
  * sessions (bounded per-session intake) instead of the all-or-nothing skip that a
  * gate / max_unfilled performs, which avoids the burst-then-starve sawtooth.
  * $max_new = 0 (default) preserves the original uncapped, id-ordered behavior.
+ *
+ * $exclude_prefixes: null resolves from env/settings; string/array skips matching
+ * shipment codes from the AUTOMATIC pool (explicit shipment generate still works).
  */
-function generate_orders_run_automatic($dbc, $session_number, $waybill_counter = 0, $seed = null, $max_new = 0)
-{
+function generate_orders_run_automatic(
+    $dbc,
+    $session_number,
+    $waybill_counter = 0,
+    $seed = null,
+    $max_new = 0,
+    $exclude_prefixes = null
+) {
     $applied_seed = generate_orders_apply_seed($seed);
 
     $orders_created = 0;
@@ -116,6 +197,7 @@ function generate_orders_run_automatic($dbc, $session_number, $waybill_counter =
     $max_new = max(0, (int) $max_new);
     $scarce_pause = generate_orders_scarce_pause_active($dbc);
     $scarce_codes = $scarce_pause ? array_fill_keys(generate_orders_scarce_pause_codes(), true) : [];
+    $exclude = generate_orders_automatic_exclude_prefixes($dbc, $exclude_prefixes);
 
     $rs_shipments = mysqli_query(
         $dbc,
@@ -150,6 +232,11 @@ function generate_orders_run_automatic($dbc, $session_number, $waybill_counter =
             break;
         }
 
+        $ship_code = (string) ($row['shipment_code'] ?? '');
+        if (generate_orders_shipment_excluded_by_prefix($ship_code, $exclude)) {
+            continue;
+        }
+
         $interval = round(mt_rand($row['min_interval'] * 100, $row['max_interval'] * 100) / 100);
         $ship_date = (int) $row['last_ship_date'] + $interval;
         if ($ship_date > $session_number) {
@@ -157,9 +244,8 @@ function generate_orders_run_automatic($dbc, $session_number, $waybill_counter =
         }
 
         if ($scarce_pause) {
-            $ship_code = (string) ($row['shipment_code'] ?? '');
             $car_code = strtoupper((string) ($row['car_code'] ?? ''));
-            if (stripos($ship_code, 'COKE-') !== 0 && isset($scarce_codes[$car_code])) {
+            if (isset($scarce_codes[$car_code])) {
                 // Leave last_ship_date alone so the lane stays due when backlog eases.
                 continue;
             }

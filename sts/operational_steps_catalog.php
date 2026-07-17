@@ -1400,6 +1400,7 @@ function operational_steps_normalize_generate_orders_params(array $params)
         'max_unfilled' => trim((string) ($params['max_unfilled'] ?? '')),
         'max_new' => trim((string) ($params['max_new'] ?? '')),
         'seed' => trim((string) ($params['seed'] ?? '')),
+        'exclude_prefixes' => trim((string) ($params['exclude_prefixes'] ?? '')),
     ];
     if (array_key_exists('increment_session', $params)) {
         $increment = trim((string) $params['increment_session']);
@@ -1435,6 +1436,9 @@ function operational_steps_compile_generate_orders_gui(array $params)
     }
     if ($params['seed'] !== '') {
         $parts[] = 'seed=' . $params['seed'];
+    }
+    if ($params['exclude_prefixes'] !== '') {
+        $parts[] = 'exclude_prefixes=' . $params['exclude_prefixes'];
     }
     if (empty($parts)) {
         return 'Generate Orders';
@@ -1887,7 +1891,7 @@ function operational_steps_catalog_definitions()
             'adder_group' => 'before',
             'label' => 'Generate Car Orders',
             'gui_template' => 'Generate Orders {shipment}',
-            'description' => 'Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or check one or more Shipments for manual orders (multi-select). Leave unchecked for AUTOMATIC generation. Max unfilled orders skips generation entirely when the unfilled backlog is above the limit (hard gate). Max new orders/session is a soft cap: it still generates every session but stops after that many new orders, serving due shipments in random order and leaving the rest due for later — this spreads demand smoothly and avoids the burst-then-starve pattern a hard gate causes. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore.',
+            'description' => 'Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or check one or more Shipments for manual orders (multi-select). Leave unchecked for AUTOMATIC generation. Max unfilled orders skips generation entirely when the unfilled backlog is above the limit (hard gate). Max new orders/session is a soft cap: it still generates every session but stops after that many new orders, serving due shipments in random order and leaving the rest due for later — this spreads demand smoothly and avoids the burst-then-starve pattern a hard gate causes. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore. Exclude prefixes (CSV) keeps matching shipment codes out of the AUTOMATIC pool only — use when those lanes are served by explicit shipment steps or other gates; also configurable via settings.auto_gen_exclude_shipment_prefixes or env STS_AUTO_GEN_EXCLUDE_SHIPMENT_PREFIXES.',
             'runnable' => true,
             'dispatch' => 'generate_orders',
             'params' => [
@@ -1941,6 +1945,15 @@ function operational_steps_catalog_definitions()
                     'min' => 0,
                     'step' => 1,
                     'visible_label' => true,
+                ],
+                [
+                    'key' => 'exclude_prefixes',
+                    'label' => 'Exclude prefixes (automatic)',
+                    'type' => 'text',
+                    'default' => '',
+                    'required' => false,
+                    'visible_label' => true,
+                    'placeholder' => 'e.g. COKE-,BULK-',
                 ],
             ],
         ],
@@ -4626,12 +4639,16 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
                 } else {
                     $seed = $gen_params['seed'] ?? '';
                     $max_new = ($gen_params['max_new'] ?? '') !== '' ? (int) $gen_params['max_new'] : 0;
+                    // Empty recipe field → null so env/settings still apply; non-empty overrides.
+                    $exclude_raw = trim((string) ($gen_params['exclude_prefixes'] ?? ''));
+                    $exclude_arg = $exclude_raw !== '' ? $exclude_raw : null;
                     $result['generated'] = generate_orders_run_automatic(
                         $dbc,
                         $session,
                         (int) $run['counter'],
                         $seed,
-                        $max_new
+                        $max_new,
+                        $exclude_arg
                     );
                     if ($seed !== '') {
                         $result['seed'] = (int) $seed;
@@ -4639,6 +4656,9 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
                     if ($max_new > 0) {
                         $result['max_new'] = $max_new;
                         $result['capped'] = ($result['generated'] >= $max_new);
+                    }
+                    if ($exclude_arg !== null) {
+                        $result['exclude_prefixes'] = $exclude_arg;
                     }
                 }
             }
