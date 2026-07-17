@@ -79,6 +79,12 @@ function track_scale_default_config()
             // Left-right gross spread range for imbalanced loads routed to reload.
             'off_tolerance_min_tons' => 6.0,
             'off_tolerance_max_tons' => 10.0,
+            // Floor for automated weigh batches. Does not need session size:
+            // each weigh step already has a finite candidate list. When the
+            // %-roll yields fewer reloads than this, force that many outbound
+            // cars to imbalanced/reload before assign. Overridable per recipe
+            // step via catalog param min_reloads.
+            'min_reloads_per_weigh_batch' => 1,
         ],
         'calibration' => [
             'adjust_step_tons' => 0.10,
@@ -2239,6 +2245,124 @@ function track_scale_simulate_car_load($target_net, $config = null, $seed_key = 
     ];
 }
 
+/**
+ * Minimum reload assignments for one automated weigh batch (not the whole session).
+ * Each weigh step already has a finite candidate list.
+ */
+function track_scale_min_reloads_per_weigh_batch($config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    $sim = $config['simulation'] ?? [];
+
+    return max(0, (int) ($sim['min_reloads_per_weigh_batch'] ?? 1));
+}
+
+/**
+ * Overwrite a car's simulated load so left/right spread is off-tolerance (reload).
+ *
+ * @return array{true_net_tons: float, balance_shift_tons: float}
+ */
+function track_scale_force_car_imbalanced_load($dbc, $reporting_marks, $true_net, $config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    $sim = $config['simulation'] ?? [];
+    $balance_tolerance = track_scale_routing_tolerance_tons($config);
+    $off_min = (float) ($sim['off_tolerance_min_tons'] ?? ($balance_tolerance + 0.5));
+    $off_max = (float) ($sim['off_tolerance_max_tons'] ?? ($balance_tolerance + 9.0));
+    if ($off_min <= $balance_tolerance) {
+        $off_min = $balance_tolerance + 0.1;
+    }
+    if ($off_max < $off_min) {
+        $off_max = $off_min;
+    }
+
+    $seed = track_scale_load_seed_state($dbc);
+    $session_number = (int) ($seed['session_number'] ?? track_scale_get_session_number($dbc));
+    $marks = strtoupper(trim((string) $reporting_marks));
+    $seed_key = $session_number . '|' . $marks . '|forced-reload|' . track_scale_seed_created_at($seed);
+    $lr_spread = $off_min + track_scale_deterministic_unit($seed_key, 2) * ($off_max - $off_min);
+    $sign = track_scale_deterministic_unit($seed_key, 3) >= 0.5 ? 1 : -1;
+    $load = [
+        'true_net_tons' => track_scale_round((float) $true_net, $config),
+        'balance_shift_tons' => track_scale_round($sign * ($lr_spread / 2.0), $config),
+    ];
+    $seed['car_weights'][$marks] = $load;
+    track_scale_save_seed_state($seed);
+
+    return $load;
+}
+
+/**
+ * After %-roll simulation, ensure the weigh batch has at least min reloads by
+ * forcing outbound cars onto imbalanced/reload before waybill assignment.
+ *
+ * Each $batch row needs: marks, tare, target_net, load_state, weighing, routing.
+ *
+ * @param list<array<string,mixed>> $batch
+ * @return int Number of cars forced to reload
+ */
+function track_scale_ensure_min_batch_reloads($dbc, array &$batch, $config = null)
+{
+    $config = $config ?? track_scale_load_config();
+    $min = track_scale_min_reloads_per_weigh_batch($config);
+    if ($min <= 0 || $batch === []) {
+        return 0;
+    }
+
+    $reload_count = 0;
+    $outbound_idxs = [];
+    foreach ($batch as $i => $item) {
+        if (($item['routing'] ?? '') === 'reload') {
+            $reload_count++;
+        } else {
+            $outbound_idxs[] = $i;
+        }
+    }
+    $need = $min - $reload_count;
+    if ($need <= 0 || $outbound_idxs === []) {
+        return 0;
+    }
+
+    $seed = track_scale_load_seed_state($dbc);
+    $session_number = (int) ($seed['session_number'] ?? track_scale_get_session_number($dbc));
+    usort($outbound_idxs, static function ($a, $b) use ($session_number, $batch) {
+        $ua = track_scale_deterministic_unit(
+            $session_number . '|min-reload|' . ($batch[$a]['marks'] ?? $a),
+            0
+        );
+        $ub = track_scale_deterministic_unit(
+            $session_number . '|min-reload|' . ($batch[$b]['marks'] ?? $b),
+            0
+        );
+
+        return $ua <=> $ub;
+    });
+
+    $forced = 0;
+    for ($k = 0; $k < $need && $k < count($outbound_idxs); $k++) {
+        $i = $outbound_idxs[$k];
+        $marks = (string) ($batch[$i]['marks'] ?? '');
+        $true_net = (float) ($batch[$i]['load_state']['true_net_tons'] ?? $batch[$i]['target_net'] ?? 0.0);
+        $tare = (float) ($batch[$i]['tare'] ?? 27.0);
+        $target = (float) ($batch[$i]['target_net'] ?? $true_net);
+        $load = track_scale_force_car_imbalanced_load($dbc, $marks, $true_net, $config);
+        $weighing = track_scale_build_display_weighing(
+            (float) $load['true_net_tons'],
+            $tare,
+            $target,
+            $config,
+            (float) $load['balance_shift_tons']
+        );
+        $batch[$i]['load_state'] = $load;
+        $batch[$i]['weighing'] = $weighing;
+        $batch[$i]['routing'] = 'reload';
+        $batch[$i]['forced_reload'] = true;
+        $forced++;
+    }
+
+    return $forced;
+}
+
 function track_scale_simulate_net_tons($target_net, $config = null, $seed_key = '', $sessions_since = 0)
 {
     $load = track_scale_simulate_car_load($target_net, $config, $seed_key, $sessions_since);
@@ -3664,18 +3788,23 @@ function track_scale_complete_wagon_unload($dbc, $car)
         $new_status = 'Loaded';
     } else {
         $new_status = 'Empty';
-        // Keep the order open as unfilled so it can be filled again.
-        $unfill = 'UPDATE car_orders SET car = "" WHERE car = "' . $car_id_esc . '"';
-        if (!mysqli_query($dbc, $unfill)) {
-            return ['success' => false, 'error' => 'Failed to unfill car orders: ' . mysqli_error($dbc)];
-        }
     }
 
+    // Status first, then unfill. Unfilling before the status write can leave
+    // Ordered/Unloading cars with car_orders.car cleared (orphan Ordered).
     $upd = 'UPDATE cars SET status = "' . mysqli_real_escape_string($dbc, $new_status) . '",
             last_spotted = 0
             WHERE id = "' . $car_id_esc . '"';
     if (!mysqli_query($dbc, $upd)) {
         return ['success' => false, 'error' => 'Failed to update car status: ' . mysqli_error($dbc)];
+    }
+
+    if ($new_status === 'Empty') {
+        // Keep the order open as unfilled so it can be filled again.
+        $unfill = 'UPDATE car_orders SET car = "" WHERE car = "' . $car_id_esc . '"';
+        if (!mysqli_query($dbc, $unfill)) {
+            return ['success' => false, 'error' => 'Failed to unfill car orders: ' . mysqli_error($dbc)];
+        }
     }
 
     return [
@@ -3703,18 +3832,19 @@ function track_scale_clear_active_car_orders($dbc, $car_id, $preserve_loaded = f
         }
     }
 
-    // Leave the order row intact so it returns to the unfilled pool.
-    $unfill = 'UPDATE car_orders SET car = "" WHERE car = "' . $car_id_esc . '"';
-    if (!mysqli_query($dbc, $unfill)) {
-        return ['success' => false, 'error' => 'Failed to unfill car orders: ' . mysqli_error($dbc)];
-    }
-
+    // Status first, then unfill — same ordering as complete_wagon_unload.
     $new_status = $preserve_loaded ? 'Loaded' : 'Empty';
     $upd = 'UPDATE cars SET status = "' . mysqli_real_escape_string($dbc, $new_status) . '",
             last_spotted = 0
             WHERE id = "' . $car_id_esc . '"';
     if (!mysqli_query($dbc, $upd)) {
         return ['success' => false, 'error' => 'Failed to update car status: ' . mysqli_error($dbc)];
+    }
+
+    // Leave the order row intact so it returns to the unfilled pool.
+    $unfill = 'UPDATE car_orders SET car = "" WHERE car = "' . $car_id_esc . '"';
+    if (!mysqli_query($dbc, $unfill)) {
+        return ['success' => false, 'error' => 'Failed to unfill car orders: ' . mysqli_error($dbc)];
     }
 
     return [
@@ -4027,7 +4157,9 @@ function track_scale_run_job_weigh($dbc, $job_name, $config = null)
         $candidates[] = $car_id;
     }
     $stats['candidates'] = count($candidates);
+    $stats['forced_reloads'] = 0;
 
+    $batch = [];
     foreach ($candidates as $car_id) {
         $car = track_scale_get_car_by_id($dbc, $car_id);
         if ($car === null) {
@@ -4066,9 +4198,26 @@ function track_scale_run_job_weigh($dbc, $job_name, $config = null)
             $config,
             (float) ($load_state['balance_shift_tons'] ?? 0.0)
         );
+        $batch[] = [
+            'car_id' => $car_id,
+            'marks' => $marks,
+            'tare' => $tare,
+            'target_net' => $target_net,
+            'load_state' => $load_state,
+            'weighing' => $weighing,
+            'routing' => $weighing['routing'] ?? 'outbound',
+        ];
+    }
+
+    $stats['forced_reloads'] = track_scale_ensure_min_batch_reloads($dbc, $batch, $config);
+
+    foreach ($batch as $item) {
+        $car_id = (int) $item['car_id'];
+        $marks = (string) $item['marks'];
+        $weighing = $item['weighing'];
+        $routing = $item['routing'] ?? 'outbound';
         track_scale_record_weigh_log($dbc, $marks, $weighing, $config);
 
-        $routing = $weighing['routing'] ?? 'outbound';
         if (track_scale_car_has_routing_order($dbc, $car_id, $routing, $config)) {
             $stats['weighed']++;
             if ($routing === 'reload') {

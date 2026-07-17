@@ -4,24 +4,38 @@
  * Loaded by the track_scale plugin; core warm_start calls these via function_exists().
  */
 
+/**
+ * Simulate a completed UI calibration: zero residual on all pads, lock them, save.
+ * Previously only marked pads "weighed" — save requires locks + ~0 residual, so the
+ * workflow calibrate step silently failed and the scale went OOS after 4 sessions.
+ *
+ * @return array{success:bool,error?:string}
+ */
 function track_scale_simulate_calibration($dbc)
 {
     track_scale_sync_session_calibration($dbc);
     if (track_scale_is_calibration_locked($dbc)) {
-        return false;
+        return ['success' => false, 'error' => 'already_locked'];
     }
 
     track_scale_session_init();
     track_scale_reset_calibration();
     foreach (track_scale_sensor_positions() as $position) {
+        // Perfect zero: error cancelled by adjustment (same end-state as the UI).
         $_SESSION['track_scale']['sensor_errors'][$position] = 0.0;
         $_SESSION['track_scale']['sensor_adjustments'][$position] = 0.0;
-        track_scale_mark_sensor_weighed($position);
+        track_scale_mark_sensor_locked($position);
     }
 
     $result = track_scale_save_calibration($dbc);
+    if (empty($result['success'])) {
+        return [
+            'success' => false,
+            'error' => (string) ($result['error'] ?? 'save_calibration failed'),
+        ];
+    }
 
-    return !empty($result['success']);
+    return ['success' => true];
 }
 
 /**
@@ -44,18 +58,31 @@ function track_scale_maybe_calibrate_scale($dbc, $config = [])
         return ['calibrated' => false, 'skipped' => true, 'sessions_since' => $sessions_since];
     }
 
-    $ok = track_scale_simulate_calibration($dbc);
+    $sim = track_scale_simulate_calibration($dbc);
+    $ok = !empty($sim['success']);
 
-    return [
+    $out = [
         'calibrated' => $ok,
         'sessions_since' => $sessions_since,
     ];
+    if (!$ok && !empty($sim['error'])) {
+        $out['error'] = $sim['error'];
+    }
+    if ($ok) {
+        $out['sessions_since_after'] = track_scale_sessions_since_calibration($dbc);
+        $out['out_of_service'] = track_scale_is_out_of_service($dbc);
+    }
+
+    return $out;
 }
 
 /**
- * CK1 outbound coke weigh after pickup, before destination setouts.
+ * Job-specific weigh path used when warm-start hooks register a named local
+ * (historically CK1). Uses the same min-reload batch floor as generic job weigh.
+ *
+ * @param array|null $config Optional track-scale config (recipe overrides applied).
  */
-function track_scale_run_ck1_scale_ops($dbc)
+function track_scale_run_ck1_scale_ops($dbc, $config = null)
 {
     $fail = function (array $stats, string $error) {
         $stats['success'] = false;
@@ -69,11 +96,12 @@ function track_scale_run_ck1_scale_ops($dbc)
         'reloads' => 0,
         'outbound_assignments' => 0,
         'candidates' => 0,
+        'forced_reloads' => 0,
         'errors' => [],
         'success' => true,
     ];
 
-    $config = track_scale_load_config();
+    $config = is_array($config) ? $config : track_scale_load_config();
     $ck1_id = warm_start_job_id($dbc, 'CK1');
     if ($ck1_id <= 0) {
         return $fail($stats, 'CK1 job not found');
@@ -123,6 +151,7 @@ function track_scale_run_ck1_scale_ops($dbc)
     }
     $stats['candidates'] = count($candidates);
 
+    $batch = [];
     foreach ($candidates as $car_id) {
         $car = track_scale_get_car_by_id($dbc, $car_id);
         if ($car === null) {
@@ -157,9 +186,26 @@ function track_scale_run_ck1_scale_ops($dbc)
             $config,
             (float) ($load_state['balance_shift_tons'] ?? 0.0)
         );
+        $batch[] = [
+            'car_id' => $car_id,
+            'marks' => $marks,
+            'tare' => $tare,
+            'target_net' => $target_net,
+            'load_state' => $load_state,
+            'weighing' => $weighing,
+            'routing' => $weighing['routing'] ?? 'outbound',
+        ];
+    }
+
+    $stats['forced_reloads'] = track_scale_ensure_min_batch_reloads($dbc, $batch, $config);
+
+    foreach ($batch as $item) {
+        $car_id = (int) $item['car_id'];
+        $marks = (string) $item['marks'];
+        $weighing = $item['weighing'];
+        $routing = $item['routing'] ?? 'outbound';
         track_scale_record_weigh_log($dbc, $marks, $weighing, $config);
 
-        $routing = $weighing['routing'] ?? 'outbound';
         if (warm_start_car_has_routing_order($dbc, $car_id, $routing, $config)) {
             $stats['weighed']++;
             $coke_stats['weighed']++;
@@ -207,7 +253,7 @@ function track_scale_run_ck1_scale_ops($dbc)
 function track_scale_run_job_weigh_dispatch($dbc, $job, array $config, array $ts_config)
 {
     if (strcasecmp($job, 'CK1') === 0 && function_exists('track_scale_run_ck1_scale_ops')) {
-        return track_scale_run_ck1_scale_ops($dbc);
+        return track_scale_run_ck1_scale_ops($dbc, $ts_config);
     }
 
     return track_scale_run_job_weigh($dbc, $job, $ts_config);
