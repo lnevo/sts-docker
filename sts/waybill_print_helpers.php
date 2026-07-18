@@ -343,14 +343,22 @@ function waybill_print_safe_filename($waybill_number)
 
 function waybill_print_page_styles()
 {
+    // One waybill document per printed page. Do not lock @page size/orientation —
+    // the printer dialog chooses paper. Page breaks between sheets are the contract.
     return 'body{font:normal 20px Verdana,Arial,sans-serif;margin:0;padding:16px}'
         . 'table{border-collapse:collapse}tr{vertical-align:top}'
         . 'th,td{border:1px solid black;padding:10px}'
         . '.waybill-sheet{margin-bottom:32px}'
         . '.waybill-break-before{margin-top:32px}'
-        . '@media print{.noprint{display:none!important}.waybill-sheet{page-break-after:always;break-after:page}'
+        . '@page{size:auto;margin:0.5in}'
+        . '@media print{'
+        . 'body{margin:0;padding:0}'
+        . '.noprint{display:none!important}'
+        . '.waybill-sheet{page-break-after:always;break-after:page;'
+        . 'page-break-inside:avoid;break-inside:avoid;margin:0;height:auto;max-height:none;overflow:visible}'
         . '.waybill-sheet:last-child{page-break-after:auto;break-after:auto}'
-        . '.waybill-break-before{page-break-before:always;break-before:page;margin-top:0}}';
+        . '.waybill-break-before{page-break-before:always;break-before:page;margin-top:0}'
+        . '}';
 }
 
 function waybill_print_render_page($dbc, $waybill_number, array $options = [])

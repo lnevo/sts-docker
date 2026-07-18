@@ -3271,8 +3271,11 @@ function session_waybill_render_print_all_page($session_nbr, $title, array $numb
         . '.waybill-print tr{vertical-align:top}'
         . '.waybill-print th,.waybill-print td{border:1px solid #000;padding:10px}'
         . '.waybill-print-controls{margin:0 0 16px}'
+        . '@page{size:auto;margin:0.5in}'
         . '@media print{nav,.noprint{display:none!important}'
-        . '.waybill-print .waybill-sheet{page-break-after:always;break-after:page}'
+        . 'body{margin:0;padding:0}'
+        . '.waybill-print .waybill-sheet{page-break-after:always;break-after:page;'
+        . 'page-break-inside:avoid;break-inside:avoid;margin:0;height:auto;max-height:none;overflow:visible}'
         . '.waybill-print .waybill-sheet:last-child{page-break-after:auto;break-after:auto}'
         . '.waybill-print .waybill-break-before{page-break-before:always;break-before:page;margin-top:0}}';
 
@@ -3284,7 +3287,8 @@ function session_waybill_render_print_all_page($session_nbr, $title, array $numb
         . $nav_html
         . '<main><div class="noprint"><h1>' . htmlspecialchars($title) . '</h1>'
         . $session_nav
-        . '<p class="muted">' . $count . ' waybill' . ($count === 1 ? '' : 's') . ' · each prints on its own page.</p></div>'
+        . '<p class="muted">' . $count . ' waybill' . ($count === 1 ? '' : 's')
+        . ' · each prints on its own page.</p></div>'
         . $controls
         . '<div class="waybill-print">' . ($sheets !== '' ? $sheets : '<div class="card"><p>No waybills to print.</p></div>') . '</div>'
         . '</main>'

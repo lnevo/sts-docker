@@ -113,6 +113,7 @@ if ($ext === 'html' || $ext === 'htm') {
     $html = so_inject_waybill_phase_filter($html, $rel);
     $html = so_inject_waybill_selection_index($html, $rel);
     $html = so_inject_waybill_selection_print($html, $rel);
+    $html = so_inject_waybill_flexible_page_breaks($html, $rel);
     $html = so_refresh_switchlist_print_all_session_nav($html, $rel);
     $html = so_refresh_switchlist_job_print_all_session_nav($html, $rel);
     $html = so_refresh_switchlist_train_print_all_session_nav($html, $rel);
@@ -635,7 +636,8 @@ function so_inject_waybill_phase_filter($html, $rel)
         . 'vis.forEach(function(s,i){var last=(i===vis.length-1);'
         . 's.style.pageBreakAfter=last?"auto":"always";s.style.breakAfter=last?"auto":"page";});'
         . 'if(muted){if(v===""){muted.textContent=mutedDefault;}'
-        . 'else{muted.textContent=vis.length+" waybill"+(vis.length===1?"":"s")+" \\u00b7 each prints on its own page.";}}}'
+        . 'else{muted.textContent=vis.length+" waybill"+(vis.length===1?"":"s")'
+        . '+" \\u00b7 each prints on its own page.";}}}'
         . 'sel.addEventListener("change",apply);'
         . '})();</script>';
 
@@ -873,10 +875,52 @@ function so_inject_waybill_selection_print($html, $rel)
         . 'var pb=document.querySelector(".waybill-print-controls button");'
         . 'if(pb)pb.innerHTML=\'<i class="bi bi-printer"></i> Print selected\';'
         . 'var cnt=document.querySelector("main .muted");'
-        . 'if(cnt)cnt.textContent=nsel+" selected waybill"+(nsel===1?"":"s")+" \\u00b7 each prints on its own page.";'
+        . 'if(cnt)cnt.textContent=nsel+" selected waybill"+(nsel===1?"":"s")'
+        . '+" \\u00b7 each prints on its own page.";'
         . '})();</script>';
 
     return str_replace('</body>', $script . '</body>', $html);
+}
+
+/**
+ * Keep waybill print pages flexible: no locked paper size/orientation, and a
+ * hard page break after every .waybill-sheet. Overrides earlier half-letter
+ * @page experiments on already-generated HTML at serve time.
+ */
+function so_inject_waybill_flexible_page_breaks($html, $rel)
+{
+    if (!preg_match('#^session_\d+/(?:phase_\d+/)?waybills/[^/]+\.html$#', $rel)) {
+        return $html;
+    }
+    if (preg_match('#/(?:[^/]*\.)?index\.html$#', $rel)) {
+        return $html;
+    }
+    if (strpos($html, 'wb-flexible-page-breaks') !== false) {
+        return $html;
+    }
+
+    $html = preg_replace(
+        '#( · )(?:each is a half-letter page(?:[^.]*)|two per letter page \(half-page forms\))\.#',
+        '$1each prints on its own page.',
+        $html,
+        1
+    );
+
+    $style = '<style id="wb-flexible-page-breaks">'
+        // size:auto clears any prior fixed half-letter/letter lock so the
+        // print dialog controls paper size and orientation.
+        . '@page{size:auto!important;margin:0.5in}'
+        . '@media print{'
+        . 'body{margin:0!important;padding:0!important}'
+        . '.waybill-print .waybill-sheet,.waybill-sheet{'
+        . 'height:auto!important;max-height:none!important;overflow:visible!important;'
+        . 'page-break-after:always!important;break-after:page!important;'
+        . 'page-break-inside:avoid!important;break-inside:avoid!important;margin:0!important}'
+        . '.waybill-print .waybill-sheet:last-child,.waybill-sheet:last-child{'
+        . 'page-break-after:auto!important;break-after:auto!important}'
+        . '}</style>';
+
+    return str_replace('</body>', $style . '</body>', $html);
 }
 
 /**
