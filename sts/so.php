@@ -109,6 +109,7 @@ if ($ext === 'html' || $ext === 'htm') {
     $html = so_refresh_waybill_session_nav($html, $rel);
     $html = so_refresh_waybill_print_all_session_nav($html, $rel);
     $html = so_inject_waybill_memo_filter($html, $rel);
+    $html = so_inject_waybill_prior_session_filter($html, $rel);
     $html = so_inject_waybill_phase_filter($html, $rel);
     $html = so_inject_waybill_selection_index($html, $rel);
     $html = so_inject_waybill_selection_print($html, $rel);
@@ -446,6 +447,82 @@ function so_inject_waybill_memo_filter($html, $rel)
 }
 
 /**
+ * Add a "This session only" checkbox on waybill print-all pages so operators can
+ * hide freight/empty waybills issued in earlier sessions (already printed) and
+ * keep paperwork for the session they are running.
+ *
+ * Matching uses the leading session token in WAYBILL No. (e.g. 002-014 on a
+ * session_3 page is prior). Sheets without a waybill number fall back to
+ * OPERATING SESSION No. / OPERATING SESSION:. Preference is kept in localStorage.
+ */
+function so_inject_waybill_prior_session_filter($html, $rel)
+{
+    if (!preg_match('#^session_(\d+)/(?:phase_\d+/)?waybills/[^/]*print_all\.html$#', $rel, $m)) {
+        return $html;
+    }
+    if (strpos($html, 'wb-this-session-only') !== false) {
+        return $html;
+    }
+
+    $session_nbr = (int) $m[1];
+    if ($session_nbr < 1) {
+        return $html;
+    }
+
+    $checkbox = '<label class="noprint wb-prior-filter" style="display:inline-flex;align-items:center;gap:6px;'
+        . 'margin-left:10px;font:14px system-ui,-apple-system,\'Segoe UI\',Roboto,sans-serif;"'
+        . ' title="Hide waybills numbered for earlier sessions (already printed)">'
+        . '<input type="checkbox" id="wb-this-session-only"> This session only</label>';
+    $html = preg_replace(
+        '#(<div class="noprint waybill-print-controls">.*?)(</div>)#s',
+        '$1' . $checkbox . '$2',
+        $html,
+        1
+    );
+
+    $style = '<style>'
+        . '.waybill-print.hide-prior-sessions .waybill-sheet.wb-prior-session{display:none!important}'
+        . '</style>';
+
+    $script = '<script>(function(){'
+        . 'var wrap=document.querySelector(".waybill-print");'
+        . 'var cb=document.getElementById("wb-this-session-only");'
+        . 'if(!wrap||!cb){return;}'
+        . 'var pageSession=' . $session_nbr . ';'
+        . 'function originSession(sheet){'
+        . 'var t=sheet.textContent||"";'
+        . 'var m=t.match(/WAYBILL No\\.\\s*([0-9A-Za-z\\-]+)/);'
+        . 'if(m){var p=m[1].match(/^(\\d{1,3})(?=-|$)/);if(p){return parseInt(p[1],10);}}'
+        . 'm=t.match(/OPERATING SESSION(?: No\\.)?\\s*:?\\s*(\\d+)/i);'
+        . 'return m?parseInt(m[1],10):null;}'
+        . 'var sheets=[].slice.call(wrap.querySelectorAll(".waybill-sheet"));'
+        . 'var priorCount=0;'
+        . 'sheets.forEach(function(s){var o=originSession(s);'
+        . 'if(o!==null&&o<pageSession){s.classList.add("wb-prior-session");priorCount++;}});'
+        . 'if(priorCount===0){var lab=cb.closest("label");if(lab)lab.style.display="none";return;}'
+        . 'var KEY="wbThisSessionOnly";'
+        . 'try{var stored=localStorage.getItem(KEY);cb.checked=(stored===null||stored==="1");}catch(e){cb.checked=true;}'
+        . 'var muted=document.querySelector("main .muted");'
+        . 'var mutedDefault=muted?(muted.textContent||""):"";'
+        . 'function visibleCount(){var n=0;sheets.forEach(function(s){'
+        . 'if(s.style.display==="none")return;'
+        . 'if(wrap.classList.contains("hide-prior-sessions")&&s.classList.contains("wb-prior-session"))return;'
+        . 'if(wrap.classList.contains("hide-memos")&&s.classList.contains("wb-memo-only"))return;'
+        . 'n++;});return n;}'
+        . 'function apply(){wrap.classList.toggle("hide-prior-sessions",cb.checked);'
+        . 'try{localStorage.setItem(KEY,cb.checked?"1":"0");}catch(e){}'
+        . 'if(muted){if(!cb.checked){muted.textContent=mutedDefault;}'
+        . 'else{var n=visibleCount();'
+        . 'muted.textContent=n+" waybill"+(n===1?"":"s")+" this session"'
+        . '+(priorCount?(" \\u00b7 "+priorCount+" prior hidden"):"")'
+        . '+" \\u00b7 each prints on its own page.";}}}'
+        . 'cb.addEventListener("change",apply);apply();'
+        . '})();</script>';
+
+    return str_replace('</body>', $style . $script . '</body>', $html);
+}
+
+/**
  * Add a "Phase" filter dropdown next to the Train dropdown on waybill print-all
  * pages (session-wide and per-train bundles). Selecting a phase shows only the
  * waybills captured for that phase; "All phases" (default) shows everything.
@@ -624,21 +701,37 @@ function so_inject_waybill_selection_index($html, $rel)
         }
     }
 
+    // Page session for "This session only" (index may be session-wide, phased, or per-train).
+    $page_session = 0;
+    if (preg_match('#^session_(\d+)/#', $rel, $psm)) {
+        $page_session = (int) $psm[1];
+    }
+
     $count = 0;
+    $prior_count = 0;
     $html = preg_replace_callback(
         '#<li><a href="([^"]+)">([^<]+)</a></li>#',
-        static function ($mm) use ($show_phase, $wb_phases) {
+        static function ($mm) use ($show_phase, $wb_phases, $page_session, &$prior_count) {
             $href = $mm[1];
             $num = $mm[2];
             $data = '';
             if ($show_phase) {
                 $phs = isset($wb_phases[$num]) ? array_keys($wb_phases[$num]) : [];
                 sort($phs);
-                $data = ' data-wb-phase="' . htmlspecialchars(implode(' ', $phs), ENT_QUOTES) . '"';
+                $data .= ' data-wb-phase="' . htmlspecialchars(implode(' ', $phs), ENT_QUOTES) . '"';
+            }
+            $origin = null;
+            if (preg_match('/^(\d{1,3})(?=-|$)/', (string) $num, $om)) {
+                $origin = (int) $om[1];
+                $data .= ' data-wb-origin="' . $origin . '"';
+                if ($page_session > 0 && $origin < $page_session) {
+                    $prior_count++;
+                    $data .= ' data-wb-prior="1"';
+                }
             }
             return '<li class="wb-pick-row"' . $data . '><label class="wb-pick-label">'
-                . '<input type="checkbox" class="wb-pick" value="' . $num . '">'
-                . '<a href="' . $href . '">' . $num . '</a></label></li>';
+                . '<input type="checkbox" class="wb-pick" value="' . htmlspecialchars($num, ENT_QUOTES) . '">'
+                . '<a href="' . $href . '">' . htmlspecialchars($num) . '</a></label></li>';
         },
         $html,
         -1,
@@ -667,8 +760,15 @@ function so_inject_waybill_selection_index($html, $rel)
             . $opts . '</select>';
     }
 
+    $prior_toggle = '';
+    if ($prior_count > 0 && $page_session > 0) {
+        $prior_toggle = '<label class="wb-prior-label" title="Hide waybills numbered for earlier sessions">'
+            . '<input type="checkbox" id="wb-this-session-only"> This session only</label>';
+    }
+
     $controls = '<div class="noprint wb-select-controls">'
         . $phase_select
+        . $prior_toggle
         . '<button type="button" id="wb-print-selected" class="btn btn-dark btn-sm" disabled>'
         . '<i class="bi bi-printer"></i> Print selected (0)</button>'
         . '<a href="#" id="wb-select-all">Select all</a>'
@@ -686,7 +786,8 @@ function so_inject_waybill_selection_index($html, $rel)
         . '.wb-pick-row{margin:3px 0;list-style:none;}'
         . '.wb-select-controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:.35rem 0 .85rem;}'
         . '.wb-select-controls a{font-size:.85rem;}'
-        . '.wb-phase-label{font-size:.85rem;margin-right:-8px;}'
+        . '.wb-phase-label,.wb-prior-label{font-size:.85rem;display:inline-flex;align-items:center;gap:6px;}'
+        . '.wb-phase-label{margin-right:-8px;}'
         . '@media print{.wb-select-controls,.wb-pick{display:none!important}}'
         . '</style>';
 
@@ -700,24 +801,35 @@ function so_inject_waybill_selection_index($html, $rel)
         . 'var selAll=document.getElementById("wb-select-all");'
         . 'var clr=document.getElementById("wb-clear");'
         . 'var phaseSel=document.getElementById("wb-phase-select");'
+        . 'var priorCb=document.getElementById("wb-this-session-only");'
+        . 'var KEY="wbThisSessionOnly";'
+        . 'if(priorCb){try{var st=localStorage.getItem(KEY);priorCb.checked=(st===null||st==="1");}catch(e){priorCb.checked=true;}}'
         . 'function rowOf(c){return c.closest?c.closest("li"):c.parentNode.parentNode;}'
         . 'function visible(c){var r=rowOf(c);return !r||r.style.display!=="none";}'
-        . 'function sel(){return picks.filter(function(c){return c.checked;}).map(function(c){return c.value;});}'
+        . 'function sel(){return picks.filter(function(c){return c.checked&&visible(c);}).map(function(c){return c.value;});}'
         . 'function upd(){var n=sel().length;if(btn){btn.disabled=n===0;'
         . 'btn.innerHTML=\'<i class="bi bi-printer"></i> Print selected (\'+n+\')\';}}'
+        . 'function applyFilters(){'
+        . 'var phaseV=phaseSel?phaseSel.value:"";'
+        . 'var hidePrior=!!(priorCb&&priorCb.checked);'
+        . 'picks.forEach(function(c){var r=rowOf(c);if(!r)return;'
+        . 'var ph=(r.getAttribute("data-wb-phase")||"").split(/\\s+/);'
+        . 'var phaseOk=(phaseV===""||ph.indexOf(phaseV)>=0);'
+        . 'var priorOk=!hidePrior||r.getAttribute("data-wb-prior")!=="1";'
+        . 'var show=phaseOk&&priorOk;'
+        . 'r.style.display=show?"":"none";if(!show&&c.checked)c.checked=false;});'
+        . 'if(priorCb){try{localStorage.setItem(KEY,priorCb.checked?"1":"0");}catch(e){}}'
+        . 'upd();}'
         . 'picks.forEach(function(c){c.addEventListener("change",upd);});'
         . 'if(selAll)selAll.addEventListener("click",function(e){e.preventDefault();picks.forEach(function(c){if(visible(c))c.checked=true;});upd();});'
         . 'if(clr)clr.addEventListener("click",function(e){e.preventDefault();picks.forEach(function(c){c.checked=false;});upd();});'
-        . 'if(phaseSel)phaseSel.addEventListener("change",function(){var v=phaseSel.value;'
-        . 'picks.forEach(function(c){var r=rowOf(c);if(!r)return;'
-        . 'var ph=(r.getAttribute("data-wb-phase")||"").split(/\\s+/);'
-        . 'var show=(v===""||ph.indexOf(v)>=0);'
-        . 'r.style.display=show?"":"none";if(!show&&c.checked)c.checked=false;});upd();});'
+        . 'if(phaseSel)phaseSel.addEventListener("change",applyFilters);'
+        . 'if(priorCb)priorCb.addEventListener("change",applyFilters);'
         . 'if(btn)btn.addEventListener("click",function(e){e.preventDefault();var s=sel();if(!s.length||!printAll)return;'
         . 'var base=printAll.getAttribute("href");'
         . 'var url=base+(base.indexOf("?")>=0?"&":"?")+"wb="+encodeURIComponent(s.join(","));'
         . 'window.location.href=url;});'
-        . 'upd();'
+        . 'applyFilters();'
         . '})();</script>';
 
     return str_replace('</body>', $style . $script . '</body>', $html);

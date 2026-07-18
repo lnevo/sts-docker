@@ -126,9 +126,13 @@ session_render_nav_bar([
         <?php if ($session_print_all_rel !== null): ?>
           <a class="btn btn-outline-dark btn-sm" href="<?php echo htmlspecialchars(session_output_url($session_print_all_rel)); ?>"><i class="bi bi-printer"></i> Print all switch lists</a>
         <?php endif; ?>
-        <a class="btn btn-outline-dark btn-sm" href="<?php echo htmlspecialchars(session_output_url('session_' . (int) $selected . '/waybills/index.html')); ?>"><i class="bi bi-file-text"></i> All waybills</a>
-        <?php if (session_waybills_bundle_ready($selected, null, $root)): ?>
-          <a class="btn btn-outline-dark btn-sm" href="<?php echo htmlspecialchars(session_output_url('session_' . (int) $selected . '/waybills/print_all.html')); ?>"><i class="bi bi-printer"></i> Print all waybills</a>
+        <?php
+          $session_wb_index_rel = 'session_' . (int) $selected . '/waybills/index.html';
+          $session_wb_print_rel = 'session_' . (int) $selected . '/waybills/print_all.html';
+          if (is_file(session_output_fs_path($session_wb_print_rel, $root))): ?>
+          <a class="btn btn-outline-dark btn-sm" href="<?php echo htmlspecialchars(session_output_url($session_wb_print_rel)); ?>"><i class="bi bi-printer"></i> Print all waybills</a>
+        <?php elseif (is_file(session_output_fs_path($session_wb_index_rel, $root))): ?>
+          <a class="btn btn-outline-dark btn-sm" href="<?php echo htmlspecialchars(session_output_url($session_wb_index_rel)); ?>"><i class="bi bi-file-text"></i> All waybills</a>
         <?php endif; ?>
       </div>
       <?php if (!$has_switchlists): ?>

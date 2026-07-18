@@ -2041,7 +2041,9 @@ function session_waybill_print_all_session_nav_html($session_nbr, $basename, $db
         $suffix_by[$n] = $suffix;
     }
 
-    return session_nav_row_picker_html(
+    // Print-all lives at session_N/waybills/ — one level deeper than session_N/,
+    // so sibling links need ../../session_M/… (picker emits ../session_M/…).
+    $html = session_nav_row_picker_html(
         $session_nbr,
         $sessions,
         $current_db,
@@ -2050,6 +2052,8 @@ function session_waybill_print_all_session_nav_html($session_nbr, $basename, $db
         'btn btn-outline-dark btn-sm',
         $suffix_by
     );
+
+    return str_replace('href="../session_', 'href="../../session_', $html);
 }
 
 /** Session picker for a waybill index page (keeps so.php waybill-index view). */
@@ -2076,16 +2080,15 @@ function session_waybill_session_nav_html($session_nbr, $phase_num = null, $dbc 
         ? ('phase_' . session_phase_pad($phase_num) . '/waybills/index.html')
         : 'waybills/index.html';
 
-    // Waybill index pages sit one level deeper when phased; sibling href from
-    // session_N/waybills/ is ../session_M/…, but from session_N/phase_XX/waybills/
-    // it needs ../../session_M/…. session_sibling_rel_href assumes one ../ —
-    // build per-depth suffix via relative helper for the phase case.
+    // Waybill index pages sit deeper than session_N/; sibling href from
+    // session_N/waybills/ needs ../../session_M/…, and from
+    // session_N/phase_XX/waybills/ needs ../../../session_M/….
+    // session_sibling_rel_href assumes one ../ — deepen after building.
     if ($phase_num !== null && $phase_num > 0) {
         $suffix_by = [];
         foreach ($sessions as $n) {
             $suffix_by[(int) $n] = 'phase_' . session_phase_pad($phase_num) . '/waybills/index.html';
         }
-        // Custom relative depth: from phase_XX/waybills → ../../session_N/...
         $html = session_nav_row_picker_html(
             $session_nbr,
             $sessions,
@@ -2095,11 +2098,12 @@ function session_waybill_session_nav_html($session_nbr, $phase_num = null, $dbc 
             'btn btn-outline-dark',
             $suffix_by
         );
-        // Fix relative depth: picker emits ../session_N/… but we need ../../session_N/…
-        return str_replace('href="../session_', 'href="../../session_', $html);
+        // From phase_XX/waybills → ../../../session_N/...
+        return str_replace('href="../session_', 'href="../../../session_', $html);
     }
 
-    return session_nav_row_picker_html(
+    // Session-wide waybill index lives at session_N/waybills/ — deepen ../ to ../../.
+    $html = session_nav_row_picker_html(
         $session_nbr,
         $sessions,
         $current_db,
@@ -2107,6 +2111,8 @@ function session_waybill_session_nav_html($session_nbr, $phase_num = null, $dbc 
         'waybill-session-nav',
         'btn btn-outline-dark'
     );
+
+    return str_replace('href="../session_', 'href="../../session_', $html);
 }
 
 /** Relative href from a job print-all page to the same train/phase in another session. */
