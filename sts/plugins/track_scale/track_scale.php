@@ -578,6 +578,39 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
             min-height: var(--scale-top-row-height);
             box-sizing: border-box;
         }
+        /* Single weigh LCD: gross left, net/status right (same spot as former right panel) */
+        #weighPanel .scale-weigh-readings {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            width: 100%;
+            min-height: 0;
+        }
+        #weighPanel .scale-weigh-gross {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        #weighPanel .scale-weigh-net {
+            flex: 0 0 50%;
+            max-width: 50%;
+            box-sizing: border-box;
+            padding-left: 0.75rem;
+        }
+        @media (max-width: 767.98px) {
+            #weighPanel .scale-weigh-readings {
+                flex-direction: column;
+                align-items: stretch;
+                justify-content: center;
+                gap: 0.35rem;
+            }
+            #weighPanel .scale-weigh-net {
+                flex: 0 0 auto;
+                max-width: none;
+                width: 100%;
+                padding-left: 0;
+            }
+        }
         .sensor-average.scale-top-row {
             display: flex;
             height: var(--scale-top-row-height);
@@ -1357,22 +1390,24 @@ $track_scale_test_car_options = track_scale_test_car_roster_options($config, $tr
     <!-- Weigh mode -->
     <div id="weighPanel" class="mode-panel active">
         <div class="row g-3 mb-2 scale-top-row">
-            <div class="col-md-6">
-                <div class="scale-display h-100">
-                    <div class="label">Adjusted Gross Weight</div>
-                    <div><span class="value" id="displayGross">0.00</span> <span class="unit">tons</span></div>
-                    <div class="small mt-2" style="color:#6bdc6b;" id="sensorBreakdown"></div>
-                </div>
-            </div>
-            <div class="col-md-6">
+            <div class="col-12">
                 <div class="scale-display h-100 position-relative" id="netDisplayPanel">
                     <div class="scale-led-wrap">
                         <div class="scale-led" id="weightLed" data-state="off" title="Tolerance indicator"></div>
                         <span class="scale-led-label d-none" id="weightLedLabel"></span>
                     </div>
-                    <div id="netReadingBlock" class="d-none">
-                        <div class="label">Net load</div>
-                        <div><span class="value" id="displayNet">0.00</span> <span class="unit">tons</span></div>
+                    <div class="scale-weigh-readings">
+                        <div class="scale-weigh-gross">
+                            <div class="label">Adjusted Gross Weight</div>
+                            <div><span class="value" id="displayGross">0.00</span> <span class="unit">tons</span></div>
+                            <div class="small mt-2" style="color:#6bdc6b;" id="sensorBreakdown"></div>
+                        </div>
+                        <div class="scale-weigh-net">
+                            <div id="netReadingBlock" class="d-none">
+                                <div class="label">Net load</div>
+                                <div><span class="value" id="displayNet">0.00</span> <span class="unit">tons</span></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
