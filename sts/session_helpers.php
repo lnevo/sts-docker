@@ -357,10 +357,48 @@ function session_restart_backup_name_excluded($name)
 }
 
 /**
- * Backup basenames that look like an end-of-(N-1) dump for restarting session N.
- * Matching is by session number token only — no hardcoded prefixes.
+ * Preferred rolling dump basenames for session N under the pre/post scheme:
+ *   hart_session_pre{N}   — after orders/fill/waybills, before morning ops
+ *   hart_session_post{N}  — end of session
+ * Legacy rolling end dump hart_session{N} is included last for older campaigns.
  *
- * Sort: names that end with the number first, then alphabetical.
+ * @return list<string>
+ */
+function session_scheme_backup_names($session_nbr)
+{
+    $session_nbr = (int) $session_nbr;
+    if ($session_nbr < 0) {
+        return [];
+    }
+
+    return [
+        'hart_session_pre' . $session_nbr,
+        'hart_session_post' . $session_nbr,
+        'hart_session' . $session_nbr,
+    ];
+}
+
+/** True when a basename is a same-session pre (start-of-ops) dump for session N. */
+function session_backup_is_pre_for_session($backup_name, $session_nbr)
+{
+    $backup_name = basename(trim((string) $backup_name));
+    $session_nbr = (int) $session_nbr;
+    if ($backup_name === '' || $session_nbr < 1) {
+        return false;
+    }
+
+    return (bool) preg_match(
+        '/(^|_)pre' . preg_quote((string) $session_nbr, '/') . '(_|$)/i',
+        $backup_name
+    );
+}
+
+/**
+ * Backup basenames for restarting session N.
+ *
+ * Prefer same-session pre dumps (hart_session_pre{N}) when present — restore
+ * returns to the start of the generated session without rewinding to N-1.
+ * Otherwise fall back to end-of-(N-1) dumps (post / legacy).
  *
  * @return list<string>
  */
@@ -370,12 +408,24 @@ function session_restart_backup_candidates($session_nbr)
     if ($session_nbr < 1) {
         return [];
     }
-    // Restarting session N restores the end of session N-1.
-    $prev = $session_nbr - 1;
     $dir = session_restart_backups_dir();
     if (!is_dir($dir)) {
         return [];
     }
+
+    $pre_matches = [];
+    foreach (['hart_session_pre' . $session_nbr] as $name) {
+        $path = $dir . '/' . $name;
+        if (is_file($path) && !session_restart_backup_name_excluded($name)) {
+            $pre_matches[] = $name;
+        }
+    }
+    if ($pre_matches !== []) {
+        return $pre_matches;
+    }
+
+    // Restarting session N restores the end of session N-1.
+    $prev = $session_nbr - 1;
     $matches = [];
     foreach (scandir($dir) ?: [] as $name) {
         if (session_restart_backup_name_excluded($name)) {
@@ -388,13 +438,27 @@ function session_restart_backup_candidates($session_nbr)
         if (!session_restart_backup_name_matches_session($name, $prev)) {
             continue;
         }
+        // Prefer post / legacy end dumps over unrelated numbered files.
         $matches[] = $name;
     }
     usort($matches, static function ($a, $b) use ($prev) {
-        $a_end = (bool) preg_match('/(?<![0-9])' . preg_quote((string) $prev, '/') . '$/', $a);
-        $b_end = (bool) preg_match('/(?<![0-9])' . preg_quote((string) $prev, '/') . '$/', $b);
-        if ($a_end !== $b_end) {
-            return $a_end ? -1 : 1;
+        $rank = static function ($name) use ($prev) {
+            if (preg_match('/(^|_)post' . preg_quote((string) $prev, '/') . '$/i', $name)) {
+                return 0;
+            }
+            if (preg_match('/^hart_session' . preg_quote((string) $prev, '/') . '$/i', $name)) {
+                return 1;
+            }
+            if ((bool) preg_match('/(?<![0-9])' . preg_quote((string) $prev, '/') . '$/', $name)) {
+                return 2;
+            }
+
+            return 3;
+        };
+        $ra = $rank($a);
+        $rb = $rank($b);
+        if ($ra !== $rb) {
+            return $ra <=> $rb;
         }
 
         return strcasecmp($a, $b);
@@ -499,13 +563,14 @@ function session_restart_operating_session($dbc, $session_nbr, $root = null, $ba
 
     // Re-open may be required after aggressive restores; re-check session.
     $dbc = open_db();
-    $prev = $session_nbr - 1;
+    $from_pre = session_backup_is_pre_for_session($snapshot, $session_nbr);
+    $expect = $from_pre ? $session_nbr : ($session_nbr - 1);
     $restored_session = (int) session_get_db_session($dbc);
-    if ($restored_session !== $prev && !($prev < 1 && $restored_session === 0)) {
-        // Snapshot should set session_nbr to PREV; force it if dump omitted settings.
+    if ($restored_session !== $expect && !($expect < 1 && $restored_session === 0)) {
+        // Pre dumps keep session_nbr = N; end-of-(N-1) dumps should be N-1.
         mysqli_query(
             $dbc,
-            'UPDATE settings SET setting_value = "' . (int) max(0, $prev)
+            'UPDATE settings SET setting_value = "' . (int) max(0, $expect)
             . '" WHERE setting_name = "session_nbr"'
         );
         $restored_session = (int) session_get_db_session($dbc);
@@ -546,8 +611,9 @@ function session_restart_operating_session($dbc, $session_nbr, $root = null, $ba
 }
 
 /**
- * Backup basenames that look like an end-of-session dump for overview session N
- * and are eligible to lock (not already *_locked).
+ * Backup basenames eligible to lock for overview session N
+ * (not already *_locked). Scheme dumps first; other matches only when no
+ * scheme dump exists (avoids rewind_undo_* noise in the picker).
  *
  * @return list<string>
  */
@@ -561,16 +627,30 @@ function session_lock_backup_candidates($session_nbr)
     if (!is_dir($dir)) {
         return [];
     }
+
     $matches = [];
+    foreach (session_scheme_backup_names($session_nbr) as $name) {
+        $path = $dir . '/' . $name;
+        if (!is_file($path) || session_restart_backup_name_excluded($name)) {
+            continue;
+        }
+        $matches[] = $name;
+    }
+    if ($matches !== []) {
+        return $matches;
+    }
+
     foreach (scandir($dir) ?: [] as $name) {
         if (session_restart_backup_name_excluded($name)) {
             continue;
         }
-        // Rolling STS dumps are extensionless (hart_session2); skip *.sql etc.
         if (strpos($name, '.') !== false) {
             continue;
         }
         if (preg_match('/_locked$/i', $name)) {
+            continue;
+        }
+        if (preg_match('/^(rewind_undo|recreate_orders|db_session)/i', $name)) {
             continue;
         }
         $path = $dir . '/' . $name;
@@ -582,17 +662,39 @@ function session_lock_backup_candidates($session_nbr)
         }
         $matches[] = $name;
     }
-    usort($matches, static function ($a, $b) use ($session_nbr) {
-        $a_end = (bool) preg_match('/(?<![0-9])' . preg_quote((string) $session_nbr, '/') . '$/', $a);
-        $b_end = (bool) preg_match('/(?<![0-9])' . preg_quote((string) $session_nbr, '/') . '$/', $b);
-        if ($a_end !== $b_end) {
-            return $a_end ? -1 : 1;
-        }
-
+    usort($matches, static function ($a, $b) {
         return strcasecmp($a, $b);
     });
 
     return $matches;
+}
+
+/**
+ * Scheme dumps that Lock Backup should freeze together when no single
+ * backup is selected: pre + post when present. Legacy hart_session{N} is
+ * locked only when neither scheme dump exists (older campaigns).
+ *
+ * @return list<string>
+ */
+function session_lock_default_sources($session_nbr)
+{
+    $session_nbr = (int) $session_nbr;
+    $dir = session_restart_backups_dir();
+    $pre = 'hart_session_pre' . $session_nbr;
+    $post = 'hart_session_post' . $session_nbr;
+    $legacy = 'hart_session' . $session_nbr;
+    $out = [];
+    if (is_file($dir . '/' . $pre)) {
+        $out[] = $pre;
+    }
+    if (is_file($dir . '/' . $post)) {
+        $out[] = $post;
+    }
+    if ($out === [] && is_file($dir . '/' . $legacy)) {
+        $out[] = $legacy;
+    }
+
+    return $out;
 }
 
 /** Locked companion name for a rolling backup (hart_session2 → hart_session2_locked). */
@@ -610,47 +712,15 @@ function session_lock_backup_target_name($backup_name)
 }
 
 /**
- * Copy a backup SQL dump (+ optional _photos dir) to its *_locked companion.
- * Filesystem only — does not restore or otherwise touch the live database.
+ * Copy one backup SQL dump (+ optional _photos dir) to its *_locked companion.
  *
  * @return array{ok:bool, message:string, source?:string, locked?:string, photos?:int}
  */
-function session_lock_backup($session_nbr, $backup = null)
+function session_lock_one_backup($source)
 {
-    $session_nbr = (int) $session_nbr;
-    $candidates = session_lock_backup_candidates($session_nbr);
-    if ($candidates === []) {
-        return [
-            'ok' => false,
-            'message' => 'No unlocked backup found containing session number '
-                . $session_nbr
-                . ' to lock.',
-        ];
-    }
-    $backup = trim((string) $backup);
-    if ($backup === '') {
-        if (count($candidates) > 1) {
-            return [
-                'ok' => false,
-                'message' => 'Multiple backups match session '
-                    . $session_nbr
-                    . '; choose one before locking.',
-                'candidates' => $candidates,
-            ];
-        }
-        $source = $candidates[0];
-    } elseif (!in_array($backup, $candidates, true)) {
-        return [
-            'ok' => false,
-            'message' => 'Selected backup is not a valid lock candidate: ' . $backup,
-            'candidates' => $candidates,
-        ];
-    } else {
-        $source = $backup;
-    }
-
+    $source = basename(trim((string) $source));
     $locked = session_lock_backup_target_name($source);
-    if ($locked === '') {
+    if ($source === '' || $locked === '') {
         return ['ok' => false, 'message' => 'Invalid lock target name.'];
     }
 
@@ -703,6 +773,83 @@ function session_lock_backup($session_nbr, $backup = null)
         'source' => $source,
         'locked' => $locked,
         'photos' => $photo_count,
+    ];
+}
+
+/**
+ * Copy session dump(s) to *_locked companions. Filesystem only.
+ * With no explicit backup, locks every scheme dump present (pre + post,
+ * plus legacy hart_session{N}) so a session lock freezes both checkpoints.
+ *
+ * @return array{ok:bool, message:string, source?:string, locked?:string, photos?:int, locked_list?:list<string>, sources?:list<string>}
+ */
+function session_lock_backup($session_nbr, $backup = null)
+{
+    $session_nbr = (int) $session_nbr;
+    $candidates = session_lock_backup_candidates($session_nbr);
+    if ($candidates === []) {
+        return [
+            'ok' => false,
+            'message' => 'No unlocked backup found containing session number '
+                . $session_nbr
+                . ' to lock.',
+        ];
+    }
+    $backup = trim((string) $backup);
+    if ($backup !== '') {
+        if (!in_array($backup, $candidates, true)) {
+            return [
+                'ok' => false,
+                'message' => 'Selected backup is not a valid lock candidate: ' . $backup,
+                'candidates' => $candidates,
+            ];
+        }
+
+        return session_lock_one_backup($backup);
+    }
+
+    $sources = session_lock_default_sources($session_nbr);
+    if ($sources === []) {
+        // Fall back to a single non-scheme candidate when only those exist.
+        if (count($candidates) === 1) {
+            return session_lock_one_backup($candidates[0]);
+        }
+
+        return [
+            'ok' => false,
+            'message' => 'Multiple backups match session '
+                . $session_nbr
+                . '; choose one before locking.',
+            'candidates' => $candidates,
+        ];
+    }
+
+    $locked_list = [];
+    $source_list = [];
+    $photos_total = 0;
+    $messages = [];
+    foreach ($sources as $source) {
+        $one = session_lock_one_backup($source);
+        if (empty($one['ok'])) {
+            return $one + [
+                'sources' => $source_list,
+                'locked_list' => $locked_list,
+            ];
+        }
+        $source_list[] = $source;
+        $locked_list[] = (string) ($one['locked'] ?? '');
+        $photos_total += (int) ($one['photos'] ?? 0);
+        $messages[] = rtrim((string) ($one['message'] ?? ''), '.');
+    }
+
+    return [
+        'ok' => true,
+        'message' => implode(' ', $messages) . '.',
+        'source' => $source_list[0] ?? '',
+        'locked' => $locked_list[0] ?? '',
+        'sources' => $source_list,
+        'locked_list' => $locked_list,
+        'photos' => $photos_total,
     ];
 }
 
@@ -2467,7 +2614,32 @@ function session_condition_variable_label($key)
 
 function session_condition_operators()
 {
-    return ['=', '!=', '<', '<=', '>', '>='];
+    // % / !% : (left % modulus) == remainder. Value "N" → remainder 0 (every Nth);
+    // value "N=R" or "N,R" → compare remainder to R.
+    return ['=', '!=', '<', '<=', '>', '>=', '%', '!%'];
+}
+
+/**
+ * Parse if_then modulo value: "N" → [N, 0]; "N=R" / "N,R" → [N, R].
+ *
+ * @return array{0:int,1:int}|null
+ */
+function session_parse_modulo_value($value)
+{
+    $raw = trim((string) $value);
+    if ($raw === '' || !preg_match('/^(\d+)\s*(?:[=,]\s*(\d+))?$/', $raw, $m)) {
+        return null;
+    }
+    $modulus = (int) $m[1];
+    if ($modulus < 1) {
+        return null;
+    }
+    $remainder = isset($m[2]) ? (int) $m[2] : 0;
+    if ($remainder < 0 || $remainder >= $modulus) {
+        return null;
+    }
+
+    return [$modulus, $remainder];
 }
 
 function session_evaluate_context($dbc, array $config = [], array $run_counters = [])
@@ -2535,6 +2707,17 @@ function session_evaluate_condition(array $ctx, $variable, $operator, $value, ar
                 $left = (float) operations_count_orders($dbc, $variable, $filters);
             }
         }
+    }
+
+    if ($operator === '%' || $operator === '!%') {
+        $parsed = session_parse_modulo_value($value);
+        if ($parsed === null) {
+            return false;
+        }
+        [$modulus, $remainder] = $parsed;
+        $matches = ((int) $left % $modulus) === $remainder;
+
+        return $operator === '%' ? $matches : !$matches;
     }
 
     $right = (float) $value;
@@ -5508,7 +5691,99 @@ function session_station_report_featured_stations()
 }
 
 /** Bump when station-report columns/filters change so cached HTML rebuilds. */
-const SESSION_STATION_REPORT_VERSION = 2;
+const SESSION_STATION_REPORT_VERSION = 7;
+
+/** Bump when wheel-report columns/styles change so cached HTML rebuilds. */
+const SESSION_WHEEL_REPORT_VERSION = 5;
+
+/**
+ * Softened locations.color swatches for car reports.
+ * Keeps each hue close to the STS named color; only reduces density.
+ *
+ * @return array{bg:string,fg:string}|null
+ */
+function session_report_muted_location_palette($color_name)
+{
+    $color_name = strtolower(trim((string) $color_name));
+    if ($color_name === '' || $color_name === 'none' || $color_name === 'white') {
+        return null;
+    }
+    // Approx. CSS named colors lightened ~35–45% toward white (still same hue).
+    $map = [
+        'pink' => ['bg' => '#ffc0cb', 'fg' => '#333'],       // already soft
+        'red' => ['bg' => '#e57373', 'fg' => '#fff'],        // was #ff0000
+        'orange' => ['bg' => '#ffb74d', 'fg' => '#333'],     // was #ffa500
+        'yellow' => ['bg' => '#ffe566', 'fg' => '#333'],     // was #ffff00
+        'green' => ['bg' => '#66a366', 'fg' => '#fff'],      // was #008000 (true green, not mint)
+        'lightblue' => ['bg' => '#add8e6', 'fg' => '#333'],  // already soft
+        'mediumblue' => ['bg' => '#5c6fd4', 'fg' => '#fff'], // was #0000cd — softer, still medium blue
+        'purple' => ['bg' => '#9b6b9b', 'fg' => '#fff'],     // was #800080
+        'lightgrey' => ['bg' => '#d3d3d3', 'fg' => '#333'],
+        'black' => ['bg' => '#3d3d3d', 'fg' => '#fff'],      // near-black, slightly lifted
+    ];
+
+    return $map[$color_name] ?? null;
+}
+
+/** Resolve locations.color for a location code. */
+function session_report_location_color_name($dbc, $location_code)
+{
+    static $cache = [];
+    $location_code = trim((string) $location_code);
+    if ($location_code === '') {
+        return '';
+    }
+    if (array_key_exists($location_code, $cache)) {
+        return $cache[$location_code];
+    }
+    $esc = mysqli_real_escape_string($dbc, $location_code);
+    $rs = mysqli_query($dbc, 'SELECT color FROM locations WHERE code = "' . $esc . '" LIMIT 1');
+    $row = $rs ? mysqli_fetch_row($rs) : null;
+    $cache[$location_code] = $row ? (string) ($row[0] ?? '') : '';
+
+    return $cache[$location_code];
+}
+
+/**
+ * Inline style for a location code on station/wheel reports.
+ * Uses muted pastel swatches (not the saturated switch-list set_colors).
+ */
+function session_report_location_style($dbc, $location_code)
+{
+    $palette = session_report_muted_location_palette(
+        session_report_location_color_name($dbc, $location_code)
+    );
+    if ($palette === null) {
+        return '';
+    }
+
+    return 'background-color: ' . $palette['bg'] . '; color: ' . $palette['fg'] . ';';
+}
+
+/**
+ * Location code whose STS color paints Action / Destination cells
+ * (same rules as display_station_report.php).
+ */
+function session_report_destination_color_loc(
+    $status,
+    $is_empty_repo,
+    $load_loc,
+    $unload_loc,
+    $e_dest_loc = ''
+) {
+    if ($is_empty_repo) {
+        return trim((string) $e_dest_loc);
+    }
+    $status = (string) $status;
+    if ($status === 'Ordered') {
+        return trim((string) $load_loc);
+    }
+    if (in_array($status, ['Loading', 'Loaded', 'Unloading'], true)) {
+        return trim((string) $unload_loc);
+    }
+
+    return '';
+}
 
 /** True when a cached station_report.html should be rebuilt. */
 function session_station_report_stale($session_nbr, $report_fs, $root = null)
@@ -5978,6 +6253,17 @@ function session_station_report_data($dbc, $session_nbr, $root = null)
             $conflict_count++;
         }
 
+        $action_loc = session_report_destination_color_loc(
+            $status,
+            $is_e,
+            $load_loc,
+            $unload_loc,
+            $car['e_dest_loc']
+        );
+        if ($action_loc === '' && !$stays && !empty($session_work[$cid]['dest_loc'])) {
+            $action_loc = (string) ($locations[$session_work[$cid]['dest_loc']]['code'] ?? '');
+        }
+
         $ship_disp = '';
         if ($waybill !== '') {
             if ($is_e) {
@@ -5997,6 +6283,7 @@ function session_station_report_data($dbc, $session_nbr, $root = null)
             'waybill' => $waybill,
             'shipment' => $ship_disp,
             'action' => $action,
+            'action_style' => session_report_location_style($dbc, $action_loc),
             'conflict' => $conflict,
             'stays' => $stays,
             'placement' => $in_train ? 'train' : 'station',
@@ -6130,6 +6417,8 @@ function session_station_report_render_html($session_nbr, array $data)
   .stay { color:#198754; font-weight:500; }
   .act { color:#b02a37; }
   .conflict { color:#a00; font-weight:600; font-size:.72rem; }
+  td.loc-swatch { font-weight:500; }
+  td.loc-swatch .conflict { color:inherit; opacity:.9; }
   .legend { font-size:.78rem; color:#6c757d; }
   .status-empty { display:inline-block; background:#ffeaa7; color:#333; padding:1px 6px; border-radius:3px; font-weight:600; font-size:.72rem; }
   .status-loaded { display:inline-block; background:#a8e6cf; color:#333; padding:1px 6px; border-radius:3px; font-weight:600; font-size:.72rem; }
@@ -6160,7 +6449,8 @@ function session_station_report_render_html($session_nbr, array $data)
     .srp-filters{display:none;}
     h1{margin:0;}
     .station-head, .featured .station-head, .in-train-card .station-head,
-    .status-empty, .status-loaded, .status-loading, .status-unloading, .status-ordered {
+    .status-empty, .status-loaded, .status-loading, .status-unloading, .status-ordered,
+    td.loc-swatch {
       -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact;
     }
   }
@@ -6183,7 +6473,7 @@ function session_station_report_render_html($session_nbr, array $data)
 <main>
   <h1>Station Car Report<?= $phase_label !== '' ? ' — ' . htmlspecialchars($phase_label, ENT_QUOTES) : '' ?> — Session <?= $session_nbr ?></h1>
   <p class="subtitle noprint"><?= $subtitle ?> <?= $total ?> cars total<?= $conflict_count > 0 ? ' · <span class="conflict">' . $conflict_count . ' list/DB conflict' . ($conflict_count === 1 ? '' : 's') . '</span>' : '' ?>. Generated <?= htmlspecialchars($generated_at, ENT_QUOTES) ?>.</p>
-  <p class="legend noprint"><span class="stay">—</span> = no switch-list work and no DB next step &nbsp;·&nbsp; <span class="act">Pick up · JOB → DEST</span> = switch-list assignment &nbsp;·&nbsp; DB next step is merged into Action when it adds load/deliver guidance.</p>
+  <p class="legend noprint"><span class="stay">—</span> = no switch-list work and no DB next step &nbsp;·&nbsp; <span class="act">Pick up · JOB → DEST</span> = switch-list assignment &nbsp;·&nbsp; Action cell background uses the destination location color code when known.</p>
   <?= $session_nav ?>
   <?= $phase_nav ?>
   <div class="srp-filters noprint">
@@ -6253,6 +6543,10 @@ function session_station_report_render_html($session_nbr, array $data)
     if (!empty($r['conflict'])) {
         $action_cls = 'conflict';
     }
+    $action_style = trim((string) ($r['action_style'] ?? ''));
+    if ($action_style !== '') {
+        $action_cls .= ' loc-swatch';
+    }
 ?>
           <tr data-search="<?= htmlspecialchars($search, ENT_QUOTES) ?>" data-status="<?= htmlspecialchars($r['status'], ENT_QUOTES) ?>" data-handling="<?= $r['stays'] ? 'stay' : 'work' ?>" data-placement="<?= htmlspecialchars($r['placement'] ?? ($is_train ? 'train' : 'station'), ENT_QUOTES) ?>">
             <td class="track"><?= htmlspecialchars($r['loc'], ENT_QUOTES) ?></td>
@@ -6272,7 +6566,7 @@ function session_station_report_render_html($session_nbr, array $data)
                 }
             ?></td>
             <td><?= htmlspecialchars($r['home'], ENT_QUOTES) ?></td>
-            <td class="<?= $action_cls ?>"><?= htmlspecialchars($r['action'], ENT_QUOTES) ?><?php
+            <td class="<?= $action_cls ?>"<?= $action_style !== '' ? ' style="' . htmlspecialchars($action_style, ENT_QUOTES) . '"' : '' ?>><?= htmlspecialchars($r['action'], ENT_QUOTES) ?><?php
                 if (!empty($r['conflict'])) {
                     echo '<div class="conflict">' . htmlspecialchars((string) $r['conflict'], ENT_QUOTES) . '</div>';
                 }
@@ -6668,6 +6962,14 @@ function session_station_report_data_live($dbc)
         ]);
         list($action) = session_station_report_consolidate_action('', $next, '', $waybill);
 
+        $action_loc = session_report_destination_color_loc(
+            $status,
+            $is_e,
+            (string) ($row['load_loc'] ?? ''),
+            (string) ($row['unload_loc'] ?? ''),
+            (string) ($row['e_dest_loc'] ?? '')
+        );
+
         $ship_disp = '';
         if ($waybill !== '') {
             $ship_disp = $is_e
@@ -6690,6 +6992,7 @@ function session_station_report_data_live($dbc)
             'waybill' => $waybill,
             'shipment' => $ship_disp,
             'action' => $action !== '' ? $action : '—',
+            'action_style' => session_report_location_style($dbc, $action_loc),
             'conflict' => '',
             'stays' => true,
             'placement' => $in_train ? 'train' : 'station',
@@ -7082,10 +7385,26 @@ function session_wheel_report_live_rows_for_job($dbc, $job_name)
             'pickup_loc' => (string) ($row['pickup_location'] ?? ''),
             'dest_station' => $dest_station,
             'dest_loc' => $dest_loc,
+            'dest_style' => session_report_location_style($dbc, $dest_loc),
         ];
     }
 
     return $rows;
+}
+
+/** Attach destination location color swatches to wheel-report rows. */
+function session_wheel_report_apply_dest_styles($dbc, array &$by_job)
+{
+    foreach ($by_job as &$rows) {
+        foreach ($rows as &$r) {
+            if (!empty($r['dest_style'])) {
+                continue;
+            }
+            $r['dest_style'] = session_report_location_style($dbc, $r['dest_loc'] ?? '');
+        }
+        unset($r);
+    }
+    unset($rows);
 }
 
 /**
@@ -7105,6 +7424,7 @@ function session_wheel_report_data_live($dbc)
         $by_job[$job] = session_wheel_report_live_rows_for_job($dbc, $job);
     }
     session_wheel_report_finish_by_job($by_job);
+    session_wheel_report_apply_dest_styles($dbc, $by_job);
     $job_order = array_keys($by_job);
     sort($job_order, SORT_NATURAL | SORT_FLAG_CASE);
     $total = 0;
@@ -7204,6 +7524,7 @@ function session_wheel_report_data_archived($dbc, $session_nbr, $root = null)
     }
 
     session_wheel_report_finish_by_job($by_job);
+    session_wheel_report_apply_dest_styles($dbc, $by_job);
     $job_order = array_keys($by_job);
     sort($job_order, SORT_NATURAL | SORT_FLAG_CASE);
     $total = 0;
@@ -7219,10 +7540,30 @@ function session_wheel_report_data_archived($dbc, $session_nbr, $root = null)
     ];
 }
 
-/** True when a cached wheel_report.html should be rebuilt (same triggers as station report). */
+/** True when a cached wheel_report.html should be rebuilt. */
 function session_wheel_report_stale($session_nbr, $report_fs, $root = null)
 {
-    return session_station_report_stale($session_nbr, $report_fs, $root);
+    if (!is_file($report_fs)) {
+        return true;
+    }
+    $cached = (string) @file_get_contents($report_fs);
+    if ($cached === '' || strpos($cached, 'data-wrp-version="' . SESSION_WHEEL_REPORT_VERSION . '"') === false) {
+        return true;
+    }
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
+    $mtime = (int) filemtime($report_fs);
+    $manifest = session_dir_for($session_nbr, $root) . '/manifest.json';
+    if (is_file($manifest) && filemtime($manifest) > $mtime) {
+        return true;
+    }
+    foreach (glob(session_dir_for($session_nbr, $root) . '/phase_*/*_master.json') ?: [] as $master) {
+        if (filemtime($master) > $mtime) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -7329,7 +7670,7 @@ function session_wheel_report_render_html($session_nbr, array $data)
 
     ob_start();
     ?><!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-wrp-version="<?= (int) SESSION_WHEEL_REPORT_VERSION ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7351,6 +7692,8 @@ function session_wheel_report_render_html($session_nbr, array $data)
   th { font-size:.68rem; text-transform:uppercase; letter-spacing:.03em; color:#495057; }
   td, th { padding:.3rem .6rem !important; vertical-align:middle; }
   .track { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.78rem; color:#0a58ca; }
+  td.loc-swatch .track { color:inherit; }
+  td.loc-swatch .station-name { color:inherit; }
   .marks { font-weight:600; }
   .station-name { font-weight:600; }
   .le-l { display:inline-block; background:#a8e6cf; color:#123; padding:1px 7px; border-radius:3px; font-weight:700; font-size:.72rem; }
@@ -7378,7 +7721,7 @@ function session_wheel_report_render_html($session_nbr, array $data)
     .noprint{display:none;}
     .wrp-filters{display:none;}
     h1{margin:0;}
-    .train-head, .le-l, .le-e {
+    .train-head, .le-l, .le-e, td.loc-swatch {
       -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact;
     }
   }
@@ -7452,6 +7795,10 @@ function session_wheel_report_render_html($session_nbr, array $data)
 <?php foreach ($rows as $r):
     $search = strtolower(trim($r['marks'] . ' ' . $r['car_code'] . ' ' . $r['commodity'] . ' ' . $r['pickup_loc'] . ' ' . $r['dest_loc']));
     $le_html = $r['le'] === 'L' ? '<span class="le-l">L</span>' : ($r['le'] === 'E' ? '<span class="le-e">E</span>' : '');
+    $dest_style = trim((string) ($r['dest_style'] ?? ''));
+    $dest_attrs = $dest_style !== ''
+        ? ' class="loc-swatch" style="' . htmlspecialchars($dest_style, ENT_QUOTES) . '"'
+        : '';
 ?>
           <tr data-search="<?= htmlspecialchars($search, ENT_QUOTES) ?>" data-le="<?= htmlspecialchars($r['le'], ENT_QUOTES) ?>">
             <td class="text-center"><?= (int) $r['seq'] ?></td>
@@ -7460,7 +7807,7 @@ function session_wheel_report_render_html($session_nbr, array $data)
             <td class="text-center"><?= $le_html ?></td>
             <td><?= htmlspecialchars($r['commodity'], ENT_QUOTES) ?></td>
             <td><span class="station-name"><?= htmlspecialchars($r['pickup_station'], ENT_QUOTES) ?></span><?php if ($r['pickup_loc'] !== ''): ?><br><span class="track"><?= htmlspecialchars($r['pickup_loc'], ENT_QUOTES) ?></span><?php endif; ?></td>
-            <td><span class="station-name"><?= htmlspecialchars($r['dest_station'], ENT_QUOTES) ?></span><?php if ($r['dest_loc'] !== ''): ?><br><span class="track"><?= htmlspecialchars($r['dest_loc'], ENT_QUOTES) ?></span><?php endif; ?></td>
+            <td<?= $dest_attrs ?>><span class="station-name"><?= htmlspecialchars($r['dest_station'], ENT_QUOTES) ?></span><?php if ($r['dest_loc'] !== ''): ?><br><span class="track"><?= htmlspecialchars($r['dest_loc'], ENT_QUOTES) ?></span><?php endif; ?></td>
           </tr>
 <?php endforeach; ?>
         </tbody>
@@ -7533,6 +7880,220 @@ function session_wheel_report_render_html($session_nbr, array $data)
 </html>
 <?php
     return (string) ob_get_clean();
+}
+
+/**
+ * Location codes sorted longest-first (for matching codes inside Action text).
+ *
+ * @return list<string>
+ */
+function session_report_location_codes_longest_first($dbc)
+{
+    static $codes = null;
+    if ($codes !== null) {
+        return $codes;
+    }
+    $codes = [];
+    $rs = mysqli_query($dbc, 'SELECT code FROM locations WHERE code IS NOT NULL AND code != ""');
+    while ($rs && ($row = mysqli_fetch_assoc($rs))) {
+        $code = trim((string) ($row['code'] ?? ''));
+        if ($code !== '') {
+            $codes[] = $code;
+        }
+    }
+    usort($codes, static fn($a, $b) => strlen($b) <=> strlen($a));
+
+    return $codes;
+}
+
+/** First known location code appearing in free text (longest match wins). */
+function session_report_find_location_code_in_text($dbc, $text)
+{
+    $text = (string) $text;
+    if ($text === '' || $text === '—') {
+        return '';
+    }
+    foreach (session_report_location_codes_longest_first($dbc) as $code) {
+        if (strpos($text, $code) !== false) {
+            return $code;
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Patch frozen station/wheel report HTML with destination location color swatches.
+ * Preserves car rows; only adds style/class and print CSS hooks.
+ *
+ * @param 'station'|'wheel' $kind
+ */
+function session_car_report_recolor_html($dbc, $html, $kind)
+{
+    $html = (string) $html;
+    if ($html === '') {
+        return $html;
+    }
+    $kind = ($kind === 'wheel') ? 'wheel' : 'station';
+
+    $apply = static function ($next, $fallback) {
+        return ($next === null || $next === '') ? $fallback : $next;
+    };
+
+    if ($kind === 'station') {
+        if (strpos($html, 'td.loc-swatch') === false) {
+            $needle = '.conflict { color:#a00; font-weight:600; font-size:.72rem; }';
+            $inject = $needle . "\n  td.loc-swatch { font-weight:500; }\n"
+                . "  td.loc-swatch .conflict { color:inherit; opacity:.9; }";
+            if (strpos($html, $needle) !== false) {
+                $html = str_replace($needle, $inject, $html);
+            }
+            $html = str_replace(
+                '.status-empty, .status-loaded, .status-loading, .status-unloading, .status-ordered {',
+                '.status-empty, .status-loaded, .status-loading, .status-unloading, .status-ordered, td.loc-swatch {',
+                $html
+            );
+        }
+        $html = $apply(preg_replace_callback(
+            '#<td class="((?:stay|act|conflict)(?:\s+loc-swatch)?)"([^>]*)>(.*?)</td>#s',
+            static function ($m) use ($dbc) {
+                $cls = trim(preg_replace('/\s+/', ' ', $m[1]));
+                $attrs = $m[2];
+                $inner = $m[3];
+                $plain = trim(html_entity_decode(strip_tags($inner), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                $code = session_report_find_location_code_in_text($dbc, $plain);
+                $style = session_report_location_style($dbc, $code);
+                $attrs = preg_replace('/\s*style="[^"]*"/', '', $attrs) ?? $attrs;
+                $cls = trim(str_replace('loc-swatch', '', $cls));
+                $cls = trim(preg_replace('/\s+/', ' ', $cls));
+                if ($style === '') {
+                    return '<td class="' . $cls . '"' . $attrs . '>' . $inner . '</td>';
+                }
+
+                return '<td class="' . $cls . ' loc-swatch"' . $attrs . ' style="'
+                    . htmlspecialchars($style, ENT_QUOTES) . '">' . $inner . '</td>';
+            },
+            $html
+        ), $html);
+        $html = $apply(preg_replace(
+            '/data-srp-version="\d+"/',
+            'data-srp-version="' . (int) SESSION_STATION_REPORT_VERSION . '"',
+            $html,
+            1
+        ), $html);
+        if (strpos($html, 'data-srp-version=') === false) {
+            $html = $apply(preg_replace(
+                '/<html([^>]*)>/',
+                '<html$1 data-srp-version="' . (int) SESSION_STATION_REPORT_VERSION . '">',
+                $html,
+                1
+            ), $html);
+        }
+
+        return $html;
+    }
+
+    // Wheel: Destination is the last <td> in each body row.
+    if (strpos($html, 'td.loc-swatch') === false) {
+        $needle = '.track { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.78rem; color:#0a58ca; }';
+        $inject = $needle . "\n  td.loc-swatch .track { color:inherit; }\n"
+            . '  td.loc-swatch .station-name { color:inherit; }';
+        if (strpos($html, $needle) !== false) {
+            $html = str_replace($needle, $inject, $html);
+        }
+        $html = str_replace(
+            '.train-head, .le-l, .le-e {',
+            '.train-head, .le-l, .le-e, td.loc-swatch {',
+            $html
+        );
+    }
+    $html = $apply(preg_replace_callback(
+        '#(<tr\b[^>]*>)(.*?)(</tr>)#s',
+        static function ($m) use ($dbc) {
+            if (strpos($m[1], '<th') !== false || strpos($m[2], '<th') !== false) {
+                return $m[0];
+            }
+            if (!preg_match_all('#<td\b([^>]*)>(.*?)</td>#s', $m[2], $cells, PREG_SET_ORDER)) {
+                return $m[0];
+            }
+            if (count($cells) < 7) {
+                return $m[0];
+            }
+            $last = $cells[count($cells) - 1];
+            $inner = $last[2];
+            $code = '';
+            if (preg_match('#<span class="track">([^<]+)</span>#', $inner, $tm)) {
+                $code = trim(html_entity_decode($tm[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+            }
+            if ($code === '') {
+                $code = session_report_find_location_code_in_text(
+                    $dbc,
+                    trim(html_entity_decode(strip_tags($inner), ENT_QUOTES | ENT_HTML5, 'UTF-8'))
+                );
+            }
+            $style = session_report_location_style($dbc, $code);
+            $attrs = preg_replace('/\s*style="[^"]*"/', '', $last[1]) ?? $last[1];
+            $attrs = preg_replace('/\s*class="[^"]*"/', '', $attrs) ?? $attrs;
+            if ($style === '') {
+                $new_td = '<td' . $attrs . '>' . $inner . '</td>';
+            } else {
+                $new_td = '<td class="loc-swatch"' . $attrs . ' style="'
+                    . htmlspecialchars($style, ENT_QUOTES) . '">' . $inner . '</td>';
+            }
+            $pos = strrpos($m[2], $last[0]);
+            if ($pos === false) {
+                return $m[0];
+            }
+            $body = substr_replace($m[2], $new_td, $pos, strlen($last[0]));
+
+            return $m[1] . $body . $m[3];
+        },
+        $html
+    ), $html);
+    if (strpos($html, 'data-wrp-version=') === false) {
+        $html = $apply(preg_replace(
+            '/<html([^>]*)>/',
+            '<html$1 data-wrp-version="' . (int) SESSION_WHEEL_REPORT_VERSION . '">',
+            $html,
+            1
+        ), $html);
+    } else {
+        $html = $apply(preg_replace(
+            '/data-wrp-version="\d+"/',
+            'data-wrp-version="' . (int) SESSION_WHEEL_REPORT_VERSION . '"',
+            $html,
+            1
+        ), $html);
+    }
+
+    return $html;
+}
+
+/**
+ * Recolor all station/wheel report HTML files under a session directory.
+ *
+ * @return array{station:int, wheel:int}
+ */
+function session_car_report_recolor_session($dbc, $session_nbr, $root = null)
+{
+    $root = $root ?? session_web_root();
+    $session_nbr = (int) $session_nbr;
+    $dir = session_dir_for($session_nbr, $root);
+    $counts = ['station' => 0, 'wheel' => 0];
+    if (!is_dir($dir)) {
+        return $counts;
+    }
+    foreach (['station' => 'station_report*.html', 'wheel' => 'wheel_report*.html'] as $kind => $glob) {
+        foreach (glob($dir . '/' . $glob) ?: [] as $fs) {
+            $html = (string) @file_get_contents($fs);
+            $next = session_car_report_recolor_html($dbc, $html, $kind);
+            if ($next !== '' && $next !== $html && @file_put_contents($fs, $next) !== false) {
+                $counts[$kind]++;
+            }
+        }
+    }
+
+    return $counts;
 }
 
 /**

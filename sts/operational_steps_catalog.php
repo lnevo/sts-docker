@@ -1594,7 +1594,7 @@ function operational_steps_catalog_definitions()
             'adder_group' => 'database',
             'label' => 'Create Backup',
             'gui_template' => 'Create Backup {prefix}<session>',
-            'description' => 'Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. Use a stable prefix (e.g. hart_session) so each session writes hart_session1, hart_session2, … Lock from the session overview for a static *_locked checkpoint.',
+            'description' => 'Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. HART recipe uses hart_session_pre (after orders/fill/waybills) and hart_session_post (end of session). Legacy hart_session{N} end dumps still work. Lock from the session overview freezes both pre + post to *_locked companions.',
             'runnable' => true,
             'dispatch' => 'backup_database',
             'gui_path' => '/sts/backup_db.php',
@@ -1602,9 +1602,9 @@ function operational_steps_catalog_definitions()
                 operational_steps_catalog_text_param(
                     'prefix',
                     'Backup prefix',
-                    'hart_session',
+                    'hart_session_post',
                     true,
-                    'hart_session'
+                    'hart_session_post'
                 ),
             ],
         ],
@@ -1779,7 +1779,7 @@ function operational_steps_catalog_definitions()
             'adder_group' => 'workflow',
             'label' => 'If … then goto …',
             'gui_template' => 'If {variable} {operator} {value} then goto {section_label}',
-            'description' => 'When the condition is true, skip forward to a later section. When false, continue to the next step. Variables match the Operations dashboard counts (session #, open/unfilled orders, unassigned, pickup/set-out pending, organize, scale, load/unload) plus this-run counters refreshed after each step: filled_this_run, generated_this_run, repositioned_this_run. For open_orders / unfilled_orders, optional Commodity, Shipment, Car code, Loading, Unloading, or Final destination filters narrow the count so gates can target a lane without hardcoding commodities in PHP.',
+            'description' => 'When the condition is true, skip forward to a later section. When false, continue to the next step. Variables match the Operations dashboard counts (session #, open/unfilled orders, unassigned, pickup/set-out pending, organize, scale, load/unload) plus this-run counters refreshed after each step: filled_this_run, generated_this_run, repositioned_this_run. For open_orders / unfilled_orders, optional Commodity, Shipment, Car code, Loading, Unloading, or Final destination filters narrow the count so gates can target a lane without hardcoding commodities in PHP. Modulo operators: % is true when (variable % N) equals remainder R (value "N" → R=0, every Nth session; "N=R" or "N,R" for other remainders); !% is the inverse — useful for rare lanes like reefers every 3–4 sessions.',
             'runnable' => true,
             'dispatch' => 'if_then',
             'params' => [
@@ -1794,7 +1794,7 @@ function operational_steps_catalog_definitions()
                     'key' => 'operator',
                     'label' => 'Operator',
                     'type' => 'select',
-                    'options' => ['=', '!=', '<', '<=', '>', '>='],
+                    'options' => ['=', '!=', '<', '<=', '>', '>=', '%', '!%'],
                     'default' => '>=',
                 ],
                 ['key' => 'value', 'label' => 'Value', 'type' => 'text', 'default' => '1', 'required' => true],

@@ -410,6 +410,9 @@ function fill_order_pick_car_for_categories($available_cars, $categories, $car_f
  */
 function fill_order_auto_assign($dbc, array $options = [])
 {
+    // Heal Ordered-without-order ghosts before pool selection so they can fill.
+    fill_order_heal_orphan_ordered_cars($dbc);
+
     $selected_waybills = $options['waybills'] ?? null;
     if ($selected_waybills !== null) {
         $selected_waybills = array_values(array_filter(array_map('trim', (array) $selected_waybills)));
@@ -536,10 +539,57 @@ function fill_order_auto_assign($dbc, array $options = [])
     ];
 }
 
+/**
+ * Ordered cars with no car_orders row pointing at them are undeliverable
+ * ghosts (inflate yard counts, block pool math). Reset them to Empty.
+ *
+ * @return int number of cars healed
+ */
+function fill_order_heal_orphan_ordered_cars($dbc)
+{
+    if (!($dbc instanceof mysqli)) {
+        return 0;
+    }
+
+    $sql = 'UPDATE cars
+            SET status = "Empty"
+            WHERE status = "Ordered"
+              AND id NOT IN (
+                    SELECT car FROM (
+                        SELECT car FROM car_orders
+                        WHERE car IS NOT NULL AND car != "" AND car != "0"
+                    ) AS active_cars
+              )';
+    if (!mysqli_query($dbc, $sql)) {
+        return 0;
+    }
+
+    return (int) mysqli_affected_rows($dbc);
+}
+
 function fill_order_assign_car($dbc, $waybill_number, $car_id)
 {
     $waybill_number = mysqli_real_escape_string($dbc, $waybill_number);
     $car_id = mysqli_real_escape_string($dbc, $car_id);
+
+    // If this waybill already points at another car, clear that car's Ordered
+    // status before stealing the slot — otherwise the prior car is left Ordered
+    // with no order row (orphan Ordered).
+    $prev_rs = mysqli_query(
+        $dbc,
+        'SELECT car FROM car_orders WHERE waybill_number = "' . $waybill_number . '" LIMIT 1'
+    );
+    $prev_row = $prev_rs ? mysqli_fetch_assoc($prev_rs) : null;
+    $prev_car = (string) ($prev_row['car'] ?? '');
+    if ($prev_car !== '' && $prev_car !== '0' && $prev_car !== (string) $car_id) {
+        $prev_esc = mysqli_real_escape_string($dbc, $prev_car);
+        mysqli_query(
+            $dbc,
+            'UPDATE cars SET status = "Empty", last_spotted = 0
+             WHERE id = "' . $prev_esc . '"
+               AND status = "Ordered"'
+        );
+    }
 
     $sql = 'UPDATE car_orders SET car = "' . $car_id . '"
             WHERE waybill_number = "' . $waybill_number . '"';

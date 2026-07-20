@@ -19,6 +19,8 @@
     insertMode: 'end',
     insertStepNum: 1,
     hideNonExecute: false,
+    /** When true, Preview mode omits step remarks lines. */
+    hideRemarks: false,
     executionPathSteps: null,
     dirty: false,
     previewMode: true,
@@ -36,25 +38,33 @@
       return this.collapsedSectionIds;
     },
 
-    /** Display numbering: sections S1..Sn, other rows as execution steps 1..m (separate sequences). */
+    /**
+     * Display numbering matches recipe indices (1-based array position) used by
+     * Start/Stop/Skip, goto/if_then "step-N" ids, and the run API.
+     * Section headers keep kind:'section' for styling (S prefix) but share the
+     * same number sequence — S8 is recipe step 8, not a separate S1..Sn count.
+     */
     displayNumbers() {
       const steps = (this.recipe && this.recipe.steps) || [];
       let sectionCount = 0;
       let stepCount = 0;
-      const map = steps.map((s) => {
+      const map = steps.map((s, i) => {
+        const num = i + 1;
         if ((s && s.function) === 'section_label') {
           sectionCount += 1;
-          return { kind: 'section', num: sectionCount };
+          return { kind: 'section', num, sectionOrd: sectionCount };
         }
         stepCount += 1;
-        return { kind: 'step', num: stepCount };
+        return { kind: 'step', num, stepOrd: stepCount };
       });
-      return { map, sectionCount, stepCount };
+      return { map, sectionCount, stepCount, total: steps.length };
     },
 
     displayInfoForIndex(idx) {
       const { map } = this.displayNumbers();
-      return map[idx] || { kind: 'step', num: idx + 1 };
+      const step = (this.recipe && this.recipe.steps && this.recipe.steps[idx]) || null;
+      const kind = (step && step.function === 'section_label') ? 'section' : 'step';
+      return map[idx] || { kind, num: idx + 1 };
     },
 
     ensureCheckboxDropdownDocHandlers() {
@@ -774,25 +784,29 @@
         car_code: 'car',
       };
       const parts = [];
+      const percent = String(params.percent != null && String(params.percent).trim() !== '' ? params.percent : '100').trim();
+      parts.push(percent + '%');
       Object.keys(orderLabels).forEach((key) => {
-        const value = String(order[key] || '').trim();
-        if (value) parts.push(orderLabels[key] + '=' + value);
+        const raw = String(order[key] || '').trim();
+        if (!raw) return;
+        const pretty = this.resolveCsvValues(raw).map((t) => this.formatStationLocationToken(t)).join(', ');
+        if (pretty) parts.push(orderLabels[key] + '=' + pretty);
       });
       const defaultSources = 'pool,station,priority,system';
-      const sources = String(car.categories || defaultSources).trim();
-      if (sources && sources !== defaultSources) {
-        parts.push('src=' + sources);
-      }
+      const sources = String(car.categories || defaultSources).trim() || defaultSources;
+      parts.push('src=' + sources);
       if (String(car.current_station || '').trim()) {
-        parts.push('car_station=' + String(car.current_station).trim());
+        const pretty = this.resolveCsvValues(car.current_station).map((t) => this.formatStationLocationToken(t)).join(', ');
+        if (pretty) parts.push('car_station=' + pretty);
       }
       if (String(car.current_location || '').trim()) {
-        parts.push('car_loc=' + String(car.current_location).trim());
+        const pretty = this.resolveCsvValues(car.current_location).map((t) => this.formatStationLocationToken(t)).join(', ');
+        if (pretty) parts.push('car_loc=' + pretty);
       }
       if (String(car.car_code || '').trim()) {
         parts.push('car_type=' + String(car.car_code).trim());
       }
-      return parts.length ? 'Fill Orders ' + parts.join('; ') : 'Fill Orders';
+      return 'Fill Orders ' + parts.join('; ');
     },
 
     compileRepositionTitle(params) {
@@ -800,9 +814,14 @@
       const mode = String(params.mode || 'reposition_to_home').trim() || 'reposition_to_home';
       let title = mode === 'update' ? 'Reposition Empties update' : 'Reposition Empties to home';
       const parts = [];
+      const percent = String(params.percent != null && String(params.percent).trim() !== '' ? params.percent : '65').trim();
+      parts.push(percent + '%');
       if (mode === 'update') {
         const dest = String(params.destination || '').trim();
-        if (dest) parts.push('dest=' + dest);
+        if (dest) {
+          const pretty = this.resolveCsvValues(dest).map((t) => this.formatStationLocationToken(t)).join(', ');
+          if (pretty) parts.push('dest=' + pretty);
+        }
       }
       const filters = params.filters || {};
       const labels = {
@@ -813,13 +832,15 @@
         home_location: 'home_loc',
       };
       Object.keys(labels).forEach((key) => {
-        const value = String(filters[key] || '').trim();
-        if (value) parts.push(labels[key] + '=' + value);
+        const raw = String(filters[key] || '').trim();
+        if (!raw) return;
+        const pretty = this.resolveCsvValues(raw).map((t) => this.formatStationLocationToken(t)).join(', ');
+        if (pretty) parts.push(labels[key] + '=' + pretty);
       });
       if (String(filters.off_home_only || '') === '1') {
         parts.push('off_home=1');
       }
-      return parts.length ? title + ' ' + parts.join('; ') : title;
+      return title + ' ' + parts.join('; ');
     },
 
     compileGenerateOrdersTitle(params) {
@@ -827,12 +848,20 @@
       const parts = [];
       const shipment = this.resolveCsvValues(params.shipment).join(', ');
       if (shipment) parts.push(shipment);
+      // Catalog default is Yes (1); blank/No means do not increment.
       if (String(params.increment_session || '') === '1') parts.push('increment session');
+      else if (Object.prototype.hasOwnProperty.call(params, 'increment_session') && String(params.increment_session || '') !== '1') {
+        parts.push('no increment');
+      }
       const maxUnfilled = String(params.max_unfilled || '').trim();
       if (maxUnfilled) parts.push('max_unfilled=' + maxUnfilled);
+      const maxNew = String(params.max_new || '').trim();
+      if (maxNew) parts.push('max_new=' + maxNew);
       const seed = String(params.seed || '').trim();
       if (seed) parts.push('seed=' + seed);
-      if (!parts.length) return 'Generate Orders';
+      const exclude = String(params.exclude_prefixes || '').trim();
+      if (exclude) parts.push('exclude=' + exclude);
+      if (!parts.length) return 'Generate Orders automatic';
       return 'Generate Orders ' + parts.join('; ');
     },
 
@@ -853,6 +882,113 @@
         line += ' → ' + destLabels.join(', ');
       }
       return line;
+    },
+
+    compileLoadUnloadTitle(filters) {
+      filters = filters || {};
+      const labels = {
+        current_location: 'current',
+        car_code: 'car',
+        status: 'status',
+        commodity: 'consignment',
+        loading_location: 'load',
+        unloading_location: 'unload',
+      };
+      const parts = [];
+      Object.keys(labels).forEach((key) => {
+        const raw = String(filters[key] || '').trim();
+        if (!raw) return;
+        const pretty = this.resolveCsvValues(raw).map((t) => this.formatStationLocationToken(t)).join(', ');
+        if (pretty) parts.push(labels[key] + '=' + pretty);
+      });
+      return parts.length ? 'Load/Unload ' + parts.join('; ') : 'Load/Unload offline';
+    },
+
+    /**
+     * Preview command line: compileOne title plus any catalog params not already
+     * represented (so Preview always shows what will run, not just remarks).
+     */
+    previewCommandText(step, idx) {
+      let cmd = (this.compileOne(step, idx) || step?.function || '—').trim();
+      if (cmd.indexOf('[object Object]') >= 0) {
+        cmd = cmd.split('[object Object]').join('').replace(/\s+/g, ' ').trim() || (step?.function || '—');
+      }
+      if (!step?.function) return cmd;
+
+      const params = step.params || {};
+      const pdefs = (this.catalogMap[step.function] || {}).params || [];
+      if (!pdefs.length) return cmd;
+
+      const cmdLower = cmd.toLowerCase();
+      const alreadyShown = (shown) => {
+        const s = String(shown || '').trim();
+        if (!s) return true;
+        if (cmd.indexOf(s) >= 0) return true;
+        // percent chips are often rendered as "25%" while the raw value is "25"
+        if (/^\d+(\.\d+)?$/.test(s) && cmd.indexOf(s + '%') >= 0) return true;
+        const lower = s.toLowerCase();
+        if (cmdLower.indexOf(lower) >= 0) return true;
+        return false;
+      };
+
+      const filterBits = [];
+      const paramBits = [];
+      pdefs.forEach((p) => {
+        if (this.shouldHideInlineParam(step, p)) return;
+        // Dedicated compilers already expand these filter bags with short labels.
+        if (
+          (step.function === 'fill_orders' && (p.key === 'order_filters' || p.key === 'car_filters'))
+          || (step.function === 'reposition_empties' && p.key === 'filters')
+          || (step.function === 'load_unload' && p.key === 'filters')
+          || ((step.function === 'pick_up_cars' || step.function === 'set_out_cars') && p.key === 'car_filters')
+        ) {
+          return;
+        }
+        // Mode / action is already in the reposition title wording.
+        if (step.function === 'reposition_empties' && p.key === 'mode') return;
+        if (step.function === 'reposition_empties' && p.key === 'percent') return;
+        if (step.function === 'fill_orders' && p.key === 'percent') return;
+        if (step.function === 'generate_orders' && (p.key === 'shipment' || p.key === 'increment_session'
+          || p.key === 'max_unfilled' || p.key === 'max_new' || p.key === 'seed' || p.key === 'exclude_prefixes')) {
+          return;
+        }
+        if (step.function === 'generate_station_report' || step.function === 'generate_wheel_report') {
+          if (p.key === 'info') return;
+        }
+        if (step.function === 'generate_switchlists' && (p.key === 'jobs' || p.key === 'format' || p.key === 'title' || p.key === 'info')) {
+          return;
+        }
+        if (step.function === 'auto_assign_locals' && (p.key === 'jobs' || p.key === 'station' || p.key === 'destination')) {
+          return;
+        }
+        if ((step.function === 'pick_up_cars' || step.function === 'set_out_cars') && (p.key === 'job' || p.key === 'location')) {
+          return;
+        }
+        if (step.function === 'if_then' || step.function === 'goto') return;
+        if (step.function === 'track_scale' && (p.key === 'job' || p.key === 'commodity' || p.key === 'min_reloads')) return;
+        if (step.function === 'calibrate_track_scale' && p.key === 'every_sessions') return;
+        if ((step.function === 'cancel_orders' || step.function === 'drain_unfilled_orders')
+          && (p.key === 'threshold' || p.key === 'target' || p.key === 'order' || p.key === 'keep_coke')) {
+          return;
+        }
+
+        const shown = this.formatParamDisplay(params[p.key], p);
+        if (!shown || alreadyShown(shown)) return;
+        if (p.type === 'filter_group') {
+          filterBits.push(shown);
+        } else if (p.type === 'percent') {
+          paramBits.push(shown + '%');
+        } else {
+          paramBits.push((p.label || p.key) + '=' + shown);
+        }
+      });
+      if (filterBits.length) {
+        cmd = (cmd + ' (' + filterBits.join('; ') + ')').replace(/\s+/g, ' ').trim();
+      }
+      if (paramBits.length) {
+        cmd = (cmd + ' — ' + paramBits.join('; ')).replace(/\s+/g, ' ').trim();
+      }
+      return cmd;
     },
 
     formatStationLocationToken(token) {
@@ -946,24 +1082,6 @@
         if (pretty) parts.push(labels[key] + '=' + pretty);
       });
       return parts.length ? parts.join('; ') : '';
-    },
-
-    compileLoadUnloadTitle(filters) {
-      filters = filters || {};
-      const labels = {
-        current_location: 'current',
-        car_code: 'car',
-        status: 'status',
-        commodity: 'consignment',
-        loading_location: 'load',
-        unloading_location: 'unload',
-      };
-      const parts = [];
-      Object.keys(labels).forEach((key) => {
-        const value = String(filters[key] || '').trim();
-        if (value) parts.push(labels[key] + '=' + value);
-      });
-      return parts.length ? 'Load/Unload ' + parts.join('; ') : 'Load/Unload offline';
     },
 
     ifThenGotoParamsHtml(step, rowIdx) {
@@ -1330,28 +1448,11 @@
       const n = steps.length;
       if (fromIdx < 0 || fromIdx >= n || n === 0) return fromIdx;
 
-      const { map } = this.displayNumbers();
-      const kind = (map[fromIdx] && map[fromIdx].kind) || 'step';
       let targetNum = parseInt(requestedNum, 10);
       if (isNaN(targetNum) || targetNum < 1) targetNum = 1;
-
-      let toIdx = -1;
-      for (let i = 0; i < map.length; i++) {
-        if (map[i].kind === kind && map[i].num === targetNum) {
-          toIdx = i;
-          break;
-        }
-      }
-      if (toIdx < 0) {
-        // Clamp to last item of this kind.
-        for (let i = map.length - 1; i >= 0; i--) {
-          if (map[i].kind === kind) {
-            toIdx = i;
-            break;
-          }
-        }
-      }
-      if (toIdx < 0 || fromIdx === toIdx) return fromIdx;
+      if (targetNum > n) targetNum = n;
+      const toIdx = targetNum - 1;
+      if (fromIdx === toIdx) return fromIdx;
 
       const moved = steps.splice(fromIdx, 1)[0];
       steps.splice(toIdx, 0, moved);
@@ -1402,21 +1503,22 @@
     stepRowInnerHtml(step, idx) {
       const rowKey = idx;
       const recipeNum = idx + 1;
-      const { map, sectionCount, stepCount } = this.displayNumbers();
+      const { map, total } = this.displayNumbers();
       const disp = map[idx] || { kind: 'step', num: recipeNum };
       const isSection = step.function === 'section_label';
-      const displayMax = isSection ? Math.max(1, sectionCount) : Math.max(1, stepCount);
+      const displayMax = Math.max(1, total || ((this.recipe.steps || []).length));
       const displaySize = Math.max(2, String(displayMax).length);
       const collapseBtn = isSection
         ? ('<button type="button" class="section-collapse-btn" data-section-collapse' +
           ' aria-expanded="true" title="Collapse section">▼</button>')
         : '';
       const numTitle = isSection
-        ? 'Section ' + disp.num + ' — type a section number to move among sections'
-        : 'Step ' + disp.num + ' — type a step number to move among execution steps';
-      const numAria = isSection ? 'Section number' : 'Step number';
+        ? ('Recipe step ' + recipeNum + ' (section header) — same number as Start/Stop/Skip and goto step-'
+          + recipeNum + '; type a recipe step number to move this row')
+        : ('Recipe step ' + recipeNum + ' — same number as Start/Stop/Skip; type a recipe step number to move this row');
+      const numAria = isSection ? 'Recipe step number (section header)' : 'Recipe step number';
       const prefix = isSection
-        ? '<span class="step-num-prefix" title="Section">S</span>'
+        ? '<span class="step-num-prefix" title="Section header at recipe step ' + recipeNum + '">S</span>'
         : '';
 
       return (
@@ -1428,7 +1530,7 @@
             '<input type="number" class="step-num step-num-input field-input" data-step-num' +
             ' data-display-kind="' + disp.kind + '"' +
             ' min="1" max="' + displayMax + '" size="' + displaySize + '"' +
-            ' value="' + disp.num + '" title="' + this.escapeHtml(numTitle) + '"' +
+            ' value="' + recipeNum + '" title="' + this.escapeHtml(numTitle) + '"' +
             ' aria-label="' + numAria + '">' +
             '<div class="step-num-arrows">' +
               '<button type="button" class="step-num-arrow" data-step-arrow="up" title="Move up">▲</button>' +
@@ -1449,7 +1551,11 @@
           '<button type="button" class="btn-icon btn-del" title="Delete">×</button>' +
         '</div>' +
         '<div class="row-bottom">' +
-          '<label class="step-include-toggle" title="Include in run. Unchecked adds this step to Skip steps.">' +
+          '<label class="step-include-toggle" title="' +
+            (isSection
+              ? 'Include this section in the run (checks/unchecks every step in the section)'
+              : 'Include in run. Unchecked adds this step to Skip steps.') +
+            '">' +
             '<input type="checkbox" data-step-include data-step-num="' + recipeNum + '" checked>' +
             '<span>Run</span>' +
           '</label>' +
@@ -1608,18 +1714,49 @@
         const fmtLabel = (this.catalogMap.generate_switchlists?.params || [])
           .find((param) => param.key === 'format')?.options
           ?.find((opt) => String(opt.value || opt) === fmt)?.label || fmt;
-        return ('Generate Switch Lists ' + jobs + ' (' + fmtLabel + ')').replace(/\s+/g, ' ').trim();
+        let title = ('Generate Switch Lists ' + jobs + ' (' + fmtLabel + ')').replace(/\s+/g, ' ').trim();
+        const swTitle = String(p.title || '').trim();
+        const swInfo = String(p.info || '').trim();
+        if (swTitle) title += ' — ' + swTitle;
+        if (swInfo) title += (swTitle ? ' · ' : ' — ') + swInfo;
+        return title;
       }
       if (def) {
         let t = def.gui_template || def.label || '';
-        const p = step.params || {};
+        // Derived placeholders used by gui_template (parity with PHP catalog merge).
+        const p = Object.assign({}, step.params || {});
+        if (step.function === 'generate_station_report' || step.function === 'generate_wheel_report') {
+          const info = String(p.info || '').trim();
+          p.info_suffix = info ? (' — ' + info) : '';
+        }
+        if (step.function === 'track_scale') {
+          const job = String(p.job || '').trim();
+          p.job = job || 'train';
+          const commodity = String(p.commodity || '').trim();
+          p.commodity_suffix = commodity ? (' (' + commodity + ')') : '';
+          const min = String(p.min_reloads || '').trim();
+          p.min_reloads_suffix = (min !== '' && /^\d+$/.test(min)) ? (' (min reloads ' + min + ')') : '';
+        }
+        if (step.function === 'calibrate_track_scale') {
+          const every = Math.max(1, parseInt(p.every_sessions, 10) || 1);
+          p.every_sessions = String(every);
+          t = t.replace('session[s]', every === 1 ? 'session' : 'sessions');
+        }
         if (step.function === 'pick_up_cars') {
           t = t.replace('{location_suffix}', p.location ? p.location : '');
         }
         title = t.replace(/\{(\w+)\}/g, (_, k) => {
+          if (!Object.prototype.hasOwnProperty.call(p, k)) return '';
+          // Derived suffix placeholders already include leading spaces/punctuation —
+          // do not run them through formatParamDisplay (it trims).
+          if (/_suffix$/.test(k)) return String(p[k] == null ? '' : p[k]);
           const pdef = (def.params || []).find((pp) => pp.key === k);
           return this.formatParamDisplay(p[k], pdef);
         }).replace(/\s+/g, ' ').trim();
+        if (step.function === 'cancel_orders' || step.function === 'drain_unfilled_orders') {
+          const keep = String(p.keep_coke != null ? p.keep_coke : '1').trim();
+          title += keep === '0' ? ' (cancel coke)' : ' (keep coke)';
+        }
       }
       if (!title && step.instruction) title = String(step.instruction).trim();
       if (!title && step.params?.label) title = String(step.params.label).trim();
@@ -1858,7 +1995,11 @@
             scrollToIndex: newIdx,
             focusStepNum: true,
           });
-          this.setStatus('Moved to ' + (this.recipe.steps[newIdx]?.function === 'section_label' ? 'section ' : 'step ') + (this.displayInfoForIndex(newIdx).num), 'ok');
+          this.setStatus(
+            'Moved to recipe step ' + (newIdx + 1)
+              + (this.recipe.steps[newIdx]?.function === 'section_label' ? ' (section header)' : ''),
+            'ok'
+          );
           queueMicrotask(() => {
             stepNumHandled = false;
           });
@@ -2042,6 +2183,16 @@
       const value = params.value ?? '0';
       if (ctx[variable] == null) return true;
       const left = parseFloat(ctx[variable]);
+      if (operator === '%' || operator === '!%') {
+        const raw = String(value ?? '').trim();
+        const m = raw.match(/^(\d+)\s*(?:[=,]\s*(\d+))?$/);
+        if (!m) return false;
+        const modulus = parseInt(m[1], 10);
+        const remainder = m[2] != null ? parseInt(m[2], 10) : 0;
+        if (!modulus || Number.isNaN(left) || remainder < 0 || remainder >= modulus) return false;
+        const matches = (Math.trunc(left) % modulus) === remainder;
+        return operator === '%' ? matches : !matches;
+      }
       const right = parseFloat(value);
       if (Number.isNaN(left) || Number.isNaN(right)) return true;
       switch (operator) {
@@ -2232,14 +2383,16 @@
       }
       // None selected — operator must pick sections (distinct from All).
       if (!selectedIds.length) {
+        const skipAll = [];
+        for (let n = 1; n <= total; n++) skipAll.push(n);
         return {
           start: 1,
           stop: total,
           total,
           selectedIds: [],
           included: new Set(),
-          skipSteps: [],
-          skipStr: '',
+          skipSteps: skipAll,
+          skipStr: this.formatStepRanges(skipAll),
           all: false,
           none: true,
         };
@@ -2259,24 +2412,20 @@
           none: false,
         };
       }
+      // Partial: keep full 1..total span so unchecked sections stay visible as
+      // skipped (Run boxes unchecked) instead of disappearing outside start/stop.
       const selected = sections.filter((s) => selectedIds.indexOf(s.id) >= 0);
-      let start = total;
-      let stop = 1;
       const included = new Set();
       selected.forEach((s) => {
-        start = Math.min(start, s.start);
-        stop = Math.max(stop, s.stop);
         for (let n = s.start; n <= s.stop; n++) included.add(n);
       });
-      start = Math.max(1, Math.min(start, total));
-      stop = Math.max(start, Math.min(stop, total));
       const skipSteps = [];
-      for (let n = start; n <= stop; n++) {
+      for (let n = 1; n <= total; n++) {
         if (!included.has(n)) skipSteps.push(n);
       }
       return {
-        start,
-        stop,
+        start: 1,
+        stop: total,
         total,
         selectedIds: selected.map((s) => s.id),
         included,
@@ -2418,20 +2567,108 @@
       skipEl.value = this.formatStepRanges(set);
     },
 
-    setStepIncluded(stepNum, included) {
+    /** True when recipe step n will run (not skipped / not outside selected sections). */
+    isStepIncludedInRun(stepNum) {
       stepNum = parseInt(stepNum, 10);
-      if (!stepNum || stepNum < 1) return;
+      if (!stepNum || stepNum < 1) return false;
+      const coverage = this.getRunCoverage();
+      if (coverage.none) return false;
+      if (this.getRunSkipSet().has(stepNum)) return false;
+      if (coverage.all) return true;
+      return !!(coverage.included && coverage.included.has(stepNum));
+    },
+
+    sectionForStepNum(stepNum) {
+      stepNum = parseInt(stepNum, 10);
+      if (!stepNum) return null;
+      const sections = this.editorSections();
+      for (let i = 0; i < sections.length; i++) {
+        const s = sections[i];
+        if (stepNum >= s.start && stepNum <= s.stop) return s;
+      }
+      return null;
+    },
+
+    ensureSectionsCheckedForRange(start, stop) {
+      const host = this.el('run-section-host');
+      const root = host && host.querySelector('[data-checkbox-dropdown]');
+      if (!root) return false;
+      let changed = false;
+      this.editorSections().forEach((sec) => {
+        if (sec.stop < start || sec.start > stop) return;
+        const opt = root.querySelector('[data-cdd-opt][value="' + sec.id + '"]');
+        if (opt && !opt.checked) {
+          opt.checked = true;
+          changed = true;
+        }
+      });
+      if (changed) {
+        this.syncCheckboxDropdown(root);
+        const hidden = this.el('run-section');
+        const coverage = this.getRunCoverage();
+        if (hidden) {
+          hidden.value = coverage.all ? '' : coverage.selectedIds.join(',');
+        }
+      }
+      return changed;
+    },
+
+    setStepsIncludedInRange(start, stop, included) {
+      start = parseInt(start, 10);
+      stop = parseInt(stop, 10);
+      const total = Math.max(1, this.recipe.steps?.length || 1);
+      if (!start || start < 1) start = 1;
+      if (!stop || stop < start) stop = start;
+      if (stop > total) stop = total;
       if (this._applyingRunSkip || this._applyingRunSection) return;
-      const set = this.getRunSkipSet();
-      if (included) set.delete(stepNum);
-      else set.add(stepNum);
+
+      if (included) {
+        this.ensureSectionsCheckedForRange(start, stop);
+      }
+
       const skipEl = this.el('run-skip');
+      const set = this.getRunSkipSet();
+      for (let n = start; n <= stop; n++) {
+        if (included) set.delete(n);
+        else set.add(n);
+      }
       if (skipEl) skipEl.value = this.formatStepRanges(set);
       this.applyRunSkipEdit({ normalize: true, syncSections: true });
     },
 
+    setStepIncluded(stepNum, included) {
+      stepNum = parseInt(stepNum, 10);
+      if (!stepNum || stepNum < 1) return;
+      if (this._applyingRunSkip || this._applyingRunSection) return;
+      const step = (this.recipe.steps || [])[stepNum - 1];
+      // Section header Run box toggles every recipe step in that section.
+      if (step && step.function === 'section_label') {
+        const sec = this.editorSections().find((s) => s.start === stepNum)
+          || this.sectionForStepNum(stepNum);
+        if (sec) {
+          this.setStepsIncludedInRange(sec.start, sec.stop, included);
+          return;
+        }
+      }
+      this.setStepsIncludedInRange(stepNum, stepNum, included);
+    },
+
+    setAllStepsIncluded(included) {
+      if (this._applyingRunSkip || this._applyingRunSection) return;
+      const host = this.el('run-section-host');
+      const root = host && host.querySelector('[data-checkbox-dropdown]');
+      if (root) {
+        root.querySelectorAll('[data-cdd-opt]').forEach((n) => {
+          n.checked = !!included;
+        });
+        this.syncCheckboxDropdown(root);
+      }
+      // Reseed Skip from section selection (all clear, or every step skipped).
+      this.applyRunSection({ reseedSkip: true });
+      this.setStatus(included ? 'Checked all steps' : 'Unchecked all steps', 'ok');
+    },
+
     syncStepIncludeCheckboxes() {
-      const skipSet = this.getRunSkipSet();
       this._syncingIncludeBoxes = true;
       try {
         document.querySelectorAll('[data-step-include]').forEach((box) => {
@@ -2441,7 +2678,7 @@
             n = row ? parseInt(row.dataset.idx, 10) + 1 : 0;
           }
           if (!n) return;
-          box.checked = !skipSet.has(n);
+          box.checked = this.isStepIncludedInRun(n);
         });
       } finally {
         this._syncingIncludeBoxes = false;
@@ -2607,8 +2844,10 @@
       row.classList.add('section-highlight');
       row.scrollIntoView({ block: 'start', behavior: 'smooth' });
       window.setTimeout(() => row.classList.remove('section-highlight'), 2500);
-      const secNum = sections.findIndex((s) => s.id === sec.id) + 1;
-      this.setStatus('Jumped to S' + secNum + ' · ' + this.truncateSectionLabel(sec.label, 56), 'ok');
+      this.setStatus(
+        'Jumped to recipe step ' + sec.start + ' · ' + this.truncateSectionLabel(sec.label, 56),
+        'ok'
+      );
     },
 
     addStep() {
@@ -2967,7 +3206,7 @@
             stop = j;
             break;
           }
-          if (fid === 'goto' || (fid === 'if_then' && this.ifThenHasGoto(step))) {
+          if (fid === 'goto' || (fid === 'if_then' && this.ifThenHasGoto(steps[j]))) {
             stop = j + 1;
             break;
           }
@@ -3296,6 +3535,10 @@
       }
       if (printBtn) printBtn.hidden = !previewing;
       if (copyBtn) copyBtn.hidden = !previewing;
+      const checkAllBtn = this.el('btn-preview-check-all');
+      const uncheckAllBtn = this.el('btn-preview-uncheck-all');
+      if (checkAllBtn) checkAllBtn.hidden = !previewing;
+      if (uncheckAllBtn) uncheckAllBtn.hidden = !previewing;
       // Keep section jump + Collapse/Expand all visible in Preview and Edit.
       if (editNav) editNav.hidden = false;
       if (editInsert) editInsert.hidden = previewing;
@@ -3340,40 +3583,20 @@
       let body = '';
       if (!steps.length) {
         body = '<p class="wf-preview-empty">No steps in this workflow.</p>';
-      } else if (coverage.none) {
-        body = '<p class="wf-preview-empty">Select one or more sections to preview.</p>';
       } else {
-        body = '<ol class="wf-preview-steps">';
+        if (coverage.none) {
+          body = '<p class="wf-preview-empty">No sections selected — all steps unchecked. Use <strong>Check all</strong> or the Sections control.</p>';
+        }
+        body += '<ol class="wf-preview-steps">';
         const appendStep = (step, idx, n) => {
-          const skipped = skipSet.has(n);
-          let cmd = (this.compileOne(step, idx) || step?.function || '—').trim();
-          if (cmd.indexOf('[object Object]') >= 0) {
-            cmd = cmd.split('[object Object]').join('').replace(/\s+/g, ' ').trim() || (step?.function || '—');
-          }
+          const included = this.isStepIncludedInRun(n);
+          const skipped = !included;
+          const cmd = this.previewCommandText(step, idx);
           const remarks = (this.rowRemarksText(step) || '').trim();
-          const expandsOwnFilters = [
-            'pick_up_cars', 'set_out_cars', 'fill_orders', 'load_unload',
-            'reposition_empties', 'auto_assign_locals',
-          ].indexOf(step.function) >= 0;
-          if (!expandsOwnFilters) {
-            const filterBits = [];
-            const params = step.params || {};
-            const pdefs = (this.catalogMap[step.function] || {}).params || [];
-            pdefs.forEach((p) => {
-              if (p.type !== 'filter_group') return;
-              const shown = this.formatParamDisplay(params[p.key], p);
-              if (!shown) return;
-              if (cmd.indexOf(shown) >= 0) return;
-              filterBits.push(shown);
-            });
-            if (filterBits.length) {
-              cmd = (cmd + ' (' + filterBits.join('; ') + ')').replace(/\s+/g, ' ').trim();
-            }
-          }
           const isSection = step.function === 'section_label';
           const sid = this.sectionIdForStepNum(n, sections);
-          const disp = (this.displayNumbers().map[idx]) || { kind: isSection ? 'section' : 'step', num: n };
-          const displayLabel = isSection ? ('S' + disp.num) : String(disp.num);
+          // Preview numbers = recipe indices (match Start/Stop/Skip); S marks section headers only.
+          const displayLabel = isSection ? ('S' + n) : String(n);
           const liClass = [
             isSection ? 'wf-preview-section' : 'wf-preview-step',
             skipped ? 'disabled wf-preview-skipped' : '',
@@ -3382,7 +3605,10 @@
             ? ('<button type="button" class="section-collapse-btn" data-section-collapse' +
               ' aria-expanded="true" title="Collapse section">▼</button>')
             : '';
-          const includeBox = '<label class="step-include-toggle wf-preview-include" title="Include in run. Unchecked adds this step to Skip steps.">'
+          const includeTitle = isSection
+            ? 'Include this section in the run (checks/unchecks every step in the section)'
+            : 'Include in run. Unchecked adds this step to Skip steps.';
+          const includeBox = '<label class="step-include-toggle wf-preview-include" title="' + this.escapeHtml(includeTitle) + '">'
             + '<input type="checkbox" data-step-include data-step-num="' + n + '"'
             + (skipped ? '' : ' checked')
             + ' aria-label="Include recipe step ' + n + ' in run"></label>';
@@ -3396,17 +3622,15 @@
             + esc(cmd)
             + (skipped ? ' <span class="wf-preview-tag">(skipped)</span>' : '')
             + '</div>';
-          if (remarks) {
+          if (remarks && !this.hideRemarks) {
             body += '<div class="wf-preview-remarks">remarks: ' + esc(remarks) + '</div>';
           }
           body += '</li>';
         };
 
-        const scoped = !coverage.all || skipSet.size > 0;
+        // Always list the full recipe so section check/uncheck stays visible.
         for (let idx = 0; idx < steps.length; idx++) {
-          const n = idx + 1;
-          if (scoped && (n < start || n > stop)) continue;
-          appendStep(steps[idx], idx, n);
+          appendStep(steps[idx], idx, idx + 1);
         }
         body += '</ol>';
       }

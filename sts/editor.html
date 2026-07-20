@@ -58,6 +58,8 @@
       <h2>Simulator</h2>
       <p class="run-instructions">
         Check one or more <strong>Sections</strong> to preview and run (from section labels in the recipe).
+        <strong>Start / Stop / Skip</strong> use the same recipe step numbers shown in the step list
+        (<code>S</code> marks a section header only — e.g. <code>S8</code> is still step <code>8</code>).
         Gaps fill <strong>Skip steps</strong> (editable, e.g. <code>1-2,5,8-10</code>); skipping every step in a section unchecks it.
         Use simulator <strong>Repeat</strong> to run the selection multiple times. Switch-list format is set on each
         <em>Generate Switch Lists</em> step. DB session: <strong id="run-db-session">—</strong>.
@@ -71,15 +73,15 @@
         </div>
         <label class="run-field">
           <span class="inline-lbl">Start step</span>
-          <input type="number" id="run-start" class="field-input" min="1" value="1">
+          <input type="number" id="run-start" class="field-input" min="1" value="1" title="Recipe step number (matches the list / goto step-N)">
         </label>
         <label class="run-field">
           <span class="inline-lbl">Stop step</span>
-          <input type="number" id="run-stop" class="field-input" min="1" value="1">
+          <input type="number" id="run-stop" class="field-input" min="1" value="1" title="Recipe step number (matches the list / goto step-N)">
         </label>
         <label class="run-field run-field-skip" id="run-skip-wrap">
           <span class="inline-lbl">Skip steps</span>
-          <input type="text" id="run-skip" class="field-input" placeholder="e.g. 1-2,5,8-10" title="Comma-separated steps/ranges to skip" value="" autocomplete="off">
+          <input type="text" id="run-skip" class="field-input" placeholder="e.g. 1-2,5,8-10" title="Comma-separated recipe step numbers/ranges to skip (same numbers as the list)" value="" autocomplete="off">
         </label>
         <button type="button" class="btn btn-outline-dark btn-sm" id="btn-run">Run</button>
         <div class="run-repeat-group">
@@ -119,6 +121,10 @@
               <input type="checkbox" id="hide-non-execute">
               <span>Execute only</span>
             </label>
+            <label class="section-jump-filter chk">
+              <input type="checkbox" id="hide-remarks">
+              <span>Hide remarks</span>
+            </label>
           </div>
         </div>
         <div class="toolbar">
@@ -139,6 +145,8 @@
           <button type="button" class="btn btn-outline-dark btn-sm" id="btn-add">+ Add step</button>
           <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-reload">Reload</button>
           <button type="button" class="btn btn-outline-dark btn-sm" id="btn-preview" title="Toggle clean command summary">Preview</button>
+          <button type="button" class="btn btn-outline-dark btn-sm noprint" id="btn-preview-check-all" hidden title="Check all sections and steps">Check all</button>
+          <button type="button" class="btn btn-outline-dark btn-sm noprint" id="btn-preview-uncheck-all" hidden title="Uncheck all sections and steps">Uncheck all</button>
           <button type="button" class="btn btn-outline-dark btn-sm noprint" id="btn-preview-copy" hidden title="Copy preview text"><i class="bi bi-clipboard"></i></button>
           <button type="button" class="btn btn-outline-dark btn-sm noprint" id="btn-preview-print" hidden><i class="bi bi-printer"></i> Print</button>
         </div>
@@ -149,7 +157,7 @@
       <div id="steps-preview" class="steps-preview" hidden></div>
     </div>
   </div>
-  <script src="workflow-shared.js?v=90"></script>
+  <script src="workflow-shared.js?v=95"></script>
   <script>
 (function () {
   const W = WorkflowUI;
@@ -157,6 +165,8 @@
   W.el('btn-add').addEventListener('click', () => W.addStep());
   W.el('btn-save').addEventListener('click', () => W.saveRecipe().catch((e) => W.setStatus(e.message, 'err')));
   W.el('btn-preview')?.addEventListener('click', () => W.togglePreview());
+  W.el('btn-preview-check-all')?.addEventListener('click', () => W.setAllStepsIncluded(true));
+  W.el('btn-preview-uncheck-all')?.addEventListener('click', () => W.setAllStepsIncluded(false));
   W.el('btn-preview-copy')?.addEventListener('click', () => W.copyPreviewContents());
   W.el('btn-preview-print')?.addEventListener('click', () => window.print());
   W.el('btn-import').addEventListener('click', () => W.promptImportWorkflow());
@@ -191,6 +201,10 @@
   W.el('hide-non-execute')?.addEventListener('change', (e) => {
     W.hideNonExecute = !!e.target.checked;
     W.syncStepVisibility();
+  });
+  W.el('hide-remarks')?.addEventListener('change', (e) => {
+    W.hideRemarks = !!e.target.checked;
+    if (W.previewMode) W.renderStepsPreview();
   });
 
   W.el('run-start')?.addEventListener('input', (e) => {

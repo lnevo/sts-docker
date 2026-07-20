@@ -2,6 +2,153 @@
 require_once __DIR__ . '/plugins/plugins.php';
 require_once __DIR__ . '/drop_down_list_functions.php';
 
+/**
+ * Count open or unfilled car orders, optionally filtered by commodity /
+ * shipment / car code / loading / unloading / final destination.
+ * Location filters use the same station:: / location:: tokens as Pickup.
+ *
+ * @param 'open_orders'|'unfilled_orders' $kind
+ * @param array{
+ *   commodity?:string,
+ *   shipment?:string,
+ *   car_code?:string,
+ *   loading_location?:string,
+ *   unloading_location?:string,
+ *   final_destination?:string
+ * } $filters
+ */
+function operations_count_orders($dbc, $kind, array $filters = [])
+{
+    $kind = ($kind === 'unfilled_orders') ? 'unfilled_orders' : 'open_orders';
+    $commodity = trim((string) ($filters['commodity'] ?? $filters['consignment'] ?? ''));
+    $shipment = trim((string) ($filters['shipment'] ?? ''));
+    $car_code = trim((string) ($filters['car_code'] ?? ''));
+    $loading = trim((string) ($filters['loading_location'] ?? ''));
+    $unloading = trim((string) ($filters['unloading_location'] ?? ''));
+    $final_dest = trim((string) ($filters['final_destination'] ?? ''));
+    $needs_loc = ($loading !== '' || $unloading !== '' || $final_dest !== '');
+    $needs_join = ($commodity !== '' || $shipment !== '' || $car_code !== '' || $needs_loc);
+
+    if ($needs_loc) {
+        require_once __DIR__ . '/operations_train_car_filters.php';
+        if (!function_exists('warm_start_load_unload_filter_token_match')) {
+            $warm = __DIR__ . '/warm_start_helpers.php';
+            if (is_file($warm)) {
+                require_once $warm;
+            }
+        }
+        $sql = 'SELECT DISTINCT car_orders.waybill_number AS waybill_number,
+                       load_st.station AS loading_station,
+                       load_loc.code AS loading_location,
+                       unload_st.station AS unloading_station,
+                       unload_loc.code AS unloading_location
+                FROM car_orders
+                INNER JOIN shipments ON shipments.id = car_orders.shipment
+                LEFT JOIN locations load_loc ON load_loc.id = shipments.loading_location
+                LEFT JOIN routing load_st ON load_st.id = load_loc.station
+                LEFT JOIN locations unload_loc ON unload_loc.id = shipments.unloading_location
+                LEFT JOIN routing unload_st ON unload_st.id = unload_loc.station';
+        if ($commodity !== '') {
+            $sql .= ' INNER JOIN commodities ON commodities.id = shipments.consignment';
+        }
+        if ($car_code !== '') {
+            $sql .= ' INNER JOIN car_codes ON car_codes.id = shipments.car_code';
+        }
+    } else {
+        $sql = 'SELECT COUNT(DISTINCT car_orders.waybill_number) AS cnt FROM car_orders';
+        if ($needs_join) {
+            $sql .= ' INNER JOIN shipments ON shipments.id = car_orders.shipment';
+            if ($commodity !== '') {
+                $sql .= ' INNER JOIN commodities ON commodities.id = shipments.consignment';
+            }
+            if ($car_code !== '') {
+                $sql .= ' INNER JOIN car_codes ON car_codes.id = shipments.car_code';
+            }
+        }
+    }
+
+    $where = [];
+    if ($kind === 'unfilled_orders') {
+        $where[] = '(car_orders.car = "" OR car_orders.car IS NULL OR car_orders.car = "0")';
+    }
+    if ($commodity !== '') {
+        $where[] = 'commodities.code = "' . mysqli_real_escape_string($dbc, $commodity) . '"';
+    }
+    if ($shipment !== '') {
+        $where[] = 'shipments.code = "' . mysqli_real_escape_string($dbc, $shipment) . '"';
+    }
+    if ($car_code !== '') {
+        // Allow trailing * wildcards (HC* → HC%).
+        $like = str_replace('*', '%', $car_code);
+        $where[] = 'car_codes.code LIKE "' . mysqli_real_escape_string($dbc, $like) . '"';
+    }
+    if ($where !== []) {
+        $sql .= ' WHERE ' . implode(' AND ', $where);
+    }
+
+    if (!$needs_loc) {
+        $rs = mysqli_query($dbc, $sql);
+        if ($rs && ($row = mysqli_fetch_array($rs))) {
+            return (int) $row['cnt'];
+        }
+
+        return 0;
+    }
+
+    $rs = mysqli_query($dbc, $sql);
+    if (!$rs) {
+        return 0;
+    }
+
+    $match_side = static function ($raw, $station, $code) {
+        $raw = trim((string) $raw);
+        if ($raw === '') {
+            return true;
+        }
+        $station = trim((string) $station);
+        $code = trim((string) $code);
+        $label = ($station !== '' && $code !== '') ? ($station . ' - ' . $code) : $code;
+        if (function_exists('operational_steps_normalize_destination_filters')) {
+            $needles = operational_steps_normalize_destination_filters($raw);
+        } else {
+            $needles = array_values(array_filter(array_map('trim', explode(',', $raw))));
+        }
+        if ($needles === []) {
+            return true;
+        }
+        foreach ($needles as $needle) {
+            if (operational_steps_train_car_station_location_match($needle, $station, $label)) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    $count = 0;
+    $seen = [];
+    while ($row = mysqli_fetch_assoc($rs)) {
+        $wb = (string) ($row['waybill_number'] ?? '');
+        if ($wb === '' || isset($seen[$wb])) {
+            continue;
+        }
+        if (!$match_side($loading, $row['loading_station'] ?? '', $row['loading_location'] ?? '')) {
+            continue;
+        }
+        if (!$match_side($unloading, $row['unloading_station'] ?? '', $row['unloading_location'] ?? '')) {
+            continue;
+        }
+        // Final destination on orders = unloading end (delivery station/spot).
+        if (!$match_side($final_dest, $row['unloading_station'] ?? '', $row['unloading_location'] ?? '')) {
+            continue;
+        }
+        $seen[$wb] = true;
+        $count++;
+    }
+
+    return $count;
+}
+
 function operations_get_stats($dbc)
 {
     $stats = [
@@ -17,11 +164,10 @@ function operations_get_stats($dbc)
         'organize_unique' => 0,
     ];
 
+    $stats['open_orders'] = operations_count_orders($dbc, 'open_orders');
+    $stats['unfilled_orders'] = operations_count_orders($dbc, 'unfilled_orders');
+
     $queries = [
-        'open_orders' => 'SELECT COUNT(DISTINCT waybill_number) AS cnt FROM car_orders',
-        'unfilled_orders' => 'SELECT COUNT(DISTINCT waybill_number) AS cnt
-                              FROM car_orders
-                              WHERE car = "" OR car IS NULL OR car = "0"',
         'unassigned' => 'SELECT COUNT(*) AS cnt
                          FROM cars
                          WHERE handled_by_job_id = 0
@@ -86,6 +232,9 @@ function operations_dashboard_condition_variables()
         ['key' => 'session_is_even', 'label' => 'Session is even (1=yes)'],
         ['key' => 'open_orders', 'label' => 'Open orders'],
         ['key' => 'unfilled_orders', 'label' => 'Unfilled orders'],
+        ['key' => 'filled_this_run', 'label' => 'Filled this run'],
+        ['key' => 'generated_this_run', 'label' => 'Generated this run'],
+        ['key' => 'repositioned_this_run', 'label' => 'Repositioned this run'],
         ['key' => 'reposition_off_home', 'label' => 'Empty cars not at home'],
         ['key' => 'unassigned', 'label' => 'Unassigned cars'],
         ['key' => 'pending_pickup', 'label' => 'Pending pickup'],

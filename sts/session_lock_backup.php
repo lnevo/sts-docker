@@ -1,10 +1,11 @@
 <?php
 /**
- * Lock a session backup from the session overview.
+ * Lock session backup(s) from the session overview.
  *
- * Copies a rolling dump whose name matches this session number to
- * {name}_locked (and {name}_photos → {name}_locked_photos when present).
- * Filesystem only — does not restore or modify the live database.
+ * With no backup selected, freezes every scheme dump for the session
+ * (hart_session_pre{N} + hart_session_post{N}, plus legacy hart_session{N})
+ * to *_locked companions. Filesystem only — does not restore or modify the
+ * live database.
  */
 require_once __DIR__ . '/session_helpers.php';
 

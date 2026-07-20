@@ -2850,6 +2850,9 @@ function warm_start_apply_setout_transitions($dbc, $car_id, $session_number)
            AND cars.current_location_id = shipments.unloading_location'
     );
 
+    // Empty reposition complete: status → Empty, then delete the E order.
+    // Must not rely on joining shipments — for E waybills car_orders.shipment
+    // is a location id, not shipments.id (mirrors set_out.php).
     mysqli_query(
         $dbc,
         'UPDATE cars, car_orders
@@ -2860,6 +2863,9 @@ function warm_start_apply_setout_transitions($dbc, $car_id, $session_number)
            AND cars.current_location_id = car_orders.shipment
            AND cars.id = "' . (int) $car_id . '"'
     );
+    if (mysqli_affected_rows($dbc) > 0) {
+        mysqli_query($dbc, 'DELETE FROM car_orders WHERE car = "' . (int) $car_id . '"');
+    }
 
     $rs = mysqli_query(
         $dbc,
@@ -2874,23 +2880,22 @@ function warm_start_apply_setout_transitions($dbc, $car_id, $session_number)
            AND cars.id = "' . (int) $car_id . '"'
     );
     $row = mysqli_fetch_array($rs);
-    if (!$row) {
-        return;
+    if ($row) {
+        $min_load_time = (int) $row['min_load_time'];
+        $max_load_time = (int) $row['max_load_time'];
+        $min_unload_time = (int) $row['min_unload_time'];
+        $max_unload_time = (int) $row['max_unload_time'];
+
+        if ($row['status'] === 'Loading' && ($min_load_time < 0 || $max_load_time < 0)) {
+            mysqli_query($dbc, 'UPDATE cars SET status = "Loaded", last_spotted = 0 WHERE id = "' . (int) $car_id . '"');
+        }
+        if ($row['status'] === 'Unloading' && ($min_unload_time < 0 || $max_unload_time < 0)) {
+            mysqli_query($dbc, 'UPDATE cars SET status = "Empty", last_spotted = 0 WHERE id = "' . (int) $car_id . '"');
+            mysqli_query($dbc, 'DELETE FROM car_orders WHERE car = "' . (int) $car_id . '"');
+        }
     }
 
-    $min_load_time = (int) $row['min_load_time'];
-    $max_load_time = (int) $row['max_load_time'];
-    $min_unload_time = (int) $row['min_unload_time'];
-    $max_unload_time = (int) $row['max_unload_time'];
-
-    if ($row['status'] === 'Loading' && ($min_load_time < 0 || $max_load_time < 0)) {
-        mysqli_query($dbc, 'UPDATE cars SET status = "Loaded", last_spotted = 0 WHERE id = "' . (int) $car_id . '"');
-    }
-    if ($row['status'] === 'Unloading' && ($min_unload_time < 0 || $max_unload_time < 0)) {
-        mysqli_query($dbc, 'UPDATE cars SET status = "Empty", last_spotted = 0 WHERE id = "' . (int) $car_id . '"');
-        mysqli_query($dbc, 'DELETE FROM car_orders WHERE car = "' . (int) $car_id . '"');
-    }
-
+    // Any remaining Empty+E order (e.g. prior early-return bug) — drop it.
     $rs2 = mysqli_query(
         $dbc,
         'SELECT status FROM cars WHERE id = "' . (int) $car_id . '"'
@@ -2905,6 +2910,20 @@ function warm_start_apply_setout_transitions($dbc, $car_id, $session_number)
             mysqli_query($dbc, 'DELETE FROM car_orders WHERE car = "' . (int) $car_id . '"');
         }
     }
+
+    // Defensive: this car Ordered with no attached order row.
+    mysqli_query(
+        $dbc,
+        'UPDATE cars SET status = "Empty"
+         WHERE id = "' . (int) $car_id . '"
+           AND status = "Ordered"
+           AND id NOT IN (
+                 SELECT car FROM (
+                     SELECT car FROM car_orders
+                     WHERE car IS NOT NULL AND car != "" AND car != "0"
+                 ) AS active_cars
+           )'
+    );
 }
 
 function warm_start_setout_cars($dbc, $fraction = 1.0, $staging_jobs = [], $skip_staging = false, $skip_jobs = [], &$by_job = null)
@@ -2976,6 +2995,10 @@ function warm_start_setout_cars($dbc, $fraction = 1.0, $staging_jobs = [], $skip
         if ($track_by_job) {
             $by_job[$job_name] = ($by_job[$job_name] ?? 0) + 1;
         }
+    }
+
+    if (function_exists('fill_order_heal_orphan_ordered_cars')) {
+        fill_order_heal_orphan_ordered_cars($dbc);
     }
 
     return $set_out;

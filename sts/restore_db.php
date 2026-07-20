@@ -1,6 +1,7 @@
 <?php
 require 'open_db.php';
 require 'credentials.php';
+require_once 'restore_sql_helpers.php';
 
 function sanitize_uploaded_name($name)
 {
@@ -24,21 +25,9 @@ function clear_image_folder($dir)
 
 function restore_sql_file($dbc, $restore_name, $sql_file_path)
 {
-  if (!is_file($sql_file_path)) {
-    return array(false, 'Selected SQL file was not found.');
-  }
-
-  $sql_string = file_get_contents($sql_file_path);
-  $sql = explode('#', $sql_string);
-
-  foreach ($sql as $sql_cmd) {
-    if (!empty(trim($sql_cmd))) {
-      if (!mysqli_query($dbc, $sql_cmd)) {
-        if (strpos(strtolower($sql_cmd), 'drop') === false) {
-          return array(false, 'SQL error while restoring: ' . htmlspecialchars(mysqli_error($dbc)));
-        }
-      }
-    }
+  list($ok, $msg) = sts_restore_sql_file($dbc, $sql_file_path, $restore_name);
+  if (!$ok) {
+    return array(false, htmlspecialchars($msg));
   }
 
   // Remove generated and uploaded image artifacts.

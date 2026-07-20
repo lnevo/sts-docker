@@ -21,7 +21,8 @@ function backup_tables($dbc, $backup_name)
 
     // drop any existing table before trying to restore it
     // separate all sql statements with comment lines (#) so that the statements can be parsed when restoring the database
-    $return .= 'drop table `' . $table . '`;' . PHP_EOL . '#' . PHP_EOL;
+    // IF EXISTS + restore_sql_helpers case-insensitive drop cover lower_case_table_names=2
+    $return .= 'drop table if exists `' . $table . '`;' . PHP_EOL . '#' . PHP_EOL;
 
     // build the create table statement
     $sql = 'show create table `' . $table . '`';

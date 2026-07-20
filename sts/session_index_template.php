@@ -133,20 +133,42 @@ $restart_candidates = $can_restart ? session_restart_backup_candidates($session)
 $restart_error = isset($_GET['restart_error']) ? (string) $_GET['restart_error'] : '';
 $restart_ok = isset($_GET['restart_ok']) ? (string) $_GET['restart_ok'] : '';
 $restart_prev = max(0, (int) $session - 1);
-$restart_confirm_base = 'Restart Session '
-    . (int) $session
-    . '?\n\nThis restores the database to the start of session '
-    . (int) $session
-    . ' (end of session '
-    . $restart_prev
-    . ') with no workflow steps applied, and deletes this session\'s generated output.';
+$restart_has_pre = false;
+foreach ($restart_candidates as $cand) {
+    if (session_backup_is_pre_for_session($cand, $session)) {
+        $restart_has_pre = true;
+        break;
+    }
+}
+$restart_confirm_base = $restart_has_pre
+    ? ('Restart Session '
+        . (int) $session
+        . '?\n\nThis restores the database from the session pre backup (start of generated session '
+        . (int) $session
+        . ') with no further workflow steps applied, and deletes this session\'s generated output.')
+    : ('Restart Session '
+        . (int) $session
+        . '?\n\nThis restores the database to the start of session '
+        . (int) $session
+        . ' (end of session '
+        . $restart_prev
+        . ') with no workflow steps applied, and deletes this session\'s generated output.');
 $lock_candidates = !$archived_output_only ? session_lock_backup_candidates($session) : [];
+$lock_default_sources = !$archived_output_only ? session_lock_default_sources($session) : [];
 $lock_error = isset($_GET['lock_error']) ? (string) $_GET['lock_error'] : '';
 $lock_ok = isset($_GET['lock_ok']) ? (string) $_GET['lock_ok'] : '';
-$lock_confirm_base = 'Lock backup for Session '
-    . (int) $session
-    . '?\n\nThis copies the selected dump to a static *_locked companion (and its _photos folder when present). Overwrites any prior locked copy with the same name. Does not change the live database.'
-    . "\n\nRestart Session is disabled while a *_locked backup exists for this session.";
+$lock_multi = count($lock_default_sources) > 1;
+$lock_confirm_base = $lock_multi
+    ? ('Lock backups for Session '
+        . (int) $session
+        . '?\n\nThis copies pre + post dumps to static *_locked companions:\n  - '
+        . implode("\n  - ", $lock_default_sources)
+        . "\n\nOverwrites any prior locked copies with the same names. Does not change the live database."
+        . "\n\nRestart Session is disabled while a *_locked backup exists for this session.")
+    : ('Lock backup for Session '
+        . (int) $session
+        . '?\n\nThis copies the selected dump to a static *_locked companion (and its _photos folder when present). Overwrites any prior locked copy with the same name. Does not change the live database.'
+        . "\n\nRestart Session is disabled while a *_locked backup exists for this session.");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -189,7 +211,9 @@ session_render_nav_bar($overview_nav, 'Session ' . (int) $session);
       <?php if ($lock_candidates !== []): ?>
         <form method="post" action="/sts/session_lock_backup.php" class="session-restart-form" id="session-lock-form">
           <input type="hidden" name="session" value="<?php echo (int) $session; ?>">
-          <?php if (count($lock_candidates) === 1): ?>
+          <?php if ($lock_multi): ?>
+            <?php /* Lock Backup freezes every scheme dump (pre + post) together. */ ?>
+          <?php elseif (count($lock_candidates) === 1): ?>
             <input type="hidden" name="backup" value="<?php echo htmlspecialchars($lock_candidates[0]); ?>">
           <?php else: ?>
             <label class="session-restart-backup-label" for="session-lock-backup">Backup</label>
@@ -200,8 +224,16 @@ session_render_nav_bar($overview_nav, 'Session ' . (int) $session);
               <?php endforeach; ?>
             </select>
           <?php endif; ?>
-          <button type="submit" class="btn-session-lock" title="Copy this session's dump to a static *_locked checkpoint">
-            <i class="bi bi-lock"></i> <?php echo $session_is_locked ? 'Update Locked Backup' : 'Lock Backup'; ?>
+          <button type="submit" class="btn-session-lock" title="<?php echo $lock_multi
+              ? 'Copy pre + post dumps to static *_locked checkpoints'
+              : 'Copy this session\'s dump to a static *_locked checkpoint'; ?>">
+            <i class="bi bi-lock"></i> <?php
+              if ($session_is_locked) {
+                  echo $lock_multi ? 'Update Locked Backups' : 'Update Locked Backup';
+              } else {
+                  echo $lock_multi ? 'Lock Backups' : 'Lock Backup';
+              }
+            ?>
           </button>
         </form>
       <?php endif; ?>
@@ -276,11 +308,18 @@ session_render_nav_bar($overview_nav, 'Session ' . (int) $session);
             $primary = $members[0];
             $tip = ($group_name !== $primary || count($members) > 1) ? implode(', ', $members) : '';
           ?>
-          <li>
+            <li>
+            <?php if ($sw > 0): ?>
             <a class="train-link" href="/sts/so.php?f=session_<?php echo (int) $session; ?>/train_<?php echo urlencode($primary); ?>.print_all.html"<?php echo $tip !== '' ? ' title="' . htmlspecialchars($tip) . '"' : ''; ?>>
               <?php echo htmlspecialchars($group_name); ?>
               <span class="meta"><?php echo $sw . ' switchlist' . ($sw === 1 ? '' : 's') . ' · ' . $wb . ' waybill' . ($wb === 1 ? '' : 's'); ?></span>
             </a>
+            <?php else: ?>
+            <span class="train-link muted"<?php echo $tip !== '' ? ' title="' . htmlspecialchars($tip) . '"' : ''; ?>>
+              <?php echo htmlspecialchars($group_name); ?>
+              <span class="meta">no switch lists yet</span>
+            </span>
+            <?php endif; ?>
           </li>
         <?php endforeach; ?>
       </ul>

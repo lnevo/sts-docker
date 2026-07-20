@@ -13,6 +13,15 @@ last_updated: 09/07/2026
 Append entries here when a decision lands — durable facts and reasoning only, no
 status updates or in-flight work. Newest first.
 
+## 2026-07-16 — HART train blocks remain operationally independent
+
+The HART session workflow runs D749 Starting/Outbound, then NVL
+Outbound/Return, then CK1. This order is an operating constraint rather than a
+score-tuning variable: D749 and NVL must not wait for CK1, and CK1 may run
+independently later in the shift. Traffic tuning must optimize within this fixed
+sequence even when a simulated throughput score favors the former interleaved
+order.
+
 ## 2026-07-09 — Mined old Copilot chat history for durable findings
 
 Reviewed ~35MB of archived VS Code chat session history (from a prior machine

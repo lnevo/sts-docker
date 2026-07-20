@@ -48,16 +48,10 @@ foreach ($train_members as $member_job) {
         $legs[] = $leg;
     }
 }
-// Rank by Train Info operational order (Starting first), then manifest
-// position — not phase_NN folder numbers (a reconstructed Starting can live
-// in a higher-numbered folder than Outbound/Next Day).
+// Display in workflow / taken order (manifest display rank), not by Train
+// Info label or phase_NN folder numbers.
 $phase_rank = session_phase_display_rank($manifest);
 usort($legs, static function ($a, $b) use ($phase_rank) {
-    $ia = session_phase_info_sort_rank((string) ($a['info'] ?? ''));
-    $ib = session_phase_info_sort_rank((string) ($b['info'] ?? ''));
-    if ($ia !== $ib) {
-        return $ia <=> $ib;
-    }
     $wa = (int) $a['workflow_phase'];
     $wb = (int) $b['workflow_phase'];
     $ra = $phase_rank[$wa] ?? $wa;
