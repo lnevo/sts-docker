@@ -12,17 +12,9 @@ everything.
 ## What this is
 
 A containerised fork of the Shipper-Driven Traffic Simulator (STS), a model
-railway operations app. Two implementations live side by side:
-
-- **`app/` — STS v2 (active development).** A ground-up rebuild in SvelteKit +
-  TypeScript + SQLite (better-sqlite3, adapter-node, single container). All
-  business rules are specified in `docs/SPEC.md` — treat it as the source of
-  truth; cite it when changing behaviour. See `app/README.md` for commands
-  (`npm run dev|check|build`, `npm run import-legacy`,
-  `docker compose --profile v2 up --build`).
-- **`sts/` — legacy PHP app (maintenance only).** Plain PHP 8 + Apache +
-  MariaDB. No Composer, no test suite, no build step — flat PHP files served
-  as-is. The sections below describe this legacy app.
+railway operations app. This repo holds the legacy app in `sts/`: plain PHP 8 +
+Apache + MariaDB. No Composer, no test suite, no build step — flat PHP files
+served as-is. STS v2 (`app/`) is not in this repo.
 
 ## Commands
 

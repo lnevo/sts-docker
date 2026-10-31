@@ -24,8 +24,7 @@ a `load_when` trigger, open only that page. Don't bulk-load everything.
 This wiki covers cross-cutting conventions and process knowledge that used to be
 copy-pasted or scattered across `.github/copilot-instructions.md`,
 `.github/instructions/`, and various chat histories. Project-specific
-architecture, commands, and file layout for each implementation (`app/` vs
-`sts/`) still live in `CLAUDE.md` at repo root — that's the source of truth for
+architecture, commands, and file layout for `sts/` still live in `CLAUDE.md` at repo root — that's the source of truth for
 "what is this codebase," this wiki is the source of truth for "conventions and
 lessons that apply across it."
 

@@ -1,9 +1,8 @@
 # AGENTS.md
 
 A containerised fork of the Shipper-Driven Traffic Simulator (STS), a model
-railway operations app. Two implementations live side by side: `app/` (STS v2 —
-SvelteKit + TypeScript + SQLite, active development) and `sts/` (legacy PHP 8 +
-Apache + MariaDB, maintenance only).
+railway operations app. This repo holds the PHP 8 + Apache + MariaDB app in
+`sts/`. STS v2 (`app/`) is not in this repo.
 
 ## Knowledge base
 
