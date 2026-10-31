@@ -303,7 +303,7 @@ function operational_steps_resolve_backup_name($backup_name, $default = null)
 }
 
 /**
- * Directory for STS SQL backups (Docker: sts/backups bind-mount; dev: Car Cards sts-backups).
+ * Directory for STS SQL backups (Docker: sts/backups bind-mount; dev: sts-docker-data/backups).
  */
 function operational_steps_backups_dir()
 {
@@ -313,14 +313,9 @@ function operational_steps_backups_dir()
     }
 
     $candidates = [__DIR__ . '/backups'];
-    $home = getenv('HOME') ?: '';
-    if ($home !== '') {
-        $candidates[] = $home . '/sts/sts-backups';
-        $candidates[] = $home . '/sts-backups';
-    }
     $repo = dirname(__DIR__, 2);
     if ($repo !== false && $repo !== '') {
-        $candidates[] = $repo . '/sts-backups';
+        $candidates[] = $repo . '/sts-docker-data/backups';
     }
 
     foreach ($candidates as $path) {
@@ -335,7 +330,7 @@ function operational_steps_backups_dir()
     return $dir;
 }
 
-/** Session editor recipe storage (under sts-backups; hidden from restore_db.php). */
+/** Session editor recipe storage (under sts-docker-data/backups; hidden from restore_db.php). */
 function operational_steps_editor_dir()
 {
     static $dir = null;

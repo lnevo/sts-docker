@@ -18,7 +18,7 @@ The Docker image copies all of `sts/` to `/var/www/html/sts/`. After `docker com
 | Coke orders (addon) | `plugins/coke_orders/` — outbound coke order replenishment catalog step |
 | Switch lists | `master_switchlist_helpers.php`, `generate_master_switchlists.php` |
 
-Recipe CSVs live on the **`sts-backups`** bind mount (`backups/session_editor/`), not in the image.
+Recipe CSVs live on the **`sts-docker-data/backups`** bind mount (`backups/session_editor/`), not in the image.
 
 ## Optional host-only CLIs
 
@@ -26,8 +26,8 @@ Legacy command-line scripts (`begin_operating_session.php`, `simulate_warm_start
 
 ## Verify before build
 
-From the Car Cards repo:
+From `external/` in the hart repo:
 
 ```bash
-sts-docker-helpers/bin/verify_sts_runtime.sh
+sts-helpers/bin/verify_sts_runtime.sh
 ```

@@ -3,7 +3,7 @@
  * Session Output server.
  *
  * Generated operating-session files (switch lists, waybills, print bundles) are
- * written under sts/backups/session_state (the host-mounted sts-backups volume,
+ * written under sts/backups/session_state (the host-mounted sts-docker-data/backups volume,
  * owned by www-data so the web server can create them and so state persists
  * across container recreation). This script streams those files to the browser
  * through a clean URL so the physical storage location is never exposed:
