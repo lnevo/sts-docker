@@ -1,6 +1,6 @@
 <?php
 // track_scale_helpers.php — Track scale helpers (config under sts/backups/track_scale)
-// Config, roster, seed, settings, and session.log live under sts-backups/track_scale.
+// Config, roster, seed, settings, and session.log live under sts-docker-data/backups/track_scale.
 // In Docker that directory is bind-mounted at sts/backups/track_scale.
 
 function track_scale_data_dir()
@@ -12,7 +12,7 @@ function track_scale_data_dir()
 
     $sts_root = dirname(__DIR__, 2);
     $mounted = $sts_root . '/backups/track_scale';
-    $repo = dirname(__DIR__, 4) . '/sts-backups/track_scale';
+    $repo = dirname(__DIR__, 4) . '/sts-docker-data/backups/track_scale';
     if (is_dir($repo) && (
         is_readable($repo . '/track_scale_config.json')
         || is_readable($repo . '/car_card_roster.csv')

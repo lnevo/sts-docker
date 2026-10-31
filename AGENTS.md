@@ -56,7 +56,7 @@ No hot-sync from `sts-docker-helpers/sts/` is required after rebuild. See **`sts
 Optional legacy CLI scripts (`begin_operating_session.php`, `simulate_warm_start.php`, …) stay in **`sts-docker-helpers/sts/`** for host bin wrappers only.
 
 **Data model:** Workflow JSON (`*.workflow.json` or `*.recipe.json` under
-`sts-backups/session_editor/`) is the persisted recipe. Steps are compiled
+`sts-docker-data/backups/session_editor/`) is the persisted recipe. Steps are compiled
 from the catalog (`GET ?action=catalog`); jobs, locations, and stations come from
 the DB via `dynamic_options`, not hardcoded PHP lists. Switch-list phases replay
 recipe steps in a dry-run transaction and capture at each `build_switchlists_sts`
