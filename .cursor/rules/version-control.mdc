@@ -7,7 +7,7 @@ alwaysApply: true
 
 - Work on a named feature branch (for example `ui-improvements`); do not commit directly to `master` unless explicitly requested.
 - Before ending a feature session, check `git status` and commit completed work with a clear message focused on the final outcome.
-- Bump `VERSION` and add a concise entry to `CHANGELOG.md` for each intentional release-worthy change set.
+- Bump `VERSION` for each intentional release-worthy change set.
 - Stage only source files that belong in the repo; exclude local data, caches, PDFs, database volumes, and abandoned experiments.
 - Do not commit unused helper files left over from reverted approaches.
 - Push the active branch to `origin` when the user asks for backup or a PR-ready state.

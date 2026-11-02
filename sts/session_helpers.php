@@ -83,7 +83,7 @@ function session_app_root()
 /**
  * Writable filesystem root for generated session output (switch lists, waybills,
  * manifests). Uses sts/backups/session_state/sessions: sts/backups is the
- * host-mounted sts-backups volume (~/sts/sts-backups), so session state persists
+ * host-mounted sts-docker-data/backups volume, so session state persists
  * across container recreation without adding another volume. www-data owns the
  * mount inside the container, so this subdirectory is created on demand and stays
  * writable. Per-session output lives at sts/backups/session_state/sessions/

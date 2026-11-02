@@ -5,7 +5,7 @@
 # shapes, update THIS FILE and the file header comment in operational_steps_api.php.
 # Catalog command params: generated into operational_steps_catalog.openapi.generated.yaml
 #   php sts/generate_operational_steps_openapi_catalog.php
-#   (also run via sts-docker-helpers/bin/run_catalog_tests.sh)
+#   (also run via sts-helpers/bin/run_catalog_tests.sh)
 # Swagger UI: /sts/operational_steps_api-docs.html
 # Maintainer notes: sts-docker/AGENTS.md § Operational Steps API
 #
