@@ -206,6 +206,32 @@ labels supplied by the scenario (`stats_labels` callable).
   `seed_island_spotting`, `assign_nvl_scully_block` move with those functions
   and become config entries in the plugin.
 
+### Implemented in 2.2a (`hart_layout`)
+
+Core: `plugins_warm_start_scenario()` (first plugin by id wins, warning logged
+for others), `plugins_scenario_call($key, $args, $default)` (scenario callable,
+else `$default`: a callable is called with the same args, anything else is
+returned), `plugins_run_delivery_complete_hooks()`,
+`plugins_wheel_report_extra_rows()`, `plugins_normalize_switchlist_section()`.
+Core keeps `warm_start_*` wrappers under the original names; core defaults are
+`warm_start_core_*`. The generic stats API is `warm_start_stats_bucket()`,
+`_reset_all()`, `_copy_all()`, `_delta_all()`.
+
+Scenario keys used (all optional): `default_config`, `staging_jobs`,
+`location_aliases`, `session_work`, `run`, `advance_session`, `begin_session`,
+`play_session`, `prep_checks` (replaces the evaluation), `summary` (replaces the
+summary), `report_lines`, `featured_stations`, `prep_staging` (yard prep before
+staging work), and for session stats: `stats_blank`, `stats_record_pickup`,
+`stats_record_setout`, `stats_row_extra` (named-stats deltas -> row columns),
+`stats_labels` (report sections: title, row_key, rule, columns[key,label,width],
+note). Other manifest keys: `delivery_complete_hooks`, `wheel_report_extra_rows`,
+`switchlist_section_normalize`, `legacy_function_ids`.
+
+Switch-list sections: `destination_override` =
+`['side' => 'unloading'|'loading', 'station_match' => [...], 'location_prefix' => [...]]`.
+No code in this repo or its data sets the old `show_island_destination` /
+`show_scully_destination` flags; the plugin maps them to the new structure.
+
 ### Parity gate
 
 `bin/sandbox_baseline.sh <label>` run on the sandbox stack before and after;

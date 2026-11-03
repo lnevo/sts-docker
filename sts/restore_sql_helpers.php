@@ -4,8 +4,8 @@
  *
  * MariaDB/MySQL with lower_case_table_names=2 (common in Docker Desktop on macOS)
  * stores table names case-preservingly but compares case-insensitively. A dump
- * that does DROP/CREATE `CK1` can leave an existing `ck1` in place, then fail
- * with: Table 'ck1' already exists.
+ * that does DROP/CREATE `JOB1` can leave an existing `job1` in place, then fail
+ * with: Table 'job1' already exists.
  */
 
 /**
@@ -15,7 +15,7 @@
  * Also issues DROP IF EXISTS for common case variants. On lower_case_table_names=2
  * (Docker Desktop / macOS), orphan .frm/.ibd pairs and dictionary ghosts can make
  * CREATE fail with "already exists" even when SHOW TABLES looks empty, and
- * DROP `CK1` may not remove a stored `ck1`.
+ * DROP `JOB1` may not remove a stored `job1`.
  */
 function sts_drop_table_case_insensitive($dbc, $table)
 {

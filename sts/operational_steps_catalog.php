@@ -353,12 +353,9 @@ function operational_steps_legacy_editor_dirs()
 /** Obsolete function ids from older saved recipes; migrated on import. */
 function operational_steps_legacy_layout_function_ids()
 {
+    // Layout-specific ids are supplied by plugins (manifest 'legacy_function_ids').
     return [
-        'weigh_ck1', 'assign_ck1_reload', 'run_stg_scully', 'run_stg_demmler',
         'run_staging_job', 'run_job_criterion', 'assign_cars', 'finish_local_jobs',
-        'composite_nvl_pre_ck1', 'composite_ck1_session', 'composite_nvl_post_ck1',
-        'composite_d749_session_start', 'composite_d749_phased',
-        'secure_d749_demmler', 'secure_nvl_scully',
         'warm_start_tracked', 'run_until_ready',
         'begin_operating_session', 'begin_session',
         'play_operating_session', 'play_session',
@@ -371,9 +368,6 @@ function operational_steps_migrate_legacy_function_id($fid, $instruction = '')
     $plugin_fid = plugins_migrate_legacy_function_id($fid);
     if ($plugin_fid !== null) {
         return $plugin_fid;
-    }
-    if ($fid === 'assign_ck1_reload') {
-        return 'auto_assign_locals';
     }
     if (in_array($fid, operational_steps_legacy_layout_function_ids(), true)) {
         return 'text_instruction';
@@ -2337,7 +2331,7 @@ function operational_steps_catalog_definitions()
                     'Info',
                     '',
                     false,
-                    'Optional phase label (e.g. Starting, After D749, End of session).'
+                    'Optional phase label (e.g. Starting, After JOB1, End of session).'
                 ),
             ],
         ],
@@ -2359,7 +2353,7 @@ function operational_steps_catalog_definitions()
                     'Info',
                     '',
                     false,
-                    'Optional phase label (e.g. Starting, After CK1, End of session).'
+                    'Optional phase label (e.g. Starting, After JOB1, End of session).'
                 ),
             ],
         ],

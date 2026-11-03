@@ -8,7 +8,7 @@
  * across container recreation). This script streams those files to the browser
  * through a clean URL so the physical storage location is never exposed:
  *
- *   so.php?f=session_3/phase_01/CK1/phase_01_mobile.html
+ *   so.php?f=session_3/phase_01/JOB1/phase_01_mobile.html
  *
  * For HTML documents, relative links inside the file are rewritten so navigation
  * between generated pages keeps flowing through so.php. Session picker controls

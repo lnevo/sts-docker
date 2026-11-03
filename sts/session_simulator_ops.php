@@ -164,9 +164,7 @@ function session_sim_load_unload($dbc, $fraction = 1.0, array $filters = [])
             mysqli_query($dbc, 'UPDATE cars SET status = "Loaded", last_spotted = 0 WHERE id = "' . $car_id . '"');
             $updated++;
         } elseif ($row['status'] === 'Unloading' || $row['status'] === 'Empty') {
-            if ($row['status'] === 'Unloading'
-                && function_exists('warm_start_is_outbound_coke_shipment')
-                && function_exists('warm_start_coke_stats')) {
+            if ($row['status'] === 'Unloading') {
                 $detail_rs = mysqli_query(
                     $dbc,
                     'SELECT shipments.code AS shipment_code
@@ -176,8 +174,8 @@ function session_sim_load_unload($dbc, $fraction = 1.0, array $filters = [])
                      LIMIT 1'
                 );
                 $detail = mysqli_fetch_array($detail_rs);
-                if ($detail && warm_start_is_outbound_coke_shipment($detail['shipment_code'])) {
-                    warm_start_coke_stats()['complete_deliveries']++;
+                if ($detail) {
+                    plugins_run_delivery_complete_hooks($dbc, $car_id, (string) $detail['shipment_code']);
                 }
             }
             mysqli_query($dbc, 'UPDATE cars SET status = "Empty", last_spotted = 0 WHERE id = "' . $car_id . '"');

@@ -506,3 +506,132 @@ function plugins_try_dispatch($dbc, $dispatch, array $step, array $def, array $p
 
     return null;
 }
+
+/**
+ * The warm-start scenario a plugin registers through the manifest key
+ * 'warm_start_scenario' (a map of hook name => callable). At most one is used:
+ * when several plugins register one, the first by plugin id wins and a warning
+ * is logged. Returns null when no plugin registers one (core defaults apply).
+ *
+ * @return array<string,mixed>|null
+ */
+function plugins_warm_start_scenario()
+{
+    static $scenario = false;
+    if ($scenario !== false) {
+        return $scenario;
+    }
+
+    plugins_bootstrap_all();
+    $scenario = null;
+    $owner = '';
+    foreach (plugins_discover() as $id => $manifest) {
+        $candidate = $manifest['warm_start_scenario'] ?? null;
+        if (!is_array($candidate)) {
+            continue;
+        }
+        if ($scenario === null) {
+            $scenario = $candidate;
+            $owner = (string) $id;
+        } else {
+            error_log('STS plugins: warm_start_scenario from "' . $id . '" ignored; "' . $owner . '" already registered one.');
+        }
+    }
+
+    return $scenario;
+}
+
+/**
+ * Call the scenario hook $key with $args. Without a registered scenario (or
+ * without that key) $default is used: a callable (Closure, function name or
+ * [class, method]) is called with the same $args, anything else is returned as is.
+ *
+ * @return mixed
+ */
+function plugins_scenario_call($key, array $args, $default = null)
+{
+    $scenario = plugins_warm_start_scenario();
+    $callback = is_array($scenario) ? ($scenario[(string) $key] ?? null) : null;
+    if ($callback !== null && is_callable($callback)) {
+        return call_user_func_array($callback, $args);
+    }
+    $default_callable = $default instanceof Closure
+        || (is_string($default) && function_exists($default))
+        || (is_array($default) && count($default) === 2 && is_callable($default));
+    if ($default_callable) {
+        return call_user_func_array($default, $args);
+    }
+
+    return $default;
+}
+
+/**
+ * Run every plugin's delivery_complete_hooks after a simulated unload completes.
+ *
+ * @param string $shipment_code code of the shipment the car just delivered
+ */
+function plugins_run_delivery_complete_hooks($dbc, $car_id, $shipment_code)
+{
+    plugins_bootstrap_all();
+    foreach (plugins_discover() as $manifest) {
+        $hooks = $manifest['delivery_complete_hooks'] ?? [];
+        if (!is_array($hooks)) {
+            continue;
+        }
+        foreach ($hooks as $hook) {
+            if (is_callable($hook)) {
+                $hook($dbc, (int) $car_id, (string) $shipment_code);
+            }
+        }
+    }
+}
+
+/**
+ * Extra rows for the archived wheel report, from each plugin's
+ * 'wheel_report_extra_rows' hook: ($dbc, $session_nbr, $root) -> array<job, list<row>>.
+ *
+ * @return array<string,list<array>>
+ */
+function plugins_wheel_report_extra_rows($dbc, $session_nbr, $root = null)
+{
+    plugins_bootstrap_all();
+    $extra = [];
+    foreach (plugins_discover() as $manifest) {
+        $hook = $manifest['wheel_report_extra_rows'] ?? null;
+        if (!is_callable($hook)) {
+            continue;
+        }
+        $chunk = call_user_func($hook, $dbc, $session_nbr, $root);
+        if (!is_array($chunk)) {
+            continue;
+        }
+        foreach ($chunk as $job => $rows) {
+            foreach ((array) $rows as $row) {
+                $extra[(string) $job][] = $row;
+            }
+        }
+    }
+
+    return $extra;
+}
+
+/**
+ * Let plugins translate legacy switch-list section flags into the generic
+ * section config (e.g. 'destination_override'). Hook: manifest
+ * 'switchlist_section_normalize', ($section) -> array.
+ */
+function plugins_normalize_switchlist_section(array $section)
+{
+    plugins_bootstrap_all();
+    foreach (plugins_discover() as $manifest) {
+        $hook = $manifest['switchlist_section_normalize'] ?? null;
+        if (is_callable($hook)) {
+            $result = call_user_func($hook, $section);
+            if (is_array($result)) {
+                $section = $result;
+            }
+        }
+    }
+
+    return $section;
+}

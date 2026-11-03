@@ -5,7 +5,8 @@
  *
  * Usage:
  *   php generate_master_switchlists.php [--format=all|mobile|half|full|dmp|wo|x2010] [--render-only] [--save-cache-only]
- *       [--session=N] [--jobs=D749,NVL,CK1] [--output=DIR]
+ *       [--session=N] [--jobs=JOB1,JOB2] [--output=DIR]
+ *   Without --jobs: every non-staging job, ordered by name.
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -23,17 +24,25 @@ if (isset($options['help'])) {
     exit(0);
 }
 
-$job_names = ['D749', 'NVL', 'CK1'];
-if (!empty($options['jobs'])) {
-    $job_names = array_values(array_filter(array_map('trim', explode(',', $options['jobs']))));
-}
-
 $format = master_sw_normalize_switchlist_format($options['format'] ?? 'all', 'all');
 
 $output_dir = $options['output'] ?? (__DIR__ . '/../../switchlists');
 $config = warm_start_merge_config([]);
 
 $dbc = open_db();
+if (!empty($options['jobs'])) {
+    $job_names = array_values(array_filter(array_map('trim', explode(',', $options['jobs']))));
+} else {
+    // The master switch-list generator has no "phased job" flag; default to every non-staging job.
+    $staging_jobs = warm_start_staging_job_names($dbc, $config);
+    $job_names = [];
+    $jobs_rs = mysqli_query($dbc, 'SELECT name FROM jobs ORDER BY name');
+    while ($jobs_rs && ($job_row = mysqli_fetch_assoc($jobs_rs))) {
+        if (!warm_start_is_staging_job($job_row['name'], $staging_jobs)) {
+            $job_names[] = $job_row['name'];
+        }
+    }
+}
 $session_nbr = master_sw_get_setting($dbc, 'session_nbr');
 if (isset($options['session']) && (int) $options['session'] !== (int) $session_nbr) {
     fwrite(STDERR, "Warning: DB is session {$session_nbr}, not {$options['session']}.\n");

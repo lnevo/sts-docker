@@ -85,8 +85,10 @@ label `baseline-88642c7`. A full run takes under a minute.
   catalog dispatch), hence task 1.9.
 - At 88642c7 the CLI warm start fatals unless the plugin registry is preloaded
   (`coke_orders_outbound_shipment_codes` undefined inside
-  `warm_start_summarize`). The script installs a CLI-only prepend shim to get
-  past it; Phase 2 removes the dependency.
+  `warm_start_summarize`). The phase1 capture installed a CLI-only prepend shim
+  to get past it; Phase 2 (hart_layout) removed the dependency:
+  `warm_start_helpers.php` bootstraps the plugin registry itself and the shim
+  step is gone from the script.
 - `mariadb-dump` is used (the image has no `mysqldump`).
 
 ## Phase 2. Carve the HART layout out of warm start
