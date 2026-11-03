@@ -138,6 +138,314 @@
           }
         ]
       }
+    },
+    "/admin/backups": {
+      "post": {
+        "summary": "Back up the database",
+        "description": "Writes backups/<name> with backup_tables(); fast, so synchronous. 409 when the name exists (unless overwrite) or an exclusive task is active. Role: admin.",
+        "x-sts-role": "admin",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BackupCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Backup written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BackupInfo"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "409": {
+            "description": "Another exclusive task is queued or running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/restore": {
+      "post": {
+        "summary": "Restore a backup",
+        "description": "Drops every table first (full, default true; pass false to restore over the existing tables), then runs sts_restore_sql_file() on backups/<backup>, optionally refreshes rolling-stock photos from backups/<backup>_photos, then runs the plugin session-reset hooks (reason restore). Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin.",
+        "x-sts-role": "admin",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Task accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TaskAccepted"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "409": {
+            "description": "Another exclusive task is queued or running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/warm-start": {
+      "post": {
+        "summary": "Simulate sessions to a warm-start state",
+        "description": "Calls warm_start_run() with the same config the sts-helpers simulate_warm_start.php CLI builds; the same seed gives the same database. Omitted fields keep the warm-start defaults. Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin.",
+        "x-sts-role": "admin",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WarmStartRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Task accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TaskAccepted"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "409": {
+            "description": "Another exclusive task is queued or running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/sessions/begin": {
+      "post": {
+        "summary": "Begin an operating session",
+        "description": "Calls warm_start_begin_operating_session(). The task fails (with its result) when the session start is blocked. Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin.",
+        "x-sts-role": "admin",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionBeginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Task accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TaskAccepted"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "409": {
+            "description": "Another exclusive task is queued or running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/sessions/play": {
+      "post": {
+        "summary": "Play the current operating session",
+        "description": "Calls warm_start_play_operating_session(). Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin.",
+        "x-sts-role": "admin",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionPlayRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Task accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TaskAccepted"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "409": {
+            "description": "Another exclusive task is queued or running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -213,6 +521,201 @@
           "name",
           "role"
         ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "TaskAccepted": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          }
+        }
+      },
+      "BackupCreate": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$"
+          },
+          "overwrite": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "BackupInfo": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "mtime": {
+            "type": "string"
+          }
+        }
+      },
+      "RestoreRequest": {
+        "type": "object",
+        "required": [
+          "backup"
+        ],
+        "properties": {
+          "backup": {
+            "type": "string",
+            "description": "File name in the backups directory (GET /backups). No paths."
+          },
+          "photos": {
+            "type": "boolean",
+            "default": false,
+            "description": "Clear the photo folders and copy backups/<backup>_photos/* into ImageStore/DB_Images/RollingStock."
+          },
+          "full": {
+            "type": "boolean",
+            "default": true,
+            "description": "Drop every table before restoring, like DROP/CREATE DATABASE. Pass false to restore over the existing tables."
+          }
+        }
+      },
+      "WarmStartRequest": {
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Minimum sessions (CLI --sessions)."
+          },
+          "max_sessions": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "seed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Ignored for the config when continue is true."
+          },
+          "continue": {
+            "type": "boolean",
+            "description": "Advance from the current session without re-seeding."
+          },
+          "tracked": {
+            "type": "boolean",
+            "description": "Tracked-session settings supplied by an installed plugin; 422 when none provides them."
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Extra warm-start config overrides (applied before the fields above)."
+          },
+          "backup": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$",
+            "description": "Save the resulting state under this backup name."
+          }
+        }
+      },
+      "SessionBeginRequest": {
+        "type": "object",
+        "properties": {
+          "load_unload": {
+            "type": "boolean",
+            "default": true
+          },
+          "increment": {
+            "type": "boolean",
+            "default": true
+          },
+          "reposition": {
+            "type": "boolean",
+            "default": true
+          },
+          "assign": {
+            "type": "boolean",
+            "default": true
+          },
+          "fill": {
+            "type": "boolean",
+            "default": true
+          },
+          "generate": {
+            "type": "boolean",
+            "default": false
+          },
+          "reposition_fraction": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "fill_fraction": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Extra options passed through to the warm-start scenario (layout-specific switches)."
+          },
+          "backup": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$"
+          }
+        }
+      },
+      "SessionPlayRequest": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "backup": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$"
+          }
+        }
       }
     }
   }

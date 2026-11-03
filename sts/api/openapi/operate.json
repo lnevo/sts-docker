@@ -1,4 +1,453 @@
 {
-  "paths": {},
-  "components": {}
+  "paths": {
+    "/commands/{command}": {
+      "post": {
+        "summary": "Run one catalog command",
+        "description": "Role: operator. Runs a catalog command through operational_steps_dispatch_step. Unknown id: 404. The destructive ids (restore_database, wipe, reset, backup_database) need role admin. Flow-control and non-runnable ids are 422. Slow commands (generate_switchlists, render_switchlists, save_switchlist_cache, generate_waybills, generate_station_report, generate_wheel_report, rebuild_switchlists_index) and any request with async=true answer 202 with a task; poll GET /tasks/{id}.",
+        "x-sts-role": "operator",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CommandResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted as a task.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TaskAccepted"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "Another exclusive task is running (async destructive commands).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        },
+        "parameters": [
+          {
+            "name": "command",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CommandId"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommandRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cars/{car}/load": {
+      "post": {
+        "summary": "Complete loading a car",
+        "description": "Role: operator. The car must be Loading; it becomes Loaded (last_spotted reset). Any other status is 409. Returns the updated car.",
+        "x-sts-role": "operator",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Car"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "Car is not in Loading status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "car",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Car id, reporting marks, or RFID code"
+          }
+        ]
+      }
+    },
+    "/cars/{car}/unload": {
+      "post": {
+        "summary": "Complete unloading a car",
+        "description": "Role: operator. The car must be Unloading; it becomes Empty and its car orders are deleted. Any other status is 409. Returns the updated car.",
+        "x-sts-role": "operator",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Car"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "Car is not in Unloading status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "car",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Car id, reporting marks, or RFID code"
+          }
+        ]
+      }
+    },
+    "/cars/{car}/reposition": {
+      "post": {
+        "summary": "Reposition an empty car",
+        "description": "Role: operator. The car must be Empty with no car orders (else 409). Creates an E-series waybill, sets status Ordered and writes a history row, in one transaction.",
+        "x-sts-role": "operator",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RepositionResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "Car is not Empty or already has orders.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        },
+        "parameters": [
+          {
+            "name": "car",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Car id, reporting marks, or RFID code"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepositionRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/advance": {
+      "post": {
+        "summary": "Advance the session number",
+        "description": "Role: operator. Increments session_nbr by one (the increment_session command).",
+        "x-sts-role": "operator",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SessionAdvance"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CommandRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "params": {
+            "type": "object",
+            "description": "Command params; keys are validated against the catalog definition (GET /catalog).",
+            "additionalProperties": true
+          },
+          "async": {
+            "type": "boolean",
+            "description": "Run as a task and answer 202 (always on for slow commands)."
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Seeds mt_srand and STS_SIM_SEED before the command runs."
+          }
+        }
+      },
+      "CommandResult": {
+        "type": "object",
+        "required": [
+          "command",
+          "result"
+        ],
+        "properties": {
+          "command": {
+            "$ref": "#/components/schemas/CommandId"
+          },
+          "result": {
+            "type": "object",
+            "description": "The dispatch result (counts, messages) plus session_nbr_before and session_nbr_after.",
+            "additionalProperties": true,
+            "properties": {
+              "session_nbr_before": {
+                "type": "integer"
+              },
+              "session_nbr_after": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "TaskAccepted": {
+        "type": "object",
+        "required": [
+          "task_id",
+          "status"
+        ],
+        "properties": {
+          "task_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          }
+        }
+      },
+      "RepositionRequest": {
+        "type": "object",
+        "required": [
+          "location"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "location": {
+            "type": [
+              "string",
+              "integer"
+            ],
+            "description": "Destination location id or code."
+          }
+        }
+      },
+      "RepositionResult": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Car"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "waybill_number": {
+                "type": "string",
+                "description": "The new empty-car (E-series) waybill."
+              },
+              "destination": {
+                "type": "string",
+                "description": "Destination location code."
+              }
+            }
+          }
+        ]
+      },
+      "SessionAdvance": {
+        "type": "object",
+        "required": [
+          "session_nbr_before",
+          "session_nbr"
+        ],
+        "properties": {
+          "session_nbr_before": {
+            "type": "integer"
+          },
+          "session_nbr": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
 }

@@ -1,4 +1,987 @@
 {
-  "paths": {},
-  "components": {}
+  "paths": {
+    "/cars/{car}": {
+      "patch": {
+        "summary": "Update a car",
+        "description": "Role: editor. Whitelisted columns only; unknown or read-only fields are 422. Returns the updated car.",
+        "x-sts-role": "editor",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Car"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "Conflict (duplicate reporting marks).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        },
+        "parameters": [
+          {
+            "name": "car",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Car id, reporting marks, or RFID code"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarPatch"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cars": {
+      "post": {
+        "summary": "Create a car",
+        "description": "Role: editor. Inserts the car, optional ownership row and pool rows in one transaction.",
+        "x-sts-role": "editor",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Car"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "description": "Conflict (duplicate reporting marks).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job}": {
+      "patch": {
+        "summary": "Update a job",
+        "description": "Role: editor. Only description is writable (renaming would orphan the job's step table and pickup criteria). Returns the job detail.",
+        "x-sts-role": "editor",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/JobDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        },
+        "parameters": [
+          {
+            "name": "job",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Job id or name"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobPatch"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shipments/{id}": {
+      "patch": {
+        "summary": "Update a shipment",
+        "description": "Role: editor. Whitelisted columns; commodity, car code and locations take an id or a code.",
+        "x-sts-role": "editor",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Shipment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Shipment id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShipmentPatch"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ownership/{car}": {
+      "put": {
+        "summary": "Set a car's ownership",
+        "description": "Role: editor. Upserts the ownership row. Returns it.",
+        "x-sts-role": "editor",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Ownership"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        },
+        "parameters": [
+          {
+            "name": "car",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Car id, reporting marks, or RFID code"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnershipPut"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings/{name}": {
+      "put": {
+        "summary": "Create or update a setting",
+        "description": "Role: editor. Upsert. session_nbr is rejected (422); use POST /session/advance.",
+        "x-sts-role": "editor",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Setting"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Setting name"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingPut"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflows/{name}": {
+      "put": {
+        "summary": "Save a workflow",
+        "description": "Role: editor. Writes the recipe JSON to the workflow directory (created if new). Does not change the active workflow.",
+        "x-sts-role": "editor",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowSaved"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowSaved"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Workflow name or file name"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowPut"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a workflow",
+        "description": "Role: editor. Removes the workflow file; clears the active workflow if it was this one.",
+        "x-sts-role": "editor",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowDeleted"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Workflow name or file name"
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CarPatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "description": "Writable car columns. Each foreign key takes either the id form or the text form (not both).",
+        "properties": {
+          "reporting_marks": {
+            "type": "string",
+            "maxLength": 16,
+            "description": "Upper-cased; 409 if another car has it."
+          },
+          "car_code_id": {
+            "type": "integer"
+          },
+          "car_code": {
+            "type": [
+              "string",
+              "integer"
+            ],
+            "description": "Car code id or code."
+          },
+          "location_id": {
+            "type": "integer"
+          },
+          "location": {
+            "type": [
+              "string",
+              "integer"
+            ],
+            "description": "Current location id or code."
+          },
+          "position": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "Empty",
+              "Ordered",
+              "Loading",
+              "Loaded",
+              "Unloading",
+              "Unavailable"
+            ]
+          },
+          "job_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "job": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "description": "Job id or name; null clears (stored as 0)."
+          },
+          "remarks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "load_count": {
+            "type": "integer"
+          },
+          "home_location_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "home_location": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ]
+          },
+          "rfid_code": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 255,
+            "description": "null clears (stored as empty string)."
+          },
+          "block_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "last_spotted": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        }
+      },
+      "CarCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reporting_marks"
+        ],
+        "description": "Also needs car_code or car_code_id, and location or location_id. status defaults to Empty and home_location to the location. owner/owner_id/on_off_rr create the ownership row; pools lists shipment ids for the pool table.",
+        "properties": {
+          "reporting_marks": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "car_code_id": {
+            "type": "integer"
+          },
+          "car_code": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "location_id": {
+            "type": "integer"
+          },
+          "location": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "position": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "Empty",
+              "Ordered",
+              "Loading",
+              "Loaded",
+              "Unloading",
+              "Unavailable"
+            ]
+          },
+          "job_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "job": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ]
+          },
+          "remarks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "load_count": {
+            "type": "integer"
+          },
+          "home_location_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "home_location": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ]
+          },
+          "rfid_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "block_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "last_spotted": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "owner_id": {
+            "type": "integer"
+          },
+          "owner": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "on_off_rr": {
+            "type": "string",
+            "enum": [
+              "on",
+              "off"
+            ]
+          },
+          "pools": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "JobPatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ShipmentPatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "commodity_id": {
+            "type": "integer"
+          },
+          "commodity": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "car_code_id": {
+            "type": "integer"
+          },
+          "car_code": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "loading_location_id": {
+            "type": "integer"
+          },
+          "loading_location": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "unloading_location_id": {
+            "type": "integer"
+          },
+          "unloading_location": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "last_ship_date": {
+            "type": "integer"
+          },
+          "min_interval": {
+            "type": "integer"
+          },
+          "max_interval": {
+            "type": "integer"
+          },
+          "min_amount": {
+            "type": "integer"
+          },
+          "max_amount": {
+            "type": "integer"
+          },
+          "special_instructions": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 255
+          },
+          "remarks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "min_load_time": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "max_load_time": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "min_unload_time": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "max_unload_time": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        }
+      },
+      "OwnershipPut": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "description": "Upsert. owner or owner_id is required when the car has no ownership row yet.",
+        "properties": {
+          "owner_id": {
+            "type": "integer"
+          },
+          "owner": {
+            "type": [
+              "string",
+              "integer"
+            ],
+            "description": "Owner id or name."
+          },
+          "on_off_rr": {
+            "type": "string",
+            "enum": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      "SettingPut": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": [
+              "string",
+              "number"
+            ],
+            "description": "Up to 256 characters."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Defaults to the existing description, or the name for a new setting."
+          }
+        }
+      },
+      "WorkflowPut": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recipe"
+        ],
+        "properties": {
+          "recipe": {
+            "type": "object",
+            "required": [
+              "steps"
+            ],
+            "description": "Recipe JSON; version defaults to 1. Normalized on save. See GET /catalog for step shapes.",
+            "properties": {
+              "steps": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "WorkflowSaved": {
+        "type": "object",
+        "required": [
+          "name",
+          "created",
+          "rows",
+          "recipe"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "created": {
+            "type": "boolean"
+          },
+          "rows": {
+            "type": "integer",
+            "description": "Compiled row count."
+          },
+          "recipe": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "WorkflowDeleted": {
+        "type": "object",
+        "required": [
+          "deleted"
+        ],
+        "properties": {
+          "deleted": {
+            "type": "string"
+          },
+          "active_workflow": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
 }

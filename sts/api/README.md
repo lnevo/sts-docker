@@ -418,3 +418,13 @@ All 5 endpoints have been tested and verified:
 - ✅ All responses return valid JSON
 - ✅ Error responses include descriptive error messages
 - ✅ Success responses include operation details and new state
+
+## Agent plugin
+
+`agent/` holds a Claude Code plugin (skill, MCP server, inspector and operator
+agents) that drives this API. Install with
+`claude plugin marketplace add lnevo/sts-docker` then
+`claude plugin install sts@sts-docker`, or add a local checkout path to
+`marketplace add`. It reads `STS_API_URL` (default
+`http://localhost:8980/sts/api/v1`; sandbox `8981`) and `STS_API_TOKEN` or
+`STS_API_TOKEN_FILE`. See `agent/README.md`.
