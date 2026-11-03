@@ -134,6 +134,13 @@ image and keep the output under `sts-docker-data/backups/baseline-2026-11/`.
 | 3.2 | Build 8.4 image on a second compose project, `php -l` sweep, phpstan | sonnet |
 | 3.3 | Smoke click-through + simulation parity vs Phase 2 baseline | sonnet, Fable signs off |
 | 3.4 | Rebuild live container | Fable |
+| 3.5 | Replace the CDN links our newer pages still carry with the vendored assets upstream added (14 files incl. the track-scale plugin page) | sonnet |
+
+Merge landed on branch `merge-upstream` (b13c7ef, stacked on `hart-layout`).
+All eight conflicts were CDN-to-vendored asset swaps on pages our UI work had
+also edited; resolved toward vendored paths while keeping our additions. The
+upstream `operations.html` became a redirect stub to `operations.php` on our
+side and stays that way.
 
 ## Phase 4. Continue refinement
 

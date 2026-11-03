@@ -151,7 +151,7 @@ function waybill_print_fetch_row($dbc, $waybill_number)
     return mysqli_fetch_array($rs);
 }
 
-function waybill_print_render_body($dbc, $waybill_number, array $settings = null)
+function waybill_print_render_body($dbc, $waybill_number, ?array $settings = null)
 {
     $settings = $settings ?? waybill_print_settings($dbc);
     $row = waybill_print_fetch_row($dbc, $waybill_number);

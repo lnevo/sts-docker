@@ -1803,8 +1803,8 @@ function session_nav_stylesheet_path()
 
 function session_bootstrap_head_links()
 {
-    return '<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">'
-        . '<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">';
+    return '<link href="/sts/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">'
+        . '<link href="/sts/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">';
 }
 
 function session_nav_stylesheet_link($href = null)
@@ -4300,7 +4300,7 @@ function session_phase_info(array $phase)
  * Compare phases for display: recipe step (order taken), then Train Info
  * rank, then phase folder. Blank morning info ranks before Return.
  */
-function session_phase_taken_order_cmp(array $a, array $b, array $slot_order = null)
+function session_phase_taken_order_cmp(array $a, array $b, ?array $slot_order = null)
 {
     $sa = (int) ($a['step'] ?? 0);
     $sb = (int) ($b['step'] ?? 0);
@@ -4362,7 +4362,7 @@ function session_phase_info_sort_rank($info)
  * @param array<string,int>|null   $slot_order  Original append order by slot key
  * @return list<array>
  */
-function session_phases_reorder_info_within_trains(array $phases, array $slot_order = null)
+function session_phases_reorder_info_within_trains(array $phases, ?array $slot_order = null)
 {
     if (count($phases) < 2) {
         return array_values($phases);
@@ -4949,7 +4949,7 @@ function session_job_latest_token_phase_nums(array $manifest, $job)
  * in the latest token (see session_latest_token_phases) yields the freshest
  * cycle's waybills instead of every historical copy accumulated by repeated runs.
  */
-function session_latest_token_waybill_count($session_nbr, array $manifest = null, $root = null)
+function session_latest_token_waybill_count($session_nbr, ?array $manifest = null, $root = null)
 {
     $root = $root ?? session_web_root();
     if ($manifest === null) {
@@ -5009,7 +5009,7 @@ function session_train_browse_href($target_session, $display_name, $style = 'mob
  * style file that hasn't been generated yet. Returns true when the style is
  * available after the call. Idempotent/cached: a no-op once the style exists.
  */
-function session_ensure_style_rendered($dbc, $session_nbr, $style, array $manifest = null, $root = null)
+function session_ensure_style_rendered($dbc, $session_nbr, $style, ?array $manifest = null, $root = null)
 {
     $root = $root ?? session_web_root();
     $style = session_normalize_switchlist_style($style);
@@ -6394,8 +6394,8 @@ function session_station_report_render_html($session_nbr, array $data)
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Station Car Report<?= $title_phase ?> — Session <?= $session_nbr ?></title>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
+<link href="/sts/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+<link href="/sts/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background:#f8f9fa; font-size:13px; }
   main { max-width: 1280px; margin: 0 auto; padding: 1rem 1rem 2.5rem; }
@@ -7609,8 +7609,8 @@ function session_wheel_report_render_html($session_nbr, array $data)
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Wheel Report<?= $title_phase ?> — Session <?= $session_nbr ?></title>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
+<link href="/sts/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+<link href="/sts/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background:#f8f9fa; font-size:13px; }
   main { max-width: 1100px; margin: 0 auto; padding: 1rem 1rem 2.5rem; }
