@@ -33,19 +33,19 @@ sts_page_start([
         $dbc = open_db();
         
         // check to see if the incoming code is a car ID number delimited by "-"
-        if ((substr($_GET['location'], 0, 1) == '%') && ((substr($_GET['location'], -1, 1)) == '%'))
+        $raw_location = sts_get('location');
+        if ((substr($raw_location, 0, 1) == '%') && ((substr($raw_location, -1, 1)) == '%'))
         {
           // if it is, get the car's reporting marks
-          $location_id = substr($_GET['location'], 1, strlen($_GET['location'])-2);
-          $sql = 'select code from locations where id = ' . $location_id;
-          $rs = mysqli_query($dbc, $sql);
-          $row = mysqli_fetch_array($rs);
-          $scan_code = $row['code'];
+          $location_id = sts_id(substr($raw_location, 1, strlen($raw_location)-2));
+          $rs = sts_q($dbc, 'select code from locations where id = ?', array($location_id));
+          $row = ($rs instanceof mysqli_result) ? mysqli_fetch_array($rs) : null;
+          $scan_code = $row ? $row['code'] : '';
         }
         else
         {
           // if not, just pass the scanned code on to the query
-          $scan_code = $_GET['location'];
+          $scan_code = $raw_location;
         }
         
         // build a query to bring in the info
@@ -57,29 +57,31 @@ sts_page_start([
                        locations.remarks as remarks,
                        routing.station as station
                   from locations, routing
-                 where locations.code = "' . $scan_code . '"
+                 where locations.code = ?
                    and locations.station = routing.id';
 
-        $rs = mysqli_query($dbc, $sql);
-        if (mysqli_num_rows($rs) > 0)
+        $rs = sts_q($dbc, $sql, array($scan_code));
+        if ($rs instanceof mysqli_result && mysqli_num_rows($rs) > 0)
         {
           $row = mysqli_fetch_array($rs);
+          $e = array_map('sts_h', $row);  // html-escaped copy for output
+          $u = array_map(function ($v) { return urlencode((string) $v); }, $row);  // url-encoded copy for links
 
           // build a table showing the information
           // add a link to db_edit_location.php
-          $location_link = '<a href="db_edit.php?tbl_name=locations&obj_id=' . $row['id'] . 
-                           '&obj_name=' . $row['code'] . '">' . $row['code'] . '</a>';
+          $location_link = '<a href="db_edit.php?tbl_name=locations&obj_id=' . $u['id'] . 
+                           '&obj_name=' . $u['code'] . '">' . $e['code'] . '</a>';
 
-          $station_link = '<a href="db_edit.php?tbl_name=routing&obj_id=' . $row['station_id'] . 
-                          '&obj_name=' . $row['station'] . '">' . $row['station'] . '</a>';
+          $station_link = '<a href="db_edit.php?tbl_name=routing&obj_id=' . $u['station_id'] . 
+                          '&obj_name=' . $u['station'] . '">' . $e['station'] . '</a>';
 
           print '<table class="table table-sm table-bordered table-hover bg-white">
                  <tr><th>Property</th><th>Value</th></tr>
                  <tr><td>Location Code</td><td>' . $location_link . '</td>
                  <tr><td>Station</td><td>' . $station_link . '</td>
-                 <tr><td>Track</td><td>' . $row['track'] . '</td>
-                 <tr><td>Spot</td><td>' . $row['spot'] . '</td>
-                 <tr><td>Remarks</td><td>' . $row['remarks'] . '</td>
+                 <tr><td>Track</td><td>' . $e['track'] . '</td>
+                 <tr><td>Spot</td><td>' . $e['spot'] . '</td>
+                 <tr><td>Remarks</td><td>' . $e['remarks'] . '</td>
                  </table>';
 
           // find all of the cars at this location
@@ -89,12 +91,12 @@ sts_page_start([
                           cars.status as status,
                           car_codes.code as car_code
                      from cars, car_codes
-                    where cars.current_location_id = "' . $row['id'] . '"
+                    where cars.current_location_id = ?
                       and cars.car_code_id = car_codes.id
                     order by cars.position, cars.reporting_marks';
 
-          $rs2 = mysqli_query($dbc, $sql2);
-          if (mysqli_num_rows($rs2) > 0)
+          $rs2 = sts_q($dbc, $sql2, array($row['id']));
+          if ($rs2 instanceof mysqli_result && mysqli_num_rows($rs2) > 0)
           {
             print '<h3 class="mt-4">Cars at this location</h3>';
             print '<table class="table table-sm table-bordered table-hover bg-white">';
@@ -107,12 +109,12 @@ sts_page_start([
 
             while ($row2 = mysqli_fetch_array($rs2))
             {
-              $car_link = '<a href="scan_car.php?scan_code=' . $row2['reporting_marks'] . '&scan_btn=Scan">' . $row2['reporting_marks'] . '</a>';
+              $car_link = '<a href="scan_car.php?scan_code=' . urlencode($row2['reporting_marks']) . '&scan_btn=Scan">' . sts_h($row2['reporting_marks']) . '</a>';
               print '<tr>
-                     <td align="center">' . $row2['position'] . '</td>
+                     <td align="center">' . sts_h($row2['position']) . '</td>
                      <td>' . $car_link . '</td>
-                     <td align="center">' . $row2['car_code'] . '</td>
-                     <td>' . $row2['status'] . '</td>
+                     <td align="center">' . sts_h($row2['car_code']) . '</td>
+                     <td>' . sts_h($row2['status']) . '</td>
                      </tr>';
             }
             
@@ -125,7 +127,7 @@ sts_page_start([
         }
         else
         {
-          print '<div class="alert alert-warning">Location "' . sts_h($_GET['location']) . '" not found. Check spelling.</div>';
+          print '<div class="alert alert-warning">Location "' . sts_h($raw_location) . '" not found. Check spelling.</div>';
         }
       }
     ?>

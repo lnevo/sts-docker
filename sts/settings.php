@@ -73,14 +73,14 @@ Current STS server IPv4 address(s):<br />
           // now go through the array of setting names and update any changes
           for ($i=0; $i<$row_count; $i++)
           {
-            if (strlen($_GET[$settings[$i]]) > 0)
+            if (strlen(sts_get($settings[$i])) > 0)
             {
               // only make a change if there's a new value
-              $setting_value = $_GET[$settings[$i]];
-              $sql = 'update settings set setting_value = "' . $setting_value . '" where setting_name = "' . $settings[$i] . '"';
-              if (!mysqli_query($dbc, $sql))
+              $setting_value = sts_get($settings[$i]);
+              $sql = 'update settings set setting_value = ? where setting_name = ?';
+              if (sts_q($dbc, $sql, array($setting_value, $settings[$i])) === false)
               {
-                print "Update Error: " . mysqli_error($dbc) . " SQL: " . $sql;
+                print "Update Error: " . sts_h(sts_err($dbc));
               }
             }
           }
@@ -99,9 +99,9 @@ Current STS server IPv4 address(s):<br />
           while ($row = mysqli_fetch_array($rs))
           {
             print '<tr>
-                     <td>' . $row[1] . '</td>
-                     <td>' . $row[2] . '</td>
-                     <td><input name="' . $row[0] . '" type="text" class="form-control form-control-sm"></td>
+                     <td>' . sts_h($row[1]) . '</td>
+                     <td>' . sts_h($row[2]) . '</td>
+                     <td><input name="' . sts_h($row[0]) . '" type="text" class="form-control form-control-sm"></td>
                    </tr>';
           }
 

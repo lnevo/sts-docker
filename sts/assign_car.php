@@ -266,11 +266,11 @@
             {
               if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row1['car_id'] . '.jpg'))
               {
-                $parm_string = '\'' . $row1['car_id'] . '\', \'' . $row1['reporting_marks'] . '\'';
+                $parm_string = json_encode((string) $row1['car_id'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ', ' . json_encode((string) $row1['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
               }
               else
               {
-                $parm_string = '\'\',\'' . $row1['reporting_marks'] . '\'';
+                $parm_string = '"", ' . json_encode((string) $row1['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
               }
               
               print '<tr style="color:White; background-color:Gray;">
@@ -286,7 +286,7 @@
               }
               
               print '</td>
-                     <td onclick="show_image(' . $parm_string . ');">' . $row1['reporting_marks'] . '
+                     <td onclick="show_image(' . sts_html($parm_string) . ');">' . sts_html($row1['reporting_marks']) . '
                        <input name="reporting_marks" value="' . sts_html($row1['reporting_marks']) . '" type="hidden">
                      </td>
                      <td>' . sts_html($row1['car_code']) . '</td>
@@ -302,11 +302,11 @@
             {
               if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row1['car_id'] . '.jpg'))
               {
-                $parm_string = '\'' . $row1['car_id'] . '\', \'' . $row1['reporting_marks'] . '\'';
+                $parm_string = json_encode((string) $row1['car_id'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ', ' . json_encode((string) $row1['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
               }
               else
               {
-                $parm_string = '\'\',\'' . $row1['reporting_marks'] . '\'';
+                $parm_string = '"", ' . json_encode((string) $row1['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
               }
               
               print '<tr style="background-color:DarkGray;">
@@ -322,7 +322,7 @@
               }
               
               print '</td>
-                     <td onclick="show_image(' . $parm_string . ');">' . $row1['reporting_marks'] . '
+                     <td onclick="show_image(' . sts_html($parm_string) . ');">' . sts_html($row1['reporting_marks']) . '
                        <input name="reporting_marks" value="' . sts_html($row1['reporting_marks']) . '" type="hidden">
                      </td>
                      <td>' . sts_html($row1['car_code']) . '</td>
@@ -350,14 +350,14 @@
               
               if (file_exists('/ImageStore/DB_Images/RollingStock/' . $row2['car_id'] . '.jpg'))
               {
-                $parm_string = '\'' . $row2['car_id'] . '\', \'' . $row2['reporting_marks'] . '\'';
+                $parm_string = json_encode((string) $row2['car_id'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ', ' . json_encode((string) $row2['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
               }
               else
               {
-                $parm_string = '\'\',\'' . $row2['reporting_marks'] . '\'';
+                $parm_string = '"", ' . json_encode((string) $row2['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
               }
               print '</td>
-                     <td onclick="show_image(' . $parm_string . ');">' . $row2['reporting_marks'] . '
+                     <td onclick="show_image(' . sts_html($parm_string) . ');">' . sts_html($row2['reporting_marks']) . '
                        <input name="reporting_marks" value="' . sts_html($row2['reporting_marks']) . '" type="hidden">
                      </td>
                      <td>' . sts_html($row2['car_code']) . '</td>
@@ -385,14 +385,14 @@
             
               if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row3['car_id'] . '.jpg'))
               {
-                $parm_string = '\'' . $row3['car_id'] . '\', \'' . $row3['reporting_marks'] . '\'';
+                $parm_string = json_encode((string) $row3['car_id'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ', ' . json_encode((string) $row3['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
               }
               else
               {
-                $parm_string = '\'\',\'' . $row3['reporting_marks'] . '\'';
+                $parm_string = '"", ' . json_encode((string) $row3['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
               }
               print '</td>
-                     <td onclick="show_image(' . $parm_string . ');">' . $row3['reporting_marks'] . '
+                     <td onclick="show_image(' . sts_html($parm_string) . ');">' . sts_html($row3['reporting_marks']) . '
                        <input name="reporting_marks" value="' . sts_html($row3['reporting_marks']) . '" type="hidden">
                      </td>
                      <td>' . sts_html($row3['car_code']) . '</td>

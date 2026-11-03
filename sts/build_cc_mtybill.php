@@ -12,10 +12,10 @@
   $rr_initials = $row[0];
 
   // get the desired shipment ID
-  $shipment_id = $_GET['shipment_id'];
+  $shipment_id = sts_id(sts_get('shipment_id'));
   
   // get the waybill number
-  $waybill_number = $_GET['waybill_number'];
+  $waybill_number = sts_get('waybill_number');
 
   // check to see if this is a waybill for the empty part of a revenue move_uploaded_file
   if (!strpos($waybill_number, "E"))
@@ -38,14 +38,14 @@
             left join commodities on commodities.id = shipments.consignment
             left join car_codes on car_codes.id = shipments.car_code
             left join routing rout01 on rout01.id = loc01.station
-            where shipments.id = "' . $shipment_id . '"';
+            where shipments.id = ?';
 
 //print 'SQL: ' . $sql . '<br /><br />';
 //error_log('SQL: ' . $sql);
 
     // run the query
-    $rs = mysqli_query($dbc, $sql);
-    $row = mysqli_fetch_array($rs);
+    $rs = sts_q($dbc, $sql, array($shipment_id));
+    $row = ($rs instanceof mysqli_result) ? mysqli_fetch_array($rs) : array();
   
     // pull the database info into local variables so that there's less typing ;-D
     $description = $row['description'];
@@ -75,14 +75,14 @@
              left join locations on locations.id = car_orders.shipment
              left join car_codes on car_codes.id = cars.car_code_id
              left join routing on routing.id = locations.station
-             where car_orders.waybill_number = "' . $waybill_number . '"';
+             where car_orders.waybill_number = ?';
 
 //print 'SQL: ' . $sql . '<br /><br />';
 //error_log('SQL: ' . $sql);
                
     //run the query
-    $rs = mysqli_query($dbc, $sql);
-    $row = mysqli_fetch_array($rs);
+    $rs = sts_q($dbc, $sql, array($waybill_number));
+    $row = ($rs instanceof mysqli_result) ? mysqli_fetch_array($rs) : array();
     
     //pull the query results into local variables and blank out the unused ones so that's there's less typing
     $description = '';

@@ -346,11 +346,11 @@
           $unload_loc_name = 'unload' . $row_count;
           if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row['id'] . '.jpg'))
           {
-            $parm_string = '\'' . $row['id'] . '\', \'' . $row['reporting_marks'] . '\'';
+            $parm_string = json_encode((string) $row['id'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ', ' . json_encode((string) $row['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
           }
           else
           {
-            $parm_string = '\'\',\'' . $row['reporting_marks'] . '\'';
+            $parm_string = '"", ' . json_encode((string) $row['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
           }
 
           if ($row['status'] ==  'Loading')
@@ -443,7 +443,7 @@
                    <td style="' . $row_style . '">' .
                      sts_html($row['position']) . '
                    </td>
-                   <td style="' . $row_style . '" onclick="show_image(' . $parm_string . ');">' .
+                   <td style="' . $row_style . '" onclick="show_image(' . sts_html($parm_string) . ');">' .
                      sts_html($row['reporting_marks']) . '<input name="' . $car_name . '" value="' . $row[0] . '" type="hidden">
                    </td>
                    <td style="' . $row_style . '">' .

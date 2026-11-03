@@ -12,7 +12,7 @@
   $rr_initials = $row[0];
 
   // get the desired shipment ID
-  $shipment_id = $_GET['shipment_id'];
+  $shipment_id = sts_id(sts_get('shipment_id'));
 
   // get the shipment info
   $sql = 'select shipments.code as shipment_code,
@@ -41,10 +41,9 @@
           left join routing rout01 on rout01.id = loc01.station
           left join locations loc02 on loc02.id = shipments.loading_location
           left join routing rout02 on rout02.id = loc02.station
-          where shipments.id = "' . $shipment_id . '"';
-//print 'SQL: ' . $sql . '<br /><br />';
-  $rs = mysqli_query($dbc, $sql);
-  $row = mysqli_fetch_array($rs);
+          where shipments.id = ?';
+  $rs = sts_q($dbc, $sql, array($shipment_id));
+  $row = ($rs instanceof mysqli_result) ? mysqli_fetch_array($rs) : array();
   $description = $row['description'];
   $consignment = $row['consignment'];
   $car_code = $row['car_code'];
