@@ -1,6 +1,6 @@
 <?php
 require_once 'page_chrome.php';
-sts_page_start(['title' => 'Remove Rolling Stock Image', 'icon' => 'bi-image', 'section' => 'data', 'back_href' => '',
+sts_page_start(['title' => 'Remove Rolling Stock Image', 'icon' => 'bi-image', 'section' => 'data', 'back_href' => '', 'nav' => false,
   'head_extra' => '<script>window.onunload = refreshParent; function refreshParent() { window.opener.location.reload(); }</script>']);
 ?>
 <div class="sts-card">

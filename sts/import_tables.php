@@ -109,7 +109,7 @@ sts_page_start([
             }
            
             // read the import file and insert each row into the temporary table
-            $fh = fopen($import_file, "r") or die("Unable to open import file!");
+            $fh = fopen($import_file, "r") or die('<div class="alert alert-danger">Unable to open import file!</div></div>' . sts_page_end_html());
             
             // discard the first line of the file
             $import_line = fgetcsv($fh);

@@ -303,4 +303,3 @@ sts_page_start([
     ?>
 </div>
 <?php sts_page_end(); ?>
-</html>

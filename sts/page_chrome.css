@@ -53,10 +53,13 @@ body.sts-page {
   margin-bottom: 16px;
 }
 
-/* Legacy tables without a class pick up the data-table look and scroll on
-   narrow screens instead of overflowing the page. */
-.sts-page-body table:not([class]),
-.sts-page-body table.sts-table {
+/* Legacy data tables (classless or the old sorttable "sortable" class) pick up
+   the data-table look and scroll on narrow screens instead of overflowing the
+   page. Classless tables that wrap another table are layout tables and stay
+   plain, so nested editors don't get doubled borders. */
+.sts-page-body table:not([class]):not(:has(table)),
+.sts-page-body table.sts-table,
+.sts-page-body table.sortable {
   border-collapse: collapse;
   background: #fff;
   font-size: 0.9rem;
@@ -66,25 +69,29 @@ body.sts-page {
   overflow-x: auto;
 }
 
-.sts-page-body table:not([class]) th,
-.sts-page-body table:not([class]) td,
+.sts-page-body table:not([class]):not(:has(table)) th,
+.sts-page-body table:not([class]):not(:has(table)) td,
 .sts-page-body table.sts-table th,
-.sts-page-body table.sts-table td {
+.sts-page-body table.sortable th,
+.sts-page-body table.sts-table td,
+.sts-page-body table.sortable td {
   border: 1px solid #dee2e6;
   padding: 6px 10px;
   vertical-align: top;
 }
 
-.sts-page-body table:not([class]) th,
-.sts-page-body table.sts-table th {
+.sts-page-body table:not([class]):not(:has(table)) th,
+.sts-page-body table.sts-table th,
+.sts-page-body table.sortable th {
   background-color: #4a90e2;
   color: #fff;
   font-weight: 600;
   font-size: 0.85rem;
 }
 
-.sts-page-body table:not([class]) tr:hover td,
-.sts-page-body table.sts-table tr:hover td {
+.sts-page-body table:not([class]):not(:has(table)) tr:hover td,
+.sts-page-body table.sts-table tr:hover td,
+.sts-page-body table.sortable tr:hover td {
   background-color: #f0f4ff;
 }
 

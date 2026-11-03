@@ -1,6 +1,6 @@
 <?php
 require_once 'page_chrome.php';
-sts_page_start(['title' => 'Import Rolling Stock Image', 'icon' => 'bi-image', 'section' => 'data', 'back_href' => '',
+sts_page_start(['title' => 'Import Rolling Stock Image', 'icon' => 'bi-image', 'section' => 'data', 'back_href' => '', 'nav' => false,
   'head_extra' => '<script>window.onunload = refreshParent; function refreshParent() { window.opener.location.reload(); }</script>']);
 ?>
 <div class="sts-card">
@@ -37,7 +37,7 @@ sts_page_start(['title' => 'Import Rolling Stock Image', 'icon' => 'bi-image', '
         {
           if (move_uploaded_file($_FILES['import_file']['tmp_name'], $target_file))
           {
-            print 'Image file for ' . $_POST['obj_id'] . ' successfully uploaded.<br /><br />';
+            print 'Image file for ' . sts_h($_POST['obj_id']) . ' successfully uploaded.<br /><br />';
           }
           else
           {
@@ -76,9 +76,9 @@ sts_page_start(['title' => 'Import Rolling Stock Image', 'icon' => 'bi-image', '
         print '<br /><br />Close this window to return to the Edit Car Screen';
                
         // pass the incoming car index, car reporting marks, and image number through to this form when it's called a second time
-        print '<input type="hidden" id="obj_id" name="obj_id" value="' . $_GET['obj_id'] . '">
-               <input type="hidden" id="obj_name" name="obj_name" value="' . $_GET['obj_name'] . '">
-               <input type="hidden" id="image" name="image" value="' . $_GET['image'] . '">';
+        print '<input type="hidden" id="obj_id" name="obj_id" value="' . sts_h($_GET['obj_id'] ?? '') . '">
+               <input type="hidden" id="obj_name" name="obj_name" value="' . sts_h($_GET['obj_name'] ?? '') . '">
+               <input type="hidden" id="image" name="image" value="' . sts_h($_GET['image'] ?? '') . '">';
         print '</form>';
       }
     ?>

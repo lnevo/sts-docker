@@ -125,7 +125,7 @@ sts_page_start([
         }
         else
         {
-          print '<div class="alert alert-warning">Location "' . $_GET['location'] . '" not found. Check spelling.</div>';
+          print '<div class="alert alert-warning">Location "' . sts_h($_GET['location']) . '" not found. Check spelling.</div>';
         }
       }
     ?>
