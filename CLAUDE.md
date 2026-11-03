@@ -5,6 +5,9 @@ code in this repository.
 
 ## Knowledge base
 
+Current state, gate and open items: `docs/plans/HANDOFF.md` (read it at the
+start of a session, keep it current).
+
 Shared context lives in `llm-wiki/INDEX.md`. Read the index first, then load
 only the page whose `load_when` trigger matches the task. Don't bulk-load
 everything.
