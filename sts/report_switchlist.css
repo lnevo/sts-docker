@@ -1,0 +1,288 @@
+/* Styles for the switch list report (display_switchlist.php with
+   ?generate_report=1). The fragment carries no <style> of its own; everything
+   it needs is here, scoped to .sw-report so nothing leaks into the page.
+   The rules reproduce the legacy printable_switchlist*.php pages (plain
+   Verdana body, black-bordered tables, quirks-mode table font reset) so the
+   printed output is unchanged; on screen the report is shown on a white
+   "sheet" the same way. */
+
+body.sts-page .sts-page-body .sw-report {
+  background: #fff;
+  color: #000;
+  font: normal 20px Verdana, Arial, sans-serif;
+  line-height: normal;
+  padding: 8px;
+  overflow-x: auto;
+}
+
+body.sts-page .sts-page-body .sw-report.sw-fmt-x2010 {
+  font: normal 14px 'Arial Narrow', Arial, sans-serif;
+}
+
+/* page_chrome.css restyles classless tables (blue headers, 0.9rem font,
+   display: block); selectors here are prefixed with body.sts-page .sts-page-body to outrank
+   it so the legacy sheet look is kept. */
+
+/* Bootstrap makes everything border-box; the legacy sheet used the browser
+   default (content-box, except tables) and its cell widths depend on it */
+body.sts-page .sts-page-body .sw-report,
+body.sts-page .sts-page-body .sw-report * {
+  box-sizing: content-box;
+}
+
+/* the legacy pages rendered in quirks mode: tables do not inherit the body
+   font size, so they are 16px unless they set their own */
+body.sts-page .sts-page-body .sw-report table {
+  border-collapse: collapse;
+  font-size: 16px;
+  font-weight: normal;
+  line-height: normal;
+  text-align: start;
+  color: #000;
+  display: table;
+  box-sizing: border-box;
+  max-width: none;
+  margin: 0;
+  overflow: visible;
+  background: none;
+}
+
+body.sts-page .sts-page-body .sw-report.sw-fmt-half table,
+body.sts-page .sts-page-body .sw-report.sw-fmt-full table {
+  table-layout: fixed;
+}
+
+body.sts-page .sts-page-body .sw-report tr {
+  vertical-align: middle;
+}
+
+body.sts-page .sts-page-body .sw-report th,
+body.sts-page .sts-page-body .sw-report td {
+  border: 1px solid #000;
+  padding: 1px;
+  color: #000;
+  background: none;
+  vertical-align: inherit;
+}
+
+body.sts-page .sts-page-body .sw-report tr:hover td {
+  background-color: transparent;
+}
+
+body.sts-page .sts-page-body .sw-report th {
+  font-size: inherit;
+  font-weight: bold;
+  text-align: center;
+}
+
+body.sts-page .sts-page-body .sw-report p {
+  margin: 1em 0;
+}
+
+body.sts-page .sts-page-body .sw-report h2,
+body.sts-page .sts-page-body .sw-report h3 {
+  color: #000;
+  font-family: inherit;
+  font-weight: bold;
+  line-height: normal;
+}
+
+body.sts-page .sts-page-body .sw-report h2 {
+  font-size: 1.5em;
+  margin: 0.83em 0;
+}
+
+body.sts-page .sts-page-body .sw-report h3 {
+  font-size: 1.17em;
+  margin: 1em 0;
+}
+
+/* quirks mode drops the top margin of the first child of the body or a table
+   cell */
+body.sts-page .sts-page-body .sw-report > :first-child,
+body.sts-page .sts-page-body .sw-report td > :first-child,
+body.sts-page .sts-page-body .sw-report th > :first-child {
+  margin-top: 0;
+}
+
+body.sts-page .sts-page-body .sw-report pre {
+  font-family: monospace;
+  font-size: 0.875em;
+  line-height: 1.202;
+  color: #000;
+  margin: 1em 0;
+  overflow: visible;
+}
+
+body.sts-page .sts-page-body .sw-report img {
+  /* quirks mode does not add a text descender gap under a lone image */
+  vertical-align: top;
+}
+
+body.sts-page .sts-page-body .sw-report b,
+body.sts-page .sts-page-body .sw-report strong {
+  font-weight: bold;
+}
+
+/* ---- x2010 (Pacific National Train Consist Form) ---- */
+
+body.sts-page .sts-page-body .sw-fmt-x2010 th,
+body.sts-page .sts-page-body .sw-fmt-x2010 td {
+  padding: 3px 5px;
+}
+
+body.sts-page .sts-page-body .sw-fmt-x2010 .form-page {
+  width: 100%;
+  max-width: 1200px;
+  font-family: 'Arial Narrow', 'Franklin Gothic', Arial, sans-serif;
+  margin-bottom: 40px;
+}
+
+body.sts-page .sts-page-body .sw-fmt-x2010 .detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #000;
+  margin-top: -1px;
+}
+
+body.sts-page .sts-page-body .sw-fmt-x2010 .detail-table td {
+  border: 1px solid #000;
+  padding: 4px 5px;
+  font-size: 12px;
+  height: 2.8em;
+  box-sizing: border-box;
+}
+
+body.sts-page .sts-page-body .sw-fmt-x2010 .data-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #000;
+  margin-top: -1px;
+  font-size: 12px;
+}
+
+body.sts-page .sts-page-body .sw-fmt-x2010 .data-table th {
+  border: 1px solid #000;
+  padding: 4px 5px;
+  background-color: #1e4d78;
+  color: #fff;
+}
+
+body.sts-page .sts-page-body .sw-fmt-x2010 .data-table td {
+  border: 1px solid #000;
+  padding: 4px 5px;
+}
+
+body.sts-page .sts-page-body .sw-fmt-x2010 .data-table tbody tr:nth-child(even) td {
+  background-color: #d0e8ff;
+}
+
+/* bold the row number and wagon number columns for easy scanning */
+body.sts-page .sts-page-body .sw-fmt-x2010 .data-table tbody td:nth-child(1),
+body.sts-page .sts-page-body .sw-fmt-x2010 .data-table tbody td:nth-child(3) {
+  font-weight: bold;
+}
+
+body.sts-page .sts-page-body .sw-fmt-x2010 .serial-number {
+  color: red;
+  font-size: 20px;
+  font-weight: bold;
+  text-align: right;
+}
+
+body.sts-page .sts-page-body .sw-fmt-x2010 .page-info {
+  font-size: 12px;
+  text-align: left;
+}
+
+body.sts-page .sts-page-body .sw-fmt-x2010 .page-break {
+  page-break-before: always;
+  break-before: page;
+}
+
+/* strike-out checkboxes (added by report_switchlist.js) */
+body.sts-page .sts-page-body .sw-report .strikethrough {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+body.sts-page .sts-page-body .sw-report .clear-strikes-button {
+  display: inline-block;
+  margin: 10px 0 15px 0;
+  padding: 5px 10px;
+  font-size: 14px;
+  background-color: #f44336;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+body.sts-page .sts-page-body .sw-report .clear-strikes-button:hover {
+  background-color: #d32f2f;
+}
+
+@media print {
+  body.sts-page .sts-page-body .sw-report {
+    padding: 0;
+    overflow: visible;
+  }
+
+  body.sts-page .sts-page-body .sw-report .noprint {
+    display: none !important;
+  }
+
+  body.sts-page .sts-page-body .sw-report.sw-fmt-x2010 {
+    font-size: 8pt;
+    font-family: 'Arial Narrow', Arial, sans-serif;
+  }
+
+  body.sts-page .sts-page-body .sw-fmt-x2010 .form-page {
+    max-width: 100% !important;
+    margin-bottom: 0 !important;
+  }
+
+  body.sts-page .sts-page-body .sw-fmt-x2010 .page-break {
+    padding-top: 3mm;
+  }
+
+  body.sts-page .sts-page-body .sw-fmt-x2010 .logo-img {
+    height: 32px !important;
+    width: auto !important;
+  }
+
+  body.sts-page .sts-page-body .sw-fmt-x2010 h2.form-title {
+    font-size: 10pt !important;
+    margin: 1px 0 !important;
+  }
+
+  body.sts-page .sts-page-body .sw-fmt-x2010 .serial-number {
+    font-size: 11pt !important;
+  }
+
+  body.sts-page .sts-page-body .sw-fmt-x2010 .detail-table td {
+    font-size: 7pt !important;
+    padding: 1px 3px !important;
+    line-height: 1.2 !important;
+  }
+
+  body.sts-page .sts-page-body .sw-fmt-x2010 .data-table th,
+  body.sts-page .sts-page-body .sw-fmt-x2010 .data-table td {
+    font-size: 8pt !important;
+    padding: 2px 4px !important;
+    line-height: 1.3 !important;
+  }
+
+  body.sts-page .sts-page-body .sw-fmt-x2010 .data-table th {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background-color: #1e4d78 !important;
+    color: #fff !important;
+  }
+
+  body.sts-page .sts-page-body .sw-fmt-x2010 .data-table tbody tr:nth-child(even) td {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background-color: #d0e8ff !important;
+  }
+}
