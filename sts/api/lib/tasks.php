@@ -121,6 +121,9 @@ function api_restore_marker_set($id)
 function api_restore_marker_clear($id = null)
 {
     $p = api_restore_marker_path();
+    if (!is_file($p)) {
+        return;
+    }
     if ($id === null || trim((string) @file_get_contents($p)) === $id) {
         @unlink($p);
     }
