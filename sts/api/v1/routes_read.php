@@ -531,13 +531,21 @@ api_route('GET', '/health', static function ($req) {
     } catch (Throwable $e) {
         $link = false;
     }
+    // During a restore the tables come and go: report it instead of querying them.
+    $restoring = function_exists('api_restore_in_progress') ? api_restore_in_progress() : null;
     if ($link) {
+        if ($restoring !== null) {
+            $db = 'restoring';
+        } else {
+            $rs = @mysqli_query($link, "SELECT setting_value FROM settings WHERE setting_name = 'session_nbr'");
+            $row = $rs ? mysqli_fetch_row($rs) : null;
+            $db = $rs ? 'ok' : 'error';
+            $session = $row ? (int) $row[0] : null;
+        }
         mysqli_close($link);
-        $db = 'ok';
-        $session = api_session_nbr();
     }
     return [
-        'status' => $db === 'ok' ? 'ok' : 'degraded',
+        'status' => $db === 'ok' ? 'ok' : ($db === 'restoring' ? 'maintenance' : 'degraded'),
         'version' => STS_API_VERSION,
         'stack' => getenv('STS_STACK_NAME') ?: 'live',
         'session_nbr' => $session,

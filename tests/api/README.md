@@ -2,10 +2,10 @@
 
 <!-- markdownlint-disable MD013 -- commands -->
 
-Stdlib-only (`unittest` + `urllib`) tests for `/sts/api/v1` and the legacy
-wagon routes. They run against a live stack, so use a **throwaway sandbox**:
-the suite restores the database, runs tasks and creates and revokes tokens.
-Never point it at the live stack on 8980.
+Stdlib-only (`unittest` + `urllib`) tests for `/sts/api/v1` and the legacy wagon
+routes. They run against a live stack, so use a **throwaway sandbox**: the suite
+restores the database, runs tasks and creates and revokes tokens. Never point it
+at the live stack on 8980.
 
 ## Run against a sandbox
 
@@ -29,12 +29,12 @@ python3 -m unittest discover -s tests/api -p 'test_*.py' -v
 python3 -m unittest discover -s tests/api -p 'test_cars.py'     # one module
 ```
 
-| Variable              | Meaning                                                                                  |
-| --------------------- | ---------------------------------------------------------------------------------------- |
-| `STS_API_URL`         | Base URL, default `http://localhost:8985/sts/api/v1`                                     |
-| `STS_API_TOKEN`       | Admin token (the bootstrap token, or `STS_API_ADMIN_TOKEN` on the stack)                 |
+| Variable              | Meaning                                                                                      |
+| --------------------- | -------------------------------------------------------------------------------------------- |
+| `STS_API_URL`         | Base URL, default `http://localhost:8985/sts/api/v1`                                         |
+| `STS_API_TOKEN`       | Admin token (the bootstrap token, or `STS_API_ADMIN_TOKEN` on the stack)                     |
 | `STS_API_TOKEN_FILE`  | File holding the admin token; falls back to `$STS_SANDBOX_DATA/config/bootstrap_admin.token` |
-| `STS_API_BACKUPS_DIR` | Host side of the stack's backups dir. The harness copies `fixtures/api_fixture` there     |
+| `STS_API_BACKUPS_DIR` | Host side of the stack's backups dir. The harness copies `fixtures/api_fixture` there        |
 
 ## Data: no private seed needed
 
@@ -42,24 +42,24 @@ python3 -m unittest discover -s tests/api -p 'test_cars.py'     # one module
 stations, 4 locations, 12 cars `TST 1001`..`TST 1012`, one shipment, session 0).
 Modules that need data restore it in `setUpClass`, so each class starts from the
 same state. `fixtures/seed.sql` is the source it was generated from (apply it to
-a freshly provisioned DB, then `POST /admin/backups {"name":"api_fixture"}`).
-If the backup is not on the stack and `STS_API_BACKUPS_DIR` is unset, data tests
+a freshly provisioned DB, then `POST /admin/backups {"name":"api_fixture"}`). If
+the backup is not on the stack and `STS_API_BACKUPS_DIR` is unset, data tests
 skip with an explanation. The restore end-to-end test makes its own backup
 in-run (`api_e2e`), so CI needs nothing else.
 
 ## What is covered
 
-| Module                  | Covers                                                                                                  |
-| ----------------------- | ------------------------------------------------------------------------------------------------------- |
-| `test_spec.py`          | health/openapi/docs open; spec valid; every expected route in the spec; every spec route live         |
-| `test_auth_matrix.py`   | for every spec operation: min role passes, role below 403, anonymous 401 (destructive ones denial-only) |
-| `test_envelope.py`      | success/error envelope (401, 403, 404, 405, 400, 422), pagination meta, filters, array params 422      |
-| `test_cars.py`          | load/unload/reposition happy paths and 409s, session advance, edits, cross-origin writes 403            |
-| `test_commands_tasks.py`| sync and async commands, task lifecycle and log, maintenance lock 409                                   |
-| `test_admin.py`         | token lifecycle, backups, restore end to end                                                            |
-| `test_workflows.py`     | workflow save/read/delete/run across roles, destructive-recipe rules                                    |
-| `test_legacy.py`        | legacy wagon routes keep their bare shapes                                                              |
-| `test_phase2.py`        | login cookie, policy, editor routes, simulator status                                                   |
+| Module                   | Covers                                                                                                  |
+| ------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `test_spec.py`           | health/openapi/docs open; spec valid; every expected route in the spec; every spec route live           |
+| `test_auth_matrix.py`    | for every spec operation: min role passes, role below 403, anonymous 401 (destructive ones denial-only) |
+| `test_envelope.py`       | success/error envelope (401, 403, 404, 405, 400, 422), pagination meta, filters, array params 422       |
+| `test_cars.py`           | load/unload/reposition happy paths and 409s, session advance, edits, cross-origin writes 403            |
+| `test_commands_tasks.py` | sync and async commands, task lifecycle and log, maintenance lock 409                                   |
+| `test_admin.py`          | token lifecycle, backups, restore end to end                                                            |
+| `test_workflows.py`      | workflow save/read/delete/run across roles, destructive-recipe rules                                    |
+| `test_legacy.py`         | legacy wagon routes keep their bare shapes                                                              |
+| `test_phase2.py`         | login cookie, policy, editor routes, simulator status                                                   |
 
 Phase 2 tests (and the matrix rows for phase 2 routes) **skip automatically**
 when `GET /v1/openapi.json` lacks the route; tests that only hold for phase 1
@@ -77,18 +77,15 @@ when `GET /v1/openapi.json` lacks the route; tests that only hold for phase 1
 - Use a car of its own per test (see the table in `test_cars.py`); do not rely
   on test order.
 
-## Known bugs the suite found (tests skipped with the reason)
+## Bugs the suite found (fixed)
 
-- **Restore vs. concurrent DB reads.** `open_db()` runs
-  `create table if not exists pool` on every connection. A request that opens
-  the database while a restore sits between its `DROP` and `CREATE` of `pool`
-  makes the restore fail with `Table 'pool' already exists` and leaves the schema
-  half built (the whole app 500s until the backup is restored again). The docs
-  say reads are never blocked by the maintenance lock; today they can break the
-  restore. `wait_restore()` in `helpers.py` settles before polling to avoid
-  tripping it; `test_reads_are_served_during_the_lock` is skipped for this.
-- **Overlong workflow names** (about 240+ characters) make `PUT /workflows/{name}`
-  answer 500 instead of 422 (`test_overlong_name_is_422`, skipped).
+- **Restore vs. concurrent DB reads:** a request that opened the database while
+  a restore swapped tables could make `open_db()` recreate `pool` and break the
+  restore. Fixed with a restore-in-progress marker: `open_db()` skips its
+  migrations, v1 data routes answer 503 `maintenance`, and `/health` reports
+  `db: restoring`. Covered by `test_reads_during_a_restore_never_break_it`.
+- **Overlong workflow names** made `PUT /workflows/{name}` answer 500; names are
+  now capped at 120 characters with a 422 (`test_overlong_name_is_422`).
 
 ## CI
 

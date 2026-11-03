@@ -113,7 +113,8 @@ class MaintenanceLock(h.ApiTestCase):
             self.assertEqual(r.status, 202, r)
             tid = r.data["task_id"]
             w = api("PUT", "/settings/lock_probe", {"value": "1"}, token=self.editor)
-            if w.status == 409:
+            # 409 = maintenance lock; 503 = restore in progress (tables being swapped)
+            if w.status in (409, 503):
                 seen = w
                 # token routes stay available during the lock (file-based, no DB)
                 self.assertEqual(api("GET", "/admin/tokens", token=self.admin).status, 200)
@@ -122,16 +123,22 @@ class MaintenanceLock(h.ApiTestCase):
                                 ("POST", "/admin/backups", {"name": "lock_probe"})):
                     x = api(m, p, b, token=self.admin)
                     # the task may have finished mid-loop; only 409 or success are valid
-                    self.assertIn(x.status, (409, 200, 201, 404, 422), (m, p, x))
+                    self.assertIn(x.status, (409, 503, 200, 201, 404, 422), (m, p, x))
                     if x.status == 409:
                         self.assertIn("maintenance task", x.error["message"])
+                    if x.status == 503:
+                        self.assertEqual(x.error["code"], "maintenance")
                 h.wait_restore(tid)
                 break
             h.wait_restore(tid)
         self.assertIsNotNone(seen, "never observed the maintenance lock (restore finished first 8 times)")
-        self.assertEqual(seen.error["code"], "conflict")
-        self.assertIn("maintenance task", seen.error["message"])
-        self.assertIn(tid, seen.error["message"])
+        if seen.status == 409:
+            self.assertEqual(seen.error["code"], "conflict")
+            self.assertIn("maintenance task", seen.error["message"])
+            self.assertIn(tid, seen.error["message"])
+        else:
+            self.assertEqual(seen.error["code"], "maintenance")
+            self.assertIn("restore in progress", seen.error["message"])
 
     def test_writes_work_again_after_the_task(self):
         r = api("POST", "/admin/restore", {"backup": h.FIXTURE_NAME}, token=self.admin)
@@ -150,12 +157,16 @@ class MaintenanceLock(h.ApiTestCase):
             h.wait_restore(b.data["task_id"])
         self.fail("never saw a second exclusive task refused")
 
-    @unittest.skip("BUG restore-vs-open_db: a read that opens the DB while a restore runs makes "
-                   "open_db() recreate `pool`; the restore then fails (Table 'pool' already exists) "
-                   "and leaves the schema half built. Enable once restore is safe against reads.")
-    def test_reads_are_served_during_the_lock(self):
+    def test_reads_during_a_restore_never_break_it(self):
+        """While a restore swaps tables, reads get 200 or 503 maintenance (never a
+        500), and the restore still succeeds (open_db skips its migrations)."""
         r = api("POST", "/admin/restore", {"backup": h.FIXTURE_NAME}, token=self.admin)
         for _ in range(20):
-            self.assertEqual(api("GET", "/cars").status, 200)
+            x = api("GET", "/cars")
+            self.assertIn(x.status, (200, 503), x)
+            if x.status == 503:
+                self.assertEqual(x.error["code"], "maintenance")
+            self.assertEqual(api("GET", "/health").status, 200)
         t = h.wait_restore(r.data["task_id"])
         self.assertEqual(t["status"], "succeeded", t)
+        self.assertEqual(api("GET", "/cars").status, 200)

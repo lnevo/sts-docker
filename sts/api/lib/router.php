@@ -137,7 +137,7 @@ function api_dispatch()
         api_legacy_error(403, $msg);
     }
     $rel = $is_v1 ? (substr($path, 3) ?: '/') : $path;
-    if ($is_v1 && !preg_match('#^/(health|openapi\.json|tasks(/|$)|auth/)#', $rel) && api_restore_in_progress() !== null) {
+    if ($is_v1 && !preg_match('#^/(health|openapi\.json|tasks(/|$)|auth/|admin/(tokens|policy)(/|$))#', $rel) && api_restore_in_progress() !== null) {
         header('Retry-After: 5');
         api_error(503, 'restore in progress', 'maintenance');
     }

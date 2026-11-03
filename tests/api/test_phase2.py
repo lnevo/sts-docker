@@ -7,6 +7,8 @@ docs/plans/2026-11-03-api-v1.md; assertions are deliberately conservative.
 import json
 
 import helpers as h
+import re
+
 from helpers import api, needs_route
 
 RECIPE = {"steps": [{"function": "generate_orders", "params": {"increment_session": "0"}}]}
@@ -15,7 +17,8 @@ RECIPE = {"steps": [{"function": "generate_orders", "params": {"increment_sessio
 def cookie_of(resp):
     raw = resp.headers.get_all("Set-Cookie") or []
     for c in raw:
-        if c.startswith("sts_api="):
+        # The cookie is named per stack: sts_api_<STS_STACK_NAME or port>.
+        if re.match(r"sts_api(_[A-Za-z0-9]+)?=", c):
             return c
     return None
 
@@ -145,6 +148,7 @@ class EditorRoutes(h.ApiTestCase):
     @needs_route("DELETE", "/sessions/output")
     def test_delete_session_output(self):
         self.assertError(api("DELETE", "/sessions/output", token=self.reader), 403)
+        self.assertError(api("DELETE", "/sessions/output", token=self.operator), 403)  # editor since the review fixes
         self.assertError(api("DELETE", "/sessions/output"), 401)
-        r = api("DELETE", "/sessions/output", token=self.operator)
+        r = api("DELETE", "/sessions/output", token=self.editor)
         self.assertEqual(r.status, 200, r)

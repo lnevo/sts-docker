@@ -49,8 +49,6 @@ class Workflows(h.ApiTestCase):
         self.assertError(api("PUT", "/workflows/apitest_safe", {"recipe": {}}, token=self.editor), 422)
         self.assertError(api("PUT", "/workflows/apitest_safe", {"recipe": {"steps": "x"}}, token=self.editor), 422)
 
-    @unittest.skip("BUG: a workflow name over ~240 characters makes PUT /workflows/{name} answer 500 "
-                   "(file name too long) instead of 422 'Invalid workflow name'")
     def test_overlong_name_is_422(self):
         self.assertEqual(self.put("x" * 300, SAFE, self.editor).status, 422)
 
@@ -95,13 +93,13 @@ class Workflows(h.ApiTestCase):
         self.assertError(r, 403, "forbidden")
 
     @h.needs_route("GET", "/admin/policy")
-    def test_phase2_operator_run_hits_admin_step_as_failed_task(self):
-        """Phase 2: saving never blocks; the run fails at the first step above the
-        caller's role (at session 0 the restore step is not skipped)."""
+    def test_phase2_operator_run_refused_up_front_for_unconditional_admin_step(self):
+        """Phase 2: saving never blocks; a run whose unconditional, in-range step
+        needs a higher role is refused before anything is dispatched (403 naming
+        the step). Conditional steps are checked at dispatch time instead."""
         self.assertOk(self.put("apitest_destructive", DESTRUCTIVE, self.editor), 201)
         r = api("POST", "/workflows/apitest_destructive/run", {}, token=self.operator)
-        self.assertEqual(r.status, 202, r)
-        t = h.wait_task(r.data["task_id"], self.operator)
-        self.assertEqual(t["status"], "failed", t)
-        self.assertTrue(t["error"])
+        self.assertEqual(r.status, 403, r)
+        self.assertIn("needs admin", r.error["message"])
+        self.assertIn("restore_database", r.error["message"])
         self.assertEqual(api("GET", "/cars").meta["total"], 12)  # nothing was restored over the data
