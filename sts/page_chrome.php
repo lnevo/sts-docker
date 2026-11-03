@@ -12,6 +12,8 @@
  *   sts_page_end();
  */
 
+require_once __DIR__ . '/html_helpers.php';
+
 /** Navbar colour, default back link and label per page section (ui-conventions 4.1 / 4.10). */
 function sts_page_sections()
 {
@@ -23,11 +25,6 @@ function sts_page_sections()
         'club'    => ['nav_class' => 'bg-secondary', 'back' => 'club_index.html', 'back_label' => 'Club Operations', 'back_icon' => 'bi-people'],
         'session' => ['nav_class' => 'bg-dark',      'back' => 'session_overview.php', 'back_label' => 'Sessions', 'back_icon' => 'bi-calendar-check'],
     ];
-}
-
-function sts_h($value)
-{
-    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
 /**
