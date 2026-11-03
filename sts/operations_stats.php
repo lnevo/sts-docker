@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/plugins/plugins.php';
+require_once __DIR__ . '/plugin_registry.php';
 require_once __DIR__ . '/drop_down_list_functions.php';
 
 /**

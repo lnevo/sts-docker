@@ -51,7 +51,7 @@ components:
             adder_group: database
             label: Create Backup
             gui_template: "Create Backup {prefix}<session>"
-            description: "Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. Use a stable prefix (e.g. hart_session) so each session writes hart_session1, hart_session2, … Lock from the session overview for a static *_locked checkpoint."
+            description: "Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. HART recipe uses hart_session_pre (after orders/fill/waybills) and hart_session_post (end of session). Legacy hart_session{N} end dumps still work. Lock from the session overview freezes both pre + post to *_locked companions."
             runnable: true
             dispatch: backup_database
             gui_path: /sts/backup_db.php
@@ -60,9 +60,9 @@ components:
                 key: prefix
                 label: Backup prefix
                 type: text
-                default: hart_session
+                default: hart_session_post
                 required: true
-                placeholder: hart_session
+                placeholder: hart_session_post
                 visible_label: true
           -
             id: validate_database
@@ -264,7 +264,7 @@ components:
             adder_group: workflow
             label: If … then goto …
             gui_template: "If {variable} {operator} {value} then goto {section_label}"
-            description: "When the condition is true, skip forward to a later section. When false, continue to the next step. Variables match the Operations dashboard counts (session #, open/unfilled orders, unassigned, pickup/set-out pending, organize, scale, load/unload)."
+            description: "When the condition is true, skip forward to a later section. When false, continue to the next step. Variables match the Operations dashboard counts (session #, open/unfilled orders, unassigned, pickup/set-out pending, organize, scale, load/unload) plus this-run counters refreshed after each step: filled_this_run, generated_this_run, repositioned_this_run. For open_orders / unfilled_orders, optional Commodity, Shipment, Car code, Loading, Unloading, or Final destination filters narrow the count so gates can target a lane without hardcoding commodities in PHP. Modulo operators: % is true when (variable % N) equals remainder R (value \"N\" → R=0, every Nth session; \"N=R\" or \"N,R\" for other remainders); !% is the inverse — useful for rare lanes like reefers every 3–4 sessions."
             runnable: true
             dispatch: if_then
             params:
@@ -285,6 +285,8 @@ components:
                   - <=
                   - ">"
                   - ">="
+                  - "%"
+                  - "!%"
                 default: ">="
               -
                 key: value
@@ -292,6 +294,69 @@ components:
                 type: text
                 default: 1
                 required: true
+              -
+                key: commodity
+                label: Commodity filter
+                type: commodity
+                options_from: commodities
+                allow_custom: true
+                required: false
+                default: ""
+                visible_label: true
+                empty_label: Any
+                summary_label: commodity
+              -
+                key: shipment
+                label: Shipment filter
+                type: shipment
+                options_from: shipments
+                allow_custom: true
+                required: false
+                default: ""
+                visible_label: true
+                empty_label: Any
+                summary_label: shipment
+              -
+                key: car_code
+                label: Car code filter
+                type: car_code
+                options_from: car_codes
+                allow_custom: true
+                required: false
+                default: ""
+                visible_label: true
+                empty_label: Any
+                summary_label: car
+              -
+                key: loading_location
+                label: Loading filter
+                type: checkbox_dropdown
+                options_from: station_locations
+                required: false
+                default: ""
+                visible_label: true
+                empty_label: Any
+                summary_label: loading
+              -
+                key: unloading_location
+                label: Unloading filter
+                type: checkbox_dropdown
+                options_from: station_locations
+                required: false
+                default: ""
+                visible_label: true
+                empty_label: Any
+                summary_label: unloading
+              -
+                key: final_destination
+                label: Final dest. filter
+                type: checkbox_dropdown
+                options_from: station_locations
+                required: false
+                default: ""
+                visible_label: true
+                empty_label: Any
+                summary_label: dest
               -
                 key: section
                 label: Section
@@ -330,7 +395,7 @@ components:
             adder_group: before
             label: Generate Car Orders
             gui_template: "Generate Orders {shipment}"
-            description: "Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or check one or more Shipments for manual orders (multi-select). Leave unchecked for AUTOMATIC generation. Max unfilled orders skips generation entirely when the unfilled backlog is above the limit (hard gate). Max new orders/session is a soft cap: it still generates every session but stops after that many new orders, serving due shipments in random order and leaving the rest due for later — this spreads demand smoothly and avoids the burst-then-starve pattern a hard gate causes. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore."
+            description: "Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or check one or more Shipments for manual orders (multi-select). Leave unchecked for AUTOMATIC generation. Max unfilled orders skips generation entirely when the unfilled backlog is above the limit (hard gate). Max new orders/session is a soft cap: it still generates every session but stops after that many new orders, serving due shipments in random order and leaving the rest due for later — this spreads demand smoothly and avoids the burst-then-starve pattern a hard gate causes. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore. Exclude prefixes (CSV) keeps matching shipment codes out of the AUTOMATIC pool only — use when those lanes are served by explicit shipment steps or other gates; also configurable via settings.auto_gen_exclude_shipment_prefixes or env STS_AUTO_GEN_EXCLUDE_SHIPMENT_PREFIXES."
             runnable: true
             dispatch: generate_orders
             params:
@@ -383,6 +448,14 @@ components:
                 min: 0
                 step: 1
                 visible_label: true
+              -
+                key: exclude_prefixes
+                label: Exclude prefixes (automatic)
+                type: text
+                default: ""
+                required: false
+                visible_label: true
+                placeholder: "e.g. ABC-,XYZ-"
           -
             id: increment_session
             category: database
@@ -401,10 +474,21 @@ components:
             adder: true
             adder_group: before
             label: Cancel Orders
-            gui_template: "Cancel Orders when unfilled > {threshold} down to {target} ({order})"
-            description: "When unfilled (non-E) orders exceed Threshold, cancel unfilled orders down to Target so the generate max_unfilled gate can reopen. Keeps COKE-* orders by default. Choose Oldest first (stale backlog) or Newest first (drop recent surge). Does not invent capacity — pairs with fill/reposition and fleet balance."
+            gui_template: "Cancel Orders when unfilled > {threshold} down to {target} ({order}){keep_suffix}"
+            description: "When unfilled (non-E) orders exceed Threshold, cancel unfilled orders down to Target so the generate max_unfilled gate can reopen. Orders whose shipment code starts with a prefix listed in Keep prefixes are never cancelled. Choose Oldest first (stale backlog) or Newest first (drop recent surge). Does not invent capacity — pairs with fill/reposition and fleet balance."
             runnable: true
             dispatch: cancel_orders
+            client:
+              hide_inline_params:
+                - threshold
+                - target
+                - order
+                - keep_prefixes
+              derived:
+                -
+                  key: keep_suffix
+                  from: keep_prefixes
+                  template: " (keep {value})"
             params:
               -
                 key: threshold
@@ -433,27 +517,33 @@ components:
                     label: Newest first
                 default: oldest_first
               -
-                key: keep_coke
-                label: Keep coke orders
-                type: select
-                options:
-                  -
-                    value: 1
-                    label: Yes
-                  -
-                    value: 0
-                    label: No
-                default: 1
+                key: keep_prefixes
+                label: Keep prefixes
+                type: text
+                default: ""
+                placeholder: "e.g. ABC-,XYZ-"
+                visible_label: true
           -
             id: drain_unfilled_orders
             category: operations
             adder: false
             adder_group: before
             label: Cancel Orders (legacy)
-            gui_template: "Cancel Orders when unfilled > {threshold} down to {target} ({order})"
+            gui_template: "Cancel Orders when unfilled > {threshold} down to {target} ({order}){keep_suffix}"
             description: Legacy recipe id for Cancel Orders. Prefer cancel_orders in the editor.
             runnable: true
             dispatch: cancel_orders
+            client:
+              hide_inline_params:
+                - threshold
+                - target
+                - order
+                - keep_prefixes
+              derived:
+                -
+                  key: keep_suffix
+                  from: keep_prefixes
+                  template: " (keep {value})"
             params:
               -
                 key: threshold
@@ -482,17 +572,12 @@ components:
                     label: Newest first
                 default: oldest_first
               -
-                key: keep_coke
-                label: Keep coke orders
-                type: select
-                options:
-                  -
-                    value: 1
-                    label: Yes
-                  -
-                    value: 0
-                    label: No
-                default: 1
+                key: keep_prefixes
+                label: Keep prefixes
+                type: text
+                default: ""
+                placeholder: "e.g. ABC-,XYZ-"
+                visible_label: true
           -
             id: fill_orders
             category: operations
@@ -1392,94 +1477,6 @@ components:
             runnable: false
             gui_path: /sts/printable_station_qr_code_report.php
             params: []
-          -
-            id: replenish_coke_orders
-            category: operations
-            adder: false
-            adder_group: before
-            label: Replenish Coke Orders
-            gui_template: "Replenish Coke Orders (target {target_min}–{target_max})"
-            description: "Count unfilled outbound coke orders (USS/CLEV singles and bulk). When below target minimum, generate single-car COKE-USS / COKE-CLEV orders alternating lanes until the minimum is met (capped at target maximum)."
-            runnable: true
-            dispatch: replenish_coke_orders
-            params:
-              -
-                key: target_min
-                label: Target minimum
-                type: number
-                default: 6
-                required: true
-                min: 1
-                step: 1
-                visible_label: true
-              -
-                key: target_max
-                label: Target maximum
-                type: number
-                default: 8
-                required: true
-                min: 1
-                step: 1
-                visible_label: true
-          -
-            id: track_scale
-            category: operations
-            adder: true
-            adder_group: during
-            label: Track Scale
-            gui_template: "Weigh Cars {job}{commodity_suffix}"
-            description: Weigh loaded cars on a job train (or at the scale) for the selected commodity. Uses track scale config when commodity is blank.
-            runnable: true
-            dispatch: track_scale
-            params:
-              -
-                key: job
-                label: Job
-                type: job
-                options_from: jobs
-                allow_custom: true
-                required: false
-                default: ""
-                visible_label: true
-              -
-                key: commodity
-                label: Commodity
-                type: commodity
-                options_from: commodities
-                allow_custom: true
-                required: false
-                default: ""
-                visible_label: true
-          -
-            id: calibrate_track_scale
-            category: operations
-            adder: true
-            adder_group: during
-            label: Calibrate Track Scale
-            gui_template: "Calibrate Track Scale (every {every_sessions} session[s])"
-            description: "Recalibrate the coke track scale. Performs a fresh random calibration when required (first use / out of service) or when the configured number of sessions have elapsed since the last calibration. Set to 1 to calibrate every session (steady ~15% reload routing); higher values let scale drift accumulate so more cars route to reload between calibrations. Run this before the Track Scale weigh step."
-            runnable: true
-            dispatch: calibrate_track_scale
-            params:
-              -
-                key: every_sessions
-                label: Calibrate every N sessions
-                type: number
-                default: 1
-                required: false
-                min: 1
-                step: 1
-                visible_label: true
-          -
-            id: track_scale_gui
-            category: operations
-            adder: false
-            label: Track Scale (STS GUI)
-            gui_template: Track Scale
-            description: "Weigh cars at track scale. GUI: track_scale.php."
-            runnable: false
-            gui_path: /sts/track_scale.php
-            params: []
         adder_functions:
           -
             id: cancel_orders
@@ -1487,10 +1484,21 @@ components:
             adder: true
             adder_group: before
             label: Cancel Orders
-            gui_template: "Cancel Orders when unfilled > {threshold} down to {target} ({order})"
-            description: "When unfilled (non-E) orders exceed Threshold, cancel unfilled orders down to Target so the generate max_unfilled gate can reopen. Keeps COKE-* orders by default. Choose Oldest first (stale backlog) or Newest first (drop recent surge). Does not invent capacity — pairs with fill/reposition and fleet balance."
+            gui_template: "Cancel Orders when unfilled > {threshold} down to {target} ({order}){keep_suffix}"
+            description: "When unfilled (non-E) orders exceed Threshold, cancel unfilled orders down to Target so the generate max_unfilled gate can reopen. Orders whose shipment code starts with a prefix listed in Keep prefixes are never cancelled. Choose Oldest first (stale backlog) or Newest first (drop recent surge). Does not invent capacity — pairs with fill/reposition and fleet balance."
             runnable: true
             dispatch: cancel_orders
+            client:
+              hide_inline_params:
+                - threshold
+                - target
+                - order
+                - keep_prefixes
+              derived:
+                -
+                  key: keep_suffix
+                  from: keep_prefixes
+                  template: " (keep {value})"
             params:
               -
                 key: threshold
@@ -1519,17 +1527,12 @@ components:
                     label: Newest first
                 default: oldest_first
               -
-                key: keep_coke
-                label: Keep coke orders
-                type: select
-                options:
-                  -
-                    value: 1
-                    label: Yes
-                  -
-                    value: 0
-                    label: No
-                default: 1
+                key: keep_prefixes
+                label: Keep prefixes
+                type: text
+                default: ""
+                placeholder: "e.g. ABC-,XYZ-"
+                visible_label: true
           -
             id: generate_orders
             category: operations
@@ -1537,7 +1540,7 @@ components:
             adder_group: before
             label: Generate Car Orders
             gui_template: "Generate Orders {shipment}"
-            description: "Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or check one or more Shipments for manual orders (multi-select). Leave unchecked for AUTOMATIC generation. Max unfilled orders skips generation entirely when the unfilled backlog is above the limit (hard gate). Max new orders/session is a soft cap: it still generates every session but stops after that many new orders, serving due shipments in random order and leaving the rest due for later — this spreads demand smoothly and avoids the burst-then-starve pattern a hard gate causes. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore."
+            description: "Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or check one or more Shipments for manual orders (multi-select). Leave unchecked for AUTOMATIC generation. Max unfilled orders skips generation entirely when the unfilled backlog is above the limit (hard gate). Max new orders/session is a soft cap: it still generates every session but stops after that many new orders, serving due shipments in random order and leaving the rest due for later — this spreads demand smoothly and avoids the burst-then-starve pattern a hard gate causes. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore. Exclude prefixes (CSV) keeps matching shipment codes out of the AUTOMATIC pool only — use when those lanes are served by explicit shipment steps or other gates; also configurable via settings.auto_gen_exclude_shipment_prefixes or env STS_AUTO_GEN_EXCLUDE_SHIPMENT_PREFIXES."
             runnable: true
             dispatch: generate_orders
             params:
@@ -1590,6 +1593,14 @@ components:
                 min: 0
                 step: 1
                 visible_label: true
+              -
+                key: exclude_prefixes
+                label: Exclude prefixes (automatic)
+                type: text
+                default: ""
+                required: false
+                visible_label: true
+                placeholder: "e.g. ABC-,XYZ-"
           -
             id: fill_orders
             category: operations
@@ -2018,55 +2029,6 @@ components:
                     empty_label: Any
                     summary_label: unloading
           -
-            id: track_scale
-            category: operations
-            adder: true
-            adder_group: during
-            label: Track Scale
-            gui_template: "Weigh Cars {job}{commodity_suffix}"
-            description: Weigh loaded cars on a job train (or at the scale) for the selected commodity. Uses track scale config when commodity is blank.
-            runnable: true
-            dispatch: track_scale
-            params:
-              -
-                key: job
-                label: Job
-                type: job
-                options_from: jobs
-                allow_custom: true
-                required: false
-                default: ""
-                visible_label: true
-              -
-                key: commodity
-                label: Commodity
-                type: commodity
-                options_from: commodities
-                allow_custom: true
-                required: false
-                default: ""
-                visible_label: true
-          -
-            id: calibrate_track_scale
-            category: operations
-            adder: true
-            adder_group: during
-            label: Calibrate Track Scale
-            gui_template: "Calibrate Track Scale (every {every_sessions} session[s])"
-            description: "Recalibrate the coke track scale. Performs a fresh random calibration when required (first use / out of service) or when the configured number of sessions have elapsed since the last calibration. Set to 1 to calibrate every session (steady ~15% reload routing); higher values let scale drift accumulate so more cars route to reload between calibrations. Run this before the Track Scale weigh step."
-            runnable: true
-            dispatch: calibrate_track_scale
-            params:
-              -
-                key: every_sessions
-                label: Calibrate every N sessions
-                type: number
-                default: 1
-                required: false
-                min: 1
-                step: 1
-                visible_label: true
-          -
             id: load_unload
             category: operations
             adder: true
@@ -2269,7 +2231,7 @@ components:
             adder_group: database
             label: Create Backup
             gui_template: "Create Backup {prefix}<session>"
-            description: "Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. Use a stable prefix (e.g. hart_session) so each session writes hart_session1, hart_session2, … Lock from the session overview for a static *_locked checkpoint."
+            description: "Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. HART recipe uses hart_session_pre (after orders/fill/waybills) and hart_session_post (end of session). Legacy hart_session{N} end dumps still work. Lock from the session overview freezes both pre + post to *_locked companions."
             runnable: true
             dispatch: backup_database
             gui_path: /sts/backup_db.php
@@ -2278,9 +2240,9 @@ components:
                 key: prefix
                 label: Backup prefix
                 type: text
-                default: hart_session
+                default: hart_session_post
                 required: true
-                placeholder: hart_session
+                placeholder: hart_session_post
                 visible_label: true
           -
             id: validate_database
@@ -2437,7 +2399,7 @@ components:
             adder_group: workflow
             label: If … then goto …
             gui_template: "If {variable} {operator} {value} then goto {section_label}"
-            description: "When the condition is true, skip forward to a later section. When false, continue to the next step. Variables match the Operations dashboard counts (session #, open/unfilled orders, unassigned, pickup/set-out pending, organize, scale, load/unload)."
+            description: "When the condition is true, skip forward to a later section. When false, continue to the next step. Variables match the Operations dashboard counts (session #, open/unfilled orders, unassigned, pickup/set-out pending, organize, scale, load/unload) plus this-run counters refreshed after each step: filled_this_run, generated_this_run, repositioned_this_run. For open_orders / unfilled_orders, optional Commodity, Shipment, Car code, Loading, Unloading, or Final destination filters narrow the count so gates can target a lane without hardcoding commodities in PHP. Modulo operators: % is true when (variable % N) equals remainder R (value \"N\" → R=0, every Nth session; \"N=R\" or \"N,R\" for other remainders); !% is the inverse — useful for rare lanes like reefers every 3–4 sessions."
             runnable: true
             dispatch: if_then
             params:
@@ -2458,6 +2420,8 @@ components:
                   - <=
                   - ">"
                   - ">="
+                  - "%"
+                  - "!%"
                 default: ">="
               -
                 key: value
@@ -2465,6 +2429,69 @@ components:
                 type: text
                 default: 1
                 required: true
+              -
+                key: commodity
+                label: Commodity filter
+                type: commodity
+                options_from: commodities
+                allow_custom: true
+                required: false
+                default: ""
+                visible_label: true
+                empty_label: Any
+                summary_label: commodity
+              -
+                key: shipment
+                label: Shipment filter
+                type: shipment
+                options_from: shipments
+                allow_custom: true
+                required: false
+                default: ""
+                visible_label: true
+                empty_label: Any
+                summary_label: shipment
+              -
+                key: car_code
+                label: Car code filter
+                type: car_code
+                options_from: car_codes
+                allow_custom: true
+                required: false
+                default: ""
+                visible_label: true
+                empty_label: Any
+                summary_label: car
+              -
+                key: loading_location
+                label: Loading filter
+                type: checkbox_dropdown
+                options_from: station_locations
+                required: false
+                default: ""
+                visible_label: true
+                empty_label: Any
+                summary_label: loading
+              -
+                key: unloading_location
+                label: Unloading filter
+                type: checkbox_dropdown
+                options_from: station_locations
+                required: false
+                default: ""
+                visible_label: true
+                empty_label: Any
+                summary_label: unloading
+              -
+                key: final_destination
+                label: Final dest. filter
+                type: checkbox_dropdown
+                options_from: station_locations
+                required: false
+                default: ""
+                visible_label: true
+                empty_label: Any
+                summary_label: dest
               -
                 key: section
                 label: Section
@@ -2582,7 +2609,7 @@ components:
               example: "Create Backup {prefix}<session>"
             description:
               type: string
-              example: "Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. Use a stable prefix (e.g. hart_session) so each session writes hart_session1, hart_session2, … Lock from the session overview for a static *_locked checkpoint."
+              example: "Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. HART recipe uses hart_session_pre (after orders/fill/waybills) and hart_session_post (end of session). Legacy hart_session{N} end dumps still work. Lock from the session overview freezes both pre + post to *_locked companions."
             params:
               type: array
               items:
@@ -2592,9 +2619,9 @@ components:
                   key: prefix
                   label: Backup prefix
                   type: text
-                  default: hart_session
+                  default: hart_session_post
                   required: true
-                  placeholder: hart_session
+                  placeholder: hart_session_post
                   visible_label: true
         validate_database:
           type: object
@@ -3000,7 +3027,7 @@ components:
               example: "If {variable} {operator} {value} then goto {section_label}"
             description:
               type: string
-              example: "When the condition is true, skip forward to a later section. When false, continue to the next step. Variables match the Operations dashboard counts (session #, open/unfilled orders, unassigned, pickup/set-out pending, organize, scale, load/unload)."
+              example: "When the condition is true, skip forward to a later section. When false, continue to the next step. Variables match the Operations dashboard counts (session #, open/unfilled orders, unassigned, pickup/set-out pending, organize, scale, load/unload) plus this-run counters refreshed after each step: filled_this_run, generated_this_run, repositioned_this_run. For open_orders / unfilled_orders, optional Commodity, Shipment, Car code, Loading, Unloading, or Final destination filters narrow the count so gates can target a lane without hardcoding commodities in PHP. Modulo operators: % is true when (variable % N) equals remainder R (value \"N\" → R=0, every Nth session; \"N=R\" or \"N,R\" for other remainders); !% is the inverse — useful for rare lanes like reefers every 3–4 sessions."
             params:
               type: array
               items:
@@ -3023,6 +3050,8 @@ components:
                     - <=
                     - ">"
                     - ">="
+                    - "%"
+                    - "!%"
                   default: ">="
                 -
                   key: value
@@ -3030,6 +3059,69 @@ components:
                   type: text
                   default: 1
                   required: true
+                -
+                  key: commodity
+                  label: Commodity filter
+                  type: commodity
+                  options_from: commodities
+                  allow_custom: true
+                  required: false
+                  default: ""
+                  visible_label: true
+                  empty_label: Any
+                  summary_label: commodity
+                -
+                  key: shipment
+                  label: Shipment filter
+                  type: shipment
+                  options_from: shipments
+                  allow_custom: true
+                  required: false
+                  default: ""
+                  visible_label: true
+                  empty_label: Any
+                  summary_label: shipment
+                -
+                  key: car_code
+                  label: Car code filter
+                  type: car_code
+                  options_from: car_codes
+                  allow_custom: true
+                  required: false
+                  default: ""
+                  visible_label: true
+                  empty_label: Any
+                  summary_label: car
+                -
+                  key: loading_location
+                  label: Loading filter
+                  type: checkbox_dropdown
+                  options_from: station_locations
+                  required: false
+                  default: ""
+                  visible_label: true
+                  empty_label: Any
+                  summary_label: loading
+                -
+                  key: unloading_location
+                  label: Unloading filter
+                  type: checkbox_dropdown
+                  options_from: station_locations
+                  required: false
+                  default: ""
+                  visible_label: true
+                  empty_label: Any
+                  summary_label: unloading
+                -
+                  key: final_destination
+                  label: Final dest. filter
+                  type: checkbox_dropdown
+                  options_from: station_locations
+                  required: false
+                  default: ""
+                  visible_label: true
+                  empty_label: Any
+                  summary_label: dest
                 -
                   key: section
                   label: Section
@@ -3103,7 +3195,7 @@ components:
               example: "Generate Orders {shipment}"
             description:
               type: string
-              example: "Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or check one or more Shipments for manual orders (multi-select). Leave unchecked for AUTOMATIC generation. Max unfilled orders skips generation entirely when the unfilled backlog is above the limit (hard gate). Max new orders/session is a soft cap: it still generates every session but stops after that many new orders, serving due shipments in random order and leaving the rest due for later — this spreads demand smoothly and avoids the burst-then-starve pattern a hard gate causes. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore."
+              example: "Auto-generate car orders for due shipments. Default matches generate.php AUTOMATIC (increment session + generate). Set Increment session=No to generate for the current session only. Or check one or more Shipments for manual orders (multi-select). Leave unchecked for AUTOMATIC generation. Max unfilled orders skips generation entirely when the unfilled backlog is above the limit (hard gate). Max new orders/session is a soft cap: it still generates every session but stops after that many new orders, serving due shipments in random order and leaving the rest due for later — this spreads demand smoothly and avoids the burst-then-starve pattern a hard gate causes. Optional Random seed (e.g. 42) reproduces the same due-shipment mix after each restore. Exclude prefixes (CSV) keeps matching shipment codes out of the AUTOMATIC pool only — use when those lanes are served by explicit shipment steps or other gates; also configurable via settings.auto_gen_exclude_shipment_prefixes or env STS_AUTO_GEN_EXCLUDE_SHIPMENT_PREFIXES."
             params:
               type: array
               items:
@@ -3158,6 +3250,14 @@ components:
                   min: 0
                   step: 1
                   visible_label: true
+                -
+                  key: exclude_prefixes
+                  label: Exclude prefixes (automatic)
+                  type: text
+                  default: ""
+                  required: false
+                  visible_label: true
+                  placeholder: "e.g. ABC-,XYZ-"
         increment_session:
           type: object
           required: [id, label, params]
@@ -3209,10 +3309,10 @@ components:
               example: cancel_orders
             gui_template:
               type: string
-              example: "Cancel Orders when unfilled > {threshold} down to {target} ({order})"
+              example: "Cancel Orders when unfilled > {threshold} down to {target} ({order}){keep_suffix}"
             description:
               type: string
-              example: "When unfilled (non-E) orders exceed Threshold, cancel unfilled orders down to Target so the generate max_unfilled gate can reopen. Keeps COKE-* orders by default. Choose Oldest first (stale backlog) or Newest first (drop recent surge). Does not invent capacity — pairs with fill/reposition and fleet balance."
+              example: "When unfilled (non-E) orders exceed Threshold, cancel unfilled orders down to Target so the generate max_unfilled gate can reopen. Orders whose shipment code starts with a prefix listed in Keep prefixes are never cancelled. Choose Oldest first (stale backlog) or Newest first (drop recent surge). Does not invent capacity — pairs with fill/reposition and fleet balance."
             params:
               type: array
               items:
@@ -3245,17 +3345,12 @@ components:
                       label: Newest first
                   default: oldest_first
                 -
-                  key: keep_coke
-                  label: Keep coke orders
-                  type: select
-                  options:
-                    -
-                      value: 1
-                      label: Yes
-                    -
-                      value: 0
-                      label: No
-                  default: 1
+                  key: keep_prefixes
+                  label: Keep prefixes
+                  type: text
+                  default: ""
+                  placeholder: "e.g. ABC-,XYZ-"
+                  visible_label: true
         drain_unfilled_orders:
           type: object
           required: [id, label, params]
@@ -3277,7 +3372,7 @@ components:
               example: cancel_orders
             gui_template:
               type: string
-              example: "Cancel Orders when unfilled > {threshold} down to {target} ({order})"
+              example: "Cancel Orders when unfilled > {threshold} down to {target} ({order}){keep_suffix}"
             description:
               type: string
               example: Legacy recipe id for Cancel Orders. Prefer cancel_orders in the editor.
@@ -3313,17 +3408,12 @@ components:
                       label: Newest first
                   default: oldest_first
                 -
-                  key: keep_coke
-                  label: Keep coke orders
-                  type: select
-                  options:
-                    -
-                      value: 1
-                      label: Yes
-                    -
-                      value: 0
-                      label: No
-                  default: 1
+                  key: keep_prefixes
+                  label: Keep prefixes
+                  type: text
+                  default: ""
+                  placeholder: "e.g. ABC-,XYZ-"
+                  visible_label: true
         fill_orders:
           type: object
           required: [id, label, params]
@@ -4749,168 +4839,6 @@ components:
             description:
               type: string
               example: Alternate printable station QR layout.
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example: []
-        replenish_coke_orders:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [replenish_coke_orders]
-            label:
-              type: string
-              example: Replenish Coke Orders
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: replenish_coke_orders
-            gui_template:
-              type: string
-              example: "Replenish Coke Orders (target {target_min}–{target_max})"
-            description:
-              type: string
-              example: "Count unfilled outbound coke orders (USS/CLEV singles and bulk). When below target minimum, generate single-car COKE-USS / COKE-CLEV orders alternating lanes until the minimum is met (capped at target maximum)."
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example:
-                -
-                  key: target_min
-                  label: Target minimum
-                  type: number
-                  default: 6
-                  required: true
-                  min: 1
-                  step: 1
-                  visible_label: true
-                -
-                  key: target_max
-                  label: Target maximum
-                  type: number
-                  default: 8
-                  required: true
-                  min: 1
-                  step: 1
-                  visible_label: true
-        track_scale:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [track_scale]
-            label:
-              type: string
-              example: Track Scale
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: track_scale
-            gui_template:
-              type: string
-              example: "Weigh Cars {job}{commodity_suffix}"
-            description:
-              type: string
-              example: Weigh loaded cars on a job train (or at the scale) for the selected commodity. Uses track scale config when commodity is blank.
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example:
-                -
-                  key: job
-                  label: Job
-                  type: job
-                  options_from: jobs
-                  allow_custom: true
-                  required: false
-                  default: ""
-                  visible_label: true
-                -
-                  key: commodity
-                  label: Commodity
-                  type: commodity
-                  options_from: commodities
-                  allow_custom: true
-                  required: false
-                  default: ""
-                  visible_label: true
-        calibrate_track_scale:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [calibrate_track_scale]
-            label:
-              type: string
-              example: Calibrate Track Scale
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: true
-            dispatch:
-              type: string
-              example: calibrate_track_scale
-            gui_template:
-              type: string
-              example: "Calibrate Track Scale (every {every_sessions} session[s])"
-            description:
-              type: string
-              example: "Recalibrate the coke track scale. Performs a fresh random calibration when required (first use / out of service) or when the configured number of sessions have elapsed since the last calibration. Set to 1 to calibrate every session (steady ~15% reload routing); higher values let scale drift accumulate so more cars route to reload between calibrations. Run this before the Track Scale weigh step."
-            params:
-              type: array
-              items:
-                $ref: "operational_steps_api.openapi.yaml#/components/schemas/CatalogParam"
-              example:
-                -
-                  key: every_sessions
-                  label: Calibrate every N sessions
-                  type: number
-                  default: 1
-                  required: false
-                  min: 1
-                  step: 1
-                  visible_label: true
-        track_scale_gui:
-          type: object
-          required: [id, label, params]
-          properties:
-            id:
-              type: string
-              enum: [track_scale_gui]
-            label:
-              type: string
-              example: Track Scale (STS GUI)
-            category:
-              type: string
-              example: operations
-            runnable:
-              type: boolean
-              example: false
-            gui_template:
-              type: string
-              example: Track Scale
-            description:
-              type: string
-              example: "Weigh cars at track scale. GUI: track_scale.php."
             params:
               type: array
               items:

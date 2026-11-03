@@ -1,0 +1,33 @@
+# Plugin boundary allowlist. "<path>" allows a whole file, "<path>:<token>"
+# allows lines containing that token (case-insensitive). Entries must shrink;
+# stale entries make the check fail.
+
+# Phase 2: move track_scale warm-start logic into the plugin.
+sts/warm_start_helpers.php
+# Phase 2: move track_scale stats into the plugin.
+sts/warm_start_session_stats.php
+# Phase 2: genericise HART job/station identifiers.
+sts/master_switchlist_helpers.php
+# Phase 2: genericise HART job names.
+sts/generate_master_switchlists.php
+# Phase 2: reword comment examples (CK1 table names).
+sts/restore_sql_helpers.php
+# Phase 2: reword comments / move HART report logic out of core.
+sts/session_helpers.php:CK1
+sts/session_helpers.php:D749
+sts/session_helpers.php:NVL
+sts/session_helpers.php:STG-DEMMLER
+sts/session_helpers.php:STG-SCULLY
+sts/session_helpers.php:Demmler
+# Phase 2: legacy function ids and phase-label examples.
+sts/operational_steps_catalog.php:Scully
+sts/operational_steps_catalog.php:Demmler
+sts/operational_steps_catalog.php:D749
+sts/operational_steps_catalog.php:CK1
+# Legacy key mapping; permanent.
+sts/operational_steps_catalog.php:keep_coke
+# Phase 2: reword comments.
+sts/job.php
+sts/so.php
+# Phase 2: reword plugin docs (names plugin ids).
+sts/RUNTIME.md

@@ -41,3 +41,7 @@ Temporary Items
 # These are one-off harnesses and must not be deployed with the app.
 # Finalized diagnostics live in the sts-docker-helpers repo (diagnostics/).
 sts/_*.php
+
+# Addons live in the sts-plugins repo; never commit a symlinked/mounted one here.
+sts/plugins/*
+!sts/plugins/README.md

@@ -21,6 +21,8 @@ services:
     volumes:
       - ../sts-docker-data/backups:/var/www/html/sts/backups
       - ../sts-docker-data/Rolling Stock photos:/var/www/html/sts/ImageStore/DB_Images/RollingStock/
+      # Addons (track_scale, coke_orders, ...) come from the sts-plugins repo.
+      - ../sts-plugins/plugins:/var/www/html/sts/plugins
     depends_on:
       db:
         condition: service_healthy

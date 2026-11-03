@@ -3,7 +3,7 @@
 /**
  * Run a catalog test workflow JSON through session_run_recipe (simulation dispatch).
  *
- * Usage: php run_catalog_workflow.php [workflow.json]
+ * Usage: php run_catalog_workflow.php [--seed=N] [workflow.json]   (env STS_SIM_SEED=N wins)
  */
 if (PHP_SAPI !== 'cli') {
     fwrite(STDERR, "CLI only\n");
@@ -11,6 +11,31 @@ if (PHP_SAPI !== 'cli') {
 }
 
 chdir(__DIR__);
+
+// Reproducible runs: STS_SIM_SEED (env, takes precedence) or --seed=N seeds the
+// global Mersenne Twister once, before the recipe runs. mt_srand also drives
+// rand()/shuffle(). Flag tells generate_orders not to re-randomise afterwards.
+$simSeed = getenv('STS_SIM_SEED');
+if ($simSeed === false || trim($simSeed) === '') {
+    $simSeed = null;
+    foreach ($argv as $i => $a) {
+        if (strpos($a, '--seed=') === 0) {
+            $simSeed = substr($a, 7);
+            unset($argv[$i]);
+        }
+    }
+    $argv = array_values($argv);
+} else {
+    $argv = array_values(array_filter($argv, static function ($a) {
+        return strpos($a, '--seed=') !== 0;
+    }));
+}
+if ($simSeed !== null && is_numeric(trim((string) $simSeed))) {
+    mt_srand((int) trim((string) $simSeed));
+    $GLOBALS['STS_SIM_SEED_ACTIVE'] = true;
+    fwrite(STDERR, 'STS_SIM_SEED: mt_srand(' . (int) trim((string) $simSeed) . ")\n");
+}
+
 require_once __DIR__ . '/open_db.php';
 require_once __DIR__ . '/session_helpers.php';
 require_once __DIR__ . '/operational_steps_catalog.php';

@@ -11,11 +11,11 @@ The Docker image copies all of `sts/` to `/var/www/html/sts/`. After `docker com
 | Simulator API | `simulator_api.php`, `session_simulator_helpers.php` |
 | Recipe runner | `session_helpers.php`, `session_run_recipe()` |
 | Dispatch | `operational_steps_dispatch_step()` in catalog |
-| Bootstrap | `session_runtime.php` → `plugins/plugins.php`, `warm_start_helpers.php`, `session_simulator_ops.php` |
+| Bootstrap | `session_runtime.php` → `plugin_registry.php`, `warm_start_helpers.php`, `session_simulator_ops.php` |
 | Orders | `generate_order_helpers.php`, `fill_order_helpers.php`, `drain_unfilled_orders.php` (Cancel Orders) |
-| Plugins | `plugins/plugins.php` — addon registry (operations buttons, catalog steps, dispatch) |
-| Track scale (addon) | `plugins/track_scale/` — GUI + workflow weigh/calibrate steps (`track_scale.php` stub at sts root) |
-| Coke orders (addon) | `plugins/coke_orders/` — outbound coke order replenishment catalog step |
+| Plugins | `plugin_registry.php` — discovers `plugins/*/plugin.php` and `STS_PLUGINS_DIR`; core calls only `plugins_*` helpers |
+| Track scale (addon) | `sts-plugins` repo, `plugins/track_scale/` (mounted at `sts/plugins/track_scale/`) — GUI + workflow weigh/calibrate steps, served via `plugin.php?id=track_scale&page=index`; ajax via `&page=ajax` |
+| Coke orders (addon) | `sts-plugins` repo, `plugins/coke_orders/` — outbound coke replenishment catalog step; maps legacy `keep_coke` to `keep_prefixes` |
 | Switch lists | `master_switchlist_helpers.php`, `generate_master_switchlists.php` |
 
 Recipe CSVs live on the **`sts-docker-data/backups`** bind mount (`backups/session_editor/`), not in the image.
