@@ -1,0 +1,11 @@
+{
+  "name": "sts-docker",
+  "owner": { "name": "lnevo" },
+  "plugins": [
+    {
+      "name": "sts",
+      "source": "./agent",
+      "description": "Operate and inspect an STS (Shipper-driven Traffic Simulator) railroad through its REST API v1: skill, MCP tools, inspector and operator agents."
+    }
+  ]
+}

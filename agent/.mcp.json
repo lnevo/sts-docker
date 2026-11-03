@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "sts-api": {
+      "command": "python3",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/servers/sts_api.py"]
+    }
+  }
+}
