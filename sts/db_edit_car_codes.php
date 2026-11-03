@@ -4,12 +4,6 @@
   // edits the selected row in the car code table if the Update button was clicked
   // it replaces only those items where a new value was submitted
 
-  // generate a javascript line to display the table name
-  print '<script>document.getElementById("table_name").innerHTML = "Car Codes";</script>';
-
-  // generate a javascript line to set the proper return link and text
-  print '<script>document.getElementById("return_link").innerHTML = "Return to Car Code Management page";</script>';
-  print '<script>document.getElementById("return_link").href = "db_list.php?tbl_name=car_codes";</script>';
 
   // get a database connection
   $dbc = open_db();
@@ -103,7 +97,7 @@
   print '<input name="obj_id" type="hidden" value="' . sts_html($row['id']) . '">';
 
   print
-    '<table>
+    '<table class="table table-sm table-bordered table-hover sts-table">
       <tr>
         <th>Property</th>
         <th>Current Value</th>
@@ -112,17 +106,17 @@
       <tr>
         <td>Car Code</td>
         <td>' . sts_html($row['code']) . '</td>
-        <td><input id="obj_name" name="obj_name" type="text"></td>
+        <td><input class="form-control form-control-sm" id="obj_name" name="obj_name" type="text"></td>
       </tr>
       <tr>
         <td>Description</td>
         <td>' . sts_html($row['description']) . '</td>
-        <td><input name="description" type="text"></td>
+        <td><input class="form-control form-control-sm" name="description" type="text"></td>
       </tr>
       <tr>
         <td>Remarks</td>
         <td>' . sts_html($row['remarks']) . '</td>
-        <td><input name="remarks" type="text"></td>
+        <td><input class="form-control form-control-sm" name="remarks" type="text"></td>
       </tr>
     </table>';
 

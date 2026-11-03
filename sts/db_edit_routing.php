@@ -4,12 +4,6 @@
   // edits the selected row in the stations and routing instructions table if the Update button was clicked
   // it replaces only those items where a new value was submitted
 
-  // generate a javascript line to display the table name
-  print '<script>document.getElementById("table_name").innerHTML = "Stations & Routing Instructions";</script>';
-
-  // generate a javascript line to set the proper return link and text
-  print '<script>document.getElementById("return_link").innerHTML = "Return to Stations & Routing Management page";</script>';
-  print '<script>document.getElementById("return_link").href = "db_list.php?tbl_name=routing";</script>';
 
   // get a database connection
   $dbc = open_db();
@@ -118,7 +112,7 @@
   print '<input name="obj_id" value="' . sts_html($row['id']) . '" type="hidden">';
 
   print
-    '<table>
+    '<table class="table table-sm table-bordered table-hover sts-table">
       <tr>
         <th>Property</th>
         <th>Current Value</th>
@@ -127,7 +121,7 @@
       <tr>
         <td>Station Name</td>
         <td>' . sts_html($row['station']) . '</td>
-        <td><input id="obj_name" name="obj_name" type="text"></td>
+        <td><input class="form-control form-control-sm" id="obj_name" name="obj_name" type="text"></td>
       </tr>
       <tr>
          <td>Default Set-Out Location</td>
@@ -137,12 +131,12 @@
       <tr>
        <td>Routing Instructions</td>
         <td>' . nl2br(sts_html($row['instructions'])) . '</td>
-        <td><textarea name="instructions" rows="5" cols="50"></textarea></td>
+        <td><textarea class="form-control form-control-sm" name="instructions" rows="5" cols="50"></textarea></td>
       </tr>
       <tr>
         <td>Sort Sequence</td>
         <td>' . sts_html($row['sort_seq']) . '</td>
-        <td><input id="sort_seq" name="sort_seq" type="text"></td>
+        <td><input class="form-control form-control-sm" id="sort_seq" name="sort_seq" type="text"></td>
       </tr>
     </table>';
 

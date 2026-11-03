@@ -7,10 +7,16 @@
 ?>
 <?php
 require_once 'page_chrome.php';
+$sts_headings = array(
+  'commodities' => 'Commodities', 'car_codes' => 'Car Codes', 'locations' => 'Locations',
+  'routing' => 'Stations and Routing Instructions', 'shipments' => 'Shipments', 'cars' => 'Cars',
+  'car_orders' => 'Car Orders', 'jobs' => 'Jobs'
+);
+$page_heading = isset($sts_headings[$tbl_name]) ? $sts_headings[$tbl_name] : '';
 sts_page_start(['title' => 'Database Management', 'icon' => 'bi-table', 'section' => 'data']);
 ?>
 <div class="sts-card">
-    <h3 id="table_name"></h3>
+    <h3 id="table_name"><?php echo htmlspecialchars($page_heading); ?></h3>
     <div id="instructions">
     To add a new item, fill in the input items and click on the <b>UPDATE</b> button.<br />
     To edit or remove an item, click on it's link<br /><br />
@@ -44,7 +50,7 @@ sts_page_start(['title' => 'Database Management', 'icon' => 'bi-table', 'section
       print '<input name="tbl_name" id="tbl_name" value="" type="hidden">';
 
       // generate the submit button
-      print '<div id="update"><input id="update_btn" name="update_btn" value="UPDATE" type="submit" class="btn btn-primary btn-sm"><br /><br /></div>';
+      print '<div id="update" class="mb-3"><input id="update_btn" name="update_btn" value="UPDATE" type="submit" class="btn btn-primary btn-sm"></div>';
 
       // build the appropriate HTML table
       switch($tbl_name)

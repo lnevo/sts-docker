@@ -4,12 +4,7 @@
   // edits the selected row in the location table if the Update button was clicked
   // it replaces only those items where a new value was submitted
 
-  // generate a javascript line to display the table name
-  print '<script>document.getElementById("table_name").innerHTML = "Locations";</script>';
   
-  // generate a javascript line to set the proper return link and text
-  print '<script>document.getElementById("return_link").innerHTML = "Return to Location Management page";</script>';
-  print '<script>document.getElementById("return_link").href = "db_list.php?tbl_name=locations";</script>';
 
   // get a database connection
   $dbc = open_db();
@@ -158,7 +153,7 @@
   print '<input id="obj_id" name="obj_id" value="' . sts_id(sts_get('obj_id')) . '" type="hidden">';
 
   print
-    '<table>
+    '<table class="table table-sm table-bordered table-hover sts-table">
       <tr>
         <th>Property</th>
         <th>Current Value</th>
@@ -167,7 +162,7 @@
       <tr>
         <td>Location Code</td>
         <td>' . sts_html($row['code']) . '</td>
-        <td><input id="obj_name" name="obj_name" type="text"></td>
+        <td><input class="form-control form-control-sm" id="obj_name" name="obj_name" type="text"></td>
       </tr>
       <tr>
         <td>Station</td>
@@ -177,22 +172,22 @@
       <tr>
         <td>Track</td>
         <td>' . sts_html($row['track']) . '</td>
-        <td><input name="track" type="text"></td>
+        <td><input class="form-control form-control-sm" name="track" type="text"></td>
       </tr>
       <tr>
         <td>Spot</td>
         <td>' . sts_html($row['spot']) . '</td>
-        <td><input name="spot" type="text"></td>
+        <td><input class="form-control form-control-sm" name="spot" type="text"></td>
       </tr>
       <tr>
         <td>Rpt Station</td>
         <td>' . sts_html($row['rpt_station']) . '</td>
-        <td><input name="rpt_station" type="text"></td>
+        <td><input class="form-control form-control-sm" name="rpt_station" type="text"></td>
       </tr>
       <tr>
         <td>Remarks</td>
         <td>' . sts_html($row['remarks']) . '</td>
-        <td><input name="remarks" type="text"></td>
+        <td><input class="form-control form-control-sm" name="remarks" type="text"></td>
       </tr>
       <tr>
         <td>Color</td>

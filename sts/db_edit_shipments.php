@@ -4,12 +4,7 @@
   // edits the selected row in the shipment table if the Update button was clicked
   // it replaces only those items where a new value was submitted
 
-  // generate a javascript line to display the table name
-  print '<script>document.getElementById("table_name").innerHTML = "Shipments";</script>';
   
-  // generate a javascript line to set the proper return link and text
-  print '<script>document.getElementById("return_link").innerHTML = "Return to Shipment Management page";</script>';
-  print '<script>document.getElementById("return_link").href = "db_list.php?tbl_name=shipments";</script>';
 
   // generate some javascript that will mark the shipment as being turned off by adding one million (1000000) to the last ship date
   print '<script>
@@ -322,7 +317,7 @@
   print '<input id="obj_id" name="obj_id" value="' . sts_id(sts_get('obj_id')) . '" type="hidden">';
 
   print
-    '<table>
+    '<table class="table table-sm table-bordered table-hover sts-table">
       <tr>
         <th>Property</th>
         <th>Current Value</th>
@@ -331,12 +326,12 @@
       <tr>
         <td>Shipment ID</td>
         <td>' . sts_html($row['code']) . '</td>
-        <td><input id="obj_name" name="obj_name" type="text"></td>
+        <td><input class="form-control form-control-sm" id="obj_name" name="obj_name" type="text"></td>
       </tr>
       <tr>
         <td>Description</td>
         <td>' . sts_html($row['description']) . '</td>
-        <td><input name="description" type="text"></td>
+        <td><input class="form-control form-control-sm" name="description" type="text"></td>
       </tr>
       <tr>
         <td>Commodity</td>
@@ -361,63 +356,63 @@
       <tr>
         <td>Last Ship Date</td>
         <td id="old_last_ship_date">' . sts_html($row['last_ship_date']) . '</td>
-        <td><input id="last_ship_date" name="last_ship_date" type="text"</td>
+        <td><input class="form-control form-control-sm" id="last_ship_date" name="last_ship_date" type="text"></td>
       </tr>
       <tr>
         <td>Min Interval</td>
         <td>' . sts_html($row['min_interval']) . '</td>
-        <td><input name="min_interval" type="text"></td>
+        <td><input class="form-control form-control-sm" name="min_interval" type="text"></td>
       </tr>
       <tr>
         <td>Max Interval</td>
         <td>' . sts_html($row['max_interval']) . '</td>
-        <td><input name="max_interval" type="text"></td>
+        <td><input class="form-control form-control-sm" name="max_interval" type="text"></td>
       </tr>
       <tr>
         <td>Min Amount</td>
         <td>' . sts_html($row['min_amount']) . '</td>
-        <td><input name="min_amount" type="text"></td>
+        <td><input class="form-control form-control-sm" name="min_amount" type="text"></td>
       </tr>
       <tr>
         <td>Max Amount</td>
         <td>' . sts_html($row['max_amount']) . '</td>
-        <td><input name="max_amount" type="text"></td>
+        <td><input class="form-control form-control-sm" name="max_amount" type="text"></td>
       </tr>
       <tr>
         <td>Special Instructions</td>
         <td>' . sts_html($row['special_instructions']) . '</td>
-        <td><input name="special_instructions" type="text"></td>
+        <td><input class="form-control form-control-sm" name="special_instructions" type="text"></td>
       </tr>
       <tr>
         <td>Remarks</td>
         <td>' . sts_html($row['remarks']) . '</td>
-        <td><input name="remarks" type="text"></td>
+        <td><input class="form-control form-control-sm" name="remarks" type="text"></td>
       </tr>
       <tr>
         <td>Shipment On/Off</td>
         <td id="ship_status" name="ship_status">' . $ship_status . '</td>
-        <td>ON <input id="ship_on" name="ship_on_off" type="radio" value="True" onchange="set_ship_on(); " '. $ship .'>
-            OFF <input id="ship_off" name="ship_on_off" type="radio" value="False" onchange="set_ship_off(); " ' . $no_ship . '>
+        <td>ON <input class="form-check-input" id="ship_on" name="ship_on_off" type="radio" value="True" onchange="set_ship_on(); " '. $ship .'>
+            OFF <input class="form-check-input" id="ship_off" name="ship_on_off" type="radio" value="False" onchange="set_ship_off(); " ' . $no_ship . '>
       </tr>
       <tr>
         <td>Min Load Time</td>
         <td>' . sts_html($row['min_load_time']) . '</td>
-        <td><input name="min_load_time" type="text"></td>
+        <td><input class="form-control form-control-sm" name="min_load_time" type="text"></td>
       </tr>
       <tr>
         <td>Max Load Time</td>
         <td>' . sts_html($row['max_load_time']) . '</td>
-        <td><input name="max_load_time" type="text"></td>
+        <td><input class="form-control form-control-sm" name="max_load_time" type="text"></td>
       </tr>
       <tr>
         <td>Min Unload Time</td>
         <td>' . sts_html($row['min_unload_time']) . '</td>
-        <td><input name="min_unload_time" type="text"></td>
+        <td><input class="form-control form-control-sm" name="min_unload_time" type="text"></td>
       </tr>
       <tr>
         <td>Max Unload Time</td>
         <td>' . sts_html($row['max_unload_time']) . '</td>
-        <td><input name="max_unload_time" type="text"></td>
+        <td><input class="form-control form-control-sm" name="max_unload_time" type="text"></td>
       </tr>
     </table>';
 
@@ -436,7 +431,7 @@
     print '<br />';
     print 'Prioritized Empty Car Search Locations - 
            Click <a href="' . $link . '">here</a> to modify the priorities<br /><br />';
-    print '<table>
+    print '<table class="table table-sm table-bordered table-hover sts-table">
            <tr>
            <th>Priority</th>
            <th>Location</th>

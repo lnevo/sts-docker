@@ -7,7 +7,6 @@
 
   // generate some javascript to display the table name, identify this table to the form, and set the update button's tab index
   print '<script>
-           document.getElementById("table_name").innerHTML = "Jobs";
            document.getElementById("tbl_name").value = "jobs";
            document.getElementById("update_btn").tabIndex = "3";
          </script>';
@@ -56,15 +55,15 @@
   $sql = 'select id, name, description from jobs order by name';
   $rs = mysqli_query($dbc, $sql);
 
-  print '<table>
-           <caption style="font: bold 15px Verdana, Arial, sans-serif; text-align:left;">Add New Job/Train</caption>
+  print '<table class="table table-sm table-bordered table-hover sts-table">
+           <caption class="sts-table-caption">Add New Job/Train</caption>
            <thead>
              <tr>
                 <th>Job Name</th><th>Description</th>
              </tr>           
              <tr>
-               <td><input id="name" name="name" type="text" tabindex="1"required></td>
-               <td><textarea name="description" rows="8" cols="128" tabindex="2"></textarea></td>
+               <td><input class="form-control form-control-sm" id="name" name="name" type="text" tabindex="1"required></td>
+               <td><textarea class="form-control form-control-sm" name="description" rows="8" cols="128" tabindex="2"></textarea></td>
              </tr>
              <tr>
                <td colspan="2" style="border:0px;">

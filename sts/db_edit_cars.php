@@ -4,12 +4,6 @@
   // edits the selected row in the car table if the Update button was clicked
   // it replaces only those items where a new value was submitted
 
-  // generate a javascript line to display the table name
-  print '<script>document.getElementById("table_name").innerHTML = "Cars";</script>';
-
-  // generate a javascript line to set the proper return link and text
-  print '<script>document.getElementById("return_link").innerHTML = "Return to Car Management page";</script>';
-  print '<script>document.getElementById("return_link").href = "db_list.php?tbl_name=cars";</script>';
 //print 'CWD: ' . getcwd() . '<br /><br />';
   // generate a QR code for this car
   require '../phpqrcode/qrlib.php';
@@ -291,11 +285,10 @@
   }
   
   // add big table so any graphical image will be on the right side of the page
-  print '<table>
-           <tr>
-             <td>';
+  print '<div class="d-flex flex-wrap gap-4">
+             <div>';
   print
-    '<table>
+    '<table class="table table-sm table-bordered table-hover sts-table">
       <tr>
         <th>Property</th>
         <th>Current Value</th>
@@ -305,7 +298,7 @@
         <td>Reporting marks</td>
         <td>' . sts_html($row['reporting_marks']) . '</td>
         <td>
-        <input id="reporting_marks" name="reporting_marks" type="text" tabindex="1" autofocus>
+        <input class="form-control form-control-sm" id="reporting_marks" name="reporting_marks" type="text" tabindex="1" autofocus>
           <input id="obj_name" name="obj_name" type="hidden" value="' . sts_html(sts_get('obj_name')) . '">
           <input id="obj_id" name="obj_id" type="hidden" value="' . sts_html(sts_get('obj_id')) . '">
         </td>
@@ -323,12 +316,12 @@
       <tr>
         <td>Position</td>
         <td>' . sts_html($row['position']) . '</td>
-        <td><input name="position" type="text" tabindex="4"></td>
+        <td><input class="form-control form-control-sm" name="position" type="text" tabindex="4"></td>
       </tr>
       <tr>
         <td>Status</td>
         <td>' . sts_html($row['status']) . '</td>
-        <td><select id="status" name="status"><option value=""></option><option value="Empty">Empty</option><option value="Unavailable">Unavailable</option></select></td>
+        <td><select class="form-select form-select-sm" id="status" name="status"><option value=""></option><option value="Empty">Empty</option><option value="Unavailable">Unavailable</option></select></td>
       </tr>
       <tr>
         <td>Handled By</td>
@@ -338,7 +331,7 @@
       <tr>
         <td>Remarks</td>
         <td>' . sts_html($row['remarks']) . '</td>
-        <td><input name="remarks" type="text" tabindex="7"></td>
+        <td><input class="form-control form-control-sm" name="remarks" type="text" tabindex="7"></td>
       </tr>
       <tr>
         <td>Home Location</td>
@@ -348,35 +341,35 @@
       <tr>
         <td>Load Count</td>
         <td>' . sts_html($row['load_count']) . '</td>
-        <td><input name="load_count" type="text" tabindex="9"></td>
+        <td><input class="form-control form-control-sm" name="load_count" type="text" tabindex="9"></td>
       </tr>
       <tr>
         <td>RFID code</td>
         <td>' . sts_html($row['RFID_code']) . '</td>
-        <td><input name="RFID_code" type="text" tabindex="10"></td>
+        <td><input class="form-control form-control-sm" name="RFID_code" type="text" tabindex="10"></td>
       </tr>
       <tr>
         <td>QR Code</td>
-        <td style="font: normal 10px Verdana, Arial, sans-serif; text-align: center;">
+        <td style="text-align: center;">
           <img src="./ImageStore/DB_Images/qrcodes/' . sts_html($obj_file) . '.png" style="vertical-align: middle">&nbsp;&nbsp;' . sts_html(sts_get('obj_id')) . '</td>
         <td></td>
       </tr>
       <tr>
         <td>Bar Code</td>
-        <td style="font: normal 10px Verdana, Arial, sans-serif; text-align: center">
+        <td style="text-align: center">
           <img src="' . $bar_file_name . '" style="vertical-align: middle"><br />' . sts_html(sts_get('obj_id')) . '</td>
         <td></td>
       </tr>
       <tr>
         <td>Last Spotted</td>
         <td>' . sts_html($row['last_spotted']) . '</td>
-        <td><input name="last_spotted" type="text" tabindex="11"></td>
+        <td><input class="form-control form-control-sm" name="last_spotted" type="text" tabindex="11"></td>
       </tr>
     </table>';
  
   // close the left hand box and start the right hand box 
-  print '</td>
-         <td>';
+  print '</div>
+         <div>';
 
   // image 1
   print '<div id="image1" name="image1">';
@@ -388,8 +381,8 @@
   print '<br />Rolling stock image or photo No. 1&nbsp;';
   if (file_exists($image_name1))
   {
-    print '<input type="button" value="IMPORT" disabled>&nbsp;
-           <a href="remove_img.php?obj_id=' . urlencode(sts_get('obj_id')) . '&obj_name=' . urlencode(sts_get('obj_name')) . '&image=1" target="_blank"><input type="button" value="REMOVE"></a><br /><br />';
+    print '<input class="btn btn-secondary btn-sm" type="button" value="IMPORT" disabled>&nbsp;
+           <a href="remove_img.php?obj_id=' . urlencode(sts_get('obj_id')) . '&obj_name=' . urlencode(sts_get('obj_name')) . '&image=1" target="_blank"><input class="btn btn-danger btn-sm" type="button" value="REMOVE"></a><br /><br />';
 
     // display the image
     $filemtime = filemtime($image_name1);
@@ -397,8 +390,8 @@
   }
   else
   {
-    print '<a href="import_img.php?obj_id=' . urlencode(sts_get('obj_id')) . '&obj_name=' . urlencode(sts_get('obj_name')) . '&image=1" target="_blank"><input type="button" value="IMPORT"></a>&nbsp;
-           <input type="button" value="REMOVE" disabled><br /><br />';
+    print '<a href="import_img.php?obj_id=' . urlencode(sts_get('obj_id')) . '&obj_name=' . urlencode(sts_get('obj_name')) . '&image=1" target="_blank"><input class="btn btn-secondary btn-sm" type="button" value="IMPORT"></a>&nbsp;
+           <input class="btn btn-danger btn-sm" type="button" value="REMOVE" disabled><br /><br />';
            
     print 'No image available';
   }
@@ -415,8 +408,8 @@
   print '<br />Rolling stock image or photo No. 2&nbsp;';
   if (file_exists($image_name2))
   {
-    print '<input type="button" value="IMPORT" disabled>&nbsp;
-           <a href="remove_img.php?obj_id=' . urlencode(sts_get('obj_id')) . '&obj_name=' . urlencode(sts_get('obj_name')) . '&image=2" target="_blank"><input type="button" value="REMOVE"></a><br /><br />';
+    print '<input class="btn btn-secondary btn-sm" type="button" value="IMPORT" disabled>&nbsp;
+           <a href="remove_img.php?obj_id=' . urlencode(sts_get('obj_id')) . '&obj_name=' . urlencode(sts_get('obj_name')) . '&image=2" target="_blank"><input class="btn btn-danger btn-sm" type="button" value="REMOVE"></a><br /><br />';
 
     // display the image
     $filemtime = filemtime($image_name2);
@@ -424,19 +417,18 @@
   }
   else
   {
-    print '<a href="import_img.php?obj_id=' . urlencode(sts_get('obj_id')) . '&obj_name=' . urlencode(sts_get('obj_name')) . '&image=2" target="_blank"><input type="button" value="IMPORT"></a>&nbsp;
-           <input type="button" value="REMOVE" disabled><br /><br />';
+    print '<a href="import_img.php?obj_id=' . urlencode(sts_get('obj_id')) . '&obj_name=' . urlencode(sts_get('obj_name')) . '&image=2" target="_blank"><input class="btn btn-secondary btn-sm" type="button" value="IMPORT"></a>&nbsp;
+           <input class="btn btn-danger btn-sm" type="button" value="REMOVE" disabled><br /><br />';
            
     print 'No image available';
   }
   // end of top photo
   print '</div>';
   // close the right hand column
-  print '</td>';
+  print '</div>';
   
   // close the big box
-  print '</tr>
-       </table>';
+  print '</div>';
 
   // display a status message
   print $sql_msg;

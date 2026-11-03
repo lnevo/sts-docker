@@ -4,12 +4,8 @@
   // edits the selected shipment's empty location search priorities
   // it replaces only those items where a new value was submitted
 
-  // generate a javascript line to display the table name
-  print '<script>document.getElementById("table_name").innerHTML = "Empty Car Location Search Priorities";</script>';
   
   // generate some javascript to set the proper return link and text
-  print '<script>document.getElementById("return_link").innerHTML = "Return to Shipment Management page";</script>';
-  print '<script>document.getElementById("return_link").href = "db_list.php?tbl_name=shipments";</script>';
   
   // get a database connection
   $dbc = open_db();
@@ -105,10 +101,10 @@
   print '<input id="prev_obj_name" name="prev_obj_name" value="' . sts_html($obj_name) . '" type="hidden">';
 
   // set up input fields for new entries to the table and the column headings
-  print '<table>
+  print '<table class="table table-sm table-bordered table-hover sts-table">
            <tr>
              <td style="text-align: center;">
-               <input name="new_priority" type="text" style="text-align: center; width: 50px;">
+               <input class="form-control form-control-sm" name="new_priority" type="text" style="text-align: center; width: 50px;">
              </td>
              <td>' . drop_down_locations('new_location', 2, '') . '</td>
            </tr>
@@ -139,7 +135,7 @@
     {
       print '<tr>
                <td style="text-align: center;">
-                 <input name="priority' . $row_count . '" type="text" value="' . sts_html($row['priority']) . '" style="text-align: center; width: 50px;">
+                 <input class="form-control form-control-sm" name="priority' . $row_count . '" type="text" value="' . sts_html($row['priority']) . '" style="text-align: center; width: 50px;">
                </td>
                <td>
                  <input name="location' . $row_count . '" type="hidden" value="' . sts_html($row['location_id']) . '">' . sts_html($row['location']) . '
