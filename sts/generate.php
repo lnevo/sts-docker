@@ -6,44 +6,10 @@
     <title>STS - Generate Car Orders</title>
     <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="operations_ui.css?v=2" rel="stylesheet">
+    <link href="operations_ui.css?v=3" rel="stylesheet">
     <script src="sorttable.js"></script>
-    <style>
-      tr {vertical-align: top;}
-      th, td { font-size: 0.875rem; padding: 6px 8px; white-space: nowrap; }
-      #ship_tbl th,
-      #ship_tbl td {
-        white-space: normal;
-        word-break: keep-all;
-        overflow-wrap: normal;
-        hyphens: none;
-      }
-      @media (max-width: 1024px) {
-        #ship_tbl th,
-        #ship_tbl td {
-          font-size: 0.8rem;
-          padding: 4px 6px;
-          line-height: 1.2;
-        }
-
-        /* Hide lower-priority numeric planning columns on tablet widths. */
-        #ship_tbl th:nth-child(8),
-        #ship_tbl td:nth-child(8),
-        #ship_tbl th:nth-child(9),
-        #ship_tbl td:nth-child(9),
-        #ship_tbl th:nth-child(10),
-        #ship_tbl td:nth-child(10),
-        #ship_tbl th:nth-child(11),
-        #ship_tbl td:nth-child(11),
-        #ship_tbl th:nth-child(12),
-        #ship_tbl td:nth-child(12) {
-          display: none;
-        }
-      }
-      @media print { .noprint {display:none;} }
-    </style>
   </head>
-  <body class="bg-light">
+  <body class="bg-light ops-steppage ops-page-generate">
     <?php
     require_once 'operations_nav.php';
     echo ops_render_navbar('generate.php', 'Generate Car Orders', 'bi-gear');
