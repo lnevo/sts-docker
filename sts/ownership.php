@@ -28,17 +28,11 @@ sts_page_start([
         }
         
         // dump the list of car id's, owner id's, and stored status values into the temporary table
-        for ($i = 0; $i < $_POST['row_count']; $i++)
+        for ($i = 0; $i < (int) sts_post('row_count'); $i++)
         {
           // check for empty values in the drop-down lists
-          if (empty($_POST['select' . $i]))
-          {
-            $selected_owner = 'NULL';
-          }
-          else
-          {
-            $selected_owner = $_POST['select' . $i];
-          }
+          // (0 means no owner and is stored as NULL)
+          $selected_owner = sts_id(sts_post('select' . $i));
           
           // check for empty values in the on_off_rr column
           if (empty($_POST['on_off_rr' . $i]))
@@ -47,11 +41,11 @@ sts_page_start([
           }
           else
           {
-            $on_off_rr = $_POST['on_off_rr' . $i];
+            $on_off_rr = sts_post('on_off_rr' . $i);
           }
           
-          $sql = 'insert into temp_ownership (car_id, owner_id, on_off_rr) values (' . $_POST['car_id' . $i] . ', ' . $selected_owner . ', "' . $on_off_rr . '")';
-          if (!$rtncd = mysqli_query($dbc, $sql))
+          $sql = 'insert into temp_ownership (car_id, owner_id, on_off_rr) values (?, nullif(?, 0), ?)';
+          if (!$rtncd = sts_q($dbc, $sql, array(sts_id(sts_post('car_id' . $i)), $selected_owner, $on_off_rr)))
           {
             print 'Unable to insert record into temporary table';
             print '</div>'; sts_page_end(); die();
@@ -136,7 +130,7 @@ sts_page_start([
           $parm_string = '\'\',\'' . $row['reporting_marks'] . '\'';
         }
         print '<tr>';
-        print '  <td onclick="show_image(' . $parm_string . ');">' . $row['reporting_marks'] . '<input type="hidden" id="car_id' . $row_count . '" name="car_id' . $row_count . '" value="' . $row['car_id'] . '"></td>';
+        print '  <td onclick="show_image(' . $parm_string . ');">' . sts_html($row['reporting_marks']) . '<input type="hidden" id="car_id' . $row_count . '" name="car_id' . $row_count . '" value="' . $row['car_id'] . '"></td>';
         print '  <td>';
         print '    <select id="select' . $row_count . '" name="select' . $row_count . '" class="form-select form-select-sm">';
         print '      <option value=""></option>';
@@ -144,15 +138,15 @@ sts_page_start([
         {
           if ($owners[$i][0] == $row['owners_id'])
           {
-            print '  <option value="' . $owners[$i][0] . '" selected>' . $owners[$i][1] . '</option>';
+            print '  <option value="' . sts_html($owners[$i][0]) . '" selected>' . sts_html($owners[$i][1]) . '</option>';
           }
           else
           {
-            print '  <option value="' . $owners[$i][0] . '">' . $owners[$i][1] . '</option>';
+            print '  <option value="' . sts_html($owners[$i][0]) . '">' . sts_html($owners[$i][1]) . '</option>';
           }
         }
         print '    </select>';
-        print '    <input type="hidden" id ="on_off_rr' . $row_count . '" name="on_off_rr' . $row_count . '" value="' . $row['on_off_rr'] . '">';
+        print '    <input type="hidden" id ="on_off_rr' . $row_count . '" name="on_off_rr' . $row_count . '" value="' . sts_html($row['on_off_rr']) . '">';
         print '  </td>';
         print '</tr>';
         $row_count++;

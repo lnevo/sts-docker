@@ -51,23 +51,23 @@ HTML,
       if (isset($_GET['fix_it_btn']))
       {
         // go through the incoming rows and fix the selected cars
-        for ($i=0; $i<$_GET['row_counter']; $i++)
+        for ($i=0; $i<(int) sts_get('row_counter'); $i++)
         {
-          print '<br />Fixing ' . $_GET['rm' . $i] . '...';
+          print '<br />Fixing ' . sts_html(sts_get('rm' . $i)) . '...';
           
           // set the orphan car's status to empty
-          $sql = 'update cars set status = "Empty" where id = "' . $_GET['car' . $i] . '"';
+          $sql = 'update cars set status = "Empty" where id = ?';
 //print 'SQL: ' . $sql . '<br />';
-          if (!mysqli_query($dbc, $sql))
+          if (!sts_q($dbc, $sql, array(sts_id(sts_get('car' . $i)))))
           {
             print 'Unable to update cars table<br />';
             print '</div>'; sts_page_end(); die();
           }
          
           // remove the car order
-          $sql = 'delete from car_orders where waybill_number = "' . $_GET['wb' . $i] . '"';
+          $sql = 'delete from car_orders where waybill_number = ?';
 //print 'SQL: ' . $sql . '<br />';
-          if (!mysqli_query($dbc, $sql))
+          if (!sts_q($dbc, $sql, array(sts_get('wb' . $i))))
           {
             print 'Unable to remove car order<br />';
             print '</div>'; sts_page_end(); die();

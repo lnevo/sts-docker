@@ -120,10 +120,10 @@
         // display the new operating session number
         print 'Auto-generating car orders for  Operating Session ' . $session_number . '...</br><br >';
 
-        $sql = 'update settings set setting_value = ' . $session_number . ' where setting_name = "session_nbr"';
-        if (!mysqli_query($dbc, $sql))
+        $sql = 'update settings set setting_value = ? where setting_name = "session_nbr"';
+        if (!sts_q($dbc, $sql, array($session_number)))
         {
-          print 'Setting not found - Error: [' . mysqli_error($dbc) . '] SQL: ' . $sql . '<br /><br />';
+          print 'Setting not found - Error: [' . sts_html(sts_err($dbc)) . '] SQL: ' . $sql . '<br /><br />';
         }
 
         $generated_order_count = run_automatic_car_order_generation($dbc, $session_number, 0);
@@ -151,10 +151,10 @@
         $previous_session = (int)$session_number;
         $session_number = $previous_session + 1;
 
-        $sql = 'update settings set setting_value = ' . $session_number . ' where setting_name = "session_nbr"';
-        if (!mysqli_query($dbc, $sql))
+        $sql = 'update settings set setting_value = ? where setting_name = "session_nbr"';
+        if (!sts_q($dbc, $sql, array($session_number)))
         {
-          print 'Setting not found - Error: [' . mysqli_error($dbc) . '] SQL: ' . $sql . '<br /><br />';
+          print 'Setting not found - Error: [' . sts_html(sts_err($dbc)) . '] SQL: ' . $sql . '<br /><br />';
         }
         else
         {
@@ -168,28 +168,32 @@
       {
         // initialize the waybill counter
         $manual_generated_count = 0;
-        $sql = 'select max(substr(waybill_number, 6, 2)) from car_orders where waybill_number like "' . str_pad($session_number, 3, '0', STR_PAD_LEFT) . '-M__"';
-        $rs = mysqli_query($dbc, $sql);
+        $sql = 'select max(substr(waybill_number, 6, 2)) from car_orders where waybill_number like ?';
+        $rs = sts_q($dbc, $sql, array(str_pad($session_number, 3, '0', STR_PAD_LEFT) . '-M__'));
         $row = mysqli_fetch_row($rs);
         $order_counter = $row[0];
 // print "Order counter: " . $order_counter . "<br />";
         // loop through the shipments and order cars for each one that was checkedmarked
-        for ($i=0; $i<$_POST['row_count']; $i++)
+        for ($i=0; $i<(int) sts_post('row_count'); $i++)
         {
           if (isset($_POST['select' . $i]))
           {
 // print 'Ordering cars for row ' . $i . '<br />';
 
             // get the things we need to create the waybills
-            $shipment_id = $_POST['id' . $i];
-            $min_amount = $_POST['min_amt' . $i];
-            $max_amount = $_POST['max_amt' . $i];
+            $shipment_id = sts_id(sts_post('id' . $i));
+            $min_amount = is_numeric(sts_post('min_amt' . $i)) ? sts_post('min_amt' . $i) + 0 : 0;
+            $max_amount = is_numeric(sts_post('max_amt' . $i)) ? sts_post('max_amt' . $i) + 0 : 0;
+            if ($shipment_id < 1)
+            {
+              continue;
+            }
 
             // store this session number as the new last ship date
-            $sql = 'update shipments set last_ship_date = ' . $session_number . ' where id = "' . $_POST['id' . $i] . '"';
-            if (!mysqli_query($dbc, $sql))
+            $sql = 'update shipments set last_ship_date = ? where id = ?';
+            if (!sts_q($dbc, $sql, array($session_number, $shipment_id)))
             {
-              print 'Update Error: [' . mysqli_error($dbc) . '] SQL: ' . $sql . '<br /><br />';
+              print 'Update Error: [' . sts_html(sts_err($dbc)) . '] SQL: ' . $sql . '<br /><br />';
               die();
             }
 
@@ -204,11 +208,11 @@
               // build the waybill number
               $wb_nbr = str_pad($session_number, 3, '0', STR_PAD_LEFT) . '-M' . str_pad($order_counter, 2, '0', STR_PAD_LEFT);
 // print 'Generating Waybill ' . $wb_nbr . '<br />';
-              $sql = 'insert into car_orders (waybill_number, shipment, car) values ("' . $wb_nbr . '", "' . $shipment_id . '", "0")';
+              $sql = 'insert into car_orders (waybill_number, shipment, car) values (?, ?, "0")';
 // print 'SQL: ' . $sql . '<br /.';
-              if (!mysqli_query($dbc, $sql))
+              if (!sts_q($dbc, $sql, array($wb_nbr, $shipment_id)))
               {
-                print 'Insert Error: [' . mysqli_error($dbc) . '] SQL: ' . $sql . '<br /><br />';
+                print 'Insert Error: [' . sts_html(sts_err($dbc)) . '] SQL: ' . $sql . '<br /><br />';
                 die();
               }
               $manual_generated_count++;
@@ -387,21 +391,21 @@
           print '<tr>
                    <td style="text-align:center;"><input type="checkbox" class="shipment-select" name="select' . $row_count . '" id="select' . $row_count . '"></td>
                    <td>' .
-                     $row['code'] . '<input type="hidden" name="id' . $row_count . '" id="id' . $row_count . '" value="' . $row['id'] . '">
+                     sts_html($row['code']) . '<input type="hidden" name="id' . $row_count . '" id="id' . $row_count . '" value="' . sts_html($row['id']) . '">
                    </td>
-                   <td>' . $row['description'] . '</td>
-                   <td>' . $row['commodity'] . '</td>
-                   <td style="text-align:center;">' . $row['car_code'] . '</td>
-                   <td><u>' . $row['loading_station'] . '</u><br />' . $row['loading_location'] . '</td>
-                   <td><u>' . $row['unloading_station'] . '</u><br />' . $row['unloading_location'] . '</td>
-                   <td style="text-align:center;">' . $row['last_ship_date'] . '</td>
-                   <td style="text-align:center;">' . $row['min_interval'] . '</td>
-                   <td style="text-align:center;">' . $row['max_interval'] . '</td>
+                   <td>' . sts_html($row['description']) . '</td>
+                   <td>' . sts_html($row['commodity']) . '</td>
+                   <td style="text-align:center;">' . sts_html($row['car_code']) . '</td>
+                   <td><u>' . sts_html($row['loading_station']) . '</u><br />' . sts_html($row['loading_location']) . '</td>
+                   <td><u>' . sts_html($row['unloading_station']) . '</u><br />' . sts_html($row['unloading_location']) . '</td>
+                   <td style="text-align:center;">' . sts_html($row['last_ship_date']) . '</td>
+                   <td style="text-align:center;">' . sts_html($row['min_interval']) . '</td>
+                   <td style="text-align:center;">' . sts_html($row['max_interval']) . '</td>
                    <td style="text-align:center;">' .
-                     $row['min_amount'] . '<input type="hidden" name="min_amt' . $row_count . '"id=min_amt' . $row_count . '" value="' . $row['min_amount'] . '">
+                     sts_html($row['min_amount']) . '<input type="hidden" name="min_amt' . $row_count . '"id=min_amt' . $row_count . '" value="' . sts_html($row['min_amount']) . '">
                    </td>
                    <td style="text-align:center;">' .
-                     $row['max_amount'] . '<input type="hidden" name="max_amt' . $row_count . '"id=max_amt' . $row_count . '" value="' . $row['max_amount'] . '"?
+                     sts_html($row['max_amount']) . '<input type="hidden" name="max_amt' . $row_count . '"id=max_amt' . $row_count . '" value="' . sts_html($row['max_amount']) . '"?
                    </td>
                  </tr>';
           $row_count++;
