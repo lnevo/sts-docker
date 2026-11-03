@@ -14,8 +14,7 @@ The Docker image copies all of `sts/` to `/var/www/html/sts/`. After `docker com
 | Bootstrap | `session_runtime.php` → `plugin_registry.php`, `warm_start_helpers.php`, `session_simulator_ops.php` |
 | Orders | `generate_order_helpers.php`, `fill_order_helpers.php`, `drain_unfilled_orders.php` (Cancel Orders) |
 | Plugins | `plugin_registry.php` — discovers `plugins/*/plugin.php` and `STS_PLUGINS_DIR`; core calls only `plugins_*` helpers |
-| Track scale (addon) | `sts-plugins` repo, `plugins/track_scale/` (mounted at `sts/plugins/track_scale/`) — GUI + workflow weigh/calibrate steps, served via `plugin.php?id=track_scale&page=index`; ajax via `&page=ajax` |
-| Coke orders (addon) | `sts-plugins` repo, `plugins/coke_orders/` — outbound coke replenishment catalog step; maps legacy `keep_coke` to `keep_prefixes` |
+| Addons | Optional addons from the sts-plugins repo (see its README); mounted at `sts/plugins/` and reached only through `plugins_*` helpers. Core runs with none installed. |
 | Switch lists | `master_switchlist_helpers.php`, `generate_master_switchlists.php` |
 
 Recipe CSVs live on the **`sts-docker-data/backups`** bind mount (`backups/session_editor/`), not in the image.

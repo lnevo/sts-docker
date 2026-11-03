@@ -4,5 +4,3 @@
 
 # Legacy key mapping; permanent.
 sts/operational_steps_catalog.php:keep_coke
-# Phase 2: reword plugin docs (names plugin ids).
-sts/RUNTIME.md

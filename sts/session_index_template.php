@@ -119,7 +119,7 @@ if ($wheel_report_href !== null) {
     ];
 }
 $overview_nav[] = [
-    'href' => '/sts/session-sitemap.html',
+    'href' => '/sts/session-sitemap.php',
     'label' => 'Site Map',
     'icon' => 'diagram-3',
     'right' => true,

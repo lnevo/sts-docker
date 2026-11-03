@@ -6466,7 +6466,7 @@ function session_station_report_render_html($session_nbr, array $data)
       <a class="btn btn-outline-light btn-sm" href="wheel_report.html" title="Wheel report"><i class="bi bi-arrow-left-right"></i> Wheel Report</a>
 <?php endif; ?>
       <button type="button" class="btn btn-outline-light btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
-      <a class="btn btn-outline-light btn-sm ms-auto" href="/sts/session-sitemap.html"><i class="bi bi-diagram-3"></i> Site Map</a>
+      <a class="btn btn-outline-light btn-sm ms-auto" href="/sts/session-sitemap.php"><i class="bi bi-diagram-3"></i> Site Map</a>
     </div>
   </div>
 </nav>
@@ -7677,7 +7677,7 @@ function session_wheel_report_render_html($session_nbr, array $data)
         <option value="<?= htmlspecialchars($job, ENT_QUOTES) ?>"><?= htmlspecialchars($job, ENT_QUOTES) ?></option>
 <?php endforeach; ?>
       </select>
-      <a class="btn btn-outline-light btn-sm" href="/sts/session-sitemap.html"><i class="bi bi-diagram-3"></i> Site Map</a>
+      <a class="btn btn-outline-light btn-sm" href="/sts/session-sitemap.php"><i class="bi bi-diagram-3"></i> Site Map</a>
     </div>
   </div>
 </nav>

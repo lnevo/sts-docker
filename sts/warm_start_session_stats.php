@@ -55,7 +55,7 @@ function warm_start_record_job_setout($dbc, $job_name, $location_id)
  * Snapshot the current session's counters (every bucket the scenario defines) plus
  * scenario columns derived from the named-stats deltas, append it to the log, and reset.
  */
-function warm_start_session_stats_commit($session, $label, ?array $stats_before = null)
+function warm_start_session_stats_commit($session, $label, ?array $stats_before = null, array $core_counts = [])
 {
     $s = warm_start_session_stats_current();
     $delta = $stats_before === null
@@ -68,6 +68,12 @@ function warm_start_session_stats_commit($session, $label, ?array $stats_before 
     ];
     foreach ($s as $key => $value) {
         $row[$key] = $value;
+    }
+    if ($core_counts) {
+        $row['core'] = [];
+        foreach (['generated', 'filled', 'repositioned', 'assigned', 'picked_up', 'set_out', 'load_unload'] as $key) {
+            $row['core'][$key] = (int) ($core_counts[$key] ?? 0);
+        }
     }
     $extra = plugins_scenario_call('stats_row_extra', [$delta], []);
     if (is_array($extra)) {
@@ -83,6 +89,28 @@ function warm_start_session_stats_commit($session, $label, ?array $stats_before 
     return $row;
 }
 
+/** Generic report used when the scenario supplies no 'stats_labels' (e.g. no plugin). */
+function warm_start_core_session_stats_labels()
+{
+    return [
+        [
+            'title' => 'Session activity',
+            'row_key' => 'core',
+            'rule' => 48,
+            'columns' => [
+                ['key' => 'generated', 'label' => 'Gen', 'width' => 4],
+                ['key' => 'filled', 'label' => 'Fill', 'width' => 4],
+                ['key' => 'repositioned', 'label' => 'Repo', 'width' => 4],
+                ['key' => 'assigned', 'label' => 'Asgn', 'width' => 4],
+                ['key' => 'picked_up', 'label' => 'Pick', 'width' => 4],
+                ['key' => 'set_out', 'label' => 'SOut', 'width' => 4],
+                ['key' => 'load_unload', 'label' => 'L/U', 'width' => 4],
+            ],
+            'note' => '  Gen=orders generated  Fill=orders filled  Repo=repositioned  Asgn=assigned  Pick/SOut=pickups/setouts  L/U=loads+unloads',
+        ],
+    ];
+}
+
 /**
  * Report sections from the scenario's 'stats_labels' callable. Each section:
  * title, row_key (key of the per-session array holding the columns, or null for
@@ -93,7 +121,7 @@ function warm_start_session_stats_commit($session, $label, ?array $stats_before 
  */
 function warm_start_session_stats_labels()
 {
-    $sections = plugins_scenario_call('stats_labels', [], []);
+    $sections = plugins_scenario_call('stats_labels', [], 'warm_start_core_session_stats_labels');
 
     return is_array($sections) ? $sections : [];
 }

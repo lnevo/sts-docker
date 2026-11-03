@@ -745,6 +745,7 @@ function warm_start_core_run_session_work(
     if ($session === null) {
         $session = warm_start_get_session($dbc);
     }
+    $generated = 0;
     $unfilled = warm_start_count_unfilled($dbc);
     $suffix = $label !== '' ? " ({$label})" : '';
 
@@ -779,7 +780,12 @@ function warm_start_core_run_session_work(
         warm_start_log("Session {$session}{$suffix}: staging deferred");
     }
 
-    $snapshot = warm_start_session_stats_commit($session, $label, $stats_before);
+    $snapshot = warm_start_session_stats_commit(
+        $session,
+        $label,
+        $stats_before,
+        array_merge($stats, ['generated' => (int) $generated])
+    );
 
     return array_merge($stats, [
         'staging' => $staging,

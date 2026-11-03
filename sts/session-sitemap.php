@@ -1,3 +1,17 @@
+<?php
+require_once __DIR__ . '/open_db.php';
+$dbc = open_db();
+$trains = [];
+$res = $dbc->query('SELECT name FROM jobs ORDER BY name');
+if ($res) {
+    while ($row = $res->fetch_assoc()) {
+        $trains[] = $row['name'];
+    }
+}
+$sample = $trains ? $trains[0] : 'JOB';
+$sampleEnc = rawurlencode($sample);
+function sm_h($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -210,10 +224,17 @@
             <span class="sitemap-subhead">Train view</span>
             <ul>
               <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/train_CK1.print_all_mobile.html">Train switch lists</a>
+                <a href="so.php" data-session-link="so.php?f=session_{n}/train_<?= $sampleEnc ?>.print_all_mobile.html">Train switch lists</a>
                 <span class="sitemap-path">train_JOB.print_all[_style].html — one train, every phase</span>
               </li>
               <li>Opened by clicking a train on the session overview</li>
+<?php if ($trains): ?>
+              <li>Trains in this database:
+<?php foreach ($trains as $t): ?>
+                <a href="so.php" data-session-link="so.php?f=session_{n}/train_<?= sm_h(rawurlencode($t)) ?>.print_all_mobile.html"><?= sm_h($t) ?></a>
+<?php endforeach; ?>
+              </li>
+<?php endif; ?>
               <li>Prev / next session follow the same train by name</li>
             </ul>
 
@@ -229,11 +250,11 @@
             <span class="sitemap-subhead">Train scope</span>
             <ul>
               <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/waybills/job_CK1.print_all.html">Train waybills</a>
+                <a href="so.php" data-session-link="so.php?f=session_{n}/waybills/job_<?= $sampleEnc ?>.print_all.html">Train waybills</a>
                 <span class="sitemap-path">waybills/job_JOB.print_all.html — links back to train switch lists</span>
               </li>
               <li>
-                <a href="so.php" data-session-link="so.php?f=session_{n}/waybills/job_CK1.index.html">Train waybill index</a>
+                <a href="so.php" data-session-link="so.php?f=session_{n}/waybills/job_<?= $sampleEnc ?>.index.html">Train waybill index</a>
               </li>
             </ul>
 
@@ -264,7 +285,7 @@
             <span class="sitemap-subhead">Typical path</span>
             <p style="margin-bottom:0.75rem;">
               <a href="session_overview.php" data-session-link="session_overview.php?session={n}">Session overview</a>
-              → click a train → <a href="so.php" data-session-link="so.php?f=session_{n}/train_CK1.print_all_mobile.html">train switch lists</a>
+              → click a train → <a href="so.php" data-session-link="so.php?f=session_{n}/train_<?= $sampleEnc ?>.print_all_mobile.html">train switch lists</a>
               → use the Train / Style dropdowns or the <strong>Waybills</strong> link (scope follows the selected train). Switch-list and waybill bundles cross-link to each other.
             </p>
             <span class="sitemap-subhead">Header links</span>
