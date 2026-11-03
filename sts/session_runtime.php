@@ -14,7 +14,7 @@ function session_runtime_bootstrap()
     }
     $bootstrapped = true;
 
-    $plugins = __DIR__ . '/plugins/plugins.php';
+    $plugins = __DIR__ . '/plugin_registry.php';
     if (is_readable($plugins)) {
         require_once $plugins;
         plugins_bootstrap_all();

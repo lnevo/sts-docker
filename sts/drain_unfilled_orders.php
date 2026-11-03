@@ -3,7 +3,7 @@
  * Cancel unfilled revenue orders so the generate max_unfilled gate can reopen.
  *
  * When unfilled (non-E) count exceeds threshold, cancel orders until count <=
- * target. Optional keep-coke. Order: oldest_first (ASC waybill) or newest_first.
+ * target. Optional keep_prefixes (shipment-code prefixes never cancelled). Order: oldest_first (ASC waybill) or newest_first.
  *
  * Backward-compatible aliases: drain_unfilled_orders* functions.
  */
@@ -22,7 +22,7 @@ function cancel_orders_count_unfilled($dbc)
  * @param array{
  *   threshold?:int|string,
  *   target?:int|string,
- *   keep_coke?:bool|string,
+ *   keep_prefixes?:list<string>|string,
  *   order?:string
  * } $opts
  * @return array{
@@ -38,11 +38,16 @@ function cancel_orders($dbc, array $opts = [])
         $target = $threshold;
     }
 
-    $keep_coke_raw = $opts['keep_coke'] ?? true;
-    if (is_string($keep_coke_raw)) {
-        $keep_coke = !in_array(strtolower(trim($keep_coke_raw)), ['0', 'no', 'false', ''], true);
-    } else {
-        $keep_coke = (bool) $keep_coke_raw;
+    $keep_raw = $opts['keep_prefixes'] ?? [];
+    if (is_string($keep_raw)) {
+        $keep_raw = explode(',', $keep_raw);
+    }
+    $keep_prefixes = [];
+    foreach ((array) $keep_raw as $prefix) {
+        $prefix = trim((string) $prefix);
+        if ($prefix !== '') {
+            $keep_prefixes[] = $prefix;
+        }
     }
 
     $order_raw = strtolower(trim((string) ($opts['order'] ?? 'oldest_first')));
@@ -80,14 +85,17 @@ function cancel_orders($dbc, array $opts = [])
         return $result;
     }
 
-    $coke_sql = $keep_coke ? ' AND s.code NOT LIKE "COKE-%"' : '';
+    $keep_sql = '';
+    foreach ($keep_prefixes as $prefix) {
+        $keep_sql .= ' AND s.code NOT LIKE "' . mysqli_real_escape_string($dbc, $prefix) . '%"';
+    }
 
     $sql = 'SELECT co.waybill_number
             FROM car_orders co
             INNER JOIN shipments s ON s.Id = co.shipment
             WHERE (co.car = "" OR co.car IS NULL OR co.car = "0")
               AND INSTR(co.waybill_number, "E") = 0'
-        . $coke_sql . '
+        . $keep_sql . '
             ORDER BY co.waybill_number ' . $sql_order . '
             LIMIT ' . (int) $need;
     $rs = mysqli_query($dbc, $sql);

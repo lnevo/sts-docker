@@ -18,7 +18,7 @@ require_once __DIR__ . '/generate_order_helpers.php';
 function warm_start_track_scale_available()
 {
     if (!function_exists('plugins_require_helper')) {
-        $plugins = __DIR__ . '/plugins/plugins.php';
+        $plugins = __DIR__ . '/plugin_registry.php';
         if (is_readable($plugins)) {
             require_once $plugins;
         }

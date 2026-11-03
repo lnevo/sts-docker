@@ -6,7 +6,7 @@
 require_once __DIR__ . '/session_runtime.php';
 session_runtime_bootstrap();
 require_once __DIR__ . '/operations_train_car_filters.php';
-require_once __DIR__ . '/plugins/plugins.php';
+require_once __DIR__ . '/plugin_registry.php';
 
 function operational_steps_catalog_categories()
 {
@@ -569,6 +569,28 @@ function operational_steps_normalize_csv_list($value)
         $out[] = $part;
     }
     return $out;
+}
+
+/**
+ * @param mixed $value Comma string or list of shipment-code prefixes.
+ * @return list<string> Trimmed, upper-cased, de-duplicated, non-empty.
+ */
+function operational_steps_keep_prefix_list($value)
+{
+    $items = is_array($value) ? $value : explode(',', (string) $value);
+    $out = [];
+    foreach ($items as $item) {
+        $item = strtoupper(trim((string) $item));
+        if ($item !== '' && !in_array($item, $out, true)) {
+            $out[] = $item;
+        }
+    }
+    return $out;
+}
+
+function operational_steps_normalize_keep_prefixes($value)
+{
+    return implode(',', operational_steps_keep_prefix_list($value));
 }
 
 function operational_steps_normalize_csv_list_string($value)
@@ -1948,7 +1970,7 @@ function operational_steps_catalog_definitions()
                     'default' => '',
                     'required' => false,
                     'visible_label' => true,
-                    'placeholder' => 'e.g. COKE-,BULK-',
+                    'placeholder' => 'e.g. ABC-,XYZ-',
                 ],
             ],
         ],
@@ -1971,10 +1993,16 @@ function operational_steps_catalog_definitions()
             'adder' => true,
             'adder_group' => 'before',
             'label' => 'Cancel Orders',
-            'gui_template' => 'Cancel Orders when unfilled > {threshold} down to {target} ({order})',
-            'description' => 'When unfilled (non-E) orders exceed Threshold, cancel unfilled orders down to Target so the generate max_unfilled gate can reopen. Keeps COKE-* orders by default. Choose Oldest first (stale backlog) or Newest first (drop recent surge). Does not invent capacity — pairs with fill/reposition and fleet balance.',
+            'gui_template' => 'Cancel Orders when unfilled > {threshold} down to {target} ({order}){keep_suffix}',
+            'description' => 'When unfilled (non-E) orders exceed Threshold, cancel unfilled orders down to Target so the generate max_unfilled gate can reopen. Orders whose shipment code starts with a prefix listed in Keep prefixes are never cancelled. Choose Oldest first (stale backlog) or Newest first (drop recent surge). Does not invent capacity — pairs with fill/reposition and fleet balance.',
             'runnable' => true,
             'dispatch' => 'cancel_orders',
+            'client' => [
+                'hide_inline_params' => ['threshold', 'target', 'order', 'keep_prefixes'],
+                'derived' => [
+                    ['key' => 'keep_suffix', 'from' => 'keep_prefixes', 'template' => ' (keep {value})'],
+                ],
+            ],
             'params' => [
                 ['key' => 'threshold', 'label' => 'Threshold', 'type' => 'number', 'default' => '40', 'required' => true, 'min' => 0],
                 ['key' => 'target', 'label' => 'Target', 'type' => 'number', 'default' => '30', 'required' => true, 'min' => 0],
@@ -1988,16 +2016,7 @@ function operational_steps_catalog_definitions()
                     ],
                     'default' => 'oldest_first',
                 ],
-                [
-                    'key' => 'keep_coke',
-                    'label' => 'Keep coke orders',
-                    'type' => 'select',
-                    'options' => [
-                        ['value' => '1', 'label' => 'Yes'],
-                        ['value' => '0', 'label' => 'No'],
-                    ],
-                    'default' => '1',
-                ],
+                ['key' => 'keep_prefixes', 'label' => 'Keep prefixes', 'type' => 'text', 'default' => '', 'placeholder' => 'e.g. ABC-,XYZ-', 'visible_label' => true],
             ],
         ],
         [
@@ -2006,10 +2025,16 @@ function operational_steps_catalog_definitions()
             'adder' => false,
             'adder_group' => 'before',
             'label' => 'Cancel Orders (legacy)',
-            'gui_template' => 'Cancel Orders when unfilled > {threshold} down to {target} ({order})',
+            'gui_template' => 'Cancel Orders when unfilled > {threshold} down to {target} ({order}){keep_suffix}',
             'description' => 'Legacy recipe id for Cancel Orders. Prefer cancel_orders in the editor.',
             'runnable' => true,
             'dispatch' => 'cancel_orders',
+            'client' => [
+                'hide_inline_params' => ['threshold', 'target', 'order', 'keep_prefixes'],
+                'derived' => [
+                    ['key' => 'keep_suffix', 'from' => 'keep_prefixes', 'template' => ' (keep {value})'],
+                ],
+            ],
             'params' => [
                 ['key' => 'threshold', 'label' => 'Threshold', 'type' => 'number', 'default' => '40', 'required' => true, 'min' => 0],
                 ['key' => 'target', 'label' => 'Target', 'type' => 'number', 'default' => '30', 'required' => true, 'min' => 0],
@@ -2023,16 +2048,7 @@ function operational_steps_catalog_definitions()
                     ],
                     'default' => 'oldest_first',
                 ],
-                [
-                    'key' => 'keep_coke',
-                    'label' => 'Keep coke orders',
-                    'type' => 'select',
-                    'options' => [
-                        ['value' => '1', 'label' => 'Yes'],
-                        ['value' => '0', 'label' => 'No'],
-                    ],
-                    'default' => '1',
-                ],
+                ['key' => 'keep_prefixes', 'label' => 'Keep prefixes', 'type' => 'text', 'default' => '', 'placeholder' => 'e.g. ABC-,XYZ-', 'visible_label' => true],
             ],
         ],
         [
@@ -2580,7 +2596,10 @@ function operational_steps_catalog_definitions()
         return $definitions;
     }
 
-    return array_merge($definitions, plugins_catalog_definitions());
+    $definitions = array_merge($definitions, plugins_catalog_definitions());
+    plugins_apply_param_overrides($definitions);
+
+    return $definitions;
 }
 
 function operational_steps_restore_backup($dbc, $backup_name, $default = null)
@@ -3015,6 +3034,57 @@ function operational_steps_normalize_goto_sections(array $recipe)
     return $recipe;
 }
 
+/**
+ * Apply a definition's declarative 'client' block (derived placeholders and
+ * plural tokens) to the label merge. Mirrors workflow-shared.js.
+ *
+ * @return string Template with plural tokens replaced.
+ */
+function operational_steps_apply_client_metadata(array $def, array $params, array &$merged, $template)
+{
+    $client = $def['client'] ?? null;
+    if (!is_array($client)) {
+        return $template;
+    }
+    foreach ((array) ($client['derived'] ?? []) as $rule) {
+        if (!is_array($rule) || empty($rule['key'])) {
+            continue;
+        }
+        $key = (string) $rule['key'];
+        $from = (string) ($rule['from'] ?? $key);
+        $value = trim((string) ($merged[$from] ?? $params[$from] ?? ''));
+        $out = '';
+        if ($value === '') {
+            $out = (string) ($rule['default'] ?? '');
+        } elseif (isset($rule['pattern']) && !preg_match('/' . str_replace('/', '\\/', (string) $rule['pattern']) . '/', $value)) {
+            $out = '';
+        } elseif (isset($rule['template'])) {
+            $out = str_replace('{value}', $value, (string) $rule['template']);
+        } else {
+            $out = $value;
+        }
+        $merged[$key] = $out;
+        if (substr($key, -7) === '_suffix') {
+            $merged['__verbatim'][$key] = true;
+        }
+    }
+    foreach ((array) ($client['plural'] ?? []) as $rule) {
+        if (!is_array($rule) || empty($rule['token']) || empty($rule['from'])) {
+            continue;
+        }
+        $from = (string) $rule['from'];
+        $n = (int) trim((string) ($merged[$from] ?? $params[$from] ?? ''));
+        $n = max((int) ($rule['min'] ?? 1), $n);
+        $merged[$from] = (string) $n;
+        $template = str_replace(
+            (string) $rule['token'],
+            $n === 1 ? (string) ($rule['one'] ?? '') : (string) ($rule['many'] ?? ''),
+            $template
+        );
+    }
+    return $template;
+}
+
 function operational_steps_compile_gui(array $def, array $params)
 {
     if (($def['id'] ?? '') === 'goto') {
@@ -3123,6 +3193,7 @@ function operational_steps_compile_gui(array $def, array $params)
         $merged['location_suffix'] = !empty($merged['location']) ? $merged['location'] : '';
     }
     plugins_apply_gui_label_merge($def, $params, $merged);
+    $template = operational_steps_apply_client_metadata($def, $params, $merged, $template);
     if (($def['id'] ?? '') === 'generate_switchlists') {
         $jobs = trim((string) ($params['jobs'] ?? 'all'));
         if ($jobs === '') {
@@ -3174,6 +3245,9 @@ function operational_steps_compile_gui(array $def, array $params)
         $key = $m[1];
         if (!isset($merged[$key]) || $merged[$key] === '') {
             return '';
+        }
+        if (!empty($merged['__verbatim'][$key])) {
+            return (string) $merged[$key];
         }
         return trim((string) $merged[$key]);
     }, $template);
@@ -3613,6 +3687,9 @@ function operational_steps_guess_function($instruction)
     }
     if (preg_match('/^If\s+/i', $s)) {
         return 'if_then';
+    }
+    if (preg_match('/^Skip Steps\b/i', $s)) {
+        return 'skip_steps';
     }
     if (stripos($s, 'Restore Database') !== false) {
         return 'restore_database';
@@ -4063,8 +4140,6 @@ function operational_steps_normalize_step(array $step)
         }
         $params['threshold'] = (string) $threshold;
         $params['target'] = (string) $target;
-        $keep = (string) ($params['keep_coke'] ?? '1');
-        $params['keep_coke'] = ($keep === '' || $keep === '1') ? '1' : '0';
         $order = strtolower(trim((string) ($params['order'] ?? 'oldest_first')));
         $params['order'] = in_array($order, ['newest_first', 'newest', 'desc', 'new'], true)
             ? 'newest_first'
@@ -4104,6 +4179,11 @@ function operational_steps_normalize_step(array $step)
         $params['info'] = trim((string) ($params['info'] ?? ''));
     }
     plugins_normalize_step_params($fid, $params);
+    if ($fid === 'cancel_orders' || $fid === 'drain_unfilled_orders') {
+        // After plugin hooks so any legacy-key mapping has already run.
+        $params['keep_prefixes'] = operational_steps_normalize_keep_prefixes($params['keep_prefixes'] ?? '');
+        unset($params['keep_coke']); // legacy key; plugins map it to keep_prefixes above
+    }
     if ($fid === 'set_out_cars') {
         $job = operational_steps_normalize_job_list_string($params['job'] ?? '');
         if ($job === '') {
@@ -4668,7 +4748,7 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
             require_once __DIR__ . '/drain_unfilled_orders.php';
             $threshold = max(0, (int) ($params['threshold'] ?? 40));
             $target = max(0, (int) ($params['target'] ?? 30));
-            $keep_coke = (($params['keep_coke'] ?? '1') === '' || (string) ($params['keep_coke'] ?? '1') === '1');
+            $keep_prefixes = operational_steps_keep_prefix_list($params['keep_prefixes'] ?? '');
             $order = strtolower(trim((string) ($params['order'] ?? 'oldest_first')));
             if (!in_array($order, ['newest_first', 'oldest_first'], true)) {
                 $order = in_array($order, ['newest', 'desc', 'new'], true) ? 'newest_first' : 'oldest_first';
@@ -4676,12 +4756,12 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
             $drain = cancel_orders($dbc, [
                 'threshold' => $threshold,
                 'target' => $target,
-                'keep_coke' => $keep_coke,
+                'keep_prefixes' => $keep_prefixes,
                 'order' => $order,
             ]);
             $result['threshold'] = $threshold;
             $result['target'] = $target;
-            $result['keep_coke'] = $keep_coke ? 1 : 0;
+            $result['keep_prefixes'] = $keep_prefixes;
             $result['order'] = (string) ($drain['order'] ?? $order);
             $result['unfilled_before'] = (int) ($drain['before'] ?? 0);
             $result['unfilled_after'] = (int) ($drain['after'] ?? 0);

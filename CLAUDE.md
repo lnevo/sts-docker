@@ -30,6 +30,13 @@ docker cp sts/some_file.php sts-docker-web-1:/var/www/html/sts/some_file.php
 
 # Copy everything modified since the last commit into the running container
 git diff --name-only | grep '^sts/' | xargs -I{} docker cp {} sts-docker-web-1:/var/www/html/{}
+
+# Throwaway sandbox stack (project sts-sandbox, port 8981) for parity runs;
+# never run sts-helpers simulation scripts against the live stack
+bin/sandbox_baseline.sh <label>
+
+# Plugin boundary lint (also run by .github/workflows/plugin-boundary.yml)
+bin/check_plugin_boundary.sh
 ```
 
 The app lives at `/var/www/html/sts/` inside the `sts-docker-web-1` container;
@@ -70,6 +77,14 @@ publishes the image via `publish-docker.yaml`.
   form fetches it and injects into `#report-content`. Do not create separate
   `printable_*` versions for new reports (legacy `printable_*.php` files still
   exist for older reports).
+- **Plugins:** addons live in the sibling repo `../sts-plugins` (under
+  `plugins/<id>/plugin.php`) and are bind-mounted onto `sts/plugins/` by
+  docker-compose; the image ships that directory empty. `sts/plugin_registry.php`
+  discovers `sts/plugins/*/plugin.php` plus the colon-separated `STS_PLUGINS_DIR`.
+  Plugin pages are served by `sts/plugin.php?id=<plugin>&page=<slug>`. Core (`sts/`
+  minus `sts/plugins/`) must not name a plugin or HART identifier and reaches
+  plugins only via `plugins_*` helpers; `bin/check_plugin_boundary.sh` enforces
+  this. Contract: `docs/plans/plugin-hook-contract.md`.
 - **REST API:** `sts/api/` (router in `index.php`, endpoints in
   `endpoints/wagon.php`) provides JSON endpoints mirroring `scan_car.php`,
   `scan_location.php`, `load_unload.php`, and `reposition.php`. No

@@ -576,12 +576,14 @@ function session_restart_operating_session($dbc, $session_nbr, $root = null, $ba
         $restored_session = (int) session_get_db_session($dbc);
     }
 
-    $ts = __DIR__ . '/plugins/track_scale/track_scale_helpers.php';
-    if (is_readable($ts)) {
-        require_once $ts;
-        if (function_exists('track_scale_reset_cached_weights')) {
-            track_scale_reset_cached_weights($dbc, true);
-        }
+    $plugin_registry = __DIR__ . '/plugin_registry.php';
+    if (is_readable($plugin_registry)) {
+        require_once $plugin_registry;
+        plugins_run_session_reset_hooks($dbc, [
+            'session_nbr' => $session_nbr,
+            'restored_session' => $restored_session,
+            'reason' => 'restart',
+        ]);
     }
 
     $removed = [];

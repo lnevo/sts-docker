@@ -965,12 +965,9 @@
           return;
         }
         if (step.function === 'if_then' || step.function === 'goto') return;
-        if (step.function === 'track_scale' && (p.key === 'job' || p.key === 'commodity' || p.key === 'min_reloads')) return;
-        if (step.function === 'calibrate_track_scale' && p.key === 'every_sessions') return;
-        if ((step.function === 'cancel_orders' || step.function === 'drain_unfilled_orders')
-          && (p.key === 'threshold' || p.key === 'target' || p.key === 'order' || p.key === 'keep_coke')) {
-          return;
-        }
+        // Declarative: definitions may list params that never echo inline.
+        const hideInline = this.catalogMap[step.function]?.client?.hide_inline_params;
+        if (Array.isArray(hideInline) && hideInline.includes(p.key)) return;
 
         const shown = this.formatParamDisplay(params[p.key], p);
         if (!shown || alreadyShown(shown)) return;
@@ -1091,7 +1088,7 @@
       (def?.params || []).forEach((p) => { paramByKey[p.key] = p; });
 
       // Prefer stable section_label when section id is blank/stale so the
-      // Goto dropdown shows the real target (e.g. After Coke Generate).
+      // Goto dropdown shows the real target (e.g. After Generate Orders).
       const sections = this.runSections || this.buildRunSections();
       const resolved = this.findSectionForGoto(sections, values);
       if (resolved) {
@@ -1729,19 +1726,30 @@
           const info = String(p.info || '').trim();
           p.info_suffix = info ? (' — ' + info) : '';
         }
-        if (step.function === 'track_scale') {
-          const job = String(p.job || '').trim();
-          p.job = job || 'train';
-          const commodity = String(p.commodity || '').trim();
-          p.commodity_suffix = commodity ? (' (' + commodity + ')') : '';
-          const min = String(p.min_reloads || '').trim();
-          p.min_reloads_suffix = (min !== '' && /^\d+$/.test(min)) ? (' (min reloads ' + min + ')') : '';
-        }
-        if (step.function === 'calibrate_track_scale') {
-          const every = Math.max(1, parseInt(p.every_sessions, 10) || 1);
-          p.every_sessions = String(every);
-          t = t.replace('session[s]', every === 1 ? 'session' : 'sessions');
-        }
+        // Declarative client metadata (mirrors operational_steps_apply_client_metadata in PHP).
+        const client = def.client || {};
+        (client.derived || []).forEach((rule) => {
+          if (!rule || !rule.key) return;
+          const from = rule.from || rule.key;
+          const value = String(p[from] == null ? '' : p[from]).trim();
+          let out;
+          if (value === '') {
+            out = rule.default != null ? String(rule.default) : '';
+          } else if (rule.pattern && !new RegExp(rule.pattern).test(value)) {
+            out = '';
+          } else if (rule.template != null) {
+            out = String(rule.template).split('{value}').join(value);
+          } else {
+            out = value;
+          }
+          p[rule.key] = out;
+        });
+        (client.plural || []).forEach((rule) => {
+          if (!rule || !rule.token || !rule.from) return;
+          const n = Math.max(parseInt(rule.min, 10) || 1, parseInt(p[rule.from], 10) || 0);
+          p[rule.from] = String(n);
+          t = t.replace(rule.token, n === 1 ? rule.one : rule.many);
+        });
         if (step.function === 'pick_up_cars') {
           t = t.replace('{location_suffix}', p.location ? p.location : '');
         }
@@ -1753,10 +1761,6 @@
           const pdef = (def.params || []).find((pp) => pp.key === k);
           return this.formatParamDisplay(p[k], pdef);
         }).replace(/\s+/g, ' ').trim();
-        if (step.function === 'cancel_orders' || step.function === 'drain_unfilled_orders') {
-          const keep = String(p.keep_coke != null ? p.keep_coke : '1').trim();
-          title += keep === '0' ? ' (cancel coke)' : ' (keep coke)';
-        }
       }
       if (!title && step.instruction) title = String(step.instruction).trim();
       if (!title && step.params?.label) title = String(step.params.label).trim();

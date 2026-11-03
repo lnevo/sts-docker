@@ -98,7 +98,7 @@ function generate_orders_scarce_pause_active($dbc)
 
 /**
  * Parse CSV / list of shipment-code prefixes excluded from AUTOMATIC generate.
- * Matching is case-insensitive prefix (e.g. "COKE-" excludes COKE-USS-BULK).
+ * Matching is case-insensitive prefix (e.g. a prefix such as ABC- excludes ABC-FOO).
  *
  * @param mixed $raw
  * @return list<string>
@@ -271,7 +271,8 @@ function generate_orders_run_automatic(
         }
     }
 
-    if ($applied_seed !== null) {
+    if ($applied_seed !== null && empty($GLOBALS['STS_SIM_SEED_ACTIVE'])) {
+        // (Skipped under a CLI-wide STS_SIM_SEED: re-randomising would break reproducibility.)
         // Avoid leaking seeded RNG state to later steps in the same request.
         mt_srand();
     }

@@ -291,8 +291,8 @@ function master_sw_car_destinations($dbc, $car_id)
     }
 
     // Empty/non-revenue waybills store the destination LOCATION id in car_orders.shipment
-    // (not a shipments.id). Joining shipments.id = that value remaps e.g. SHEN-COKE-SHIPPING
-    // (location 6) onto an unrelated revenue lane and shows Island industries by mistake.
+    // (not a shipments.id). Joining shipments.id = that value remaps a location-named
+    // shipment code (location 6) onto an unrelated revenue lane and shows Island industries by mistake.
     $is_empty_wb = isset($waybill[4]) && $waybill[4] === 'E';
     if ($is_empty_wb) {
         $rs = mysqli_query(
@@ -2303,7 +2303,7 @@ function master_sw_render_x2010($dbc, $job_name, array $sections, $output_path, 
     $table_name = (string) ($shell['meta']['table_name'] ?? $job_name);
     $train_no = trim(explode('|', $table_name)[0]);
     $logo_src = master_sw_x2010_logo_file($table_name);
-    $serial_base = random_int(1, 999999);
+    $serial_base = mt_rand(1, 999999);
 
     // Flatten every work-leg section's cars into one continuous consist, matching
     // the single-form layout of the original printable_switchlist_x2010.php.

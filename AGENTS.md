@@ -33,9 +33,11 @@ shapes): update the file header in `operational_steps_api.php`, the action table
 in `operational_steps_api.openapi.yaml`, and this section if paths move.
 
 **When you change catalog commands or params:** run
-`php sts/generate_operational_steps_openapi_catalog.php` (or
+`php sts/generate_operational_steps_openapi_catalog.php --core-only` (or
 `bin/run_catalog_tests.sh`) to refresh `operational_steps_catalog.openapi.generated.yaml`
 for Swagger. The live `GET ?action=catalog` response remains authoritative at runtime.
+The track-scale and coke plugins live in the sibling `sts-plugins` repo, not here,
+so the committed yaml is core-only; catalog test runs regenerate it core-only too.
 
 **Deploy:** Rebuild the web image after changing `sts/` (`docker compose --profile build up -d --build`). For live dev without rebuild, `sts-docker-helpers/bin/sync_operational_steps.sh` hot-copies `sts-docker/sts/` into the running container.
 

@@ -124,6 +124,16 @@ function catalog_test_matrix_sections($dbc = null)
                     ],
                     'description' => 'Test: Reposition Empty Cars',
                 ],
+                [
+                    'function' => 'cancel_orders',
+                    'params' => [
+                        'threshold' => '40',
+                        'target' => '30',
+                        'order' => 'oldest_first',
+                        'keep_prefixes' => 'ABC-',
+                    ],
+                    'description' => 'Test: Cancel Orders',
+                ],
             ],
         ],
         [
@@ -207,6 +217,21 @@ function catalog_test_matrix_sections($dbc = null)
             ],
         ],
         [
+            'label' => '[Reports]',
+            'steps' => [
+                [
+                    'function' => 'generate_station_report',
+                    'params' => ['info' => 'Test'],
+                    'description' => 'Test: Generate Station Report',
+                ],
+                [
+                    'function' => 'generate_wheel_report',
+                    'params' => ['info' => 'Test'],
+                    'description' => 'Test: Generate Wheel Report',
+                ],
+            ],
+        ],
+        [
             'label' => '[Database]',
             'steps' => [
                 [
@@ -263,6 +288,11 @@ function catalog_test_matrix_sections($dbc = null)
                         'value' => '0',
                     ],
                     'description' => 'Test: If … then goto',
+                ],
+                [
+                    'function' => 'skip_steps',
+                    'params' => ['steps' => '1-1'],
+                    'description' => 'Test: Skip Steps',
                 ],
             ],
         ],

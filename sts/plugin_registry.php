@@ -2,19 +2,43 @@
 /**
  * STS plugin registry.
  *
- * Each addon lives in plugins/<id>/plugin.php and returns a manifest array.
+ * Addons are discovered from sts/plugins/<id>/plugin.php and from every
+ * directory listed in the STS_PLUGINS_DIR environment variable (colon
+ * separated, each scanned as <dir>/<id>/plugin.php). The image ships none.
+ * Each addon's plugin.php returns a manifest array.
  * Stock pages call the plugins_* helpers below to merge buttons, stats, catalog
  * steps, and dispatch handlers without hardcoding feature-specific code.
  */
 
 function plugins_root_dir()
 {
-    return __DIR__;
+    return __DIR__ . '/plugins';
 }
 
 function plugins_sts_root_dir()
 {
-    return dirname(__DIR__);
+    return __DIR__;
+}
+
+/**
+ * Directories scanned for <dir>/<id>/plugin.php (deduplicated).
+ *
+ * @return list<string>
+ */
+function plugins_search_dirs()
+{
+    $dirs = [plugins_root_dir()];
+    $env = getenv('STS_PLUGINS_DIR');
+    if (is_string($env) && $env !== '') {
+        foreach (explode(':', $env) as $dir) {
+            $dir = rtrim(trim($dir), '/');
+            if ($dir !== '') {
+                $dirs[] = $dir;
+            }
+        }
+    }
+
+    return array_values(array_unique($dirs));
 }
 
 /**
@@ -28,14 +52,16 @@ function plugins_discover()
     }
 
     $cache = [];
-    foreach (glob(plugins_root_dir() . '/*/plugin.php') ?: [] as $path) {
-        $manifest = include $path;
-        if (!is_array($manifest) || empty($manifest['id'])) {
-            continue;
+    foreach (plugins_search_dirs() as $searchDir) {
+        foreach (glob($searchDir . '/*/plugin.php') ?: [] as $path) {
+            $manifest = include $path;
+            if (!is_array($manifest) || empty($manifest['id'])) {
+                continue;
+            }
+            $manifest['_dir'] = dirname($path);
+            $manifest['_path'] = $path;
+            $cache[(string) $manifest['id']] = $manifest;
         }
-        $manifest['_dir'] = dirname($path);
-        $manifest['_path'] = $path;
-        $cache[(string) $manifest['id']] = $manifest;
     }
     ksort($cache);
 
@@ -95,6 +121,14 @@ function plugins_require_helper($id)
 }
 
 /**
+ * URL of a plugin page served by plugin.php (see manifest 'pages').
+ */
+function plugins_page_url($id, $slug = 'index')
+{
+    return 'plugin.php?id=' . rawurlencode((string) $id) . '&page=' . rawurlencode((string) $slug);
+}
+
+/**
  * Render op-btn anchors for a placement CID (before|during|after).
  */
 function plugins_render_operations_buttons($cid, array $stats)
@@ -107,6 +141,9 @@ function plugins_render_operations_buttons($cid, array $stats)
         foreach ($manifest['operations_buttons'] ?? [] as $button) {
             if (($button['cid'] ?? '') !== $cid) {
                 continue;
+            }
+            if (isset($button['page']) && !isset($button['href'])) {
+                $button['href'] = plugins_page_url($manifest['id'], (string) $button['page']);
             }
             $buttons[] = $button;
         }
@@ -373,6 +410,59 @@ function plugins_apply_gui_label_merge(array $def, array $params, array &$merged
         if (is_callable($hook)) {
             // Call directly (not call_user_func) so by-reference params bind.
             $hook($params, $merged);
+        }
+    }
+}
+
+/**
+ * Run every plugin's session_reset_hooks (session restart / rewind).
+ *
+ * @param array $context session_nbr, restored_session, reason
+ */
+function plugins_run_session_reset_hooks($dbc, array $context)
+{
+    plugins_bootstrap_all();
+    foreach (plugins_discover() as $manifest) {
+        $hooks = $manifest['session_reset_hooks'] ?? [];
+        if (!is_array($hooks)) {
+            continue;
+        }
+        foreach ($hooks as $hook) {
+            if (is_callable($hook)) {
+                $hook($dbc, $context);
+            }
+        }
+    }
+}
+
+/**
+ * Merge manifest 'param_overrides' (fid => param_key => attrs) into catalog
+ * definitions. Only 'default' and 'placeholder' are honoured.
+ */
+function plugins_apply_param_overrides(array &$defs)
+{
+    plugins_bootstrap_all();
+    foreach (plugins_discover() as $manifest) {
+        $overrides = $manifest['param_overrides'] ?? [];
+        if (!is_array($overrides)) {
+            continue;
+        }
+        foreach ($defs as $i => $def) {
+            $fid = (string) ($def['id'] ?? '');
+            if ($fid === '' || !isset($overrides[$fid]) || !is_array($overrides[$fid]) || empty($def['params'])) {
+                continue;
+            }
+            foreach ($def['params'] as $j => $param) {
+                $attrs = $overrides[$fid][$param['key'] ?? ''] ?? null;
+                if (!is_array($attrs)) {
+                    continue;
+                }
+                foreach (['default', 'placeholder'] as $attr) {
+                    if (array_key_exists($attr, $attrs)) {
+                        $defs[$i]['params'][$j][$attr] = $attrs[$attr];
+                    }
+                }
+            }
         }
     }
 }
