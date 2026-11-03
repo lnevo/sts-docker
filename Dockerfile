@@ -60,6 +60,9 @@ RUN mkdir -p /var/www/html/sts/temp \
 # API token store / task spool (bind-mounted from sts-docker-data/config in compose)
 RUN mkdir -p /var/lib/sts && chown www-data:www-data /var/lib/sts && chmod 750 /var/lib/sts
 
+# mod_headers: X-Frame-Options / CSP frame-ancestors for /sts/ (docker/apache-sts-api.conf)
+RUN a2enmod headers
+
 # Route /sts/api/* to the API router (FallbackResource)
 COPY docker/apache-sts-api.conf /etc/apache2/conf-enabled/apache-sts-api.conf
 

@@ -224,9 +224,17 @@ try {
                     $mode = 'rerender';
                 }
             }
+            $respond_err = static function ($code, $msg) {
+                operational_steps_api_json(['ok' => false, 'error' => $msg], $code);
+            };
+            if ($mode !== 'rerender') {
+                $play = (int) ($body['session_count'] ?? 1) > 1 && (!isset($body['play_after']) || (bool) $body['play_after']);
+                sts_editor_precheck($recipe, (int) ($body['start_step'] ?? 0), $play ? 0 : (int) ($body['stop_step'] ?? 0), '', $respond_err);
+            }
             $dbc = open_db();
             $result = operational_steps_run_generator_web($dbc, [
                 'recipe' => $recipe,
+                'before_dispatch' => $GLOBALS['sts_before_dispatch'] ?? null,
                 'format' => $format,
                 'jobs' => $jobs,
                 'mode' => $mode,

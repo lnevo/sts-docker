@@ -35,7 +35,7 @@ route is not live yet; `GET /sts/api/v1/openapi.json` lists what is.
 (`STS_API_READ_OPEN=1`, or the policy flag `read_open`). Agents authenticate with
 a **bearer token**: `Authorization: Bearer sts_<40 hex>`, which the MCP server
 sends from `STS_API_TOKEN` or the file named by `STS_API_TOKEN_FILE`. The
-browser sign-in cookie (`sts_api`, from `POST /auth/login`, used by the editor
+browser sign-in cookie (`sts_api_<port>`, from `POST /auth/login`, used by the editor
 and `/sts/api_admin.php`) is for people; do not use it from tools.
 
 - operator: commands, car load/unload/reposition, advance session, run
@@ -52,7 +52,7 @@ and `/sts/api_admin.php`) is for people; do not use it from tools.
 ## Command policy
 
 The minimum role per catalog command is a policy, not a fixed list. Defaults:
-`restore_database`, `wipe_database`, `reset_session` need **admin**; every other
+`restore_database`, `wipe_database`, `reset_session`, `remove_backup` need **admin**; every other
 command (including `backup_database` and `restart_session`) needs **operator**.
 Admins change it on `/sts/api_admin.php` (Database Maintenance) or with
 `sts_policy`. With an admin token, `sts_policy get` (`GET /admin/policy`) shows
@@ -95,7 +95,7 @@ workflow (`sts_workflow_run`) runs a whole recipe as a task.
 3. `sts_workflow_run` checks each step again right before it runs and fails the
    task at the first step the role does not cover, naming the step. Skipped
    steps are never checked. The 202 result repeats `caller_role` and
-   `role_warnings`. Set `timeout_seconds` (1-86400) to cap a run; on expiry the
+   `role_warnings`. Set `timeout_seconds` (60-86400; admins may go down to 1) to cap a run; a run is refused up front (403) when a certain step needs a higher role than yours; on expiry the
    task is `failed`, "timed out after N seconds".
 4. Runs are exclusive: one at a time, and other writes get 409 meanwhile.
 

@@ -17,7 +17,7 @@ if (!defined('STS_API_BOOT')) {
 require_once __DIR__ . '/tokens.php';
 
 /** Commands that need admin unless the policy file lowers them. */
-const STS_API_POLICY_ADMIN_COMMANDS = ['restore_database', 'wipe_database', 'reset_session'];
+const STS_API_POLICY_ADMIN_COMMANDS = ['restore_database', 'wipe_database', 'reset_session', 'remove_backup'];
 
 /** Ids that rewrite the whole database: always run as exclusive tasks, whatever their role. */
 const STS_API_POLICY_EXCLUSIVE_COMMANDS = [
@@ -26,6 +26,9 @@ const STS_API_POLICY_EXCLUSIVE_COMMANDS = [
 ];
 
 const STS_API_POLICY_FLAGS = ['read_open', 'legacy_open', 'editor_open'];
+
+/** Backups matching these globs may only be overwritten by admins (policy key protected_backups). */
+const STS_API_POLICY_PROTECTED_DEFAULT = ['*seed*', '*_locked*'];
 
 function api_policy_path()
 {
@@ -36,11 +39,54 @@ function api_policy_path()
 function api_policy_read_raw()
 {
     $path = api_policy_path();
-    if (!is_readable($path)) {
+    if (!file_exists($path)) {
         return [];
     }
-    $data = json_decode((string) file_get_contents($path), true);
-    return is_array($data) ? $data : [];
+    $data = is_readable($path) ? json_decode((string) file_get_contents($path), true) : null;
+    if (!is_array($data)) {
+        // Unreadable or corrupt: command roles fail closed (see api_command_required_role).
+        $GLOBALS['api_policy_corrupt'] = true;
+        static $logged = false;
+        if (!$logged) {
+            $logged = true;
+            error_log('[sts] api policy file ' . $path . ' is unreadable or corrupt; all commands require admin until it is fixed');
+        }
+        return [];
+    }
+    return $data;
+}
+
+function api_policy_is_corrupt()
+{
+    api_policy_read_raw();
+    return !empty($GLOBALS['api_policy_corrupt']);
+}
+
+/** Effective protected-backup globs. */
+function api_policy_protected_backups()
+{
+    $raw = api_policy_read_raw()['protected_backups'] ?? null;
+    if (is_array($raw)) {
+        return array_values(array_filter($raw, 'is_string'));
+    }
+    return STS_API_POLICY_PROTECTED_DEFAULT;
+}
+
+/**
+ * Error text when $role may not write backup $name (it matches a protected
+ * pattern and already exists), else null. Admins and an unset role are never refused.
+ */
+function api_backup_write_error($name, $role, $exists)
+{
+    if ($role === null || $role === '' || (STS_API_ROLES[(string) $role] ?? 0) >= STS_API_ROLES['admin'] || !$exists) {
+        return null;
+    }
+    foreach (api_policy_protected_backups() as $pat) {
+        if (fnmatch($pat, (string) $name, FNM_CASEFOLD)) {
+            return "Backup '$name' is protected (matches '$pat'); only an admin may overwrite it";
+        }
+    }
+    return null;
 }
 
 function api_policy_default_role($id)
@@ -58,6 +104,9 @@ function api_policy_command_role_names()
 function api_command_required_role($id)
 {
     static $cache = null;
+    if (api_policy_is_corrupt()) {
+        return 'admin'; // fail closed
+    }
     if ($cache === null) {
         $roles = api_policy_read_raw()['command_roles'] ?? [];
         $cache = is_array($roles) ? $roles : [];
@@ -117,7 +166,7 @@ function api_policy_get(array $command_ids = null)
     foreach ($ids as $id) {
         $roles[$id] = api_command_required_role($id);
     }
-    $out = ['command_roles' => $roles];
+    $out = ['command_roles' => $roles, 'protected_backups' => api_policy_protected_backups()];
     $sources = [];
     foreach (STS_API_POLICY_FLAGS as $f) {
         $out[$f] = api_policy_flag($f);
@@ -129,6 +178,7 @@ function api_policy_get(array $command_ids = null)
         'read_open' => api_policy_flag_default('read_open'),
         'legacy_open' => api_policy_flag_default('legacy_open'),
         'editor_open' => false,
+        'protected_backups' => STS_API_POLICY_PROTECTED_DEFAULT,
     ];
     return $out;
 }
@@ -143,8 +193,8 @@ function api_policy_put(array $in, array $command_ids)
 {
     $errors = [];
     foreach (array_keys($in) as $k) {
-        if ($k !== 'command_roles' && !in_array($k, STS_API_POLICY_FLAGS, true)) {
-            $errors[] = "Unknown field '$k' (allowed: command_roles, " . implode(', ', STS_API_POLICY_FLAGS) . ')';
+        if ($k !== 'command_roles' && $k !== 'protected_backups' && !in_array($k, STS_API_POLICY_FLAGS, true)) {
+            $errors[] = "Unknown field '$k' (allowed: command_roles, protected_backups, " . implode(', ', STS_API_POLICY_FLAGS) . ')';
         }
     }
     $roles = null;
@@ -161,6 +211,19 @@ function api_policy_put(array $in, array $command_ids)
                     $errors[] = "Role for '$id' must be one of: " . implode(', ', api_policy_command_role_names());
                 } elseif ($role !== api_policy_default_role($id)) {
                     $roles[$id] = $role;
+                }
+            }
+        }
+    }
+    if (array_key_exists('protected_backups', $in) && $in['protected_backups'] !== null) {
+        $pb = $in['protected_backups'];
+        if (!is_array($pb) || count($pb) > 50 || ($pb && array_keys($pb) !== range(0, count($pb) - 1))) {
+            $errors[] = 'protected_backups must be a list of up to 50 glob patterns';
+        } else {
+            foreach ($pb as $pat) {
+                if (!is_string($pat) || !preg_match('/^[A-Za-z0-9_.*?-]{1,64}$/', $pat)) {
+                    $errors[] = "protected_backups pattern must be 1-64 characters of letters, digits, '_', '.', '-', '*', '?'";
+                    break;
                 }
             }
         }
@@ -189,6 +252,13 @@ function api_policy_put(array $in, array $command_ids)
             $cur = api_policy_read_raw();
             if ($roles !== null) {
                 $cur['command_roles'] = (object) $roles;
+            }
+            if (array_key_exists('protected_backups', $in)) {
+                if ($in['protected_backups'] === null) {
+                    unset($cur['protected_backups']);
+                } else {
+                    $cur['protected_backups'] = array_values($in['protected_backups']);
+                }
             }
             foreach (STS_API_POLICY_FLAGS as $f) {
                 if (array_key_exists($f, $in)) {

@@ -111,6 +111,16 @@
               ]
             }
           },
+          "protected_backups": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Glob patterns (default *seed*, *_locked*). Non-admin callers (commands, workflow steps) may not overwrite an existing backup whose name matches. null restores the default."
+          },
           "read_open": {
             "type": [
               "boolean",
@@ -134,6 +144,12 @@
       "Policy": {
         "type": "object",
         "properties": {
+          "protected_backups": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "command_roles": {
             "type": "object",
             "additionalProperties": {

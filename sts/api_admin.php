@@ -75,6 +75,10 @@ sts_page_start([
       <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="flag-read_open"><label class="form-check-label" for="flag-read_open">Reads need no token (read_open)</label></div>
       <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="flag-legacy_open"><label class="form-check-label" for="flag-legacy_open">Legacy wagon / RFID routes need no token (legacy_open)</label></div>
       <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" id="flag-editor_open"><label class="form-check-label" for="flag-editor_open">Workflow editor needs no sign-in (editor_open)</label></div>
+      <div class="mb-3">
+        <label class="form-label" for="protected-backups">Protected backups (comma-separated name patterns; only an admin may overwrite a backup that matches)</label>
+        <input class="form-control" type="text" id="protected-backups" placeholder="*seed*, *_locked*">
+      </div>
       <div class="table-responsive" style="max-height: 360px; overflow-y: auto;">
         <table class="table table-sm align-middle" id="policy-table">
           <thead><tr><th>Command</th><th>Minimum role</th></tr></thead>
@@ -225,6 +229,7 @@ sts_page_start([
     api('GET', '/admin/policy').then(function (j) {
       policy = j.data;
       ['read_open', 'legacy_open', 'editor_open'].forEach(function (f) { $('flag-' + f).checked = !!policy[f]; });
+      $('protected-backups').value = (policy.protected_backups || []).join(', ');
       var tb = $('policy-table').tBodies[0];
       tb.textContent = '';
       Object.keys(policy.command_roles).sort().forEach(function (id) {
@@ -247,7 +252,7 @@ sts_page_start([
   $('policy-save').addEventListener('click', function () {
     var roles = {};
     Array.prototype.forEach.call($('policy-table').querySelectorAll('select'), function (s) { roles[s.dataset.command] = s.value; });
-    var body = { command_roles: roles };
+    var body = { command_roles: roles, protected_backups: $('protected-backups').value.split(',').map(function (x) { return x.trim(); }).filter(Boolean) };
     ['read_open', 'legacy_open', 'editor_open'].forEach(function (f) { body[f] = $('flag-' + f).checked; });
     alertMsg('');
     api('PUT', '/admin/policy', body).then(function () { alertMsg('Policy saved.', 'success'); loadPolicy(); }, fail);

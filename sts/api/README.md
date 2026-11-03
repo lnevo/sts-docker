@@ -98,14 +98,15 @@ Environment (web service):
 ### Browser sign-in
 
 `POST /v1/auth/login {"token": "sts_..."}` checks the token and starts a
-server-side session. The browser gets the cookie `sts_api` (a random 64-hex
+server-side session. The browser gets the cookie `sts_api_<stack>` (named by `STS_STACK_NAME`, else the published port, e.g. `sts_api_8981`, so two stacks on one host do not share it; a random 64-hex
 session id; `HttpOnly; SameSite=Strict; Path=/sts/`, plus `Secure` over HTTPS).
 The token is never kept in the page. Sessions are files under
 `/var/lib/sts/sessions/` (named by the SHA-256 of the id) and expire after 12
-hours idle. Every request rechecks the session's token, so revoking it ends its
+hours idle and 7 days after login, whatever the activity. Logging in again replaces that
+browser's session id and leaves other sessions alone. Every request rechecks the session's token, so revoking it ends its
 sessions at once. `GET /v1/auth/me` returns `{name, role, source, expires_at}`
 (or 401); `POST /v1/auth/logout` ends the session. Failed logins are limited to
-10 a minute per client IP (429 with `Retry-After`). A bearer token, when sent,
+10 a minute per client IP (429 with `Retry-After`; the check and the record are one locked step, and the per-IP files are capped at 2000). A bearer token, when sent,
 takes precedence over the cookie. The Origin check covers cookie writes.
 
 PHP pages outside the router use the same auth:
@@ -122,14 +123,18 @@ api_command_required_role('backup_database');
 
 `/var/lib/sts/api_policy.json` holds `command_roles` (minimum role per catalog
 command id) and the flags `read_open`, `legacy_open`, `editor_open`. Defaults:
-`restore_database`, `wipe_database` and `reset_session` need `admin`; every
+`restore_database`, `wipe_database`, `reset_session` and `remove_backup` need `admin`; every
 other command needs `operator` (so `backup_database` and `restart_session`
 dropped from admin; they still run as exclusive tasks). Flags not in the file
 fall back to `STS_API_READ_OPEN`, `STS_API_LEGACY_OPEN` and `false`.
 `GET /v1/admin/policy` shows the effective values for every catalog command;
 `PUT /v1/admin/policy` (admin) takes any subset of the keys (unknown command ids
 or roles are 422; a flag of `null` returns to its default). Changes apply to the
-next request.
+next request. `protected_backups` (default `["*seed*", "*_locked*"]`, editable on the
+admin page) lists name patterns: a non-admin caller (command, workflow step) may not
+overwrite an existing backup that matches. If the policy file is unreadable or
+corrupt it is logged and every command needs `admin` until it is fixed (flags fall
+back to their defaults).
 
 ### Admin page
 
@@ -179,12 +184,12 @@ The workflow editor's remaining actions, on v1 (envelope responses; the legacy
 | `POST /sessions/{n}/rerender {style, force}` | operator | `rerender_session_style` |
 | `POST /sessions/{n}/print-all {style, job}` | operator | `build_print_all_style` |
 | `GET /simulator/status` | reader | simulator `status` |
-| `DELETE /sessions/output` | operator | clears the generated output directory; 409 while a task is queued or running |
+| `DELETE /sessions/output` | editor | clears the generated output directory under the exclusive maintenance lock; 409 while a task is queued or running |
 
 Literal paths such as `/workflows/compile` win over `/workflows/{name}` (the
 router tries patterns with fewer placeholders first). Rerender and print-all run
-synchronously. Tasks accept `timeout_seconds` (1-86400): the runner re-executes
-itself as a child and kills it on expiry; the task is `failed`, "timed out after
+synchronously. Tasks accept `timeout_seconds` (60-86400 for non-admins, 422 below; admins from 1): the runner re-executes
+itself as a child in its own process group and kills the group on expiry (the child's pid is recorded in the task; failing a running task as admin kills the group too); the task is `failed`, "timed out after
 N seconds". `GET /locations/{code}` also resolves plugin location aliases.
 
 `operational_steps_api.php`, `simulator_api.php` and `save_operational_steps.php`

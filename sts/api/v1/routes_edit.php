@@ -442,6 +442,9 @@ function edit_workflow_put(array $req)
     if (!isset($recipe['version'])) {
         $recipe['version'] = 1;
     }
+    if (strlen((string) $req['params']['name']) > 120) {
+        api_error(422, 'Workflow names are at most 120 characters', 'invalid');
+    }
     try {
         $file = operational_steps_sanitize_workflow_filename($req['params']['name']);
     } catch (InvalidArgumentException $e) {

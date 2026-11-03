@@ -41,6 +41,7 @@ function api_workflow_step_guard($role)
     api_operate_load();
     $catalog = operational_steps_catalog_by_id();
     return static function ($fid, $n) use ($role, $catalog) {
+        $GLOBALS['sts_caller_role'] = (string) $role; // read by backup_database (protected backups)
         $dispatch = (string) ($catalog[$fid]['dispatch'] ?? $fid);
         $need = 'operator';
         foreach (array_unique([(string) $fid, $dispatch]) as $id) {
@@ -128,6 +129,39 @@ function api_recipe_role_warnings(array $recipe, $role)
     return $out;
 }
 
+/**
+ * Pre-run check: a message naming the enabled, in-range, not-skipped,
+ * non-conditional steps that need a higher role than $role, or null when the
+ * run may start. Conditional steps (behind a goto or condition) are still
+ * checked when the run reaches them. $to 0 or null = to the end of the recipe.
+ */
+function api_workflow_precheck(array $recipe, $role, $from = 1, $to = 0, $skip = '')
+{
+    $total = count($recipe['steps'] ?? []);
+    $from = max(1, (int) $from);
+    $to = (int) $to > 0 ? min($total, (int) $to) : $total;
+    $skipped = [];
+    if (is_array($skip)) {
+        $skip = implode(',', $skip);
+    }
+    if (is_string($skip) && trim($skip) !== '') {
+        $skipped = array_flip(operational_steps_parse_step_ranges($skip));
+    }
+    $bad = [];
+    foreach (api_recipe_role_warnings($recipe, $role) as $w) {
+        if ($w['conditional'] || $w['step'] < $from || $w['step'] > $to || isset($skipped[$w['step']])) {
+            continue;
+        }
+        $bad[] = 'step ' . $w['step'] . ' (' . $w['command'] . ') needs ' . $w['required_role'];
+    }
+    if (!$bad) {
+        return null;
+    }
+    $who = ($role === '' || $role === null) ? 'none' : $role;
+    return "Run refused before it started: " . implode('; ', $bad)
+        . ". Sign in with a higher role, skip those steps, or change the command's role on /sts/api_admin.php (caller role '$who').";
+}
+
 function api_operate_load()
 {
     require_once dirname(__DIR__, 2) . '/operational_steps_catalog.php';
@@ -175,12 +209,15 @@ function api_operate_validate($command, $params)
  * Run one catalog command. Returns [dispatch result + session_nbr_before/after].
  * Throws RuntimeException on a dispatch error.
  */
-function api_operate_run_command($command, array $params, $seed = null)
+function api_operate_run_command($command, array $params, $seed = null, $role = null)
 {
     api_operate_load();
     if ($seed !== null && $seed !== '') {
         mt_srand((int) $seed);
         putenv('STS_SIM_SEED=' . (int) $seed);
+    }
+    if ($role !== null && $role !== '') {
+        $GLOBALS['sts_caller_role'] = (string) $role;
     }
     $dbc = api_db();
     $before = api_session_nbr();

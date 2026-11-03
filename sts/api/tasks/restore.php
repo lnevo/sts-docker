@@ -23,6 +23,22 @@ function api_task_kind_restore(array $spec, callable $log)
     chdir($sts);
     $dbc = open_db();
     mysqli_report(MYSQLI_REPORT_OFF);
+    // Keep other requests' open_db() migrations (and v1 requests) away while tables are dropped and recreated.
+    $marker_id = (string) ($GLOBALS['run_task_id'] ?? '');
+    if ($marker_id !== '') {
+        api_restore_marker_set($marker_id);
+    }
+    try {
+        return api_task_restore_body($spec, $log, $dbc, $sts, $dir, $name, $path);
+    } finally {
+        if ($marker_id !== '') {
+            api_restore_marker_clear($marker_id);
+        }
+    }
+}
+
+function api_task_restore_body(array $spec, callable $log, $dbc, $sts, $dir, $name, $path)
+{
     if (!array_key_exists('full', $spec) || !empty($spec['full'])) {
         $dropped = 0;
         mysqli_query($dbc, 'SET FOREIGN_KEY_CHECKS = 0');

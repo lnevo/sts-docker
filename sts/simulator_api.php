@@ -88,6 +88,9 @@ try {
             }
             session_simulator_maybe_save_recipe($session_dir, $body);
             $recipe = session_simulator_load_recipe($session_dir, $body);
+            sts_editor_precheck(operational_steps_normalize_recipe($recipe), (int) ($body['start_step'] ?? 0), (int) ($body['stop_step'] ?? 0), $body['skip_steps'] ?? '', static function ($code, $msg) {
+                simulator_api_json(['ok' => false, 'error' => $msg], $code);
+            });
             $dbc = open_db();
             $result = session_simulator_run($dbc, $recipe, [
                 'start_step' => (int) ($body['start_step'] ?? 0),
@@ -110,6 +113,12 @@ try {
             }
             session_simulator_maybe_save_recipe($session_dir, $body);
             $recipe = session_simulator_load_recipe($session_dir, $body);
+            $sec = operational_steps_find_workflow_section(operational_steps_normalize_recipe($recipe), $section_id, 0, $section_id);
+            if ($sec !== null) {
+                sts_editor_precheck(operational_steps_normalize_recipe($recipe), $sec['start'], $sec['stop'], $body['skip_steps'] ?? '', static function ($code, $msg) {
+                    simulator_api_json(['ok' => false, 'error' => $msg], $code);
+                });
+            }
             $dbc = open_db();
             $result = session_simulator_run_section($dbc, $recipe, $section_id, [
                 'start_step' => (int) ($body['start_step'] ?? 0),

@@ -5063,6 +5063,13 @@ function operational_steps_dispatch_step($dbc, array $step, array $config = [])
             if ($name === '') {
                 return ['skipped' => true, 'reason' => 'invalid backup name'];
             }
+            // Caller role set by an API guard (unset for the CLI and unguarded runs: unchanged).
+            if (!empty($GLOBALS['sts_caller_role']) && function_exists('api_backup_write_error')) {
+                $werr = api_backup_write_error($name, $GLOBALS['sts_caller_role'], is_file(operational_steps_backups_dir() . '/' . $name));
+                if ($werr !== null) {
+                    return ['error' => $werr, 'function' => $fid];
+                }
+            }
             $result['backup'] = $name;
             $result['path'] = warm_start_backup($dbc, $name);
             $photos = operational_steps_backup_rolling_stock_photos($name);
@@ -5354,6 +5361,13 @@ function operational_steps_run_recipe_steps($dbc, array $recipe, $from_step, $to
     $from = max(1, (int) $from_step);
     $to = min(count($steps), (int) $to_step);
     $log = [];
+    // Per-step guard (same contract as session_run_recipe): config['before_dispatch'],
+    // else the legacy editor global. Not passed on to the step handlers.
+    $before_dispatch = isset($config['before_dispatch']) && is_callable($config['before_dispatch'])
+        ? $config['before_dispatch']
+        : (isset($GLOBALS['sts_before_dispatch']) && is_callable($GLOBALS['sts_before_dispatch'])
+            ? $GLOBALS['sts_before_dispatch'] : null);
+    unset($config['before_dispatch']);
     for ($n = $from; $n <= $to; $n++) {
         $step = $steps[$n - 1] ?? null;
         if (!is_array($step)) {
@@ -5362,6 +5376,9 @@ function operational_steps_run_recipe_steps($dbc, array $recipe, $from_step, $to
         $fid = $step['function'] ?? '';
         if (in_array($fid, ['generate_switchlists', 'section_label', 'text_instruction', 'marker', 'stop', 'goto', 'if_then', 'generate_waybills', 'generate_station_report', 'generate_wheel_report'], true)) {
             continue;
+        }
+        if ($before_dispatch !== null) {
+            $before_dispatch($fid, $n, $step);
         }
         $log[] = array_merge(
             ['step' => $n],
@@ -5445,6 +5462,9 @@ function operational_steps_run_generator_web($dbc, array $options = [])
     $render_sessions = $options['render_sessions'] ?? [];
     $config = warm_start_merge_config($options['config'] ?? []);
     $config['session_root'] = session_web_root();
+    // Optional per-step guard; unset keeps the old behaviour (the legacy global fallback still applies).
+    $guard_opt = isset($options['before_dispatch']) && is_callable($options['before_dispatch'])
+        ? ['before_dispatch' => $options['before_dispatch']] : [];
     $indices = operational_steps_recipe_indices($recipe);
     $total_steps = count($recipe['steps'] ?? []);
 
@@ -5511,7 +5531,7 @@ function operational_steps_run_generator_web($dbc, array $options = [])
             $warnings[] = 'Cycle ' . ($cycle + 1) . ': steps ' . $from_step . '–' . $to_step . '.';
         }
 
-        $run_result = session_run_recipe($dbc, $recipe, [
+        $run_result = session_run_recipe($dbc, $recipe, $guard_opt + [
             'from_step' => $from_step,
             'to_step' => $to_step,
             'format' => $format,
@@ -5547,14 +5567,14 @@ function operational_steps_run_generator_web($dbc, array $options = [])
                     $recipe,
                     $play_start,
                     $session_end,
-                    $config
+                    $guard_opt ? ($config + $guard_opt) : $config
                 );
             } else {
                 $indices = operational_steps_recipe_indices($recipe);
                 $from = max(1, (int) ($indices['operating_start'] ?? ($to_step + 1)));
                 $to = (int) ($indices['session_end'] ?? count($recipe['steps'] ?? []));
                 if ($from <= $to) {
-                    $cycle_result['play'] = session_run_recipe($dbc, $recipe, [
+                    $cycle_result['play'] = session_run_recipe($dbc, $recipe, $guard_opt + [
                         'from_step' => $from,
                         'to_step' => $to,
                         'format' => $config['format'] ?? 'all',

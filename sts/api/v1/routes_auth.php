@@ -26,7 +26,8 @@ api_route('POST', '/auth/login', static function ($req) {
             api_error(422, "Unknown field '$k' (allowed: token)");
         }
     }
-    $wait = api_login_retry_after();
+    $slot = api_login_reserve();
+    $wait = $slot['wait'];
     if ($wait > 0) {
         header('Retry-After: ' . $wait);
         api_error(429, "Too many failed sign-in attempts; try again in $wait seconds", 'rate_limited');
@@ -43,9 +44,9 @@ api_route('POST', '/auth/login', static function ($req) {
         }
     }
     if ($principal === null) {
-        api_login_record_failure();
         api_error(401, 'Invalid or revoked token');
     }
+    api_login_release($slot['ts']);
     try {
         $s = api_session_create($principal, api_token_hash($token));
     } catch (RuntimeException $e) {

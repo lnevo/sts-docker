@@ -42,6 +42,13 @@ function admin_opt_int(array $body, $key, $min, $max)
     return $v;
 }
 
+/** timeout_seconds: admins any value from 1; other roles at least 60 (up to 86400). */
+function admin_timeout(array $body, $user)
+{
+    $min = api_role_allows($user, 'admin') ? 1 : 60;
+    return admin_opt_int($body, 'timeout_seconds', $min, 86400);
+}
+
 function admin_opt_bool(array $body, $key)
 {
     if (!array_key_exists($key, $body) || $body[$key] === null) {
@@ -220,7 +227,7 @@ api_route('POST', '/workflows/{name}/run', static function ($req) {
     }
     $render = admin_opt_bool($body, 'render');
     $spec = admin_compact([
-        'timeout_seconds' => admin_opt_int($body, 'timeout_seconds', 1, 86400),
+        'timeout_seconds' => admin_timeout($body, $req['user']),
         'workflow' => $file,
         'creator_role' => $req['user']['role'] ?? null,
         'seed' => admin_opt_int($body, 'seed', 0, 2147483647),
@@ -230,8 +237,13 @@ api_route('POST', '/workflows/{name}/run', static function ($req) {
         'session_count' => admin_opt_int($body, 'session_count', 1, 50),
         'render' => $render,
     ]);
-    $rec = api_task_create('workflow_run', $spec, $req['user'], ['exclusive' => true]);
     $role = $req['user']['role'] ?? null;
+    // Refuse before anything runs when a certain (non-conditional) step needs more than the caller has.
+    $refuse = api_workflow_precheck($recipe, $role, $start ?? 1, $stop ?? 0, $skip_steps);
+    if ($refuse !== null) {
+        api_error(403, $refuse);
+    }
+    $rec = api_task_create('workflow_run', $spec, $req['user'], ['exclusive' => true]);
     api_ok([
         'task_id' => $rec['id'], 'status' => $rec['status'], 'kind' => $rec['kind'],
         'caller_role' => $role,

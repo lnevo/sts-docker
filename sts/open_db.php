@@ -89,6 +89,14 @@
       die('Connection to sts_user database failed: ' . mysqli_connect_error());
     }
 
+    // A restore task owns the schema while its marker file exists (and is fresh):
+    // skip the migrations below so they cannot create tables between its DROP and CREATE.
+    $restore_marker = rtrim(getenv('STS_API_DATA_DIR') ?: '/var/lib/sts', '/') . '/restore_in_progress';
+    if (file_exists($restore_marker) && time() - (int) @filemtime($restore_marker) < 1800)
+    {
+      return $dbc;
+    }
+
     /*----------------------- make database adjustment here if necessary ----------------------------------------------*/
 
     // create the owners table if it doesn't exist

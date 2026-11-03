@@ -472,6 +472,9 @@ function read_load_catalog()
 
 function read_workflow_name_file($name)
 {
+    if (strlen((string) $name) > 120) {
+        api_error(422, 'Workflow names are at most 120 characters', 'invalid');
+    }
     read_load_catalog();
     $dir = operational_steps_editor_dir();
     try {

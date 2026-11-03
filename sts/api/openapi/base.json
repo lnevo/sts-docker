@@ -20,8 +20,8 @@
       "cookieAuth": {
         "type": "apiKey",
         "in": "cookie",
-        "name": "sts_api",
-        "description": "Browser session cookie set by POST /auth/login (HttpOnly, SameSite=Strict, Path=/sts/, 12 hour idle timeout). It stands in for a bearer token; the underlying token is rechecked on every request."
+        "name": "sts_api_<stack>",
+        "description": "Browser session cookie set by POST /auth/login (HttpOnly, SameSite=Strict, Path=/sts/, 12 hour idle timeout, 7 day absolute limit; the cookie name carries the stack, e.g. sts_api_8981, so two stacks on one host do not overwrite each other). It stands in for a bearer token; the underlying token is rechecked on every request."
       }
     },
     "schemas": {

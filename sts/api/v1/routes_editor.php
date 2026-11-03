@@ -39,6 +39,9 @@ function editor_body_workflow_file(array $body)
     if ($requested !== null && !is_string($requested)) {
         api_error(422, 'workflow_file must be a string');
     }
+    if (strlen((string) $requested) > 120) {
+        api_error(422, 'Workflow names are at most 120 characters', 'invalid');
+    }
     try {
         return operational_steps_active_workflow(operational_steps_editor_dir(), $requested);
     } catch (InvalidArgumentException $e) {
@@ -129,6 +132,9 @@ api_route('PUT', '/workflows/active', static function ($req) {
     if ($file === '') {
         api_error(422, 'Missing workflow_file');
     }
+    if (strlen($file) > 120) {
+        api_error(422, 'Workflow names are at most 120 characters', 'invalid');
+    }
     try {
         $file = operational_steps_set_active_workflow(operational_steps_editor_dir(), $file);
     } catch (InvalidArgumentException $e) {
@@ -217,6 +223,9 @@ api_route('POST', '/sessions/{n}/print-all', static function ($req) {
 
 api_route('DELETE', '/sessions/output', static function ($req) {
     read_session_helpers();
+    // Exclusive maintenance lock for the whole delete: waits for in-flight writes
+    // and keeps new ones out until the request ends.
+    $GLOBALS['api_maint_fh'] = api_tasks_lock_open('.maint.lock', LOCK_EX);
     $busy = array_merge(api_task_list(['status' => 'running']), api_task_list(['status' => 'queued']));
     if ($busy) {
         api_error(409, 'Task ' . $busy[0]['id'] . ' (' . $busy[0]['kind'] . ') is ' . $busy[0]['status'] . '; wait for it to finish');
@@ -236,7 +245,7 @@ api_route('DELETE', '/sessions/output', static function ($req) {
         }
     }
     return ['removed' => $removed, 'count' => count($removed)];
-}, 'operator', ['summary' => 'Delete all generated switch-list output (session directories)']);
+}, 'editor', ['summary' => 'Delete all generated switch-list output (session directories)', 'maint' => 'self']);
 
 api_route('GET', '/simulator/status', static function ($req) {
     require_once dirname(__DIR__, 2) . '/session_simulator_helpers.php';

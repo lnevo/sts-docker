@@ -52,11 +52,13 @@ function operate_command(array $req)
     if ($async) {
         require_once dirname(__DIR__) . '/lib/tasks.php';
         $timeout = $body['timeout_seconds'] ?? null;
-        if ($timeout !== null && (!is_int($timeout) || $timeout < 1 || $timeout > 86400)) {
-            api_error(422, 'timeout_seconds must be an integer between 1 and 86400');
+        $tmin = api_role_allows($req['user'], 'admin') ? 1 : 60;
+        if ($timeout !== null && (!is_int($timeout) || $timeout < $tmin || $timeout > 86400)) {
+            api_error(422, "timeout_seconds must be an integer between $tmin and 86400");
         }
         $task = api_task_create('command', array_filter([
             'command' => $command, 'params' => $params, 'seed' => $seed, 'timeout_seconds' => $timeout,
+            'creator_role' => $req['user']['role'] ?? null,
         ], static function ($v) {
             return $v !== null;
         }) + ['seed' => $seed], $req['user'], ['exclusive' => $destructive]);
@@ -64,7 +66,7 @@ function operate_command(array $req)
     }
 
     try {
-        $result = api_operate_run_command($command, $params, $seed);
+        $result = api_operate_run_command($command, $params, $seed, $req['user']['role'] ?? null);
     } catch (RuntimeException $e) {
         api_error(422, $e->getMessage());
     }

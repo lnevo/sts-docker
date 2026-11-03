@@ -388,7 +388,7 @@ def t_simulator_status(args):
 
 
 def t_clear_output(args):
-    return call("DELETE", "/sessions/output", role="operator")
+    return call("DELETE", "/sessions/output", role="editor")
 
 
 def t_task_fail(args):

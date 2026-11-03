@@ -509,7 +509,7 @@
     "/sessions/output": {
       "delete": {
         "summary": "Delete generated switch-list output",
-        "description": "Role: operator. Removes every session output directory under the generated-output root (what the helpers clean between runs). 409 while any task is queued or running.",
+        "description": "Role: editor. Takes the exclusive maintenance lock while deleting. Removes every session output directory under the generated-output root (what the helpers clean between runs). 409 while any task is queued or running.",
         "x-sts-role": "operator",
         "security": [
           {
