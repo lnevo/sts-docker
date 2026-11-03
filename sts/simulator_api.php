@@ -3,6 +3,7 @@
  * HTTP API for session workflow simulator.
  * GET  ?action=run_options|status
  * POST ?action=run|run_section|status
+ * Role lock (editor_open=false, the default): run and run_section need operator (editor with save_recipe).
  */
 
 error_reporting(E_ALL);
@@ -59,6 +60,13 @@ function simulator_api_json($data, $code = 200)
 }
 
 try {
+    // Role lock (policy flag editor_open, default off): status/run_options stay open.
+    if ($action === 'run' || $action === 'run_section') {
+        require_once $sts_dir . '/editor_lock.php';
+        sts_editor_require(!empty($body['save_recipe']) ? 'editor' : 'operator', static function ($code, $msg) {
+            simulator_api_json(['ok' => false, 'error' => $msg], $code);
+        }, true);
+    }
     switch ($action) {
         case 'run_options':
             $recipe = session_simulator_load_recipe($session_dir, $body);
@@ -127,5 +135,5 @@ try {
             ], 400);
     }
 } catch (Throwable $e) {
-    simulator_api_json(['ok' => false, 'error' => $e->getMessage()], 500);
+    simulator_api_json(['ok' => false, 'error' => $e->getMessage()], $e instanceof ApiTaskFailure ? 403 : 500);
 }

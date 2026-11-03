@@ -67,11 +67,19 @@ Environment (web service):
 - `STS_API_READ_OPEN=1` (default): GETs need no token. `0` requires `reader`.
   This includes `/settings`, `/backups` and `/sessions`, which are readable
   anonymously. `GET /tasks` and `GET /tasks/{id}` always need `operator`.
-- Workflows that contain destructive commands (`restore_database`,
-  `backup_database`, `wipe_database`, `reset_session`, `restart_session`) can
-  only be saved (`PUT /workflows/{name}`) or run (`POST /workflows/{name}/run`)
-  by an admin: 403 naming the step numbers. The check uses the normalized
-  recipe, counts disabled steps, and runs again when the task starts.
+- Workflows are checked per step, when they run. `PUT /workflows/{name}` saves
+  any recipe. `POST /workflows/{name}/run` (operator) records the caller's role in
+  the task, and `session_run_recipe()` calls a `before_dispatch` guard right
+  before each step is dispatched; the task fails at the first step whose command
+  needs a higher role (`api_command_required_role()`, see Policy), with
+  "step N (command) needs admin; sign in with an admin token or change the
+  command's role on /sts/api_admin.php". Steps skipped by conditions, gotos,
+  ranges or disabled flags are never checked, so an operator can run
+  `hart_session` past session 0 (the restore step is behind "session > 0 then
+  goto 4"). The 202 response and `GET /workflows/{name}/run-options` carry
+  `caller_role` and `role_warnings` (`{step, command, label, required_role,
+  conditional, note}`); `conditional` marks steps behind a forward goto or
+  if_then-goto that may skip them.
 - A task whose process vanished is marked failed on read (the pid and its
   `/proc` start time are recorded, so a reused pid is not mistaken for it);
   `start.sh` marks tasks left over from before a container restart failed
@@ -80,10 +88,54 @@ Environment (web service):
   task records and logs are kept.
 - `STS_API_LEGACY_OPEN=1` (default): legacy wagon routes need no token. `0`
   requires `operator`.
+- `STS_API_READ_OPEN` and `STS_API_LEGACY_OPEN` are only defaults: a key set in
+  the policy file (below) wins.
 - `STS_API_ADMIN_TOKEN`: accepted as an admin token, not stored (CI use).
 - `GET /v1/health`, `GET /v1/openapi.json` and `/sts/api/docs/` are always open.
 - `STS_STACK_NAME` (`live` by default, `sandbox` in the sandbox compose) is
   reported by `/health`.
+
+### Browser sign-in
+
+`POST /v1/auth/login {"token": "sts_..."}` checks the token and starts a
+server-side session. The browser gets the cookie `sts_api` (a random 64-hex
+session id; `HttpOnly; SameSite=Strict; Path=/sts/`, plus `Secure` over HTTPS).
+The token is never kept in the page. Sessions are files under
+`/var/lib/sts/sessions/` (named by the SHA-256 of the id) and expire after 12
+hours idle. Every request rechecks the session's token, so revoking it ends its
+sessions at once. `GET /v1/auth/me` returns `{name, role, source, expires_at}`
+(or 401); `POST /v1/auth/logout` ends the session. Failed logins are limited to
+10 a minute per client IP (429 with `Retry-After`). A bearer token, when sent,
+takes precedence over the cookie. The Origin check covers cookie writes.
+
+PHP pages outside the router use the same auth:
+
+```php
+require_once __DIR__ . '/api/lib/web_auth.php';
+$user = api_web_user();                    // ['id','name','role','source'] or null
+if (!api_role_allows($user, 'operator')) { /* 401/403 */ }
+api_policy_flag('editor_open');            // lib/policy.php
+api_command_required_role('backup_database');
+```
+
+### Policy
+
+`/var/lib/sts/api_policy.json` holds `command_roles` (minimum role per catalog
+command id) and the flags `read_open`, `legacy_open`, `editor_open`. Defaults:
+`restore_database`, `wipe_database` and `reset_session` need `admin`; every
+other command needs `operator` (so `backup_database` and `restart_session`
+dropped from admin; they still run as exclusive tasks). Flags not in the file
+fall back to `STS_API_READ_OPEN`, `STS_API_LEGACY_OPEN` and `false`.
+`GET /v1/admin/policy` shows the effective values for every catalog command;
+`PUT /v1/admin/policy` (admin) takes any subset of the keys (unknown command ids
+or roles are 422; a flag of `null` returns to its default). Changes apply to the
+next request.
+
+### Admin page
+
+`/sts/api_admin.php` (Database Maintenance, "API Access") signs in with a token
+and, for admins, lists/creates/revokes tokens (the new secret is shown once),
+edits the policy and lists tasks with a "Mark failed" button.
 
 Tokens live in `/var/lib/sts/api_tokens.json` (bind mount of
 `../sts-docker-data/config`; sandbox: `${STS_SANDBOX_DATA}/config`), outside the
@@ -110,6 +162,40 @@ file it creates to `www-data`. Files are created with umask 0027 (mode 0640).
 
 The same operations over HTTP (admin): `GET/POST /v1/admin/tokens`,
 `DELETE /v1/admin/tokens/{id}`.
+
+### Editor endpoints and the legacy lock
+
+The workflow editor's remaining actions, on v1 (envelope responses; the legacy
+`ok` flag is dropped, errors are 422 where the legacy pages said 400):
+
+| Route | Role | Legacy action |
+| --- | --- | --- |
+| `POST /workflows/compile` `{recipe?}` | reader | `compile` |
+| `POST /workflows/normalize` `{recipe? / use_file, workflow_file}` | reader | `normalize_recipe` |
+| `POST /workflows/import` | editor | `import_workflow` |
+| `GET /workflows/active`, `PUT /workflows/active {workflow_file}` | reader / editor | `list_workflows`, `set_active_workflow` |
+| `GET /workflows/{name}/run-options` | reader | simulator `run_options` (plus `caller_role`, `role_warnings`) |
+| `GET /workflows/{name}/download` | reader | `download` (raw file attachment, not an envelope) |
+| `POST /sessions/{n}/rerender {style, force}` | operator | `rerender_session_style` |
+| `POST /sessions/{n}/print-all {style, job}` | operator | `build_print_all_style` |
+| `GET /simulator/status` | reader | simulator `status` |
+| `DELETE /sessions/output` | operator | clears the generated output directory; 409 while a task is queued or running |
+
+Literal paths such as `/workflows/compile` win over `/workflows/{name}` (the
+router tries patterns with fewer placeholders first). Rerender and print-all run
+synchronously. Tasks accept `timeout_seconds` (1-86400): the runner re-executes
+itself as a child and kills it on expiry; the task is `failed`, "timed out after
+N seconds". `GET /locations/{code}` also resolves plugin location aliases.
+
+`operational_steps_api.php`, `simulator_api.php` and `save_operational_steps.php`
+keep answering reads (catalog, list_workflows, recipe, run_options, compile,
+normalize_recipe, download, status). While the policy flag `editor_open` is false
+(default), writes and runs need a bearer token or the `sts_api` cookie
+(`/sts/api_admin.php`): save, import, set_active, delete and
+`save_operational_steps.php` need editor; run_switchlists, rerender, print-all,
+simulator run and run_section need operator (editor when they also save a
+recipe), and recipe runs apply the same per-step guard. Answers are 401 (no
+sign-in) or 403 in each file's own JSON error shape.
 
 ### Read routes (reader)
 

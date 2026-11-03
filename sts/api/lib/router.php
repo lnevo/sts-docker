@@ -138,8 +138,14 @@ function api_dispatch()
     }
     $rel = $is_v1 ? (substr($path, 3) ?: '/') : $path;
 
+    // Literal paths win over {name} patterns (PUT /workflows/active before PUT /workflows/{name}),
+    // whatever order the route files register in; the sort is stable.
+    $routes = $GLOBALS['api_routes'];
+    usort($routes, static function ($a, $b) {
+        return substr_count($a['pattern'], '{') <=> substr_count($b['pattern'], '{');
+    });
     $allowed = [];
-    foreach ($GLOBALS['api_routes'] as $r) {
+    foreach ($routes as $r) {
         if ($r['legacy'] === $is_v1) {
             continue;
         }

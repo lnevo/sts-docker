@@ -442,7 +442,7 @@
     "/locations/{location}": {
       "get": {
         "summary": "One location with the cars there",
-        "description": "Role: reader.",
+        "description": "Role: reader. Accepts an id or a location code. A code a plugin renames (the warm-start scenario's location_aliases, alias to code) resolves to the canonical location.",
         "x-sts-role": "reader",
         "parameters": [
           {

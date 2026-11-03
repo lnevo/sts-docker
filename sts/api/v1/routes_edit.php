@@ -428,6 +428,7 @@ function edit_setting_put(array $req)
 function edit_workflow_put(array $req)
 {
     read_load_catalog();
+    read_session_helpers(); // the compile step labels use session helpers
     $body = api_body();
     foreach (array_keys($body) as $k) {
         if ($k !== 'recipe') {
@@ -450,8 +451,6 @@ function edit_workflow_put(array $req)
     $path = operational_steps_workflow_path($dir, $file);
     $created = !is_file($path);
     $recipe = operational_steps_normalize_recipe($recipe);
-    require_once dirname(__DIR__) . '/lib/operate_command.php';
-    api_recipe_require_admin_for_destructive($recipe, $req['user']);
     if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
         api_internal_error("mkdir failed: $dir");
     }

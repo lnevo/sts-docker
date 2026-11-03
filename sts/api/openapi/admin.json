@@ -203,7 +203,7 @@
     "/admin/restore": {
       "post": {
         "summary": "Restore a backup",
-        "description": "Drops every table first (full, default true; pass false to restore over the existing tables), then runs sts_restore_sql_file() on backups/<backup>, optionally refreshes rolling-stock photos from backups/<backup>_photos, then runs the plugin session-reset hooks (reason restore). Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin.",
+        "description": "Drops every table first (full, default true; pass false to restore over the existing tables), then runs sts_restore_sql_file() on backups/<backup>, optionally refreshes rolling-stock photos from backups/<backup>_photos, then runs the plugin session-reset hooks (reason restore). Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin. Optional timeout_seconds (1-86400) kills the task after that long: failed, \"timed out after N seconds\".",
         "x-sts-role": "admin",
         "security": [
           {
@@ -267,7 +267,7 @@
     "/admin/warm-start": {
       "post": {
         "summary": "Simulate sessions to a warm-start state",
-        "description": "Calls warm_start_run() with the same config the sts-helpers simulate_warm_start.php CLI builds; the same seed gives the same database. Omitted fields keep the warm-start defaults. Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin.",
+        "description": "Calls warm_start_run() with the same config the sts-helpers simulate_warm_start.php CLI builds; the same seed gives the same database. Omitted fields keep the warm-start defaults. Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin. Optional timeout_seconds (1-86400) kills the task after that long: failed, \"timed out after N seconds\".",
         "x-sts-role": "admin",
         "security": [
           {
@@ -328,7 +328,7 @@
     "/admin/sessions/begin": {
       "post": {
         "summary": "Begin an operating session",
-        "description": "Calls warm_start_begin_operating_session(). The task fails (with its result) when the session start is blocked. Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin.",
+        "description": "Calls warm_start_begin_operating_session(). The task fails (with its result) when the session start is blocked. Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin. Optional timeout_seconds (1-86400) kills the task after that long: failed, \"timed out after N seconds\".",
         "x-sts-role": "admin",
         "security": [
           {
@@ -389,7 +389,7 @@
     "/admin/sessions/play": {
       "post": {
         "summary": "Play the current operating session",
-        "description": "Calls warm_start_play_operating_session(). Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin.",
+        "description": "Calls warm_start_play_operating_session(). Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin. Optional timeout_seconds (1-86400) kills the task after that long: failed, \"timed out after N seconds\".",
         "x-sts-role": "admin",
         "security": [
           {

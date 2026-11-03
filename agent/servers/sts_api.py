@@ -21,7 +21,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mcp_stdio import Tool, serve  # noqa: E402
 
 DEFAULT_URL = "http://localhost:8980/sts/api/v1"
-ADMIN_COMMANDS = {"restore_database", "wipe_database", "reset_session", "restart_session", "backup_database"}
+# Defaults; the live policy (GET /admin/policy, admin only) overrides them when readable.
+ADMIN_COMMANDS = {"restore_database", "wipe_database", "reset_session"}
+_POLICY_ROLES: dict | None = None
 DONE = ("succeeded", "failed")
 
 
@@ -194,6 +196,20 @@ def t_task(args):
 
 # ---- write tools ------------------------------------------------------------
 
+def command_role(command: str) -> str:
+    """Minimum role for a command: from GET /admin/policy when this token may read it, else the defaults."""
+    global _POLICY_ROLES
+    if _POLICY_ROLES is None:
+        try:
+            data = call("GET", "/admin/policy", role="admin")
+            _POLICY_ROLES = data.get("command_roles") or {} if isinstance(data, dict) else {}
+        except ApiError:
+            _POLICY_ROLES = {}
+    if command in _POLICY_ROLES:
+        return _POLICY_ROLES[command]
+    return "admin" if command in ADMIN_COMMANDS else "operator"
+
+
 def t_command(args):
     need(args, "command")
     command = args["command"]
@@ -202,8 +218,12 @@ def t_command(args):
         body["async"] = True
     if args.get("seed") is not None:
         body["seed"] = args["seed"]
-    role = "admin" if command in ADMIN_COMMANDS else "operator"
-    return call("POST", f"/commands/{seg(command)}", body=body, role=role)
+    try:
+        return call("POST", f"/commands/{seg(command)}", body=body, role="operator")
+    except ApiError as exc:
+        if " 403 " in str(exc):
+            raise ApiError(f"{exc} The policy requires role {command_role(command)} for {command}.") from None
+        raise
 
 
 def t_car_action(args):
@@ -294,6 +314,20 @@ def t_tokens(args):
     raise ApiError("action must be list, create or revoke")
 
 
+def t_policy(args):
+    global _POLICY_ROLES
+    action = args.get("action", "get")
+    if action == "get":
+        return call("GET", "/admin/policy", role="admin")
+    if action == "put":
+        body = {k: args[k] for k in ("command_roles", "read_open", "legacy_open", "editor_open") if k in args}
+        if not body:
+            raise ApiError("put needs command_roles and/or read_open, legacy_open, editor_open")
+        _POLICY_ROLES = None
+        return call("PUT", "/admin/policy", body=body, role="admin")
+    raise ApiError("action must be get or put")
+
+
 # ---- tool table -------------------------------------------------------------
 
 def obj(props: dict, required: list[str] | None = None) -> dict:
@@ -334,8 +368,8 @@ TOOLS = [
          obj({"id": S, "wait_seconds": {"type": "number", "description": "Max 600."},
               "log_lines": {"type": "integer"}}, ["id"]), t_task),
 
-    Tool("sts_command", "Role: operator; admin for restore_database, wipe_database, reset_session, "
-         "backup_database. Runs one catalog command (generate_orders, fill_orders, reposition_empties, "
+    Tool("sts_command", "Role: operator by default; admin for restore_database, wipe_database, "
+         "reset_session (the policy can change this, see sts_policy). Runs one catalog command (generate_orders, fill_orders, reposition_empties, "
          "pick_up_cars, set_out_cars, load_unload, ...). Some commands change many rows; a few replace "
          "the whole database. async=true (or a slow command) returns a task to follow with sts_task.",
          obj({"command": S, **PARAMS, "async": B, "seed": I}, ["command"]), t_command,
@@ -380,6 +414,14 @@ TOOLS = [
          "params go in the request body.", obj(PARAMS), t_session_begin, read_only=False, destructive=True),
     Tool("sts_session_play", "Role: admin. Play an operating session via the warm-start machinery (task). "
          "params go in the request body.", obj(PARAMS), t_session_play, read_only=False, destructive=True),
+    Tool("sts_policy", "Role: admin. action get shows the effective policy: the minimum role per catalog "
+         "command and the read_open, legacy_open and editor_open flags. action put changes it at once: "
+         "command_roles {id: operator|editor|admin} (replaces the stored map) and the flags (null = default). "
+         "Lowering a command's role lets lesser tokens run it; confirm with the user first.",
+         obj({"action": {"type": "string", "enum": ["get", "put"]}, "command_roles": O,
+              "read_open": {"type": ["boolean", "null"]}, "legacy_open": {"type": ["boolean", "null"]},
+              "editor_open": {"type": ["boolean", "null"]}}),
+         t_policy, read_only=False, destructive=True),
     Tool("sts_tokens", "Role: admin. action list (hashes only), create (name, role reader|operator|editor|admin; "
          "the token is shown once) or revoke (id).",
          obj({"action": {"type": "string", "enum": ["list", "create", "revoke"]}, "name": S,

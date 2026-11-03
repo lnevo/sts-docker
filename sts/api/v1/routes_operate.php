@@ -36,10 +36,11 @@ function operate_command(array $req)
     if (!in_array($command, api_catalog_command_ids(), true)) {
         api_error(404, 'Unknown command');
     }
-    $destructive = in_array($command, OPERATE_DESTRUCTIVE_COMMANDS, true);
-    if ($destructive && api_role_rank($req['user']['role'] ?? '') < api_role_rank('admin')) {
-        api_error(403, "Command '$command' is destructive and needs role 'admin'");
+    $needs = api_command_required_role($command);
+    if (!api_role_allows($req['user'], $needs)) {
+        api_error(403, "Command '$command' needs role '$needs'");
     }
+    $destructive = api_command_is_exclusive($command);
     api_operate_validate($command, $params);
 
     // Destructive commands always run as an exclusive (maintenance) task. Any
@@ -50,9 +51,15 @@ function operate_command(array $req)
     $async = $destructive || !empty($body['async']) || in_array($command, OPERATE_SLOW_COMMANDS, true);
     if ($async) {
         require_once dirname(__DIR__) . '/lib/tasks.php';
-        $task = api_task_create('command', [
-            'command' => $command, 'params' => $params, 'seed' => $seed,
-        ], $req['user'], ['exclusive' => $destructive]);
+        $timeout = $body['timeout_seconds'] ?? null;
+        if ($timeout !== null && (!is_int($timeout) || $timeout < 1 || $timeout > 86400)) {
+            api_error(422, 'timeout_seconds must be an integer between 1 and 86400');
+        }
+        $task = api_task_create('command', array_filter([
+            'command' => $command, 'params' => $params, 'seed' => $seed, 'timeout_seconds' => $timeout,
+        ], static function ($v) {
+            return $v !== null;
+        }) + ['seed' => $seed], $req['user'], ['exclusive' => $destructive]);
         api_task_accepted($task);
     }
 

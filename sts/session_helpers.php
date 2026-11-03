@@ -3838,6 +3838,14 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
         }
         $refresh_ctx();
     };
+    // Optional guard: before_dispatch(string $function_id, int $step_number, array $step)
+    // runs right before a step that does work is dispatched; it may throw to stop the run.
+    // The legacy editor pages set $GLOBALS['sts_before_dispatch'] (see editor_lock.php).
+    $before_dispatch = isset($options['before_dispatch']) && is_callable($options['before_dispatch'])
+        ? $options['before_dispatch']
+        : (isset($GLOBALS['sts_before_dispatch']) && is_callable($GLOBALS['sts_before_dispatch'])
+            ? $GLOBALS['sts_before_dispatch']
+            : null);
     $log = [];
     $stopped = false;
     $loop_error = null;
@@ -3975,6 +3983,9 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
         }
 
         if ($fid === 'generate_switchlists') {
+            if ($before_dispatch !== null) {
+                $before_dispatch($fid, $n, $step);
+            }
             $sync_output_session();
             $phase_num++;
             $jobs = session_resolve_jobs_param($step['params']['jobs'] ?? 'all', $dbc);
@@ -4037,6 +4048,9 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
             continue;
         }
         if ($fid === 'generate_waybills') {
+            if ($before_dispatch !== null) {
+                $before_dispatch($fid, $n, $step);
+            }
             $sync_output_session();
             if ($phase_num < 1) {
                 $phase_num = 1;
@@ -4067,6 +4081,9 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
             continue;
         }
         if ($fid === 'generate_station_report') {
+            if ($before_dispatch !== null) {
+                $before_dispatch($fid, $n, $step);
+            }
             $sync_output_session();
             $info = trim((string) ($step['params']['info'] ?? ''));
             $snap = session_generate_station_report_phase($dbc, $session_nbr, $info, $root);
@@ -4081,6 +4098,9 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
             continue;
         }
         if ($fid === 'generate_wheel_report') {
+            if ($before_dispatch !== null) {
+                $before_dispatch($fid, $n, $step);
+            }
             $sync_output_session();
             $info = trim((string) ($step['params']['info'] ?? ''));
             $snap = session_generate_wheel_report_phase($dbc, $session_nbr, $info, $root);
@@ -4095,6 +4115,9 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
             continue;
         }
 
+        if ($before_dispatch !== null) {
+            $before_dispatch($fid, $n, $step);
+        }
         $dispatch_opts = array_merge($config, [
             'session_root' => $root,
             'phase' => $phase_num,

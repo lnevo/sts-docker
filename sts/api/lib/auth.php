@@ -1,9 +1,13 @@
 <?php
 /**
- * Bearer-token auth with hierarchical roles: reader < operator < editor < admin.
+ * Bearer-token and browser-session auth with hierarchical roles:
+ * reader < operator < editor < admin.
  *
  * Env: STS_API_READ_OPEN (default 1), STS_API_LEGACY_OPEN (default 1),
- * STS_API_ADMIN_TOKEN (accepted as admin, never stored).
+ * STS_API_ADMIN_TOKEN (accepted as admin, never stored). The two open flags are
+ * only defaults: /var/lib/sts/api_policy.json overrides them (lib/policy.php).
+ * Pages outside the router use api_web_user() / api_role_allows() after
+ * `require_once 'api/lib/web_auth.php'`.
  */
 
 if (!defined('STS_API_BOOT')) {
@@ -12,6 +16,8 @@ if (!defined('STS_API_BOOT')) {
 }
 
 require_once __DIR__ . '/tokens.php';
+require_once __DIR__ . '/policy.php';
+require_once __DIR__ . '/session.php';
 
 function api_env_flag($name, $default = true)
 {
@@ -42,7 +48,9 @@ function api_bearer_token()
 
 /**
  * Identify the caller. Returns ['id','name','role','source'] or null when no
- * (valid) credential was presented.
+ * (valid) credential was presented. A bearer token wins; without an
+ * Authorization header the `sts_api` session cookie is checked (source
+ * 'session'), and its underlying token is rechecked on every request.
  */
 function api_authenticate()
 {
@@ -52,7 +60,7 @@ function api_authenticate()
     }
     $token = api_bearer_token();
     if ($token === '') {
-        return $cached = null;
+        return $cached = api_session_user();
     }
     $env = getenv('STS_API_ADMIN_TOKEN');
     if ($env !== false && $env !== '' && hash_equals($env, $token)) {
@@ -64,6 +72,21 @@ function api_authenticate()
     }
     api_token_touch($rec['id']);
     return $cached = ['id' => $rec['id'], 'name' => $rec['name'], 'role' => $rec['role'], 'source' => 'file'];
+}
+
+/** Current caller from a bearer token or the session cookie, or null. Same as api_authenticate(). */
+function api_web_user()
+{
+    return api_authenticate();
+}
+
+/** True when $user (as api_web_user() returns it) has at least $role. 'open' is always allowed. */
+function api_role_allows($user, $role)
+{
+    if ($role === 'open') {
+        return true;
+    }
+    return is_array($user) && api_role_rank($user['role'] ?? '') >= api_role_rank($role) && api_role_rank($role) > 0;
 }
 
 /**
@@ -98,8 +121,8 @@ function api_require_role($required, $legacy = false)
         $required,
         $legacy,
         $user['role'] ?? null,
-        api_env_flag('STS_API_READ_OPEN', true),
-        api_env_flag('STS_API_LEGACY_OPEN', true)
+        api_policy_flag('read_open'),
+        api_policy_flag('legacy_open')
     );
     if ($code === 200) {
         return $user;

@@ -3,7 +3,7 @@
   "info": {
     "title": "STS REST API v1",
     "version": "1.0.0",
-    "description": "Shipper-Driven Traffic Simulator API. All v1 fields are snake_case. Success responses are `{\"data\": ..., \"meta\": {...}}`; errors are `{\"error\": {\"code\", \"message\"}}`. Authentication is a bearer token (`Authorization: Bearer sts_...`) with hierarchical roles reader < operator < editor < admin. GETs are open unless the server sets `STS_API_READ_OPEN=0`. Each operation states its minimum role in `x-sts-role`. Tokens are managed under `/admin/tokens` or with `php sts/api/bin/tokens.php`. Cross-site writes are rejected: a POST/PUT/PATCH/DELETE that carries an `Origin` header whose host:port differs from the request `Host` gets 403 (requests without `Origin`, such as curl, RFID devices and helpers, are unaffected). `Access-Control-Allow-Origin: *` is sent for GET/HEAD only; for writes it is echoed only for a same-host origin. Maintenance lock: while an exclusive task (restore, warm start, begin, play, workflow run or a destructive command) is queued or running, every other write route answers 409 `maintenance task <id> running`; reads, `/admin/tokens` and `POST /admin/tasks/{id}/fail` are not blocked. Reads under `STS_API_READ_OPEN=1` (the default) need no token, which includes `/settings`, `/backups` and `/sessions`; only `/tasks` always needs the `operator` role."
+    "description": "Shipper-Driven Traffic Simulator API. All v1 fields are snake_case. Success responses are `{\"data\": ..., \"meta\": {...}}`; errors are `{\"error\": {\"code\", \"message\"}}`. Authentication is a bearer token (`Authorization: Bearer sts_...`) with hierarchical roles reader < operator < editor < admin. GETs are open unless the server sets `STS_API_READ_OPEN=0`. Each operation states its minimum role in `x-sts-role`. Tokens are managed under `/admin/tokens` or with `php sts/api/bin/tokens.php`. Cross-site writes are rejected: a POST/PUT/PATCH/DELETE that carries an `Origin` header whose host:port differs from the request `Host` gets 403 (requests without `Origin`, such as curl, RFID devices and helpers, are unaffected). `Access-Control-Allow-Origin: *` is sent for GET/HEAD only; for writes it is echoed only for a same-host origin. Maintenance lock: while an exclusive task (restore, warm start, begin, play, workflow run or a destructive command) is queued or running, every other write route answers 409 `maintenance task <id> running`; reads, `/admin/tokens` and `POST /admin/tasks/{id}/fail` are not blocked. Reads under `STS_API_READ_OPEN=1` (the default) need no token, which includes `/settings`, `/backups` and `/sessions`; only `/tasks` always needs the `operator` role. A browser can sign in with `POST /auth/login` and then authenticate with the `sts_api` session cookie (`cookieAuth`); revoking the underlying token ends its sessions. Command roles and the open flags come from the policy (`/admin/policy`), not only the environment."
   },
   "servers": [
     {
@@ -16,6 +16,12 @@
         "type": "http",
         "scheme": "bearer",
         "description": "Token of the form sts_ followed by 40 hex characters."
+      },
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "sts_api",
+        "description": "Browser session cookie set by POST /auth/login (HttpOnly, SameSite=Strict, Path=/sts/, 12 hour idle timeout). It stands in for a bearer token; the underlying token is rechecked on every request."
       }
     },
     "schemas": {

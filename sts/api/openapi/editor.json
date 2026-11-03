@@ -1,0 +1,867 @@
+{
+  "paths": {
+    "/workflows/compile": {
+      "post": {
+        "summary": "Compile a recipe",
+        "description": "Role: reader. Mirrors operational_steps_api.php?action=compile. Body recipe, or the active workflow when omitted. Returns the display rows.",
+        "x-sts-role": "reader",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CompiledRows"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        }
+      }
+    },
+    "/workflows/normalize": {
+      "post": {
+        "summary": "Normalize a recipe",
+        "description": "Role: reader. Mirrors action=normalize_recipe. Normalizes the given recipe, or with use_file reloads workflow_file (or the active one). Saves nothing.",
+        "x-sts-role": "reader",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NormalizeBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/NormalizedRecipe"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        }
+      }
+    },
+    "/workflows/import": {
+      "post": {
+        "summary": "Import workflow JSON",
+        "description": "Role: editor. Mirrors action=import_workflow: recipe object, use_file + workflow_file, or workflow/json text. When workflow_file is given it becomes the active workflow. Does not save the recipe; use PUT /workflows/{name}. Malformed input is 422 (legacy: 400).",
+        "x-sts-role": "editor",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ImportedRecipe"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "409": {
+            "$ref": "#/components/responses/Maintenance"
+          }
+        }
+      }
+    },
+    "/workflows/active": {
+      "get": {
+        "summary": "Active workflow",
+        "description": "Role: reader. Mirrors action=list_workflows: the active workflow, the workflow files and whether there is exactly one. Optional query workflow_file.",
+        "x-sts-role": "reader",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workflow_file",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ActiveWorkflow"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        }
+      },
+      "put": {
+        "summary": "Set the active workflow",
+        "description": "Role: editor. Mirrors action=set_active_workflow.",
+        "x-sts-role": "editor",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivePut"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "active_workflow": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "409": {
+            "$ref": "#/components/responses/Maintenance"
+          }
+        }
+      }
+    },
+    "/workflows/{name}/run-options": {
+      "get": {
+        "summary": "Run options for a workflow",
+        "description": "Role: reader. The simulator_api.php run_options payload for this workflow (indices, sections, compiled rows, condition_context, current_session, existing_sessions, runtime_available) plus caller_role (null when anonymous) and role_warnings: steps whose command needs a higher role than the caller has (callers below operator are compared as operator). conditional is true when a forward goto or if_then-goto earlier in the recipe may skip the step, e.g. hart_session step 3, restore_database, runs only at session 0; the note says so.",
+        "x-sts-role": "reader",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Workflow name or file name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RunOptions"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        }
+      }
+    },
+    "/workflows/{name}/download": {
+      "get": {
+        "summary": "Download a workflow file",
+        "description": "Role: reader. The raw workflow JSON as an attachment (not the envelope).",
+        "x-sts-role": "reader",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Workflow name or file name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        }
+      }
+    },
+    "/sessions/{n}/rerender": {
+      "post": {
+        "summary": "Re-render a session's switch lists in a style",
+        "description": "Role: operator. Mirrors action=rerender_session_style. Synchronous (sub-second to a few seconds on a HART session).",
+        "x-sts-role": "operator",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "Session number"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RerenderBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RerenderResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Maintenance"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        }
+      }
+    },
+    "/sessions/{n}/print-all": {
+      "post": {
+        "summary": "Build the print-all bundle",
+        "description": "Role: operator. Mirrors action=build_print_all_style. With job, one consolidated train. 404 when there is nothing to render for the style.",
+        "x-sts-role": "operator",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "Session number"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrintAllBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PrintAllResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Maintenance"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        }
+      }
+    },
+    "/sessions/output": {
+      "delete": {
+        "summary": "Delete generated switch-list output",
+        "description": "Role: operator. Removes every session output directory under the generated-output root (what the helpers clean between runs). 409 while any task is queued or running.",
+        "x-sts-role": "operator",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "removed": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "count": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Maintenance"
+          }
+        }
+      }
+    },
+    "/simulator/status": {
+      "get": {
+        "summary": "Simulator status",
+        "description": "Role: reader. Mirrors simulator_api.php?action=status: runtime_available, session, condition context and warm-start summary.",
+        "x-sts-role": "reader",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "RecipeBody": {
+        "type": "object",
+        "properties": {
+          "recipe": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "NormalizeBody": {
+        "type": "object",
+        "properties": {
+          "recipe": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "use_file": {
+            "type": "boolean"
+          },
+          "workflow_file": {
+            "type": "string"
+          }
+        }
+      },
+      "ImportBody": {
+        "type": "object",
+        "properties": {
+          "recipe": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "use_file": {
+            "type": "boolean"
+          },
+          "workflow_file": {
+            "type": "string"
+          },
+          "workflow": {
+            "description": "Workflow JSON text or object",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "additionalProperties": true
+              }
+            ]
+          },
+          "json": {
+            "description": "Alias of workflow"
+          }
+        }
+      },
+      "ActivePut": {
+        "type": "object",
+        "required": [
+          "workflow_file"
+        ],
+        "properties": {
+          "workflow_file": {
+            "type": "string"
+          }
+        }
+      },
+      "RerenderBody": {
+        "type": "object",
+        "properties": {
+          "style": {
+            "type": "string",
+            "default": "mobile"
+          },
+          "force": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PrintAllBody": {
+        "type": "object",
+        "properties": {
+          "style": {
+            "type": "string",
+            "default": "mobile"
+          },
+          "job": {
+            "type": "string"
+          }
+        }
+      },
+      "CompiledRows": {
+        "type": "object",
+        "properties": {
+          "compiled": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      },
+      "NormalizedRecipe": {
+        "type": "object",
+        "properties": {
+          "recipe": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "compiled": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "rows": {
+            "type": "integer"
+          }
+        }
+      },
+      "ImportedRecipe": {
+        "type": "object",
+        "properties": {
+          "recipe": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "workflow_file": {
+            "type": "string"
+          },
+          "compiled": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      },
+      "ActiveWorkflow": {
+        "type": "object",
+        "properties": {
+          "active_workflow": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "auto_load": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RunOptions": {
+        "type": "object",
+        "properties": {
+          "workflow": {
+            "type": "string"
+          },
+          "caller_role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "current_session": {
+            "type": "integer"
+          },
+          "role_warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoleWarning"
+            }
+          },
+          "runtime_available": {
+            "type": "boolean"
+          },
+          "existing_sessions": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "indices": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "compiled": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "condition_context": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "default_start": {
+            "type": "integer"
+          },
+          "default_stop": {
+            "type": "integer"
+          },
+          "breakpoints": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      },
+      "RerenderResult": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "integer"
+          },
+          "style": {
+            "type": "string"
+          },
+          "skipped": {
+            "type": "boolean"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      },
+      "PrintAllResult": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "integer"
+          },
+          "style": {
+            "type": "string"
+          },
+          "job": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

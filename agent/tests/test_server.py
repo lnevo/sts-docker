@@ -51,6 +51,10 @@ class Stub(BaseHTTPRequestHandler):
             return self.reply(200, {"data": {"session_nbr": 4, "stats": {}}})
         if path == "/v1/admin/tokens":
             return self.reply(403, {"error": {"code": "forbidden", "message": "admin required"}})
+        if path == "/v1/admin/policy":
+            Stub.policy_hits = getattr(Stub, "policy_hits", 0) + 1
+            return self.reply(200, {"data": {"command_roles": {"backup_database": "editor", "wipe_database": "admin"},
+                                             "read_open": True, "legacy_open": True, "editor_open": False}})
         if path == "/v1/cars/nope":
             return self.reply(404, {"error": {"code": "not_found", "message": "no such car"}})
         if path == "/v1/commands/generate_orders":
@@ -67,6 +71,9 @@ class Stub(BaseHTTPRequestHandler):
 
     def do_GET(self):
         self.handle_any("GET")
+
+    def do_PUT(self):
+        self.handle_any("PUT")
 
     def do_POST(self):
         self.handle_any("POST")
@@ -107,7 +114,41 @@ class ServerTests(unittest.TestCase):
             self.assertFalse(tools[name]["annotations"]["readOnlyHint"], name)
             self.assertTrue(tools[name]["annotations"]["destructiveHint"], name)
         self.assertFalse(tools["sts_create_car"]["annotations"]["destructiveHint"])
-        self.assertEqual(len(tools), 21)
+        self.assertEqual(len(tools), 22)
+        self.assertTrue(tools["sts_policy"]["annotations"]["destructiveHint"])
+
+    def test_policy_tool_get_and_put(self):
+        out = run_server(self.env, INIT, call("sts_policy", {"action": "get"}),
+                         call("sts_policy", {"action": "put", "command_roles": {"backup_database": "editor"}, "editor_open": True}, 3),
+                         call("sts_policy", {"action": "put"}, 4))
+        self.assertEqual(json.loads(self.text(out))["command_roles"]["backup_database"], "editor")
+        method, path, _, body = Stub.seen[1]
+        self.assertEqual((method, path), ("PUT", "/v1/admin/policy"))
+        self.assertEqual(body, {"command_roles": {"backup_database": "editor"}, "editor_open": True})
+        self.assertEqual(len(Stub.seen), 2)
+        self.assertTrue(out[3]["result"]["isError"])
+
+    def test_command_role_comes_from_policy_with_fallback(self):
+        sys.path.insert(0, str(ROOT / "servers"))
+        import sts_api
+        self.assertEqual(sts_api.ADMIN_COMMANDS, {"restore_database", "wipe_database", "reset_session"})
+        old = {k: os.environ.get(k) for k in ("STS_API_URL", "STS_API_TOKEN")}
+        os.environ.update(self.env)
+        try:
+            sts_api._POLICY_ROLES = None
+            self.assertEqual(sts_api.command_role("backup_database"), "editor")
+            self.assertEqual(sts_api.command_role("fill_orders"), "operator")
+            os.environ["STS_API_URL"] = "http://127.0.0.1:9/v1"
+            sts_api._POLICY_ROLES = None
+            self.assertEqual(sts_api.command_role("wipe_database"), "admin")
+            self.assertEqual(sts_api.command_role("backup_database"), "operator")
+        finally:
+            sts_api._POLICY_ROLES = None
+            for k, v in old.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
 
     def test_seg_encodes_and_rejects_dot_segments(self):
         sys.path.insert(0, str(ROOT / "servers"))

@@ -163,7 +163,7 @@
     "/workflows/{name}/run": {
       "post": {
         "summary": "Run a saved workflow",
-        "description": "Runs the recipe through session_run_recipe(), as the run_catalog_workflow.php CLI does; the same seed gives the same database. render is accepted but the engine always renders. Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). A recipe holding destructive commands (restore_database, backup_database, wipe_database, reset_session, restart_session; ids are checked after normalization, disabled steps included) needs role admin: 403 naming the step numbers, checked when the request arrives and again when the task starts (the file may have changed). A malformed workflow name is 422. Role: operator (admin for destructive recipes).",
+        "description": "Runs the recipe through session_run_recipe(), as the run_catalog_workflow.php CLI does; the same seed gives the same database. render is accepted but the engine always renders. Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Each step is checked against the caller's role right before it is dispatched (the command's role from the policy, GET /admin/policy): the task fails at the first step that needs a higher role, with a message naming the step, e.g. \"step 3 (restore_database) needs admin; sign in with an admin token or change the command's role on /sts/api_admin.php\". Steps skipped by conditions, gotos, ranges or disabled flags are never checked, so an operator can run hart_session past session 0 where the restore step is skipped. The 202 response carries caller_role and role_warnings (steps that need more than the caller's role; conditional marks steps behind a goto or condition) so a client can warn up front. A malformed workflow name is 422. timeout_seconds (1-86400) kills the task after that many seconds: failed, \"timed out after N seconds\". Role: operator.",
         "x-sts-role": "operator",
         "security": [
           {
@@ -202,7 +202,7 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/TaskAccepted"
+                      "$ref": "#/components/schemas/WorkflowRunAccepted"
                     }
                   }
                 }
@@ -213,7 +213,7 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "description": "Role too low; or the recipe has destructive commands and the caller is not admin (message lists the step numbers).",
+            "description": "Role too low (operator needed to run a workflow).",
             "content": {
               "application/json": {
                 "schema": {
@@ -402,6 +402,73 @@
           "render": {
             "type": "boolean",
             "description": "Accepted; not used (the engine always renders)."
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400,
+            "description": "Kill the task after this many seconds (failed, \"timed out after N seconds\"). Default: no limit."
+          }
+        }
+      },
+      "WorkflowRunAccepted": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TaskAccepted"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "caller_role": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "role_warnings": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/RoleWarning"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "RoleWarning": {
+        "type": "object",
+        "required": [
+          "step",
+          "command",
+          "label",
+          "required_role",
+          "conditional",
+          "note"
+        ],
+        "properties": {
+          "step": {
+            "type": "integer"
+          },
+          "command": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "required_role": {
+            "type": "string",
+            "enum": [
+              "operator",
+              "editor",
+              "admin"
+            ]
+          },
+          "conditional": {
+            "type": "boolean",
+            "description": "True when an earlier forward goto or if_then-goto may jump over the step, so a run might never reach it."
+          },
+          "note": {
+            "type": "string"
           }
         }
       }

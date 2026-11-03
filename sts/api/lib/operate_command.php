@@ -9,11 +9,15 @@ if (!defined('STS_API_BOOT')) {
     exit;
 }
 
-/** Destructive command ids: admin only. */
-const OPERATE_DESTRUCTIVE_COMMANDS = [
-    'restore_database', 'wipe', 'reset', 'backup_database',
-    'wipe_database', 'reset_session', 'restart_session',
-];
+require_once __DIR__ . '/policy.php';
+
+/**
+ * Command ids that touch the whole database (also used to find destructive
+ * recipe steps). Who may run a command comes from the policy
+ * (api_command_required_role()); a command that is in this list or needs admin
+ * runs as an exclusive task.
+ */
+const OPERATE_DESTRUCTIVE_COMMANDS = STS_API_POLICY_EXCLUSIVE_COMMANDS;
 
 /** Control-flow steps that only make sense inside a workflow run. */
 const OPERATE_FLOW_COMMANDS = ['stop', 'goto', 'if_then', 'skip_steps', 'marker', 'section_label', 'text_instruction'];
@@ -25,47 +29,103 @@ const OPERATE_SLOW_COMMANDS = [
     'rebuild_switchlists_index',
 ];
 
-require_once __DIR__ . '/openapi.php';
+require_once __DIR__ . '/policy.php';
 
 /**
- * Destructive steps of a recipe, as the runner would see it: the recipe is
- * normalized first (function ids are guessed from instruction text, if_then and
- * goto steps are merged), so step numbers match a run. Every step counts, also
- * disabled ones: they can be switched on by editing the file.
- * @return array<int,array{step:int,command:string}>
+ * before_dispatch guard for session_run_recipe(): fails the run at the first step
+ * whose command needs a higher role than $role (the task creator's). Steps
+ * skipped by conditions, ranges or disabled flags never reach it.
  */
-function api_recipe_destructive_steps(array $recipe)
+function api_workflow_step_guard($role)
 {
     api_operate_load();
     $catalog = operational_steps_catalog_by_id();
-    $found = [];
+    return static function ($fid, $n) use ($role, $catalog) {
+        $dispatch = (string) ($catalog[$fid]['dispatch'] ?? $fid);
+        $need = 'operator';
+        foreach (array_unique([(string) $fid, $dispatch]) as $id) {
+            $r = api_command_required_role($id);
+            if (api_role_rank($r) > api_role_rank($need)) {
+                $need = $r;
+            }
+        }
+        if (api_role_rank((string) $role) < api_role_rank($need)) {
+            throw new ApiTaskFailure("step $n ($fid) needs $need; sign in with an admin token or change the command's role on /sts/api_admin.php"
+                . " (the run was started by role '" . ($role === '' || $role === null ? 'none' : $role) . "')");
+        }
+    };
+}
+
+/**
+ * Steps of a recipe whose command needs a higher role than $role (null or below
+ * operator are compared as operator).
+ * Rows: {step, command, label, required_role, conditional, note}. conditional is true
+ * when a forward goto / if_then-goto earlier in the recipe may jump over the step
+ * (so a run might never reach it); skip lists given at run time are not considered.
+ * @return array<int,array>
+ */
+function api_recipe_role_warnings(array $recipe, $role)
+{
+    api_operate_load();
+    // Below operator nobody can run a workflow at all; list what exceeds operator rights then.
+    if (api_role_rank((string) $role) < api_role_rank('operator')) {
+        $role = 'operator';
+    }
+    $catalog = operational_steps_catalog_by_id();
     $norm = operational_steps_normalize_recipe($recipe);
-    foreach ($norm['steps'] ?? [] as $i => $step) {
+    $steps = $norm['steps'] ?? [];
+    $spans = []; // [from, target] of every forward jump
+    foreach ($steps as $i => $step) {
         if (!is_array($step)) {
             continue;
         }
         $fid = (string) ($step['function'] ?? '');
-        $dispatch = (string) ($catalog[$fid]['dispatch'] ?? $fid);
-        foreach (array_unique([$fid, $dispatch]) as $id) {
-            if (in_array($id, OPERATE_DESTRUCTIVE_COMMANDS, true)) {
-                $found[] = ['step' => $i + 1, 'command' => $fid];
-                break;
+        if ($fid === 'goto' || ($fid === 'if_then' && operational_steps_if_then_has_goto($step))) {
+            $target = operational_steps_goto_resolve_step($norm, $step['params'] ?? []);
+            if ($target > $i + 1) {
+                $spans[] = [$i + 1, $target, $fid];
             }
         }
     }
-    return $found;
-}
-
-/** 403 unless admin when the recipe holds destructive steps; names the step numbers. */
-function api_recipe_require_admin_for_destructive(array $recipe, ?array $user)
-{
-    $found = api_recipe_destructive_steps($recipe);
-    if ($found && api_role_rank($user['role'] ?? '') < api_role_rank('admin')) {
-        $list = implode(', ', array_map(static function ($f) {
-            return $f['step'] . ' (' . $f['command'] . ')';
-        }, $found));
-        api_error(403, "Recipe has destructive commands at step(s) $list; role 'admin' is required");
+    $out = [];
+    foreach ($steps as $i => $step) {
+        if (!is_array($step) || (array_key_exists('enabled', $step) && !$step['enabled'])) {
+            continue;
+        }
+        $n = $i + 1;
+        $fid = (string) ($step['function'] ?? '');
+        $dispatch = (string) ($catalog[$fid]['dispatch'] ?? $fid);
+        $need = 'operator';
+        foreach (array_unique([$fid, $dispatch]) as $id) {
+            $r = api_command_required_role($id);
+            if (api_role_rank($r) > api_role_rank($need)) {
+                $need = $r;
+            }
+        }
+        if (api_role_rank((string) $role) >= api_role_rank($need)) {
+            continue;
+        }
+        $cond = false;
+        foreach ($spans as [$from, $target, $kind]) {
+            if ($from < $n && $n < $target) {
+                $cond = $kind;
+                break;
+            }
+        }
+        $label = operational_steps_compile_recipe(['steps' => [$step]])[0]['instruction'] ?? $fid;
+        $out[] = [
+            'step' => $n,
+            'command' => $fid,
+            'label' => $label,
+            'required_role' => $need,
+            'conditional' => $cond !== false,
+            'note' => $cond === false
+                ? "Always runs unless skipped with a step range; needs $need."
+                : "Behind a " . ($cond === 'goto' ? 'goto' : 'condition') . " at an earlier step that may skip it; "
+                    . "it is only checked if the run reaches it. Whether it is reached depends on the database at run time.",
+        ];
     }
+    return $out;
 }
 
 function api_operate_load()
