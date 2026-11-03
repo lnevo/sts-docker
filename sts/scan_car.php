@@ -1,35 +1,25 @@
-<html>
-  <head>
-    <title>STS - Scan Cars</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-    </style>
-  </head>
-  <body onload='document.getElementById("reporting_marks").focus();'>
-<p><img src="ImageStore/GUI/Menu/manage.jpg" width="718" height="146" border="0" usemap="#Map5">
-  <map name="Map5">
-    <area shape="rect" coords="569,4,708,48" href="index.html">
-    <area shape="rect" coords="569,97,711,140" href="index-t.html">
-    <area shape="rect" coords="569,52,709,91" href="database.html">
-  </map>
-</p>
-<h2>Database Management</h2>
-    <h3 >Scan Cars</h3>
-    <div id="instructions">
+<?php
+require_once 'page_chrome.php';
+sts_page_start([
+    'title' => 'Scan Cars',
+    'icon' => 'bi-upc-scan',
+    'section' => 'data',
+    'body_attrs' => 'onload=\'document.getElementById("scan_code").focus();\'',
+]);
+?>
+<div class="sts-card">
+    <div id="instructions" class="text-muted mb-3">
     If the scanner is set to send a "Carriage Return" at the end of the scan,<br />
     it will automatically trigger the Scan button.<br /><br />
     To manually search for car information, enter the car's reporting marks<br />
-    into the Reporting Marks input box and then click the <b>SCAN</b> button.<br /><br />
+    into the Reporting Marks input box and then click the <b>SCAN</b> button.
     </div>
-    <form action="scan_car.php" method="get">
-    Scan QR code, Bar code, or RFID tag:
-      <input id="scan_code" name="scan_code" type="text">
-      <input name="scan_btn" value="SCAN" type="submit">
-      <br /><br />
+<form action="scan_car.php" method="get">
+    <label for="scan_code" class="form-label">Scan QR code, Bar code, or RFID tag:</label>
+    <div class="d-flex gap-2 mb-3">
+      <input id="scan_code" name="scan_code" type="text" class="form-control form-control-lg" autocomplete="off" autofocus>
+      <input name="scan_btn" value="SCAN" type="submit" class="btn btn-primary btn-lg">
+    </div>
     <?php
       // display everything we know about the selected car
 
@@ -137,7 +127,7 @@
                             $row['shipment'] . '">' .
                             $row['shipment'] . '</a>';
 
-          print '<table>
+          print '<table class="table table-sm table-bordered table-hover bg-white">
                    <thead>
                      <tr>
                        <th>Property</th>
@@ -212,13 +202,10 @@
         }
         else
         {
-          print "Car with ID " . $_GET['scan_code'] . " not found. Check spelling.";
+          print '<div class="alert alert-warning">Car with ID ' . $_GET['scan_code'] . ' not found. Check spelling.</div>';
         }
       }
     ?>
     </form>
-  
-</body>
-</html>
-
-
+</div>
+<?php sts_page_end(); ?>

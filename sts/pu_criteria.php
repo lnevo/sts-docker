@@ -1,24 +1,8 @@
-<html>
-  <head>
-  <!-- Ron's wonderful menuing system -->
-    <title>STS - Edit Database</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-    </style>
-  </head>
-  <body>
-<p><img src="ImageStore/GUI/Menu/manage.jpg" width="718" height="146" border="0" usemap="#Map5">
-  <map name="Map5">
-    <area shape="rect" coords="569,4,708,48" href="index.html">
-    <area shape="rect" coords="569,97,711,140" href="index-t.html">
-    <area shape="rect" coords="569,52,709,91" href="database.html">
-  </map>
-</p>
-
+<?php
+require_once 'page_chrome.php';
+sts_page_start(['title' => 'Pick Up Criteria', 'icon' => 'bi-funnel', 'section' => 'data', 'back_href' => '']);
+?>
+<div class="sts-card">
 <?php
   // return link
   print '<a href="db_edit.php?tbl_name=jobs&obj_id=' . $_GET['job_id'] . '&obj_name=' . $_GET['job_name'] . '">
@@ -263,8 +247,10 @@
   // update and remove buttons do a recursive call on this page and all of the form
   // values are passed through when the page loads
   print '<br />';
-  print '<input type="submit" name="update_btn" value="UPDATE">&nbsp;&nbsp;';
-  print '<input type="submit" name="remove_btn" value="REMOVE">';
+  print '<input type="submit" name="update_btn" value="UPDATE" class="btn btn-primary btn-sm">&nbsp;&nbsp;';
+  print '<input type="submit" name="remove_btn" value="REMOVE" class="btn btn-danger btn-sm">';
 
   print '</form>';
 ?>
+</div>
+<?php sts_page_end(); ?>

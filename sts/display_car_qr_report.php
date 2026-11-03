@@ -1,56 +1,40 @@
-<html>
-  <head>
-    <title>STS - Car QR/Bar Code Report</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-    </style>
-    <script>
+<?php
+require_once 'page_chrome.php';
+sts_page_start([
+  'title' => 'Car QR/Bar Code Report',
+  'icon' => 'bi-qr-code',
+  'section' => 'report',
+  'head_extra' => '<script>
       function enable_display_btn()
       {
         document.getElementById("display_btn").disabled = false;
       }
-    </script>
-  </head>
-  <body>
-<p><img src="ImageStore/GUI/Menu/report.jpg" width="715" height="144" border="0" usemap="#MapMap">
-  <map name="MapMap">
-    <area shape="rect" coords="566,7,704,47" href="index.html">
-    <area shape="rect" coords="566,96,706,136" href="index-t.html">
-    <area shape="rect" coords="563,51,707,91" href="reports.html">
-  </map>
-</p>
-<h2>Reports</h2>
-    <h3>Car QR/Bar Code Report</h3>
+    </script>',
+]);
+?>
     <!-- this form generates another page that is modified for better printing  -->
     <!-- the user needs to use the browser's back button to return to this page -->
     <!-- or user the link displayed at the bottom of the last page              -->
-    <form action="printable_car_qr_report.php" method="get"> 
-    Select the desired station, the desired type of code, and then click the Display button.<br />
-    <br />
-    The codes for all of the cars at the selected station will be displayed on a page that is formatted for printing.<br />
-    <br />
-    Use the browser's <b>BACK</b> button to return to this page or click on the link on the bottom of the last page of the report.
-    <br /><br />
-   
+    <div class="sts-card">
+    <form action="printable_car_qr_report.php" method="get">
+    <p>Select the desired station, the desired type of code, and then click the Display button. The codes for all of the cars at the selected station will be displayed on a page that is formatted for printing.</p>
+    <p>Use the browser's <b>BACK</b> button to return to this page or click on the link on the bottom of the last page of the report.</p>
 
     <?php
       // bring in the utility files
       require 'drop_down_list_functions.php';
       require 'open_db.php';
 
-
       // generate a drop-down list of stations, radio buttons for the type of codes,  and the submit button
-      print 'Station: ' . drop_down_stations('station_name', '', 'enable_display_btn()') . '&nbsp;';
+      print '<div class="mb-3"><label class="form-label" for="station_name">Station</label>' . drop_down_stations('station_name', '', 'enable_display_btn()') . '</div>';
 
-      print '<input name="code_type" type="radio" value="qr" checked> QR Code&nbsp;
-             <input name="code_type" type="radio" value="bar"> Bar Code&nbsp;';
+      print '<div class="mb-3">
+               <div class="form-check form-check-inline"><input class="form-check-input" id="code_type_qr" name="code_type" type="radio" value="qr" checked> <label class="form-check-label" for="code_type_qr">QR Code</label></div>
+               <div class="form-check form-check-inline"><input class="form-check-input" id="code_type_bar" name="code_type" type="radio" value="bar"> <label class="form-check-label" for="code_type_bar">Bar Code</label></div>
+             </div>';
 
-      print '<input id="display_btn" name="display_btn" value="Display" type="submit" onclick="start_dots();" disabled><br /><br >';
-      print '<div id="dots" style="visibility: hidden">Working</div>';
+      print '<button id="display_btn" name="display_btn" value="Display" type="submit" class="btn btn-primary" onclick="start_dots();" disabled><i class="bi bi-printer"></i> Display</button>';
+      print '<div id="dots" class="mt-2 text-muted" style="visibility: hidden">Working</div>';
 
       // generate some javascript that adds "All" to the top of the station drop-down list
       print '<script>
@@ -80,5 +64,5 @@
             </script>';
     ?>
     </form>
-  </body>
-</html>
+    </div>
+<?php sts_page_end(); ?>

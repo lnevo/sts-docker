@@ -1,34 +1,23 @@
-<html>
-  <head>
-    <title>STS - Fix Empty Cars That May Still Be Loaded</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-    </style>
-  </head>
-  <body>
-    <p> <img src="ImageStore/GUI/Menu/maint.jpg" width="715" height="147" border="0" usemap="#Map3">
-      <map name="Map3">
-        <area shape="rect" coords="567,5,710,47" href="index.html">
-        <area shape="rect" coords="568,98,708,142" href="index-t.html">
-        <area shape="rect" coords="567,54,711,92" href="db-maint.html">
-      </map>
-    </p>
-    <h2><a href="validate_db.php"><img src="ImageStore/GUI/Menu/validate.png" width="166" height="40" border="0"></a></h2>
-    <h2>Database Maintenance</h2>
-    <h3 >Fix Empty Cars That May Still Be Loaded</h3>
-    <div id="instructions">
+<?php
+require_once 'page_chrome.php';
+sts_page_start([
+    'title' => 'Fix Empty Cars That May Still Be Loaded',
+    'icon' => 'bi-box',
+    'section' => 'maint',
+    'links' => [['href' => 'validate_db.php', 'label' => 'Validate Database', 'icon' => 'bi-check2-square']],
+    'head_extra' => <<<'HTML'
+HTML,
+]);
+?>
+<div class="sts-card">
+<div id="instructions" class="alert alert-warning">
     Cars having a status of Empty should not be shown to have a Commodity<br />
     assigned. Either their status should be changed to Loaded or their waybill<br />
     should be cancelled.<br /><br />
     When the FIX STATUS button is clicked, the desired action will be taken.<br />
   <br />
     </div>
-
-    <?php
+<?php
       // pull in the utility files
       require 'open_db.php';
 
@@ -52,7 +41,7 @@
               if (!mysqli_query($dbc, $sql))
               {
                 print 'Unable to update car current location<br />';
-                die();
+                print '</div>'; sts_page_end(); die();
               }
             }
             else
@@ -64,7 +53,7 @@
               if (!mysqli_query($dbc, $sql))
               {
                 print 'Unable to update car current location<br />';
-                die();
+                print '</div>'; sts_page_end(); die();
               }
             }
           }          
@@ -91,9 +80,9 @@
       if (mysqli_num_rows($rs) > 0)
       {
         print '<form action="fix_empty_commodity.php" method="get">';
-        print '<input type="submit" id="fix_it_btn" name="fix_it_btn" value="FIX STATUS">&nbsp;<input type="reset" value="RESET"><br /><br />';
+        print '<input type="submit" class="btn btn-danger" id="fix_it_btn" name="fix_it_btn" value="FIX STATUS" onclick="return confirm(\'Fix Status: this changes the database. Continue?\');">&nbsp;<input type="reset" class="btn btn-secondary" value="RESET"><br /><br />';
     
-        print '<table id="car_table" name="car_table">';
+        print '<table class="table table-sm table-bordered w-auto" id="car_table" name="car_table">';
         print '<thead>';
         print '<tr>';
         print '<th>Change Status<br />To Loaded?</th>
@@ -129,8 +118,5 @@
         print '<br />No Empty Cars were found that still have commodities assigned to them.';
       }
     ?>
-
-</body>
-</html>
-
-
+</div>
+<?php sts_page_end(); ?>

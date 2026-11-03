@@ -1,26 +1,11 @@
-<html>
-  <head>
-    <title>Remove Rolling Stock Image</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      th.vert_bottom {vertical-align: bottom}
-      td {border: 1px solid black; padding: 10px}
-      td.numbers {text-align: center}
-    </style>
-    <script>
-      window.onunload = refreshParent;
-      function refreshParent() {
-          window.opener.location.reload();
-      }
-  </script>
-  </head>
-  <body>
-    <h3>Edit Cars</h3>
+<?php
+require_once 'page_chrome.php';
+sts_page_start(['title' => 'Remove Rolling Stock Image', 'icon' => 'bi-image', 'section' => 'data', 'back_href' => '',
+  'head_extra' => '<script>window.onunload = refreshParent; function refreshParent() { window.opener.location.reload(); }</script>']);
+?>
+<div class="sts-card">
     <?php
-      print '<h3>Upload a Rollingstock Image</h3>';
+      print '<h3>Remove a Rollingstock Image</h3>';
 
       // check to see if the upload button was clicked
       if (isset($_POST['remove_btn']))
@@ -64,7 +49,7 @@
         
         print '<p>To remove this image for ' . $_GET['obj_id'] . ' click the REMOVE button.</p>';
                
-        print '<input type="submit" name="remove_btn" id="remove_btn" value="REMOVE">&nbsp;';
+        print '<input type="submit" name="remove_btn" id="remove_btn" value="REMOVE" class="btn btn-danger btn-sm">&nbsp;';
                //<input type="submit" name="close_win" id="close_win" value="CANCEL" onclick="window.close();"><br /><br />';
         print '<br /><br />Close this window to return to the Edit Car Screen<br /><br />';
 
@@ -77,5 +62,5 @@
         print '</form>';
       }
     ?>
-  </body>
-</html>
+</div>
+<?php sts_page_end(); ?>

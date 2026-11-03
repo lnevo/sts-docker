@@ -1,35 +1,45 @@
-<html>
-  <head>
-    <title>STS - Wipe system</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-    </style>
-  </head>
-  <body>
-<p><img src="ImageStore/GUI/Menu/maint.jpg" width="715" height="147" border="0" usemap="#Map3">
-  <map name="Map3">
-    <area shape="rect" coords="567,5,710,47" href="index.html">
-    <area shape="rect" coords="568,98,708,142" href="index-t.html">
-    <area shape="rect" coords="567,54,711,92" href="db-maint.html">
-  </map>
-</p>
-<h2>Database Maintenance</h2>
-    <h3>Wipe Database</h3>
+<?php
+require_once 'page_chrome.php';
+sts_page_start([
+    'title' => 'Wipe Database',
+    'icon' => 'bi-eraser',
+    'section' => 'maint',
+    'head_extra' => <<<'HTML'
+    <script>
+      function toggle_wipe_check_box2()
+      {
+        if (document.getElementById("wipe_check_box2").disabled)
+          document.getElementById("wipe_check_box2").disabled = false;
+        else
+          {
+            document.getElementById("wipe_check_box2").disabled = true;
+            document.getElementById("wipe_check_box2").checked = false;
+            document.getElementById("wipe_btn").disabled = true;
+          }
+      }
+      function toggle_wipe_btn()
+      {
+        if (document.getElementById("wipe_btn").disabled)
+          document.getElementById("wipe_btn").disabled = false;
+        else
+          document.getElementById("wipe_btn").disabled = true;
+      }
+    </script>
+HTML,
+]);
+?>
+<div class="sts-card">
+<div class="alert alert-danger">
     Click the check boxes to activate the <b>WIPE</b> button<br />
-Click the <b>WIPE</b> button to erase the contents of the database and start over.<br /> 
-<img src="ImageStore/GUI/warning.gif" width="110" height="30" align="absbottom"> There 
-is no &quot;Undo&quot; feature. <br />
-<br />
+Click the <b>WIPE</b> button to erase the contents of the database and start over.<br />
+There is no &quot;Undo&quot; feature.
+</div>
     <form method="get" action="wipe.php">
-      <input id="wipe_check_box1" value="reset" type="checkbox" onclick="toggle_wipe_check_box2();">
+      <input id="wipe_check_box1" value="reset" type="checkbox" class="form-check-input" onclick="toggle_wipe_check_box2();">
       Yes, I'm certain I want to wipe the entire database!<br /><br />
-      <input id="wipe_check_box2" value="wipe2" type="checkbox" onclick="toggle_wipe_btn();" disabled>
-      Yes, I'm REALLY REALLY certain that I want to wipe the entire database! (No going back!)<br /><br ?>
-      <input id="wipe_btn" name="wipe_btn" value="WIPE" type="submit" disabled><br /><br />
+      <input id="wipe_check_box2" value="wipe2" type="checkbox" class="form-check-input" onclick="toggle_wipe_btn();" disabled>
+      Yes, I'm REALLY REALLY certain that I want to wipe the entire database! (No going back!)<br /><br />
+      <input id="wipe_btn" name="wipe_btn" value="WIPE" type="submit" class="btn btn-danger" onclick="return confirm('Wipe the entire database now? There is no undo.');" disabled><br /><br />
     </form>
 
     <?php
@@ -353,25 +363,5 @@ is no &quot;Undo&quot; feature. <br />
       }
     ?>
 
-    <script>
-      function toggle_wipe_check_box2()
-      {
-        if (document.getElementById("wipe_check_box2").disabled)
-          document.getElementById("wipe_check_box2").disabled = false;
-        else
-          {
-            document.getElementById("wipe_check_box2").disabled = true;
-            document.getElementById("wipe_check_box2").checked = false;
-            document.getElementById("wipe_btn").disabled = true;
-          }
-      }
-      function toggle_wipe_btn()
-      {
-        if (document.getElementById("wipe_btn").disabled)
-          document.getElementById("wipe_btn").disabled = false;
-        else
-          document.getElementById("wipe_btn").disabled = true;
-      }
-    </script>
-  </body>
-</html>
+</div>
+<?php sts_page_end(); ?>

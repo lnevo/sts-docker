@@ -1,0 +1,114 @@
+/* Shared chrome for pages built with page_chrome.php (STS UI conventions). */
+
+body.sts-page {
+  background-color: #f8f9fa;
+  color: #333;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+}
+
+.sts-nav-ops {
+  background-color: #2e7d32;
+}
+
+.sts-navbar-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sts-navbar-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sts-page-narrow {
+  max-width: 960px;
+}
+
+.sts-page-body {
+  padding-bottom: 24px;
+}
+
+.sts-page-body h2 {
+  color: #333;
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.sts-page-body h3 {
+  color: #666;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+/* Content card: the primary container (ui-conventions 4.2). */
+.sts-card {
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+/* Legacy tables without a class pick up the data-table look and scroll on
+   narrow screens instead of overflowing the page. */
+.sts-page-body table:not([class]),
+.sts-page-body table.sts-table {
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.sts-page-body table:not([class]) th,
+.sts-page-body table:not([class]) td,
+.sts-page-body table.sts-table th,
+.sts-page-body table.sts-table td {
+  border: 1px solid #dee2e6;
+  padding: 6px 10px;
+  vertical-align: top;
+}
+
+.sts-page-body table:not([class]) th,
+.sts-page-body table.sts-table th {
+  background-color: #4a90e2;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.sts-page-body table:not([class]) tr:hover td,
+.sts-page-body table.sts-table tr:hover td {
+  background-color: #f0f4ff;
+}
+
+/* Touch targets: keep form controls usable on tablets. */
+.sts-page-body input[type="text"],
+.sts-page-body input[type="number"],
+.sts-page-body input[type="date"],
+.sts-page-body input[type="password"],
+.sts-page-body select,
+.sts-page-body textarea {
+  min-height: 40px;
+}
+
+@media print {
+  .noprint {
+    display: none !important;
+  }
+
+  body.sts-page {
+    background: #fff;
+  }
+
+  .sts-card {
+    box-shadow: none;
+    padding: 0;
+  }
+}

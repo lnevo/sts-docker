@@ -1,25 +1,29 @@
-<html>
-  <head>
-    <title>STS - Reset System</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-    </style>
-  </head>
-  <body>
-<img src="ImageStore/GUI/Menu/maint.jpg" width="715" height="147" border="0" usemap="#Map3">
-<map name="Map3">
-  <area shape="rect" coords="567,5,710,47" href="index.html">
-  <area shape="rect" coords="568,98,708,142" href="index-t.html">
-  <area shape="rect" coords="567,54,711,92" href="db-maint.html">
-</map>
-<h2>Database Maintenance</h2>
-    <h3>Reset Simulation</h3>
-
-    <?php
+<?php
+require_once 'page_chrome.php';
+sts_page_start([
+    'title' => 'Reset Simulation',
+    'icon' => 'bi-arrow-counterclockwise',
+    'section' => 'maint',
+    'head_extra' => <<<'HTML'
+    <script>
+      function toggle_restart_btn()
+      {
+        if (document.getElementById("restart_btn").disabled)
+          document.getElementById("restart_btn").disabled = false;
+        else
+          document.getElementById("restart_btn").disabled = true;
+      }
+    </script>
+HTML,
+]);
+?>
+<div class="sts-card">
+<div class="alert alert-danger">
+Click the check box to activate the <b>RESET</b> button<br />
+    Click the <b>RESET</b> button to restart all shippers, cancel all waybills, set all cars to "Empty-Available",<br />
+    reposition all cars to their home locations if they have one specified, and set all car load counts to 0 (zero).
+</div>
+<?php
       // this program restarts all shippers, cancels waybills, and sets all cars to "Empty-Available"
       // it also places all cars at their home location if one is specified, otherwise it leaves them where they are
       // it also sets all car load counts to 0 (zero)
@@ -104,24 +108,12 @@
       }
     ?>
 
-    Click the check box to activate the <b>RESET</b> button<br />
-    Click the <b>RESET</b> button to restart all shippers, cancel all waybills, set all cars to "Empty-Available",<br />
-    reposition all cars to their home locations if they have one specified, and set all car load counts to 0 (zero).
-    <br /><br />
-    <script>
-      function toggle_restart_btn()
-      {
-        if (document.getElementById("restart_btn").disabled)
-          document.getElementById("restart_btn").disabled = false;
-        else
-          document.getElementById("restart_btn").disabled = true;
-      }
-    </script>
     <form method="get" action="reset.php">
-      <input id="reset_check_box" value="reset" type="checkbox" onclick="toggle_restart_btn();">
+      <input id="reset_check_box" value="reset" type="checkbox" class="form-check-input" onclick="toggle_restart_btn();">
       Yes, I'm certain I want to reset the simulation!<br /><br />
-      <input id="restart_btn" name="restart_btn" value="RESET" type="submit" disabled><br /><br />
+      <input id="restart_btn" name="restart_btn" value="RESET" type="submit" class="btn btn-danger" onclick="return confirm('Reset the simulation now? This cannot be undone.');" disabled><br /><br />
     </form>
-    <?php print $msg; ?>
-  </body>
-</html>
+
+<?php print $msg; ?>
+</div>
+<?php sts_page_end(); ?>

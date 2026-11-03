@@ -1,28 +1,15 @@
-<html>
-  <head>
-    <title>STS - Shipment Forecast</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      th.vert_bottom {vertical-align: bottom}
-      td {border: 1px solid black; padding: 10px}
-      td.numbers {text-align: center}
-    </style>
-  </head>
-  <body>
-<p><img src="ImageStore/GUI/Menu/report.jpg" width="715" height="144" border="0" usemap="#MapMap">
-  <map name="MapMap">
-    <area shape="rect" coords="566,7,704,47" href="index.html">
-    <area shape="rect" coords="566,96,706,136" href="index-t.html">
-    <area shape="rect" coords="563,51,707,91" href="reports.html">
-  </map>
-</p>
-<h2>Reports</h2>
-    <h3>Shipment Forecast</h3>
-
-    <?php
+<?php
+require_once 'page_chrome.php';
+sts_page_start([
+    'title' => 'Shipment Forecast',
+    'icon' => 'bi-graph-up-arrow',
+    'section' => 'report',
+    'print' => true,
+    'head_extra' => '<style>th.vert_bottom {vertical-align: bottom} td.numbers {text-align: center} @media print {.sts-card {box-shadow: none; padding: 0}}</style>',
+]);
+?>
+<div class="sts-card">
+<?php
       // bring in the utility files
       require 'drop_down_list_functions.php';
       require 'open_db.php';
@@ -40,7 +27,7 @@
       $row_print_width= mysqli_fetch_row($rs);
       $print_width = $row_print_width[0];
 
-      print '<div id="instructions" style="width: ' . $print_width . '">';
+      print '<div id="instructions" class="text-muted" style="width: ' . $print_width . '">';
     ?>
     The report shows an estimate of how often shipments will occur during the next 10 operating sessions.<br /><br />
     As the random number generator is not predictable (on purpose) the actual number of shipments will vary from day to day but should remain somewhat stable from one ten day period to another.</br /><br />
@@ -48,7 +35,7 @@
     Click on the <b>REFRESH</b> button to generate another set of random numbers. Click on the <b>PRINT</b> button to generate a printable report.<br /><br />
     </div>
     <form action="shipment_forecast.php" method="get">
-    <input id="refresh_btn" name="refresh_btn" value="REFRESH" type="submit">&nbsp;&nbsp;<button onclick="window.print();">PRINT</button>
+    <input id="refresh_btn" name="refresh_btn" value="REFRESH" type="submit" class="btn btn-primary">&nbsp;&nbsp;<button type="button" class="btn btn-outline-secondary" onclick="window.print();">PRINT</button>
     <br /><br />
     <?php
 
@@ -163,5 +150,5 @@
       }
     ?>
     </form>
-  </body>
-</html>
+</div>
+<?php sts_page_end(); ?>

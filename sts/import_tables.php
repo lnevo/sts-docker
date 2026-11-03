@@ -1,29 +1,13 @@
-<html>
-  <head>
-    <title>STS - Import Data</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      th.vert_bottom {vertical-align: bottom}
-      td {border: 1px solid black; padding: 10px}
-      td.numbers {text-align: center}
-    </style>
-  </head>
-  <body>
-  <p><img src="ImageStore/GUI/Menu/manage.jpg" width="718" height="146" border="0" usemap="#Map5">
-    <map name="Map5">
-      <area shape="rect" coords="569,4,708,48" href="index.html">
-      <area shape="rect" coords="569,97,711,140" href="index-t.html">
-      <area shape="rect" coords="569,52,709,91" href="database.html">
-    </map>
-  </p>
-  <h2>Database Management</h2>
-      
-  <h3>Import Data from a File</h3>
-  <p><img src="ImageStore/GUI/warning.gif" width="110" height="30" align="absmiddle"> There is no &quot;Undo&quot; for the Replace function!</p>
-
+<?php
+require_once 'page_chrome.php';
+sts_page_start([
+    'title' => 'Import Data from a File',
+    'icon' => 'bi-upload',
+    'section' => 'maint',
+]);
+?>
+<div class="sts-card">
+<div class="alert alert-warning">There is no &quot;Undo&quot; for the Replace function!</div>
     <?php
       // bring in the utility files
       require 'open_db.php';
@@ -329,7 +313,7 @@
     ?>
 
     <form action="import_tables.php" method="post" enctype="multipart/form-data">
-      <table>
+      <table class="table table-bordered w-auto">
         <tr>
           <th>Table</th>
           <th>Add or Replace</th>
@@ -349,11 +333,11 @@
             <input type="radio" name="add_replace" value="replace"> Replace all Existing Data
           </td>
           <td style="valign: top";>
-            <input type="file" name="import_file" id="import_file" accept=".csv"><br /><br />
-            <input type="submit" value="IMPORT" name="import">
+            <input type="file" class="form-control" name="import_file" id="import_file" accept=".csv"><br /><br />
+            <input type="submit" class="btn btn-danger" value="IMPORT" name="import" onclick="var r = document.querySelector('input[name=add_replace]:checked'); if (r &amp;&amp; r.value === 'replace') { return confirm('Replace will erase all existing data in the selected table. There is no undo. Continue?'); }">
           </td>
         </tr>
       </table>
     </form>
-  </body>
-</html>
+</div>
+<?php sts_page_end(); ?>

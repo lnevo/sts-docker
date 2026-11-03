@@ -1,29 +1,17 @@
-<html>
-  <head>
-    <title>STS Club Ops - Ownership Management</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top;}
-      th {border: 1px solid black; padding: 10px;}
-      td {border: 1px solid black; padding: 10px;}
-      td.checkbox {text-align: center;}
-    </style>
-    <?php
-      // bring in the javascript function that shows rollingstock photos
-      require 'show_image.php';
-    ?>
-  </head>
-  <body>
-<p><img src="ImageStore/GUI/Menu/club_operations.jpg" width="716" height="147" border="0" usemap="#Map4">
-  <map name="Map4">
-    <area shape="rect" coords="570,3,709,49" href="index.html">
-    <area shape="rect" coords="567,94,709,141" href="index-t.html">
-    <area shape="rect" coords="569,53,710,93" href="club_index.html">
-  </map>
-</p>
-<h2>Fleet Management</h2>
-<h3>Rolling Stock Ownership</h3>
+<?php
+require_once 'page_chrome.php';
+// bring in the javascript function that shows rollingstock photos
+ob_start();
+require 'show_image.php';
+$show_image_js = ob_get_clean();
+sts_page_start([
+    'title' => 'Rolling Stock Ownership',
+    'icon' => 'bi-person-badge',
+    'section' => 'club',
+    'head_extra' => $show_image_js,
+]);
+?>
+<div class="sts-card">
 <?php
       // connect to the database using the credentials from sts04
       require 'open_db.php';
@@ -108,11 +96,11 @@
       print '<form name=get_owner method="post" action="ownership.php">';
       
       // put a submit button on both the top and bottom of the page
-      print '<input type="submit" id="submit" name="submit" value="UPDATE">';
+      print '<input type="submit" id="submit" name="submit" value="UPDATE" class="btn btn-primary">';
       print '<br /><br />';
       
       // set up the table for the list of cars and owners
-      print '<table>
+      print '<table class="table table-sm table-bordered align-middle bg-white">
                <tr>
                  <th>Car Reporting Marks</th>
                  <th>Owner</th>
@@ -150,7 +138,7 @@
         print '<tr>';
         print '  <td onclick="show_image(' . $parm_string . ');">' . $row['reporting_marks'] . '<input type="hidden" id="car_id' . $row_count . '" name="car_id' . $row_count . '" value="' . $row['car_id'] . '"></td>';
         print '  <td>';
-        print '    <select id="select' . $row_count . '" name="select' . $row_count . '">';
+        print '    <select id="select' . $row_count . '" name="select' . $row_count . '" class="form-select form-select-sm">';
         print '      <option value=""></option>';
         for ($i = 0; $i < $owner_count; $i++)
         {
@@ -176,10 +164,9 @@
 
       // put a submit button on both the top and bottom of the page
       print '<br />';
-      print '<input type="submit" id="submit" name="submit" value="UPDATE">';
+      print '<input type="submit" id="submit" name="submit" value="UPDATE" class="btn btn-primary">';
       print '</form>';
       
     ?>
-<!-- <a href="index.html"><img src="../sts/ImageStore/Menu/Club-OPS-operations-sm.jpg" width="109" height="30" border="0"></a> -->
-</body>
-</html>
+</div>
+<?php sts_page_end(); ?>

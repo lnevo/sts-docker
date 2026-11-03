@@ -1,25 +1,13 @@
-<html>
-  <head>
-    <title>STS - Validate Database</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-    </style>
-  </head>
-  <body>
-<p><img src="ImageStore/GUI/Menu/maint.jpg" width="715" height="147" border="0" usemap="#Map3">
-  <map name="Map3">
-    <area shape="rect" coords="567,5,710,47" href="index.html">
-    <area shape="rect" coords="568,98,708,142" href="index-t.html">
-    <area shape="rect" coords="567,54,711,92" href="db-maint.html">
-  </map>
-</p>
-<h2>Database Maintenance</h2>
-    <h3 >Validate Database</h3>
-    <table style="width:750px;">
+<?php
+require_once 'page_chrome.php';
+sts_page_start([
+    'title' => 'Validate Database',
+    'icon' => 'bi-check2-square',
+    'section' => 'maint',
+]);
+?>
+<div class="sts-card">
+    <table class="table table-sm" style="max-width:900px;">
     <tr style="border: 0px;">
       <td style="border: 0px;">
         This report checks the STS database for any broken links that may be due to database objects having been removed after the simulation is running or because
@@ -39,7 +27,7 @@
       print '<tr>
                <td>
                  <b>Locations without a valid link to a station</b> These locations will not be displayed on the List Locations screen because of the broken link.
-                    Use the <a href="./fix_ghost_locations.php">Fix Ghost Locations</a> function to remove these locations.
+                    Use the <a class="btn btn-sm btn-outline-danger py-0" href="./fix_ghost_locations.php">Fix Ghost Locations</a> function to remove these locations.
                </td>
              </tr>';
       $sql = 'select code from locations where station not in (select id from routing) order by code';
@@ -272,7 +260,7 @@
       print '<tr>
                <td>
                  <b>Cars shown as Empty but may still be loaded</b> Any car with a status of Empty should not be shown as having a consignment.
-                    Use the <a href="./fix_empty_commodity.php">Find and Fix Empty Cars having Consignments</a> function to repair these problems.
+                    Use the <a class="btn btn-sm btn-outline-danger py-0" href="./fix_empty_commodity.php">Find and Fix Empty Cars having Consignments</a> function to repair these problems.
                </td>
              </tr>';
 
@@ -317,7 +305,7 @@
       print '<tr>
                <td>
                  <b>Cars in Trains that still have Current Locations</b> Any car currently in a train should not have a "Current Location".
-                    Use the <a href="./fix_cars_trains_loc.php">Find and Fix Cars in Trains w/Current Location</a> function to repair these problems.
+                    Use the <a class="btn btn-sm btn-outline-danger py-0" href="./fix_cars_trains_loc.php">Find and Fix Cars in Trains w/Current Location</a> function to repair these problems.
                </td>
              </tr>';
 
@@ -361,7 +349,7 @@
       print '<tr>
                <td>
                  <b>Orphaned Cars</b> These repositioned cars are assigned to car orders which are missing their links to an unloading
-                    location or the cars have a status code other than "Ordered." Use the <a href="./fix_orphans.php">Find and Fix Orphaned Cars</a> function to repair these problems.
+                    location or the cars have a status code other than "Ordered." Use the <a class="btn btn-sm btn-outline-danger py-0" href="./fix_orphans.php">Find and Fix Orphaned Cars</a> function to repair these problems.
                </td>
              </tr>';
        
@@ -413,7 +401,7 @@
       print '<tr>
                <td>
                  <b>Incomplete Waybills</b> These waybills were not closed out when the cars attached to them were unloaded at their final destination.
-                 Use the <a href="./fix_waybills.php">Find and Fix Incomplete Waybills</a> function to repair these problems.
+                 Use the <a class="btn btn-sm btn-outline-danger py-0" href="./fix_waybills.php">Find and Fix Incomplete Waybills</a> function to repair these problems.
                </td>
              </tr>';
        
@@ -472,7 +460,7 @@
       print '<tr>
                <td>
                  <b>Job Steps without a valid link to a station</b> These job steps will not be displayed in the Job Step list because of the
-                    broken link. Use the <a href="./fix_ghost_steps.php">Fix Ghost Job Steps</a> function to remove the missing steps, then 
+                    broken link. Use the <a class="btn btn-sm btn-outline-danger py-0" href="./fix_ghost_steps.php">Fix Ghost Job Steps</a> function to remove the missing steps, then 
                     recreate the job step and link it to an existing station.
                </td>
              </tr>';
@@ -523,7 +511,7 @@
 
       print '<tr>
                <td>
-                 <b>Ghost Cars</b> These cars are referenced in car orders but don\'t exist in the cars database. Use the <a href="./fix_ghost_cars.php">Fix Ghost Cars</a>
+                 <b>Ghost Cars</b> These cars are referenced in car orders but don\'t exist in the cars database. Use the <a class="btn btn-sm btn-outline-danger py-0" href="./fix_ghost_cars.php">Fix Ghost Cars</a>
                    function to remove these car orders.
                </td>
              </tr>';
@@ -554,7 +542,7 @@
       print '<tr>
                <td>
                  <b>Ghost Trains</b> These jobs/trains, while no longer in the database, still have job steps associated with them
-                    that are taking up resources and may cause database corruption. Use the <a href="./fix_ghost_trains.php">Fix Ghost Trains</a>
+                    that are taking up resources and may cause database corruption. Use the <a class="btn btn-sm btn-outline-danger py-0" href="./fix_ghost_trains.php">Fix Ghost Trains</a>
                     function to eliminate each ghost job\'s abandoned steps.
                </td>
              </tr>';
@@ -604,7 +592,7 @@
       print '<tr>
                <td>
                  <b>Illegal Characters in Reporting Marks</b> Reporting marks may only consist of alphabetic letters. The & is not allowed.
-                 Use the <a href="./fix_reporting_marks.php">Fix Reporting Marks</a> function to remove illegal characters.
+                 Use the <a class="btn btn-sm btn-outline-danger py-0" href="./fix_reporting_marks.php">Fix Reporting Marks</a> function to remove illegal characters.
                </td>
              </tr>';
       $sql = 'select reporting_marks from cars where locate("&", reporting_marks)';
@@ -629,7 +617,7 @@
 
     ?>
     </table>
-  </body>
-</html>
+</div>
+<?php sts_page_end(); ?>
 
 

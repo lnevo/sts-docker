@@ -118,19 +118,14 @@ if (isset($_POST['upload_restore_btn'])) {
 
 $backup_files = array_slice(scandir('./backups'), 2);
 sort($backup_files);
-?>
-<html>
-  <head>
-    <title>STS - Restore DB</title>
+require_once 'page_chrome.php';
+sts_page_start([
+    'title' => 'Restore Database',
+    'icon' => 'bi-cloud-download',
+    'section' => 'maint',
+    'head_extra' => <<<'HTML'
     <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-      .section-card {margin-bottom: 24px;}
       .download-link {font-size: 16px;}
-      .status-box {font-size: 18px; margin: 12px 0;}
     </style>
     <script>
       function enable_restore_btn()
@@ -138,33 +133,27 @@ sort($backup_files);
         document.getElementById("restore_btn").disabled = false;
       }
     </script>
-  </head>
-  <body>
-  <p><img src="ImageStore/GUI/Menu/manage.jpg" width="718" height="146" border="0" usemap="#Map5">
-    <map name="Map5">
-      <area shape="rect" coords="569,4,708,48" href="index.html">
-      <area shape="rect" coords="569,97,711,140" href="index-t.html">
-      <area shape="rect" coords="569,52,709,91" href="database.html">
-    </map>
-  </p>
-  <h2>Database Management</h2>
-  <h3>Restore Database</h3>
-
+HTML,
+]);
+?>
+<div class="sts-card">
+  <div class="alert alert-danger">
+    The current contents of the database for this railroad will be erased and replaced with the data stored in the backup copy.
+    If you are restoring a backup file for a different railroad, run the <b>WIPE</b> function first.
+  </div>
   <?php if ($status_msg !== '') { ?>
-    <div class="status-box" style="color: <?php echo $status_color; ?>;"><?php echo $status_msg; ?></div>
+    <div class="alert <?php echo $status_color === 'green' ? 'alert-success' : 'alert-danger'; ?>"><?php echo $status_msg; ?></div>
   <?php } ?>
 
-  <div class="section-card">
+  <div class="mb-4">
     <form action="restore_db.php" method="post">
       Click on the radio button for the backup copy that you want to restore and then click the <b>RESTORE</b> button.<br /><br />
-      The current contents of the database for this railroad will be erased and replaced with the data stored in the backup copy.<br /><br />
-      If you are restoring a backup file for a different railroad, run the <b>WIPE</b> function first.<br /><br />
 
       <?php
       if (count($backup_files) > 0) {
-        print '<input id="restore_btn" name="restore_btn" value="RESTORE" type="submit" disabled><br /><br />';
+        print '<input id="restore_btn" name="restore_btn" value="RESTORE" type="submit" class="btn btn-danger" onclick="return confirm(\'Restore this backup? The current database contents will be erased and replaced.\');" disabled><br /><br />';
 
-        print '<table>';
+        print '<table class="table table-sm table-bordered w-auto">';
         print '<tr><th>Select</th><th>Backup File</th><th>Download</th></tr>';
         foreach ($backup_files as $file_name) {
           if (is_file('./backups/' . $file_name)) {
@@ -183,13 +172,13 @@ sort($backup_files);
     </form>
   </div>
 
-  <div class="section-card">
+  <div class="mb-4">
     <h3>Restore From Your Device</h3>
     <form action="restore_db.php" method="post" enctype="multipart/form-data">
       Select a local SQL file and click <b>UPLOAD &amp; RESTORE</b>.<br /><br />
-      <input type="file" name="sql_file" accept=".sql" required>
-      <input type="submit" name="upload_restore_btn" value="UPLOAD &amp; RESTORE">
+      <input type="file" class="form-control d-inline-block w-auto" name="sql_file" accept=".sql" required>
+      <input type="submit" class="btn btn-danger" name="upload_restore_btn" value="UPLOAD &amp; RESTORE" onclick="return confirm('Restore from the uploaded file? The current database contents will be erased and replaced.');">
     </form>
   </div>
-  </body>
-</html>
+</div>
+<?php sts_page_end(); ?>

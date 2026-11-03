@@ -1,24 +1,20 @@
-<html>
-  <head>
-    <title>STS - Back-up DB</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-    </style>
-  </head>
-  <body>
-<p><img src="ImageStore/GUI/Menu/manage.jpg" width="718" height="146" border="0" usemap="#Map5">
-  <map name="Map5">
-    <area shape="rect" coords="569,4,708,48" href="index.html">
-    <area shape="rect" coords="569,97,711,140" href="index-t.html">
-    <area shape="rect" coords="569,52,709,91" href="database.html">
-  </map>
-</p>
-<h2>Database Management</h2>
-  <h3>Back Up Database</h3>
+<?php
+require_once 'page_chrome.php';
+sts_page_start([
+    'title' => 'Back Up Database',
+    'icon' => 'bi-cloud-upload',
+    'section' => 'maint',
+    'head_extra' => <<<'HTML'
+    <script>
+      function display_msg1()
+      {
+        document.getElementById("msg1").innerHTML = "Processing...";
+      }
+    </script>
+HTML,
+]);
+?>
+<div class="sts-card">
   <form action="backup_db.php" method="get">
     <div align="left">Enter a name for the backup file and then click the <b>Back 
     Up</b> button. This file can be used to restore the database at a later date.<br />
@@ -26,9 +22,9 @@
     (Leave the file name box empty and click the Back Up button to refresh the 
     list of existing files.)<br />
     <br />
-    <input id="backup_name" name="backup_name" type="text">
+    <input id="backup_name" name="backup_name" type="text" class="form-control d-inline-block w-auto">
     &nbsp; 
-    <input id="backup_btn" name="backup_btn" value="BACK UP" type="submit" onclick="display_msg1();">
+    <input id="backup_btn" name="backup_btn" value="BACK UP" type="submit" class="btn btn-primary" onclick="display_msg1();">
     <br />
     <br />
     <?php
@@ -99,10 +95,5 @@
     ?>
     </div>
   </form>
-  <script>
-    function display_msg1()
-    {
-      document.getElementById("msg1").innerHTML = "Processing...";
-    }
-  </script>
-</html>
+</div>
+<?php sts_page_end(); ?>

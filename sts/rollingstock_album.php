@@ -1,29 +1,14 @@
-<html>
-  <head>
-    <title>STS - Rollingstock Photo Album</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-      div.scrollable {
-          width: 100%;
-          height: 100%;
-          margin: 0;
-          padding: 0;
-          overflow: auto;
-      }
-    </style>
-  </head>
-  <body>
-    <p><img src="ImageStore/GUI/Menu/manage.jpg" width="718" height="146" border="0" usemap="#Map5">
-      <map name="Map5">
-        <area shape="rect" coords="569,4,708,48" href="index.html">
-        <area shape="rect" coords="569,97,711,140" href="index-t.html">
-        <area shape="rect" coords="569,52,709,91" href="database.html">
-      </map>
-    </p>
+<?php
+require_once 'page_chrome.php';
+sts_page_start([
+    'title' => 'Rollingstock Photo Album',
+    'icon' => 'bi-images',
+    'section' => 'data',
+    'print' => true,
+    'head_extra' => '<style>div.scrollable {width: 100%; height: 100%; margin: 0; padding: 0; overflow: auto;}</style>',
+]);
+?>
+<div class="sts-card">
     <?php
       // bring in the utility files
       require 'open_db.php';
@@ -33,7 +18,6 @@
 
       print '<a name="#TOP">';
 
-      print '<h2 style="display:inline;">Rollingstock Photo Album</h2>&nbsp;&nbsp;<button onclick="window.print();">PRINT</button><br /><br />';
 
       // build a shortcut list of all letters in the alphabet where there's at least one car on the system that has reporting marks
       // starting with those letters
@@ -195,6 +179,5 @@
         print "No cars found on the system.<br />";
       }
     ?>
-    <br />
-  </body>
-</html>
+</div>
+<?php sts_page_end(); ?>

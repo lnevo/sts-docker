@@ -1,33 +1,24 @@
-<html>
-  <head>
-    <title>STS - Scan Locations</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-    </style>
-  </head>
-  <body onload='document.getElementById("location_id").focus();'>
-<p><img src="ImageStore/GUI/Menu/manage.jpg" width="718" height="146" border="0" usemap="#Map5">
-  <map name="Map5">
-    <area shape="rect" coords="569,4,708,48" href="index.html">
-    <area shape="rect" coords="569,97,711,140" href="index-t.html">
-    <area shape="rect" coords="569,52,709,91" href="database.html">
-  </map>
-</p>
-<h2>Database Management</h2>
-    <h3>Scan Locations</h3>
-    <div id="instructions">
+<?php
+require_once 'page_chrome.php';
+sts_page_start([
+    'title' => 'Scan Locations',
+    'icon' => 'bi-upc-scan',
+    'section' => 'data',
+    'body_attrs' => 'onload=\'document.getElementById("location").focus();\'',
+]);
+?>
+<div class="sts-card">
+    <div id="instructions" class="text-muted mb-3">
     If the scanner is set to send a "Carriage Return" at the end of the scan,<br />
     it will automatically trigger the Scan button.<br /><br />
     To manually search for location information, enter the location's ID code<br />
-    into the input box and then click the <b>SCAN</b> button.<br /><br />
+    into the input box and then click the <b>SCAN</b> button.
     </div>
-    <form action="scan_location.php" method="get">
-      <input id="location" name="location" type="text">&nbsp;
-      <input name="scan_btn" value="SCAN" type="submit" autofocus><br /><br />
+<form action="scan_location.php" method="get">
+      <div class="d-flex gap-2 mb-3">
+        <input id="location" name="location" type="text" class="form-control form-control-lg" autocomplete="off" autofocus>
+        <input name="scan_btn" value="SCAN" type="submit" class="btn btn-primary btn-lg">
+      </div>
 
     <?php
       // display everything we know about the location
@@ -82,7 +73,7 @@
           $station_link = '<a href="db_edit.php?tbl_name=routing&obj_id=' . $row['station_id'] . 
                           '&obj_name=' . $row['station'] . '">' . $row['station'] . '</a>';
 
-          print '<table>
+          print '<table class="table table-sm table-bordered table-hover bg-white">
                  <tr><th>Property</th><th>Value</th></tr>
                  <tr><td>Location Code</td><td>' . $location_link . '</td>
                  <tr><td>Station</td><td>' . $station_link . '</td>
@@ -105,8 +96,8 @@
           $rs2 = mysqli_query($dbc, $sql2);
           if (mysqli_num_rows($rs2) > 0)
           {
-            print '<br />Cars at this location:<br /><br />';
-            print '<table>';
+            print '<h3 class="mt-4">Cars at this location</h3>';
+            print '<table class="table table-sm table-bordered table-hover bg-white">';
             print '<tr>
                    <th>Position</th>
                    <th>Reporting<br />Marks</th>
@@ -129,17 +120,15 @@
           }
           else
           {
-            print '<br />No cars have been found at this location.<br /><br />';
+            print '<div class="alert alert-info mt-3">No cars have been found at this location.</div>';
           }
         }
         else
         {
-          print '<br />Location "' . $_GET['location'] . '" not found. Check spelling.';
+          print '<div class="alert alert-warning">Location "' . $_GET['location'] . '" not found. Check spelling.</div>';
         }
       }
     ?>
     </form>
-  </body>
-</html>
-
-
+</div>
+<?php sts_page_end(); ?>
