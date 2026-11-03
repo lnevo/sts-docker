@@ -88,6 +88,8 @@ $wheel_report_href = session_car_report_phases($session, 'wheel', $root) !== []
     : null;
 $overview_nav = [
     ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+    ['href' => '/sts/operations.php', 'label' => 'Operations', 'icon' => 'gear'],
+    ['href' => '/sts/editor.html', 'label' => 'Session Editor', 'icon' => 'pencil-square'],
     ['href' => '/sts/session.php?session=' . (int) $session, 'label' => 'All-session totals', 'icon' => 'bar-chart-line'],
 ];
 if ($has_switchlists && $session_print_all_rel !== null) {
@@ -333,7 +335,7 @@ session_render_nav_bar($overview_nav, 'Session ' . (int) $session);
   ); ?>
 
   <?php if (!count($jobs)): ?>
-    <p class="muted">No trains yet. Run the workflow generator from the editor.</p>
+    <p class="muted">No trains yet. Run the workflow generator from the <a href="/sts/editor.html">Session Editor</a>.</p>
   <?php endif; ?>
 
   <?php echo session_run_stats_updated_html($run_stats); ?>

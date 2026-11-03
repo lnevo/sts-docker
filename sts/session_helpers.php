@@ -2448,6 +2448,8 @@ function session_waybill_index_nav_items($session_nbr, $back_href, $back_label)
     $session_nbr = (int) $session_nbr;
     $items = [
         ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+        ['href' => '/sts/operations.php', 'label' => 'Operations', 'icon' => 'gear'],
+        ['href' => '/sts/editor.html', 'label' => 'Session Editor', 'icon' => 'pencil-square'],
     ];
     // Back navigation is normalized to the per-session overview (session_overview
     // .php) so waybill pages match the switch-list pages. The legacy '../index.php'
@@ -5151,6 +5153,8 @@ function session_build_switchlist_print_all($dbc, $session_nbr, $root = null)
     // RELATIVE to this file's directory (session_N/) so so.php rewrites it.
     $nav_html = session_nav_bar_html([
         ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+        ['href' => '/sts/operations.php', 'label' => 'Operations', 'icon' => 'gear'],
+        ['href' => '/sts/editor.html', 'label' => 'Session Editor', 'icon' => 'pencil-square'],
         ['href' => '/sts/session_overview.php?session=' . $session_nbr, 'label' => 'Session ' . $session_nbr, 'icon' => 'calendar-event'],
         ['href' => 'waybills/print_all.html', 'label' => 'Waybills', 'icon' => 'files'],
     ], '');
@@ -5270,6 +5274,8 @@ function session_build_switchlist_train_print_all($dbc, $session_nbr, $job, $roo
     // train (session-wide waybills for a consolidated multi-member train).
     $nav_html = session_nav_bar_html([
         ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+        ['href' => '/sts/operations.php', 'label' => 'Operations', 'icon' => 'gear'],
+        ['href' => '/sts/editor.html', 'label' => 'Session Editor', 'icon' => 'pencil-square'],
         ['href' => $browse_href, 'label' => 'Session ' . $session_nbr, 'icon' => 'calendar-event'],
         ['href' => $train_wb_href, 'label' => 'Waybills', 'icon' => 'file-text'],
     ], '');
@@ -5495,6 +5501,8 @@ function session_build_switchlist_print_all_style($dbc, $session_nbr, $style, $r
     [$style_cluster, $style_script] = session_print_all_style_controls($session_nbr, $style, '', $root);
     $nav_html = session_nav_bar_html([
         ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+        ['href' => '/sts/operations.php', 'label' => 'Operations', 'icon' => 'gear'],
+        ['href' => '/sts/editor.html', 'label' => 'Session Editor', 'icon' => 'pencil-square'],
         ['href' => '/sts/session_overview.php?session=' . $session_nbr, 'label' => 'Session ' . $session_nbr, 'icon' => 'calendar-event'],
         ['href' => 'waybills/print_all.html', 'label' => 'Waybills', 'icon' => 'files'],
     ], '');
@@ -5604,6 +5612,8 @@ function session_build_switchlist_train_print_all_style($dbc, $session_nbr, $job
     // train (session-wide waybills for a consolidated multi-member train).
     $nav_html = session_nav_bar_html([
         ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+        ['href' => '/sts/operations.php', 'label' => 'Operations', 'icon' => 'gear'],
+        ['href' => '/sts/editor.html', 'label' => 'Session Editor', 'icon' => 'pencil-square'],
         ['href' => $browse_href, 'label' => 'Session ' . $session_nbr, 'icon' => 'calendar-event'],
         ['href' => $train_wb_href, 'label' => 'Waybills', 'icon' => 'file-text'],
     ], '');

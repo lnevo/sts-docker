@@ -973,6 +973,8 @@ function master_sw_nav_links_from_legacy(array $nav, $session_nbr)
 {
     $links = [
         ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+        ['href' => '/sts/operations.php', 'label' => 'Operations', 'icon' => 'gear'],
+        ['href' => '/sts/editor.html', 'label' => 'Session Editor', 'icon' => 'pencil-square'],
     ];
     if (!empty($nav['session_href'])) {
         $links[] = [
@@ -1201,6 +1203,8 @@ function master_sw_render_phase_nav_bar($table_name, $session_nbr, array $nav)
     // the per-session overview; all-session totals live on the overview.
     $links = [
         ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+        ['href' => '/sts/operations.php', 'label' => 'Operations', 'icon' => 'gear'],
+        ['href' => '/sts/editor.html', 'label' => 'Session Editor', 'icon' => 'pencil-square'],
         ['href' => '/sts/session_overview.php?session=' . $session_int, 'label' => 'Session ' . $session_int, 'icon' => 'calendar-event'],
     ];
     if (!empty($nav['waybills_href'])) {
@@ -1282,6 +1286,8 @@ function master_sw_render_job_index($dbc, $job_name, array $sections, $job_dir, 
     }
     $nav_links = [
         ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+        ['href' => '/sts/operations.php', 'label' => 'Operations', 'icon' => 'gear'],
+        ['href' => '/sts/editor.html', 'label' => 'Session Editor', 'icon' => 'pencil-square'],
         ['href' => $prefix . 'session_' . $sn . '/index.php', 'label' => 'Session ' . $sn, 'icon' => 'calendar-event'],
         ['href' => 'print_all.html', 'label' => 'Train switch lists', 'icon' => 'list-check'],
     ];
@@ -1478,7 +1484,7 @@ function master_sw_render_switchlists_root_index($output_root, $max_session = nu
     }
 
     $tools_card = '<div class="card">
-      <h2>Workflow Builder</h2>
+      <h2>Session Editor</h2>
       <p>Define STS operational steps from functions and parameters. Compile, save, and run the switch list generator.</p>
       <a class="button" href="/sts/editor.html">Edit workflow &amp; run generator</a>
     </div>';
