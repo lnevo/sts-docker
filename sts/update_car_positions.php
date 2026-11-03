@@ -3,16 +3,18 @@
 
   // get a database connection
   require 'open_db.php';
+  require_once 'html_helpers.php';
   $dbc = open_db();
 
   // pull in the style colors function
   require 'set_colors.php';
 
   // get the number of incoming cars
-  $car_count = $_REQUEST['car_count'];
+  $car_count = min(sts_id(isset($_REQUEST['car_count']) ? $_REQUEST['car_count'] : ''), 2000);
 
   // start the "where" clause
   $where_clause = "";
+  $where_params = array();
   $first_parm = true;
 
   // loop through the incoming parameters and update each car's position
@@ -23,15 +25,19 @@
     $pos_name = 'pos' . $i;
 
     // use integer ids/positions from request
-    $car_id = (int)$_GET[$car_name];
-    $car_pos = (int)$_GET[$pos_name];
+    $car_id = sts_id(sts_get($car_name));
+    $car_pos = (int) sts_get($pos_name);
+
+    // an invalid id is skipped entirely
+    if ($car_id < 1)
+    {
+      continue;
+    }
 
     // build and update query
-    $sql = 'update cars set position = "' . $car_pos . '" where id = "' . $car_id . '"';
-// print 'SQL: ' . $sql . '<br /><br />';
-    if (!mysqli_query($dbc, $sql))
+    if (sts_q($dbc, 'update cars set position = ? where id = ?', array($car_pos, $car_id)) === false)
     {
-      print 'Update Error - SQL: ' . $sql . '<br /><br />';
+      print 'Update Error: ' . sts_h(sts_err($dbc)) . '<br /><br />';
     }
 
     // add this car to a string that will become the "where" clause in the next query
@@ -39,8 +45,15 @@
     {
       $where_clause = $where_clause . ' or ';
     }
-    $where_clause = $where_clause . 'cars.id = "' . $car_id . '"';
+    $where_clause = $where_clause . 'cars.id = ?';
+    $where_params[] = $car_id;
     $first_parm = false;
+  }
+
+  if ($first_parm)
+  {
+    print 'No cars found.';
+    exit;
   }
 
   // build a query to pull in the necessary info for each car in the parameter list
@@ -74,10 +87,10 @@
            where ' . $where_clause . ' order by position';
 // print "SQL: " . $sql . "<br /><br />";
 
-  $rs = mysqli_query($dbc, $sql);
-  if ($rs === false)
+  $rs = sts_q($dbc, $sql, $where_params);
+  if (!($rs instanceof mysqli_result))
   {
-    print 'Query Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql;
+    print 'Query Error: ' . sts_h(sts_err($dbc));
     exit;
   }
 
@@ -98,6 +111,7 @@
                      <th>Unloading Station / Location</th>
                    </tr></thead>';
     $data_table .= '<tbody id="car_table_body">';
+    $js_flags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
     while ($row = mysqli_fetch_array($rs))
     {
       // generate the table rows
@@ -107,25 +121,25 @@
       $data_table .= '<td class="text-center" style="vertical-align: middle;"><span class="drag-handle" title="Drag to reorder">&#9776;</span></td>';
 
       // column 2 - position at this location
-      $data_table .= '<td style="text-align: center; vertical-align: middle;">' . $row['position'] . '</td>';
+      $data_table .= '<td style="text-align: center; vertical-align: middle;">' . sts_h($row['position']) . '</td>';
 
       // column 3 - reporting marks
       if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row['id'] . '.jpg'))
       {
-        $parm_string = '\'' . $row['id'] . '\', \'' . $row['reporting_marks'] . '\'';
+        $parm_string = json_encode((string) $row['id'], $js_flags) . ', ' . json_encode((string) $row['reporting_marks'], $js_flags);
       }
       else
       {
-        $parm_string = '\'\',\'' . $row['reporting_marks'] . '\'';
+        $parm_string = '"", ' . json_encode((string) $row['reporting_marks'], $js_flags);
       }
-      $data_table .= '<td onclick="show_image(' . $parm_string . ');">' . $row['reporting_marks']
-                  . '<input name="car' . $row_count . '" value="' . $row['id'] . '" type="hidden"></td>';
+      $data_table .= '<td onclick="show_image(' . sts_h($parm_string) . ');">' . sts_h($row['reporting_marks'])
+                  . '<input name="car' . $row_count . '" value="' . sts_h($row['id']) . '" type="hidden"></td>';
 
       // column 4 - car code
-      $data_table .= '<td>' . $row['car_code'] . '</td>';
+      $data_table .= '<td>' . sts_h($row['car_code']) . '</td>';
 
       // column 5 - status
-      $data_table .= '<td><span class="status-' . strtolower($row['status']) . '">' . $row['status'] . '</span></td>';
+      $data_table .= '<td><span class="status-' . sts_h(strtolower($row['status'])) . '">' . sts_h($row['status']) . '</span></td>';
 
       // column 6 - consignment -  if this is a non-revenue move, display "Non-Revenue", otherwise display the consignment
       if (substr($row['waybill_number'], 4, 1) == 'E')
@@ -134,13 +148,13 @@
       }
       else
       {
-        $data_table .= '<td>' . $row['consignment'] . '</td>';
+        $data_table .= '<td>' . sts_h($row['consignment']) . '</td>';
       }
 
       // column 7 - current location
       if ($row['current_location_id'] > 0)
       {
-        $data_table .= '<td>' . $row['current_station'] . '<br />' . $row['current_location'] . '</td>';
+        $data_table .= '<td>' . sts_h($row['current_station']) . '<br />' . sts_h($row['current_location']) . '</td>';
       }
       else
       {
@@ -157,11 +171,11 @@
         // if this car is ordered, bold the the loading location
         if ($row['status'] == 'Ordered')
         {
-          $data_table .= '<td style="' . set_colors($dbc, $row['loading_location']) . '"><b>' . $row['loading_station'] . '<br />' . $row['loading_location'] . '</b></td>';
+          $data_table .= '<td style="' . sts_h(set_colors($dbc, $row['loading_location'])) . '"><b>' . sts_h($row['loading_station']) . '<br />' . sts_h($row['loading_location']) . '</b></td>';
         }
         else
         {
-          $data_table .= '<td>' . $row['loading_station'] . '<br />' . $row['loading_location'] . '</td>';
+          $data_table .= '<td>' . sts_h($row['loading_station']) . '<br />' . sts_h($row['loading_location']) . '</td>';
         }
       }
 
@@ -172,22 +186,23 @@
         // the destination is stored in the car order's shipment field
         $sql2 = 'select locations.code, routing.station
                    from locations, routing
-                  where locations.id = "' . $row['shipment_id'] . '" and locations.station = routing.id';
-        $rs2 = mysqli_query($dbc, $sql2);
-        $row2 = mysqli_fetch_array($rs2);
+                  where locations.id = ? and locations.station = routing.id';
+        $rs2 = sts_q($dbc, $sql2, array($row['shipment_id']));
+        $row2 = ($rs2 instanceof mysqli_result) ? mysqli_fetch_array($rs2) : null;
+        if (!$row2) { $row2 = array('code' => '', 'station' => ''); }
 // print 'SQL: ' . $sql2 . '<br />code: ' . $row2['code'] . '<br />';
-        $data_table .= '<td style="' . set_colors($dbc, $row2['code']) . '"><b>' . $row2['station'] . '<br />' . $row2['code'] . '</b></td>';
+        $data_table .= '<td style="' . sts_h(set_colors($dbc, $row2['code'])) . '"><b>' . sts_h($row2['station']) . '<br />' . sts_h($row2['code']) . '</b></td>';
       }
       else
       {
         // if this car is loaded, bold the the final destination
         if ($row['status'] == 'Loaded')
         {
-          $data_table .= '<td style="' . set_colors($dbc, $row['unloading_location']) . '"><b>' . $row['unloading_station'] . '<br />' . $row['unloading_location'] . '</b></td>';
+          $data_table .= '<td style="' . sts_h(set_colors($dbc, $row['unloading_location'])) . '"><b>' . sts_h($row['unloading_station']) . '<br />' . sts_h($row['unloading_location']) . '</b></td>';
         }
         else
         {
-          $data_table .= '<td>' . $row['unloading_station'] . '<br />' . $row['unloading_location'] . '</td>';
+          $data_table .= '<td>' . sts_h($row['unloading_station']) . '<br />' . sts_h($row['unloading_location']) . '</td>';
         }
       }
 

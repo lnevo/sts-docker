@@ -1,5 +1,6 @@
 <?php
-  $tbl_name = isset($_POST['tbl_name']) ? $_POST['tbl_name'] : (isset($_GET['tbl_name']) ? $_GET['tbl_name'] : '');
+  require_once __DIR__ . '/sql_safe.php';
+  $tbl_name = isset($_POST['tbl_name']) ? sts_post('tbl_name') : sts_get('tbl_name');
   if ($tbl_name === 'cars') {
     require 'list_cars.php';
     exit;
@@ -33,14 +34,7 @@ sts_page_start(['title' => 'Database Management', 'icon' => 'bi-table', 'section
       require 'drop_down_list_functions.php';
 
       // pull in the table to be hooked to this page
-      if (isset($_POST['tbl_name']))
-      {
-        $tbl_name = $_POST['tbl_name'];
-      }
-      else
-      {
-        $tbl_name = $_GET['tbl_name'];
-      }
+      // ($tbl_name was read above as a plain string and is only compared in the whitelist switch below)
 
       // generate the <form> tag
       print '<form method="post" action="db_list.php">';

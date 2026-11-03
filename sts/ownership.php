@@ -123,14 +123,14 @@ sts_page_start([
       {
         if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row['car_id'] . '.jpg'))
         {
-          $parm_string = '\'' . $row['car_id'] . '\', \'' . $row['reporting_marks'] . '\'';
+          $parm_string = json_encode((string) $row['car_id'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ', ' . json_encode((string) $row['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
         }
         else
         {
-          $parm_string = '\'\',\'' . $row['reporting_marks'] . '\'';
+          $parm_string = '"", ' . json_encode((string) $row['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
         }
         print '<tr>';
-        print '  <td onclick="show_image(' . $parm_string . ');">' . sts_html($row['reporting_marks']) . '<input type="hidden" id="car_id' . $row_count . '" name="car_id' . $row_count . '" value="' . $row['car_id'] . '"></td>';
+        print '  <td onclick="show_image(' . sts_html($parm_string) . ');">' . sts_html($row['reporting_marks']) . '<input type="hidden" id="car_id' . $row_count . '" name="car_id' . $row_count . '" value="' . $row['car_id'] . '"></td>';
         print '  <td>';
         print '    <select id="select' . $row_count . '" name="select' . $row_count . '" class="form-select form-select-sm">';
         print '      <option value=""></option>';

@@ -33,19 +33,19 @@ sts_page_start([
         $dbc = open_db();
         
         // check to see if the incoming code is a car ID number delimited by "-"
-        if ((substr($_GET['scan_code'], 0, 1) == '-') && (substr($_GET['scan_code'], -1, 1)))
+        $raw_scan_code = sts_get('scan_code');
+        if ((substr($raw_scan_code, 0, 1) == '-') && (substr($raw_scan_code, -1, 1)))
         {
           // if it is, get the car's reporting marks
-          $car_id = substr($_GET['scan_code'], 1, strlen($_GET['scan_code'])-2);
-          $sql = 'select reporting_marks from cars where id = ' . $car_id;
-          $rs = mysqli_query($dbc, $sql);
-          $row = mysqli_fetch_array($rs);
-          $scan_code = $row['reporting_marks'];
+          $car_id = sts_id(substr($raw_scan_code, 1, strlen($raw_scan_code)-2));
+          $rs = sts_q($dbc, 'select reporting_marks from cars where id = ?', array($car_id));
+          $row = ($rs instanceof mysqli_result) ? mysqli_fetch_array($rs) : null;
+          $scan_code = $row ? $row['reporting_marks'] : '';
         }
         else
         {
           // if not, just pass the scanned code on to the query
-          $scan_code = $_GET['scan_code'];
+          $scan_code = $raw_scan_code;
         }
 
         // build a query to bring in the info
@@ -85,32 +85,33 @@ sts_page_start([
                   left join routing sta01 on sta01.id = loc01.station
                   left join routing sta02 on sta02.id = loc02.station
                   left join routing sta03 on sta03.id = loc03.station
-                  where (cars.reporting_marks = "' . strtoupper($scan_code) . '" or
-                         cars.RFID_code = "' . $_GET['scan_code'] . '")';
-// print $sql;
-        $rs = mysqli_query($dbc, $sql);
-        if (mysqli_num_rows($rs) > 0)
+                  where (cars.reporting_marks = ? or
+                         cars.RFID_code = ?)';
+        $rs = sts_q($dbc, $sql, array(strtoupper($scan_code), $raw_scan_code));
+        if ($rs instanceof mysqli_result && mysqli_num_rows($rs) > 0)
         {
           $row = mysqli_fetch_array($rs);
+          $e = array_map('sts_h', $row);  // html-escaped copy for output
+          $u = array_map(function ($v) { return urlencode((string) $v); }, $row);  // url-encoded copy for links
 
           // build a table showing the information
           // add links to db_edit_car.php, db_edit_car_code.php, db_edit_location.php, db_edit_job.php, and db_edit_shipment.php programs
 
           $car_link = '<a href="db_edit.php?tbl_name=cars&obj_id=' .
-                                 $row['reporting_marks'] . '&obj_name=' .
-                                 $row['id'] . '">' . 
-                                 $row['reporting_marks'] . '</a>';
+                                 $u['reporting_marks'] . '&obj_name=' .
+                                 $u['id'] . '">' . 
+                                 $e['reporting_marks'] . '</a>';
                        
           $car_code_link = '<a href="db_edit.php?tbl_name=car_codes&obj_id=' . 
-                            $row['car_code_id'] . '&obj_name=' .
-                            $row['car_code'] . '">' .
-                            $row['car_code'] . '</a>';
+                            $u['car_code_id'] . '&obj_name=' .
+                            $u['car_code'] . '">' .
+                            $e['car_code'] . '</a>';
           
           if ($row['current_location_id'] > 0)
           {            
             $location_link = '<a href="scan_location.php?location=' .
-                              $row['current_location'] . '&scan_btn=Scan">' .
-                              $row['current_location'] . '</a>';
+                              $u['current_location'] . '&scan_btn=Scan">' .
+                              $e['current_location'] . '</a>';
           }
           else
           {
@@ -118,14 +119,14 @@ sts_page_start([
           }
                            
           $job_link = '<a href="db_edit.php?tbl_name=jobs&obj_id=' .
-                       $row['handled_by_job_id'] . '&obj_name=' .
-                       $row['job_name'] . '">' .
-                       $row['job_name'] . '</a>';
+                       $u['handled_by_job_id'] . '&obj_name=' .
+                       $u['job_name'] . '">' .
+                       $e['job_name'] . '</a>';
                        
           $shipment_link = '<a href="db_edit.php?tbl_name=shipments&obj_id=' .
-                            $row['shipment_id'] . '&obj_name=' .
-                            $row['shipment'] . '">' .
-                            $row['shipment'] . '</a>';
+                            $u['shipment_id'] . '&obj_name=' .
+                            $u['shipment'] . '">' .
+                            $e['shipment'] . '</a>';
 
           print '<table class="table table-sm table-bordered table-hover bg-white">
                    <thead>
@@ -144,7 +145,7 @@ sts_page_start([
                    </tr>
                    <tr>
                      <td>Current Station:</td>
-                     <td>' . $row['current_station'] . '</td>
+                     <td>' . $e['current_station'] . '</td>
                    </tr>
                    <tr>
                      <td>Current Location:</td>
@@ -152,7 +153,7 @@ sts_page_start([
                    </tr>
                    <tr>
                      <td>Status:</td
-                     ><td>' . $row['status'] . '</td>
+                     ><td>' . $e['status'] . '</td>
                    </tr>
                    <tr>
                      <td>Handled By:</td>
@@ -160,7 +161,7 @@ sts_page_start([
                    </tr>
                    <tr>
                      <td>Waybill Number:</td>
-                     <td>' . $row['waybill_number'] . '</td>
+                     <td>' . $e['waybill_number'] . '</td>
                    </tr>
                    <tr>
                      <td>Shipment Code:</td>
@@ -168,41 +169,41 @@ sts_page_start([
                    </tr>
                    <tr>
                      <td>Consignment:</td>
-                     <td>' . $row['consignment'] . '</td>
+                     <td>' . $e['consignment'] . '</td>
                    </tr>
                    <tr>
                      <td>Loading Station:</td>
-                     <td>' . $row['loading_station'] . '</td>
+                     <td>' . $e['loading_station'] . '</td>
                    </tr>
                    <tr>
                      <td>Loading Location:</td>
-                     <td>' . $row['loading_location'] . '</td>
+                     <td>' . $e['loading_location'] . '</td>
                    </tr>
                    <tr>
                      <td>Unloading Station:</td>
-                     <td>' . $row['unloading_station'] . '</td>
+                     <td>' . $e['unloading_station'] . '</td>
                    </tr>
                    <tr>
                      <td>Unloading Location:</td>
-                     <td>' . $row['unloading_location'] . '</td>
+                     <td>' . $e['unloading_location'] . '</td>
                      </tr>
                    <tr>
                      <td>Remarks:</td>
-                     <td>' . $row['remarks'] . '</td>
+                     <td>' . $e['remarks'] . '</td>
                    </tr>
                    <tr>
                      <td>Load Count:</td>
-                     <td>' . $row['load_count'] . '</td>
+                     <td>' . $e['load_count'] . '</td>
                    </tr>
                    <tr>
                      <td>RFID code:</td>
-                     <td>' . $row['RFID_code'] . '</td>
+                     <td>' . $e['RFID_code'] . '</td>
                    </tr>
                  </table>';
         }
         else
         {
-          print '<div class="alert alert-warning">Car with ID ' . sts_h($_GET['scan_code']) . ' not found. Check spelling.</div>';
+          print '<div class="alert alert-warning">Car with ID ' . sts_h($raw_scan_code) . ' not found. Check spelling.</div>';
         }
       }
     ?>
