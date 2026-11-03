@@ -3,6 +3,7 @@
  * HTTP API for session workflow simulator.
  * GET  ?action=run_options|status
  * POST ?action=run|run_section|status
+ * Role lock (editor_open=false, the default): run and run_section need operator (editor with save_recipe).
  */
 
 error_reporting(E_ALL);
@@ -59,6 +60,13 @@ function simulator_api_json($data, $code = 200)
 }
 
 try {
+    // Role lock (policy flag editor_open, default off): status/run_options stay open.
+    if ($action === 'run' || $action === 'run_section') {
+        require_once $sts_dir . '/editor_lock.php';
+        sts_editor_require(!empty($body['save_recipe']) ? 'editor' : 'operator', static function ($code, $msg) {
+            simulator_api_json(['ok' => false, 'error' => $msg], $code);
+        }, true);
+    }
     switch ($action) {
         case 'run_options':
             $recipe = session_simulator_load_recipe($session_dir, $body);
@@ -80,6 +88,9 @@ try {
             }
             session_simulator_maybe_save_recipe($session_dir, $body);
             $recipe = session_simulator_load_recipe($session_dir, $body);
+            sts_editor_precheck(operational_steps_normalize_recipe($recipe), (int) ($body['start_step'] ?? 0), (int) ($body['stop_step'] ?? 0), $body['skip_steps'] ?? '', static function ($code, $msg) {
+                simulator_api_json(['ok' => false, 'error' => $msg], $code);
+            });
             $dbc = open_db();
             $result = session_simulator_run($dbc, $recipe, [
                 'start_step' => (int) ($body['start_step'] ?? 0),
@@ -102,6 +113,12 @@ try {
             }
             session_simulator_maybe_save_recipe($session_dir, $body);
             $recipe = session_simulator_load_recipe($session_dir, $body);
+            $sec = operational_steps_find_workflow_section(operational_steps_normalize_recipe($recipe), $section_id, 0, $section_id);
+            if ($sec !== null) {
+                sts_editor_precheck(operational_steps_normalize_recipe($recipe), $sec['start'], $sec['stop'], $body['skip_steps'] ?? '', static function ($code, $msg) {
+                    simulator_api_json(['ok' => false, 'error' => $msg], $code);
+                });
+            }
             $dbc = open_db();
             $result = session_simulator_run_section($dbc, $recipe, $section_id, [
                 'start_step' => (int) ($body['start_step'] ?? 0),
@@ -127,5 +144,5 @@ try {
             ], 400);
     }
 } catch (Throwable $e) {
-    simulator_api_json(['ok' => false, 'error' => $e->getMessage()], 500);
+    simulator_api_json(['ok' => false, 'error' => $e->getMessage()], $e instanceof ApiTaskFailure ? 403 : 500);
 }

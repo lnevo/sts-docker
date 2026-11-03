@@ -6,44 +6,8 @@
     <title>STS - Pick Up Cars</title>
     <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="operations_ui.css?v=2" rel="stylesheet">
+    <link href="operations_ui.css?v=3" rel="stylesheet">
     <script src="operations_table_filters.js"></script>
-    <style>
-      tr {vertical-align: top;}
-      th, td { font-size: 0.875rem; padding: 6px 8px; white-space: nowrap; }
-      #job_table th,
-      #job_table td {
-        white-space: normal;
-        word-break: keep-all;
-        overflow-wrap: normal;
-        hyphens: none;
-      }
-      @media (max-width: 1024px) {
-        #job_table th,
-        #job_table td {
-          font-size: 0.8rem;
-          padding: 4px 6px;
-          line-height: 1.2;
-        }
-
-        /* Hide lower-priority detail columns on tablet to reduce horizontal scroll. */
-        #job_table th:nth-child(6),
-        #job_table td:nth-child(6),
-        #job_table th:nth-child(7),
-        #job_table td:nth-child(7),
-        #job_table th:nth-child(8),
-        #job_table td:nth-child(8) {
-          display: none;
-        }
-      }
-      @media print { .noprint {display:none;} }
-      .status-empty    { display:inline-block; background-color:#ffeaa7; color:#333;   padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-loaded   { display:inline-block; background-color:#a8e6cf; color:#333;   padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-loading  { display:inline-block; background-color:#74b9ff; color:white;  padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-unloading{ display:inline-block; background-color:#fab1a0; color:white;  padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-ordered  { display:inline-block; background-color:#dfe6e9; color:#333;   padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-unavailable{ display:inline-block; background-color:#d63031; color:white; padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-    </style>
     <?php
       // bring in the javascript function that shows rollingstock photos
       require 'show_image.php';
@@ -66,7 +30,7 @@
       }
     </script>
   </head>
-  <body class="bg-light">
+  <body class="bg-light ops-steppage ops-page-pick_up">
     <?php
     require_once 'operations_nav.php';
     echo ops_render_navbar('pick_up.php', 'Pick Up Cars', 'bi-arrow-up-circle', '<button class="btn btn-light btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>');
@@ -92,7 +56,7 @@
         if (isset($_GET['row_count']))
         {
           // get the number of rows that were on the page
-          $row_count = $_GET['row_count'];
+          $row_count = (int) sts_get('row_count');
 
           // update the position (set to 1) of all cars with a checkmark
           for ($i=0; $i<$row_count; $i++)
@@ -104,10 +68,15 @@
             // go through all of the check boxes and for cars with a checkmark set their position to 1
             if (isset($_GET[$check_name]))
             {
+              $car_id = sts_id(sts_get($car_name));
+              if ($car_id < 1)
+              {
+                continue;
+              }
               // save the car's current location to give to the history file after the car's been picked up
-              $sql = 'select current_location_id from cars where id = "' . $_GET[$car_name] . '"';
+              $sql = 'select current_location_id from cars where id = ?';
 //print 'SQL: ' . $sql . '<br /><br />';
-              $rs = mysqli_query($dbc, $sql);
+              $rs = sts_q($dbc, $sql, array($car_id));
               $row = mysqli_fetch_array($rs);
               $location = $row['current_location_id'];
 //print 'location: ' . $location . '<br /><br />';
@@ -115,18 +84,18 @@
                             $sql = 'update cars
                                     set current_location_id = "0",
                                         position="0"
-                                    where id = "' . $_GET[$car_name] . '"';
+                                    where id = ?';
               */
 
               // build a query to set the car's current location to 0 (zero) indicating that it's in a train
               // don't set the position to 0 because that undoes any organization performed by the user
               $sql = 'update cars
                       set current_location_id = "0"
-                      where id = "' . $_GET[$car_name] . '"';
+                      where id = ?';
 
-              if(!mysqli_query($dbc, $sql))
+              if(!sts_q($dbc, $sql, array($car_id)))
               {
-                print 'Update Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br />';
+                print 'Update Error: ' . sts_html(sts_err($dbc)) . ' SQL: ' . $sql . '<br />';
               }
 
               // get the info that the history table needs
@@ -137,23 +106,19 @@
 
               $sql = 'select jobs.name as job_name
                         from jobs, cars
-                       where cars.id = "' . $_GET[$car_name] . '" and jobs.id = cars.handled_by_job_id';
+                       where cars.id = ? and jobs.id = cars.handled_by_job_id';
 //print 'SQL: ' . $sql . '<br /><br />';
-              $rs = mysqli_query($dbc, $sql);
+              $rs = sts_q($dbc, $sql, array($car_id));
               $row = mysqli_fetch_array($rs);
               $job_name = $row['job_name'];
 
               // insert a car history record
               $sql = 'insert into history(car_id, session_nbr, event_date, event, location)
-                      values ("' . $_GET[$car_name] . '",
-                              "' . $session_nbr . '",
-                              "' . date("Y-m-d H:i:s") . '",
-                              "Picked up by Job ' . $job_name . '",
-                              "' . $location . '")';
+                      values (?, ?, ?, ?, ?)';
 
-              if (!mysqli_query($dbc, $sql))
+              if (!sts_q($dbc, $sql, array($car_id, $session_nbr, date("Y-m-d H:i:s"), 'Picked up by Job ' . $job_name, $location)))
               {
-                print 'Insert error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+                print 'Insert error: ' . sts_html(sts_err($dbc)) . ' SQL: ' . $sql . '<br /><br />';
               }
               else
               {

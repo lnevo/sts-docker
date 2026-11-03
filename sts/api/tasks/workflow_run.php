@@ -2,7 +2,8 @@
 /**
  * Task kind workflow_run: session_run_recipe(), modelled on run_catalog_workflow.php.
  * Spec: workflow (saved file name), seed, start_step, stop_step, skip_steps
- * (range text), session_count, render.
+ * (range text), session_count, render, creator_role (role of the caller; each
+ * step is checked against it before it is dispatched).
  * With a seed the global STS_SIM_SEED_ACTIVE flag is set, as the CLI does.
  */
 if (!defined('STS_API_BOOT')) {
@@ -33,15 +34,11 @@ function api_task_kind_workflow_run(array $spec, callable $log)
     $recipe = operational_steps_load_recipe_from_json_file(operational_steps_workflow_path($editor, $file));
     $recipe['source_workflow'] = basename($file);
 
-    // The file may have changed since the request was accepted: re-check.
+    // Each step is checked against the creator's role as it is about to run.
+    require_once __DIR__ . '/../lib/auth.php';
     require_once __DIR__ . '/../lib/operate_command.php';
-    $bad = empty($spec['allow_destructive']) ? api_recipe_destructive_steps($recipe) : [];
-    if ($bad) {
-        throw new ApiTaskFailure('Workflow now holds destructive commands (step '
-            . implode(', ', array_column($bad, 'step')) . ') and the task was not started by an admin');
-    }
 
-    $options = ['format' => 'all'];
+    $options = ['format' => 'all', 'before_dispatch' => api_workflow_step_guard((string) ($spec['creator_role'] ?? ''))];
     if (!empty($spec['start_step'])) {
         $options['from_step'] = (int) $spec['start_step'];
     }

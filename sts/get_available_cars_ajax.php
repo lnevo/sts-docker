@@ -6,13 +6,13 @@ require 'fill_order_helpers.php';
 
 header('Content-Type: application/json');
 
-if (!isset($_GET['waybill_number'])) {
+if (!isset($_GET['waybill_number']) || !is_scalar($_GET['waybill_number'])) {
     http_response_code(400);
     echo json_encode(['error' => 'Missing waybill_number']);
     exit;
 }
 
-$waybill_number = $_GET['waybill_number'];
+$waybill_number = (string) $_GET['waybill_number'];
 $dbc = open_db();
 
 $order_row = fill_order_get_details($dbc, $waybill_number);

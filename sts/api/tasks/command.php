@@ -17,7 +17,7 @@ function api_task_kind_command(array $spec, callable $log): array
     if ($seed !== null && $seed !== '') {
         $log('seed ' . (int) $seed);
     }
-    $result = api_operate_run_command($command, $params, $seed);
+    $result = api_operate_run_command($command, $params, $seed, $spec['creator_role'] ?? null);
     $log('done; session ' . $result['session_nbr_before'] . ' -> ' . $result['session_nbr_after']);
     return $result;
 }

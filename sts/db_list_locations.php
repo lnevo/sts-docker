@@ -9,7 +9,6 @@
 
   // generate some javascript to display the table name, identify this table to the form, and set the update button's tab index
   print '<script>
-           document.getElementById("table_name").innerHTML = "Locations";
            document.getElementById("tbl_name").value = "locations";
            document.getElementById("update_btn").tabIndex = "8";
 
@@ -32,19 +31,12 @@
   if (isset($_POST['update_btn']))
   {
     // yes, so check to see if there is anything in the first input text box
-    if (strlen($_POST['code']) > 0)
+    if (strlen(sts_post('code')) > 0)
     {
       // add the new location to the locations table
-      $sql = 'insert into locations (code, station, track, spot, rpt_station, remarks, color)
-	                        values ("' . $_POST['code'] . '",
-                                  "' . $_POST['station'] . '",
-                                  "' . $_POST['track'] . '",
-                                  "' . $_POST['spot'] . '",
-                                  "' . $_POST['rpt_station'] . '",
-                                  "' . $_POST['remarks'] . '",
-                                  "' . $_POST['color'] . '")';
-//print $sql;
-      $rs = mysqli_query($dbc, $sql);
+      sts_q($dbc, 'insert into locations (code, station, track, spot, rpt_station, remarks, color) values (?, ?, ?, ?, ?, ?, ?)',
+            array(sts_post('code'), sts_post('station'), sts_post('track'), sts_post('spot'),
+                  sts_post('rpt_station'), sts_post('remarks'), sts_post('color')));
     }
   }
 
@@ -64,8 +56,8 @@
 //print $sql;
   $rs = mysqli_query($dbc, $sql);
 
-  print '<table class="sortable" id="loc_tbl">
-          <caption style="font: bold 15px Verdana, Arial, sans-serif; text-align:left;">Add New Location</caption>
+  print '<table class="table table-sm table-bordered table-hover sts-table sortable" id="loc_tbl">
+          <caption class="sts-table-caption">Add New Location</caption>
           <thead>
            <tr>
              <th>Station</th>
@@ -78,11 +70,11 @@
            </tr>
            <tr>
              <td>' . drop_down_stations('station', '1', '') . '</td>
-             <td><input id="code" name="code" type="text" tabindex="2" required></td>
-             <td><input name="track" type="text" tabindex="3"></td>
-             <td><input name="spot" type="text" tabindex="4"></td>
-             <td style="text-align: center;"><input name="rpt_station" type="text" tabindex="5" size="25"></td>
-             <td style="text-align: center;"><input name="remarks" type="text" tabindex="6" size="25"></td>
+             <td><input class="form-control form-control-sm" id="code" name="code" type="text" tabindex="2" required></td>
+             <td><input class="form-control form-control-sm" name="track" type="text" tabindex="3"></td>
+             <td><input class="form-control form-control-sm" name="spot" type="text" tabindex="4"></td>
+             <td style="text-align: center;"><input class="form-control form-control-sm" name="rpt_station" type="text" tabindex="5" size="25"></td>
+             <td style="text-align: center;"><input class="form-control form-control-sm" name="remarks" type="text" tabindex="6" size="25"></td>
              <td>' . drop_down_colors('color', '7', '') . '</td>
            </tr>
            <tr>
@@ -105,13 +97,13 @@
     while ($row = mysqli_fetch_array($rs))
     {
       print '<tr>';
-      print '  <td>' . $row['station'] . '</td>';
-      print '  <td><a href="db_edit.php?tbl_name=locations&obj_id=' . $row['id'] . '&obj_name=' . $row['code'] . '">' . $row['code'] . '</a></td>';
-      print '  <td>' . $row['track'] . '</td>';
-      print '  <td>' . $row['spot'] . '</td>';
-      print '  <td>' . $row['rpt_station'] . '</td>';
-      print '  <td>' . $row['remarks'] . '</td>';
-      print '  <td style="background-color: ' . $row['color'] . '"></td>';
+      print '  <td>' . sts_html($row['station']) . '</td>';
+      print '  <td><a href="db_edit.php?tbl_name=locations&obj_id=' . sts_html($row['id']) . '&obj_name=' . urlencode($row['code']) . '">' . sts_html($row['code']) . '</a></td>';
+      print '  <td>' . sts_html($row['track']) . '</td>';
+      print '  <td>' . sts_html($row['spot']) . '</td>';
+      print '  <td>' . sts_html($row['rpt_station']) . '</td>';
+      print '  <td>' . sts_html($row['remarks']) . '</td>';
+      print '  <td style="background-color: ' . sts_html($row['color']) . '"></td>';
       print '</tr>';
     }
   }

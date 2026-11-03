@@ -1,0 +1,190 @@
+{
+  "paths": {
+    "/admin/policy": {
+      "get": {
+        "summary": "Effective policy",
+        "description": "Role: admin. command_roles lists every catalog command with its minimum role.",
+        "x-sts-role": "admin",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Policy"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "put": {
+        "summary": "Change the policy",
+        "description": "Role: admin. Any subset of the fields; command_roles replaces the stored map (entries equal to the default are dropped); a flag set to null goes back to its default. Unknown command ids or roles are 422. Takes effect immediately.",
+        "x-sts-role": "admin",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Policy"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PolicyInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "command_roles": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "operator",
+                "editor",
+                "admin"
+              ]
+            }
+          },
+          "protected_backups": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Glob patterns (default *seed*, *_locked*). Non-admin callers (commands, workflow steps) may not overwrite an existing backup whose name matches. null restores the default."
+          },
+          "read_open": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "legacy_open": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "editor_open": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      },
+      "Policy": {
+        "type": "object",
+        "properties": {
+          "protected_backups": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "command_roles": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "operator",
+                "editor",
+                "admin"
+              ]
+            }
+          },
+          "read_open": {
+            "type": "boolean"
+          },
+          "legacy_open": {
+            "type": "boolean"
+          },
+          "editor_open": {
+            "type": "boolean"
+          },
+          "flag_sources": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "file",
+                "default"
+              ]
+            }
+          },
+          "defaults": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

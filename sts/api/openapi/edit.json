@@ -408,7 +408,7 @@
     "/workflows/{name}": {
       "put": {
         "summary": "Save a workflow",
-        "description": "Role: editor. Writes the recipe JSON to the workflow directory (created if new). Does not change the active workflow. Recipes with destructive commands (restore_database, backup_database, wipe_database, reset_session, restart_session) need role admin: 403 naming the step numbers. A malformed name is 422. The file is replaced atomically.",
+        "description": "Role: editor. Writes the recipe JSON to the workflow directory (created if new). Does not change the active workflow. Saving never runs anything, so recipes with admin-only steps (restore_database, wipe_database, reset_session by default) can be saved by an editor; the role is checked per step when the workflow runs. A malformed name is 422. The file is replaced atomically.",
         "x-sts-role": "editor",
         "security": [
           {

@@ -7,7 +7,7 @@
   <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
   <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <link rel="stylesheet" href="session-nav.css">
-  <link rel="stylesheet" href="workflow-ui.css?v=57">
+  <link rel="stylesheet" href="workflow-ui.css?v=58">
 </head>
 <body>
   <nav class="navbar navbar-dark noprint" style="background-color: #343a40;">
@@ -18,6 +18,15 @@
         <a href="/sts/session_overview.php" class="btn btn-outline-light btn-sm"><i class="bi bi-collection"></i> Sessions</a>
         <a href="session-sitemap.php" class="btn btn-outline-light btn-sm"><i class="bi bi-diagram-3"></i> Session Site Map</a>
         <span class="navbar-text ms-auto"><span class="badge bg-light text-dark">DB Session <strong id="nav-db-session">—</strong></span></span>
+        <form id="auth-signed-out" class="auth-box d-flex align-items-center gap-1" autocomplete="off" hidden>
+          <input type="password" id="auth-token" class="form-control form-control-sm" placeholder="API token (sts_...)" autocomplete="off" aria-label="API token">
+          <button type="submit" class="btn btn-outline-light btn-sm" id="auth-signin"><i class="bi bi-box-arrow-in-right"></i> Sign in</button>
+        </form>
+        <span id="auth-signed-in" class="auth-box d-flex align-items-center gap-2" hidden>
+          <span class="navbar-text text-white small" id="auth-who"></span>
+          <button type="button" class="btn btn-outline-light btn-sm" id="auth-signout">Sign out</button>
+        </span>
+        <a href="/sts/api_admin.php" class="btn btn-outline-light btn-sm" id="auth-manage"><i class="bi bi-key"></i> Manage tokens</a>
         <span class="navbar-text text-white-50 small">Session Editor</span>
       </div>
     </div>
@@ -65,6 +74,7 @@
       <input type="file" id="workflow-import-file" accept=".json,application/json,.workflow.json,.recipe.json" hidden>
     </div>
 
+    <div id="auth-banner" class="auth-banner noprint" role="status" hidden></div>
     <div id="status" class="status info">Loading…</div>
 
     <ul class="nav nav-tabs mb-3" id="editor-tabs" role="tablist">
@@ -179,6 +189,8 @@
           </label>
         </div>
       </div>
+      <div id="run-warnings" class="run-warnings" role="alert" hidden></div>
+      <div id="run-error" class="run-error" role="alert" hidden></div>
       <pre class="log" id="log">Run output appears here.</pre>
       <div id="run-complete-actions" class="run-complete-actions" hidden></div>
     </div>
@@ -187,7 +199,7 @@
     </div>
   </div>
   <script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
-  <script src="workflow-shared.js?v=95"></script>
+  <script src="workflow-shared.js?v=97"></script>
   <script>
 (function () {
   const W = WorkflowUI;
@@ -241,11 +253,13 @@
     e.target.dataset.userSet = '1';
     W.syncRunRangeHighlight();
     W.syncStepVisibility();
+    W.renderRoleWarnings();
   });
   W.el('run-stop')?.addEventListener('input', (e) => {
     e.target.dataset.userSet = '1';
     W.syncRunRangeHighlight();
     W.syncStepVisibility();
+    W.renderRoleWarnings();
   });
   W.el('run-skip')?.addEventListener('input', () => {
     // Live preview/highlight only — wait for blur/change before unchecking sections.
@@ -253,10 +267,30 @@
   });
   W.el('run-skip')?.addEventListener('change', () => {
     W.applyRunSkipEdit({ normalize: true, syncSections: true });
+    W.renderRoleWarnings();
   });
   W.el('btn-run')?.addEventListener('click', () => {
-    if (!confirm('Save this workflow and run the selected steps against the live STS database?')) return;
-    W.runWorkflow({ saveFirst: true }).catch((e) => W.setStatus(e.message, 'err'));
+    if (!W.canRun()) return;
+    const msg = W.canEdit()
+      ? 'Save this workflow and run the selected steps against the live STS database?'
+      : 'Run the saved workflow\'s selected steps against the live STS database?';
+    if (!confirm(msg)) return;
+    W.runWorkflow({ saveFirst: true }).catch((e) => {
+      W.setStatus(e.message, 'err');
+      W.showRunError(e.message);
+    });
+  });
+  W.el('auth-signed-out')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const box = W.el('auth-token');
+    const token = box.value;
+    box.value = '';
+    W.signIn(token).then(() => {
+      W.setStatus('Signed in as ' + W.me.name + ' (' + W.me.role + ')', 'ok');
+    }, (err) => W.setStatus('Sign-in failed: ' + err.message, 'err'));
+  });
+  W.el('auth-signout')?.addEventListener('click', () => {
+    W.signOut().then(() => W.setStatus('Signed out', 'info'));
   });
   W.el('run-repeat-enabled')?.addEventListener('change', (e) => {
     const n = W.el('run-repeat');
@@ -265,6 +299,7 @@
 
   async function init() {
     try {
+      await W.loadAuth();
       await W.loadCatalog();
       await W.loadWorkflowList();
       if (W.autoLoadWorkflow && W.activeWorkflow) {

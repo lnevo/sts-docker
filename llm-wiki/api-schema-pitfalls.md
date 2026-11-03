@@ -7,7 +7,7 @@ load_when:
   writing or reviewing SQL/queries against the legacy sts/ MySQL schema, or
   working on sts/api/
 owner: shared
-last_updated: 06/07/2026
+last_updated: 11/03/2026
 ---
 
 # STS Legacy DB Schema & API Notes
@@ -15,6 +15,60 @@ last_updated: 06/07/2026
 > Applies to the legacy `sts/` PHP app's MySQL/mysqli schema and `sts/api/`. The
 > v2 rebuild (`app/`) uses its own SQLite schema — see
 > `app/src/lib/server/db.ts` and `docs/SPEC.md`, not this page.
+
+## REST API v1 (`/sts/api/v1`)
+
+The contract and the "as built" deviations are in
+`docs/plans/2026-11-03-api-v1.md`. Routes, environment flags, the token CLI and
+the steps for adding a route are in [sts/api/README.md](../sts/api/README.md).
+This section records only what trips people up.
+
+- **Envelope.** Success is `{"data": ..., "meta": {...}}`, with `meta` (`total`,
+  `limit`, `offset`) on lists only. Errors are
+  `{"error": {"code": "...", "message": "..."}}`. A 500 never includes SQL or
+  exception text, so look in the server log.
+- **snake_case everywhere.** `reporting_marks`, `car_code`, `location_id`. A
+  foreign key `<thing>_id` sits beside its resolved value. The legacy wagon
+  routes use camelCase (`reportingMarks`, `wagonId`), so field names do not
+  carry over between the two.
+- **Identifiers resolve loosely.** `{car}` takes a database id, reporting marks
+  or an RFID code. `{location}` takes an id or a `locations.code`. `{job}` takes
+  an id or a job name. Array-valued query parameters (`status[]=x`) are 422.
+- **`0` means unassigned.** `cars.current_location_id` and
+  `cars.handled_by_job_id` hold `0`, not NULL, when nothing is assigned. Compare
+  with `= 0` and `> 0`; `IS NULL` matches nothing.
+- **`pu_criteria.job_id` holds the job name**, not `jobs.Id`. Join on the name
+  and never wrap it in `lower()`.
+- **`car_orders.shipment` is overloaded.** It holds a shipment id for ordinary
+  orders and a location id for empty-car E-waybills (`NNN-E##`).
+  `GET /car-orders` marks empty moves with `is_empty_move: true` and returns the
+  destination location, so check that flag before reading `shipment` as a
+  shipment.
+- **Roles are hierarchical:** `reader` < `operator` < `editor` < `admin`. GETs
+  need no token by default (`STS_API_READ_OPEN=1`), but `/tasks` always needs
+  `operator`. The per-route mapping is in the README.
+- **Tokens** are sent as `Authorization: Bearer sts_<40 hex>`. Only SHA-256
+  hashes are stored, in `/var/lib/sts/api_tokens.json`. That path is a bind
+  mount of `../sts-docker-data/config`, outside the database, because a seed
+  restore drops every table. On start, `start.sh` writes a bootstrap admin token
+  to `bootstrap_admin.token` in the same directory if no active admin exists.
+- **Cross-site writes are refused.** A POST, PUT, PATCH or DELETE whose `Origin`
+  host:port differs from `Host` gets 403. Requests without `Origin` (curl,
+  helpers, RFID devices) are unaffected.
+- **Destructive recipes need admin.** A recipe with `restore_database`,
+  `backup_database`, `wipe_database`, `reset_session` or `restart_session` gets
+  403 from a non-admin on save and on run, and the check repeats when the task
+  starts. The stock `hart_session` and `start_session` workflows contain these
+  steps, so an operator token cannot run them.
+- **Long work returns 202 with a task.** Restore, warm start, session begin and
+  play, workflow runs and the slow catalog commands all return `task_id`. Poll
+  `GET /tasks/{id}?log=N` with an operator token. Task files live in
+  `/var/lib/sts/tasks/`. Only one exclusive task runs per stack. While one is
+  queued or running, other writes get 409 `conflict` with
+  `maintenance task <id> running`.
+- **No wall-clock timeout yet.** A hung task holds the maintenance lock until an
+  admin fails it with `POST /admin/tasks/{id}/fail`. The process check on read
+  marks a task failed when its process has vanished.
 
 ## Discovered Database Schema
 
@@ -73,7 +127,13 @@ CREATE TABLE IF NOT EXISTS history (
 - `color1` (int)
 - `color2` (int)
 
-## Endpoint Behaviour (sts/api/)
+## Endpoint Behaviour (sts/api/): legacy wagon API
+
+> **Legacy.** These routes are still served at `/sts/api/wagon/*` and
+> `/sts/api/index.php/wagon/*` with the old bare response shapes and camelCase
+> fields, for RFID scanners and existing clients. Use `/sts/api/v1` for new
+> code. Reference for the legacy half of the API:
+> [sts/api/README.md](../sts/api/README.md).
 
 ### GET /wagon/cargo/id/:tag_name
 
@@ -189,3 +249,15 @@ equivalent legacy page:
 
 _Migrated from `.github/instructions/api-schema.instructions.md` into the shared
 wiki on 06/07/2026 — see [decisions-log.md](decisions-log.md)._
+
+## Query failure logging
+
+`mysqli_report` is OFF and `error_reporting(E_ERROR)` for display, so a failed
+query is silent in the page. `open_db.php` therefore logs to stderr (Apache
+error log, `docker logs <web>`): all PHP errors except deprecations, via a
+handler that never prints, plus `sts_query($dbc, $sql)`, a drop-in for
+`mysqli_query` that returns the same result and logs file:line, errno, error
+and the first 300 chars of the SQL on failure. `sts_db_log_error($dbc, $sql)`
+does the logging alone for existing `if (!mysqli_query(...))` paths. Only the
+`open_db.php` migrations use them so far; prefer `sts_query` in new code. Never
+print from `open_db.php`: it corrupts JSON responses.

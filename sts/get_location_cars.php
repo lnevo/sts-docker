@@ -9,11 +9,11 @@
   require 'set_colors.php';
 
   // get the incoming parameter
-  $location_id = urldecode($_REQUEST['location']);
+  $location_id = (string) sts_id(urldecode(isset($_REQUEST['location']) && is_scalar($_REQUEST['location']) ? $_REQUEST['location'] : ''));
 
   // run a quick query to get the code for this location
-  $sql = 'select code from locations where id = "' . $location_id . '"';
-  $rs = mysqli_query($dbc, $sql);
+  $sql = 'select code from locations where id = ?';
+  $rs = sts_q($dbc, $sql, array($location_id));
   $row = mysqli_fetch_array($rs);
   $location_code = $row['code'];
 
@@ -43,10 +43,10 @@
           left join routing sta03 on sta03.id = loc03.station
           left join commodities on commodities.id = shipments.consignment
           left join car_codes on car_codes.id = cars.car_code_id
-          where cars.current_location_id = "' . $location_id . '"
+          where cars.current_location_id = ?
           order by position, reporting_marks';
 // print 'SQL: ' . $sql . '<br /><br />';
-  $rs = mysqli_query($dbc, $sql);
+  $rs = sts_q($dbc, $sql, array($location_id));
   if ($rs === false) {
     echo 'No cars at ' . htmlspecialchars($location_code);
     exit;
@@ -78,7 +78,7 @@
       $data_table .= '<td class="text-center" style="vertical-align: middle;"><span class="drag-handle" title="Drag to reorder">&#9776;</span></td>';
 
       // column 2 - position at this location
-      $data_table .= '<td>' . $row['position'] . '</td>';
+      $data_table .= '<td>' . sts_html($row['position']) . '</td>';
 
       // column 3 - reporting marks
       if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row['id'] . '.jpg'))
@@ -90,13 +90,13 @@
         $parm_string = '\'\',\'' . $row['reporting_marks'] . '\'';
       }
       $data_table .= '<td onclick="show_image(' . $parm_string . ');">' . $row['reporting_marks']
-                  . '<input name="car' . $row_count . '" value="' . $row['id'] . '" type="hidden"></td>';
+                  . '<input name="car' . $row_count . '" value="' . sts_html($row['id']) . '" type="hidden"></td>';
 
       // column 4 - car code
-      $data_table .= '<td>' . $row['car_code'] . '</td>';
+      $data_table .= '<td>' . sts_html($row['car_code']) . '</td>';
 
       // column 5 - status
-      $data_table .= '<td><span class="status-' . strtolower($row['status']) . '">' . $row['status'] . '</span></td>';
+      $data_table .= '<td><span class="status-' . strtolower($row['status']) . '">' . sts_html($row['status']) . '</span></td>';
 
       // column 6 - consignment -  if this is a non-revenue move, display "Non-Revenue", otherwise display the consignment
       if (substr($row['waybill_number'], 4, 1) == 'E')
@@ -105,7 +105,7 @@
       }
       else
       {
-        $data_table .= '<td>' . $row['consignment'] . '</td>';
+        $data_table .= '<td>' . sts_html($row['consignment']) . '</td>';
       }
 
       // column 7 - loading location
@@ -118,7 +118,7 @@
         // if this car is ordered, bold the the loading location
         if ($row['status'] == 'Ordered')
         {
-          $data_table .= '<td style="' . set_colors($dbc, $row['loading_location']) . '"><b>' . $row['loading_station'] . '<br />' . $row['loading_location'] . '</b></td>';
+          $data_table .= '<td style="' . set_colors($dbc, $row['loading_location']) . '"><b>' . sts_html($row['loading_station']) . '<br />' . sts_html($row['loading_location']) . '</b></td>';
         }
         else if ($row['status'] == "Empty")
         {
@@ -126,7 +126,7 @@
         }
         else
         {
-          $data_table .= '<td>' . $row['loading_station'] . '<br />' . $row['loading_location'] . '</td>';
+          $data_table .= '<td>' . sts_html($row['loading_station']) . '<br />' . sts_html($row['loading_location']) . '</td>';
         }
       }
 
@@ -137,18 +137,18 @@
         // the destination is stored in the car order's shipment field
         $sql2 = 'select locations.code as code, routing.station as station
                    from locations, routing
-                  where locations.id = "' . $row['shipment_id'] . '" and locations.station = routing.id';
-        $rs2 = mysqli_query($dbc, $sql2);
+                  where locations.id = ? and locations.station = routing.id';
+        $rs2 = sts_q($dbc, $sql2, array($row['shipment_id']));
         $row2 = mysqli_fetch_array($rs2);
 
-        $data_table .= '<td style="' . set_colors($dbc, $row2['code']) . '"><b>' . $row2['station'] . '<br />' . $row2['code'] . '</b></td>';
+        $data_table .= '<td style="' . set_colors($dbc, $row2['code']) . '"><b>' . sts_html($row2['station']) . '<br />' . sts_html($row2['code']) . '</b></td>';
       }
       else
       {
         // if this car is loaded, bold the the final destination
         if ($row['status'] == 'Loaded')
         {
-          $data_table .= '<td style="' . set_colors($dbc, $row['unloading_location']) . '"><b>' . $row['unloading_station'] . '<br />' . $row['unloading_location'] . '</b></td>';
+          $data_table .= '<td style="' . set_colors($dbc, $row['unloading_location']) . '"><b>' . sts_html($row['unloading_station']) . '<br />' . sts_html($row['unloading_location']) . '</b></td>';
         }
         else if ($row['status'] == "Empty")
         {
@@ -156,7 +156,7 @@
         }
         else
         {
-          $data_table .= '<td>' . $row['unloading_station'] . '<br />' . $row['unloading_location'] . '</td>';
+          $data_table .= '<td>' . sts_html($row['unloading_station']) . '<br />' . sts_html($row['unloading_location']) . '</td>';
         }
       }
 

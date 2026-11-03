@@ -103,6 +103,48 @@ function api_task_now()
     return gmdate('c');
 }
 
+/** Marker file that tells open_db() a restore owns the schema (content: the task id). */
+function api_restore_marker_path()
+{
+    return rtrim(getenv('STS_API_DATA_DIR') ?: '/var/lib/sts', '/') . '/restore_in_progress';
+}
+
+function api_restore_marker_set($id)
+{
+    $old = umask(0027);
+    @file_put_contents(api_restore_marker_path(), $id);
+    umask($old);
+    api_tasks_chown_www(api_restore_marker_path());
+}
+
+/** Remove the marker; with $id only when it belongs to that task. */
+function api_restore_marker_clear($id = null)
+{
+    $p = api_restore_marker_path();
+    if (!is_file($p)) {
+        return;
+    }
+    if ($id === null || trim((string) @file_get_contents($p)) === $id) {
+        @unlink($p);
+    }
+}
+
+/** Task id of an active restore, or null. A marker whose task is no longer running is removed. */
+function api_restore_in_progress()
+{
+    $p = api_restore_marker_path();
+    if (!file_exists($p)) {
+        return null;
+    }
+    $id = trim((string) @file_get_contents($p));
+    $rec = $id !== '' ? api_task_get($id) : null;
+    if ($rec !== null && in_array($rec['status'] ?? '', ['queued', 'running'], true)) {
+        return $id;
+    }
+    @unlink($p);
+    return null;
+}
+
 /** Raw record by id, or null. No stale check. */
 function api_task_read($id)
 {
@@ -208,10 +250,34 @@ function api_task_pid_alive($pid, $start = null)
     return function_exists('posix_kill') ? @posix_kill($pid, 0) : false;
 }
 
-/** Is the process of a task record alive (pid plus recorded start time)? */
+/**
+ * Is the task's work still going? The runner/supervisor (pid) or, for a task
+ * with a timeout, its worker child (child_pid, own process group) counts.
+ */
 function api_task_alive(array $rec)
 {
-    return api_task_pid_alive($rec['pid'] ?? 0, $rec['pid_start'] ?? null);
+    return api_task_pid_alive($rec['pid'] ?? 0, $rec['pid_start'] ?? null)
+        || (!empty($rec['child_pid']) && api_task_pid_alive($rec['child_pid'], $rec['child_pid_start'] ?? null));
+}
+
+/**
+ * Kill a task's processes: the worker child's whole process group (it is a
+ * group leader, started with setsid), the child, and the supervisor/runner.
+ * Only pids whose recorded start time still matches are signalled.
+ */
+function api_task_kill(array $rec)
+{
+    if (!function_exists('posix_kill')) {
+        return;
+    }
+    $targets = [[$rec['child_pid'] ?? 0, $rec['child_pid_start'] ?? null], [$rec['pid'] ?? 0, $rec['pid_start'] ?? null]];
+    foreach ($targets as [$pid, $start]) {
+        $pid = (int) $pid;
+        if ($pid > 1 && $pid !== getmypid() && api_task_pid_alive($pid, $start)) {
+            @posix_kill(-$pid, 9);
+            @posix_kill($pid, 9);
+        }
+    }
 }
 
 /** Turn a queued/running task whose process is gone into 'failed'. Returns the (possibly updated) record. */
@@ -235,6 +301,7 @@ function api_task_reconcile(array $rec)
     if (!$dead) {
         return $rec;
     }
+    api_restore_marker_clear($rec['id']);
     $updated = api_task_update($rec['id'], static function ($r) use ($why) {
         if (in_array($r['status'] ?? '', ['running', 'queued'], true)) {
             $r['status'] = 'failed';
@@ -425,10 +492,13 @@ function api_task_create($kind, array $spec, ?array $user, array $opts = [])
             'status' => 'queued',
             'created_at' => api_task_now(),
             'created_by' => $user['name'] ?? null,
+            'created_by_id' => $user['id'] ?? null,
             'exclusive' => $exclusive,
             'spec' => $spec,
             'pid' => null,
             'pid_start' => null,
+            'child_pid' => null,
+            'child_pid_start' => null,
             'started_at' => null,
             'finished_at' => null,
             'result' => null,

@@ -5,8 +5,8 @@
   'use strict';
 
   const WorkflowUI = {
-    API: 'operational_steps_api.php',
-    SIMULATOR_API: 'simulator_api.php',
+    /** REST API v1 base, relative to /sts/ (editor.html lives there). */
+    API_V1: 'api/v1',
     catalog: { adder_functions: [], functions: [], adder_categories: {} },
     catalogMap: {},
     dynamicOptions: {},
@@ -109,40 +109,166 @@
       }
     },
 
-    async api(action, method, body, queryParams) {
-      queryParams = queryParams || {};
-      const opts = { method: method || (body ? 'POST' : 'GET'), cache: 'no-store' };
-      if (body && opts.method === 'POST') {
-        opts.headers = { 'Content-Type': 'application/json' };
-        opts.body = JSON.stringify(Object.assign({ action: action }, body));
+    /**
+     * REST API v1 call (same-origin, cookie session). Resolves to the `data`
+     * member of the envelope; errors throw Error(message) with .status/.code.
+     * Raw is returned for the download route only (not used through here).
+     */
+    async v1(method, path, body) {
+      const opts = {
+        method: method,
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+      };
+      if (body !== undefined && body !== null) {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
       }
-      const params = new URLSearchParams({ action: action, t: String(Date.now()) });
-      Object.keys(queryParams).forEach((k) => {
-        if (queryParams[k] != null && queryParams[k] !== '') {
-          params.set(k, String(queryParams[k]));
+      const res = await fetch(this.API_V1 + path, opts);
+      const json = await this.parseJsonResponse(res);
+      if (!res.ok || json.error) {
+        const err = new Error((json.error && json.error.message) || ('HTTP ' + res.status));
+        err.status = res.status;
+        err.code = json.error && json.error.code;
+        if (res.status === 401 && this.me && path.indexOf('/auth/') !== 0) {
+          this.me = null;
+          this.renderAuthUi();
+          err.message += ' (your session ended; sign in again)';
         }
-      });
-      const url = opts.method === 'POST' ? this.API : this.API + '?' + params.toString();
-      const res = await fetch(url, opts);
-      const data = await this.parseJsonResponse(res);
-      if (!res.ok || !data.ok) throw new Error(data.error || 'Request failed');
-      return data;
+        throw err;
+      }
+      return json.data;
     },
 
-    async simulatorApi(action, method, body) {
-      const opts = { method: method || 'GET', cache: 'no-store' };
-      if (body) {
-        opts.method = 'POST';
-        opts.headers = { 'Content-Type': 'application/json' };
-        opts.body = JSON.stringify(Object.assign({ action: action }, body));
+    /* ── Sign-in state (server cookie only; no token is kept in page storage) ── */
+
+    me: null,
+    running: false,
+    ROLE_RANK: { reader: 1, operator: 2, editor: 3, admin: 4 },
+    SIGN_IN_TIP: 'Sign in to edit or run',
+
+    roleAtLeast(role) {
+      const have = this.me ? (this.ROLE_RANK[this.me.role] || 0) : 0;
+      return have >= (this.ROLE_RANK[role] || 99);
+    },
+    canEdit() { return this.roleAtLeast('editor'); },
+    canRun() { return this.roleAtLeast('operator'); },
+
+    gateTip(role) {
+      if (!this.me) return this.SIGN_IN_TIP;
+      return 'Needs the ' + role + ' role (you are signed in as ' + this.me.role + ')';
+    },
+
+    async loadAuth() {
+      try {
+        this.me = await this.v1('GET', '/auth/me');
+      } catch (e) {
+        this.me = null;
       }
-      const url = body
-        ? this.SIMULATOR_API
-        : this.SIMULATOR_API + '?action=' + encodeURIComponent(action) + '&t=' + Date.now();
-      const res = await fetch(url, opts);
-      const data = await this.parseJsonResponse(res);
-      if (!res.ok || !data.ok) throw new Error(data.error || 'Request failed');
-      return data;
+      this.renderAuthUi();
+    },
+
+    async signIn(token) {
+      token = String(token || '').trim();
+      if (!token) throw new Error('Paste an API token to sign in');
+      await this.v1('POST', '/auth/login', { token: token });
+      await this.loadAuth();
+      await this.afterAuthChange();
+    },
+
+    async signOut() {
+      try { await this.v1('POST', '/auth/logout', {}); } catch (e) { /* already out */ }
+      this.me = null;
+      this.renderAuthUi();
+      await this.afterAuthChange();
+    },
+
+    /** Role warnings depend on the caller's role, so refresh run options. */
+    async afterAuthChange() {
+      try { await this.loadRunOptions(); } catch (e) { /* no workflow yet */ }
+    },
+
+    renderAuthUi() {
+      const out = this.el('auth-signed-out');
+      const inn = this.el('auth-signed-in');
+      if (out) out.hidden = !!this.me;
+      if (inn) inn.hidden = !this.me;
+      const who = this.el('auth-who');
+      if (who && this.me) {
+        who.textContent = 'Signed in as ' + this.me.name + ' (' + this.me.role + ')';
+      }
+      const banner = this.el('auth-banner');
+      if (banner) {
+        let msg = '';
+        if (!this.me) {
+          msg = 'Read-only. You can open workflows and browse steps. ' + this.SIGN_IN_TIP +
+            ' (use the token field in the navigation bar).';
+        } else if (!this.canRun()) {
+          msg = 'Signed in as a reader: read-only. Editing needs an editor token, running needs an operator token.';
+        } else if (!this.canEdit()) {
+          msg = 'Signed in as an operator: you can run workflows but not edit or save them (editor role needed).';
+        }
+        banner.textContent = msg;
+        banner.hidden = !msg;
+      }
+      this.applyAuthUi();
+    },
+
+    /** Disable (with tooltip) every control the caller's role does not allow. */
+    applyAuthUi() {
+      const edit = this.canEdit();
+      const run = this.canRun();
+      const gate = (id, ok, role) => {
+        const node = this.el(id);
+        if (!node) return;
+        if (!node.dataset.tipOrig) node.dataset.tipOrig = node.getAttribute('title') || '';
+        node.disabled = !ok && node.tagName === 'BUTTON';
+        node.classList.toggle('disabled', !ok);
+        node.classList.toggle('wf-gated', !ok);
+        node.setAttribute('aria-disabled', ok ? 'false' : 'true');
+        if (!ok) node.setAttribute('title', this.gateTip(role));
+        else if (node.dataset.tipOrig) node.setAttribute('title', node.dataset.tipOrig);
+        else node.removeAttribute('title');
+      };
+      gate('btn-save', edit, 'editor');
+      gate('btn-import', edit, 'editor');
+      gate('btn-delete-workflow', edit, 'editor');
+      gate('btn-reset', edit, 'editor');
+      gate('btn-add', edit, 'editor');
+      gate('btn-run', run && !this.running, 'operator');
+      if (this.running) this.el('btn-run')?.setAttribute('title', 'A run is in progress');
+      gate('btn-preview-print', run, 'operator');
+      const save = this.el('workflow-save-as');
+      if (save) save.disabled = !edit;
+      ['run-repeat-enabled'].forEach((id) => { const n = this.el(id); if (n) n.disabled = !run; });
+      const rep = this.el('run-repeat');
+      if (rep) rep.disabled = !run || !this.el('run-repeat-enabled')?.checked;
+      document.body.classList.toggle('wf-readonly', !edit);
+      this.applyStepEditLock();
+      this.renderRoleWarnings();
+    },
+
+    /** Step rows are read-only unless the caller can save. Run-selection checkboxes stay live. */
+    applyStepEditLock() {
+      const edit = this.canEdit();
+      const list = this.el('steps-list');
+      if (!list) return;
+      list.querySelectorAll('input, select, textarea, button').forEach((n) => {
+        if (n.hasAttribute('data-step-include') || n.hasAttribute('data-section-collapse')) return;
+        if (!edit) {
+          if (!n.hasAttribute('data-wf-lock')) {
+            n.setAttribute('data-wf-lock', n.disabled ? 'was' : 'set');
+          }
+          n.disabled = true;
+        } else if (n.getAttribute('data-wf-lock') === 'set') {
+          n.disabled = false;
+          n.removeAttribute('data-wf-lock');
+        } else {
+          n.removeAttribute('data-wf-lock');
+        }
+      });
+      list.title = edit ? '' : this.gateTip('editor');
     },
 
     setStatus(msg, kind) {
@@ -2093,6 +2219,7 @@
         this.renderStepsPreview();
         this.syncPreviewUi();
       }
+      this.applyStepEditLock();
     },
 
     isExecutableStep(step) {
@@ -2855,6 +2982,7 @@
     },
 
     addStep() {
+      if (!this.canEdit()) { this.setStatus('Add step: ' + this.gateTip('editor'), 'err'); return; }
       this.syncAllStepsFromDom();
       this.readInsertFromDom();
       const at = this.resolveInsertIndex();
@@ -2884,7 +3012,7 @@
     },
 
     async loadCompiled() {
-      const d = await this.api('compile', 'POST', { recipe: this.recipe });
+      const d = await this.v1('POST', '/workflows/compile', { recipe: this.recipe });
       this.compiledSteps = d.compiled || [];
     },
 
@@ -2953,7 +3081,7 @@
       }
       const q = encodeURIComponent(name);
       if (dl) {
-        dl.href = 'operational_steps_api.php?action=download&workflow_file=' + q;
+        dl.href = this.API_V1 + '/workflows/' + q + '/download';
         dl.download = name;
         dl.classList.remove('disabled');
       }
@@ -2962,7 +3090,7 @@
     async loadWorkflowList(options) {
       options = options || {};
       const prevActive = this.activeWorkflow;
-      const d = await this.api('list_workflows');
+      const d = await this.v1('GET', '/workflows/active');
       this.workflowFiles = d.files || [];
       const savedActive = d.active_workflow || '';
       if (this.workflowFiles.length === 1) {
@@ -3002,9 +3130,9 @@
         }
         return;
       }
-      const d = await this.api('recipe', 'GET', null, { workflow_file: this.activeWorkflow });
+      const d = await this.v1('GET', '/workflows/' + encodeURIComponent(this.activeWorkflow));
       this.recipe = d.recipe;
-      this.activeWorkflow = d.workflow_file || this.activeWorkflow;
+      this.activeWorkflow = d.name || this.activeWorkflow;
       await this.loadCompiled();
       this.syncWorkflowSelect();
       if (options.clearDirty !== false) {
@@ -3026,7 +3154,10 @@
         }
       }
       this.activeWorkflow = next;
-      await this.api('set_active_workflow', 'POST', { workflow_file: this.activeWorkflow });
+      // Remembering the active workflow is a write (editor); everyone can still load it.
+      if (this.canEdit()) {
+        await this.v1('PUT', '/workflows/active', { workflow_file: this.activeWorkflow });
+      }
       await this.loadRecipe();
       await this.loadRunOptions();
       this.renderSteps({ skipSync: true });
@@ -3040,6 +3171,7 @@
     },
 
     resetEditor() {
+      if (!this.canEdit()) { this.setStatus('Reset: ' + this.gateTip('editor'), 'err'); return; }
       const stepCount = this.recipe.steps?.length || 0;
       if (this.dirty || stepCount > 0) {
         if (!confirm('Reset the editor? All unsaved steps will be cleared.')) {
@@ -3055,6 +3187,7 @@
     },
 
     async deleteSelectedWorkflow() {
+      this.requireRole('editor', 'Delete');
       const sel = this.el('workflow-file');
       const name = sel?.value || this.activeWorkflow || '';
       if (!name) {
@@ -3071,9 +3204,9 @@
           return;
         }
       }
-      const d = await this.api('delete_workflow', 'POST', { workflow_file: name });
+      const d = await this.v1('DELETE', '/workflows/' + encodeURIComponent(name));
       const wasActive = this.activeWorkflow === name;
-      this.workflowFiles = d.files || [];
+      await this.loadWorkflowList();
       this.activeWorkflow = d.active_workflow || '';
       this.syncWorkflowSelect({ preferEmpty: !this.activeWorkflow });
       if (wasActive || !this.activeWorkflow) {
@@ -3089,16 +3222,23 @@
     },
 
     async loadCatalog() {
-      this.catalog = await this.api('catalog');
+      this.catalog = await this.v1('GET', '/catalog');
       this.dynamicOptions = this.catalog.dynamic_options || {};
       this.buildCatalogMap();
     },
 
+    requireRole(role, what) {
+      if (!this.roleAtLeast(role)) throw new Error(what + ': ' + this.gateTip(role));
+    },
+
     async saveRecipe() {
+      this.requireRole('editor', 'Save');
       this.syncAllStepsFromDom();
       const saveAs = this.readSaveWorkflowFilename();
-      const d = await this.api('save', 'POST', { recipe: this.recipe, workflow_file: saveAs });
-      this.activeWorkflow = d.workflow_file || saveAs;
+      const d = await this.v1('PUT', '/workflows/' + encodeURIComponent(saveAs), { recipe: this.recipe });
+      this.activeWorkflow = d.name || saveAs;
+      // v1 saves do not change the active workflow; the editor's Save did.
+      await this.v1('PUT', '/workflows/active', { workflow_file: this.activeWorkflow });
       await this.loadWorkflowList({ keepActive: true });
       await this.loadCompiled();
       this.renderSteps();
@@ -3112,7 +3252,7 @@
 
     async normalizeRecipe() {
       this.syncAllStepsFromDom();
-      const data = await this.api('normalize_recipe', 'POST', { recipe: this.recipe });
+      const data = await this.v1('POST', '/workflows/normalize', { recipe: this.recipe });
       this.recipe = data.recipe;
       await this.loadCompiled();
       this.renderSteps({ skipSync: true });
@@ -3129,6 +3269,7 @@
 
     async importWorkflowFile(file) {
       if (!file) return;
+      this.requireRole('editor', 'Import');
       const name = file.name || 'imported.workflow.json';
       const text = await file.text();
       let payload;
@@ -3137,7 +3278,7 @@
       } catch (e) {
         throw new Error('Invalid workflow JSON in ' + name);
       }
-      const d = await this.api('import_workflow', 'POST', { recipe: payload });
+      const d = await this.v1('POST', '/workflows/import', { recipe: payload });
       const importedSteps = d.recipe?.steps || [];
       if (!importedSteps.length) {
         this.setStatus('No steps found in ' + name, 'err');
@@ -3179,10 +3320,88 @@
       );
     },
 
+    /**
+     * Run options for the active workflow (indices, condition context, role
+     * warnings for the caller). With no saved workflow yet, fall back to the
+     * simulator status so the session number and conditions still show.
+     */
     async loadRunOptions() {
-      this.runOptions = await this.simulatorApi('run_options');
+      if (this.activeWorkflow && (this.workflowFiles || []).includes(this.activeWorkflow)) {
+        this.runOptions = await this.v1(
+          'GET', '/workflows/' + encodeURIComponent(this.activeWorkflow) + '/run-options'
+        );
+      } else {
+        const st = await this.v1('GET', '/simulator/status');
+        this.runOptions = {
+          current_session: st.session,
+          condition_context: st.context || {},
+          role_warnings: [],
+        };
+      }
       this.syncRunDefaults();
+      this.renderRoleWarnings();
     },
+
+    /** Warnings that fall inside the selected run (range and skip list). */
+    applicableRoleWarnings() {
+      const warns = (this.runOptions && this.runOptions.role_warnings) || [];
+      const { start, stop } = this.getRunStepRange();
+      const skip = this.getRunSkipSet();
+      return warns.map((w) => Object.assign({}, w, {
+        inRun: w.step >= start && w.step <= stop && !skip.has(w.step),
+      }));
+    },
+
+    renderRoleWarnings() {
+      const host = this.el('run-warnings');
+      if (!host) return;
+      host.textContent = '';
+      const warns = this.applicableRoleWarnings();
+      if (!warns.length) { host.hidden = true; return; }
+      const head = document.createElement('div');
+      head.className = 'run-warnings-title';
+      head.textContent = 'Some steps need a higher role than yours' +
+        (this.me ? ' (' + this.me.role + ')' : ' (not signed in)') + ':';
+      host.appendChild(head);
+      const ul = document.createElement('ul');
+      warns.forEach((w) => {
+        const li = document.createElement('li');
+        li.className = w.conditional ? 'is-conditional' : 'is-hard';
+        if (!w.inRun) li.classList.add('is-outside');
+        let text = 'Step ' + w.step + ' ' + (w.label || w.command) + ' needs ' + w.required_role + ' \u2014 ';
+        text += w.conditional
+          ? 'runs only if reached (conditional); the run fails there if it is'
+          : 'always runs unless skipped; the run will fail there';
+        if (!w.inRun) text += ' [not in the selected range or skipped]';
+        li.textContent = text;
+        li.title = w.note || '';
+        ul.appendChild(li);
+      });
+      host.appendChild(ul);
+      const a = document.createElement('a');
+      a.href = 'api_admin.php';
+      a.textContent = 'Manage tokens and command roles';
+      host.appendChild(a);
+      host.hidden = false;
+    },
+
+    showRunError(msg) {
+      const host = this.el('run-error');
+      if (!host) return;
+      host.textContent = '';
+      if (!msg) { host.hidden = true; return; }
+      const strong = document.createElement('strong');
+      strong.textContent = 'Run failed: ';
+      host.appendChild(strong);
+      host.appendChild(document.createTextNode(msg + ' '));
+      const a = document.createElement('a');
+      a.href = 'api_admin.php';
+      a.textContent = 'API Access';
+      host.appendChild(a);
+      host.hidden = false;
+    },
+
+    sleep(ms) { return new Promise((r) => setTimeout(r, ms)); },
 
     truncateSectionLabel(label, max) {
       label = String(label || '').trim();
@@ -3431,6 +3650,8 @@
 
     async runWorkflow(options) {
       options = options || {};
+      this.requireRole('operator', 'Run');
+      if (this.running) throw new Error('A run is already in progress');
       const repeatEnabled = !!this.el('run-repeat-enabled')?.checked;
       const repeat = repeatEnabled
         ? Math.max(2, parseInt(this.el('run-repeat')?.value, 10) || 2)
@@ -3444,8 +3665,11 @@
       if (coverage.none) {
         throw new Error('Select at least one section to run');
       }
-      if (options.saveFirst) {
+      // Runs execute the saved file. Editors save first; operators run what is on disk.
+      if (options.saveFirst && this.canEdit()) {
         await this.saveRecipe();
+      } else if (this.dirty) {
+        this.setStatus('Running the saved file; unsaved editor changes are not included', 'info');
       }
       const total = coverage.total;
       let start = parseInt(this.el('run-start')?.value, 10) || coverage.start;
@@ -3456,42 +3680,96 @@
         throw new Error('Stop step must be at or after start step');
       }
       const skipStr = (this.el('run-skip')?.value || coverage.skipStr || '').trim();
+
+      // Role warnings for this exact range, from the saved file, before anything runs.
+      await this.loadRunOptions();
+      const hard = this.applicableRoleWarnings().filter((w) => w.inRun && !w.conditional);
+      if (hard.length) {
+        const lines = hard.map((w) => '  Step ' + w.step + ' ' + (w.label || w.command) + ' needs ' + w.required_role);
+        if (!confirm(
+          'These steps need a higher role than yours and the run will fail at the first one:\n\n' +
+          lines.join('\n') + '\n\nRun anyway?'
+        )) {
+          this.setStatus('Run cancelled', 'info');
+          return null;
+        }
+      }
+
       this.clearRunCompleteActions();
+      this.showRunError('');
       let statusMsg = repeat > 1
         ? ('Running ' + repeat + ' cycles (steps ' + start + '–' + stop + ')')
         : ('Running steps ' + start + '–' + stop);
       if (skipStr) statusMsg += ' (skip ' + skipStr + ')';
       statusMsg += '…';
       this.setStatus(statusMsg, 'info');
-      const runBody = {
-        recipe: this.recipe,
-        save_recipe: true,
-        session_count: repeat,
-        workflow_file: this.activeWorkflow,
-        start_step: start,
-        stop_step: stop,
-        skip_steps: skipStr,
-      };
-      // Multi-section (or gaps) always uses the range runner with skip_steps.
-      const d = await this.simulatorApi('run', 'POST', runBody);
-      const lines = (d.summary || []).slice();
-      if (d.start_step) {
-        let head = 'Steps ' + d.start_step + '–' + d.stop_step;
-        if (d.skip_steps) head += ' (skip ' + d.skip_steps + ')';
-        lines.unshift(head);
+      const body = { start_step: start, stop_step: stop, session_count: repeat };
+      if (skipStr) body.skip = skipStr;
+      this.running = true;
+      this.applyAuthUi();
+      try {
+        const started = await this.v1(
+          'POST', '/workflows/' + encodeURIComponent(this.activeWorkflow) + '/run', body
+        );
+        this.log('Task ' + started.task_id + ' queued\n');
+        const task = await this.pollTask(started.task_id);
+        return await this.finishRun(task, start, stop, skipStr);
+      } finally {
+        this.running = false;
+        this.applyAuthUi();
       }
-      if (d.warnings?.length) lines.push('', ...d.warnings);
-      if (d.index_url) lines.push('', 'Sessions: ' + d.index_url);
-      if (d.session_url) lines.push('Latest: ' + d.session_url);
-      this.log(lines.join('\n'));
-      this.setStatus(
-        'Complete — session ' + (d.session || (d.sessions || []).join(', ') || ''),
-        'ok'
-      );
-      this.showRunCompleteActions(d);
-      this.runOptions = await this.simulatorApi('run_options');
-      this.syncRunDefaults();
-      return d;
+    },
+
+    /** Poll GET /tasks/{id}?log=N about once a second, streaming the log into #log. */
+    async pollTask(id) {
+      let failures = 0;
+      let task = null;
+      for (;;) {
+        try {
+          task = await this.v1('GET', '/tasks/' + encodeURIComponent(id) + '?log=2000');
+          failures = 0;
+        } catch (e) {
+          failures += 1;
+          if (failures >= 5 || e.status === 401 || e.status === 403 || e.status === 404) throw e;
+          await this.sleep(1000);
+          continue;
+        }
+        const node = this.el('log');
+        if (node) {
+          const lines = task.log || [];
+          const stick = node.scrollTop + node.clientHeight >= node.scrollHeight - 24;
+          node.textContent = 'Task ' + id + ' (' + task.status + ')\n' + lines.join('\n');
+          if (stick) node.scrollTop = node.scrollHeight;
+        }
+        if (task.status === 'succeeded' || task.status === 'failed') return task;
+        await this.sleep(1000);
+      }
+    },
+
+    async finishRun(task, start, stop, skipStr) {
+      const res = task.result || {};
+      const r = res.output || res;
+      const cycles = r.cycles || [];
+      let sessions = cycles.map((c) => c.session).filter((x) => x != null && x !== '');
+      if (!sessions.length && res.session_after != null) sessions = [res.session_after];
+      const node = this.el('log');
+      if (node && task.status === 'succeeded') {
+        const sum = ['', 'Steps ' + start + '–' + stop + (skipStr ? ' (skip ' + skipStr + ')' : '')];
+        sum.push('Dispatched ' + (r.dispatched || 0) + ', control ' + (r.control || 0) + ', skipped ' + (r.skipped || 0));
+        node.textContent += '\n' + sum.join('\n');
+        node.scrollTop = node.scrollHeight;
+      }
+      if (task.status === 'failed') {
+        const msg = task.error || 'The task failed';
+        this.showRunError(msg);
+        this.setStatus('Run failed: ' + msg, 'err');
+        if (sessions.length) this.showRunCompleteActions({ sessions: sessions });
+      } else {
+        this.setStatus('Complete — session ' + (sessions.join(', ') || ''), 'ok');
+        this.showRunCompleteActions({ sessions: sessions });
+      }
+      try { await this.loadRunOptions(); } catch (e) { /* keep the run result on screen */ }
+      return task;
     },
 
     /**

@@ -245,6 +245,29 @@ function read_locations_list(array $req)
     api_ok_list(array_map('read_loc_row', $rows), $total, $limit, $offset);
 }
 
+/** Canonical code for a registered alias, or null. Follows alias chains. */
+function read_location_alias($value)
+{
+    require_once dirname(__DIR__, 2) . '/plugin_registry.php';
+    $aliases = plugins_scenario_call('location_aliases', [], []);
+    if (!is_array($aliases) || !$aliases) {
+        return null;
+    }
+    $map = [];
+    foreach ($aliases as $alias => $code) {
+        $map[strtoupper(trim((string) $alias))] = strtoupper(trim((string) $code));
+    }
+    $code = strtoupper(trim((string) $value));
+    $seen = [];
+    $hit = false;
+    while (isset($map[$code]) && !isset($seen[$code])) {
+        $seen[$code] = true;
+        $code = $map[$code];
+        $hit = true;
+    }
+    return $hit ? $code : null;
+}
+
 function read_location_detail(array $req)
 {
     $where = [];
@@ -252,6 +275,13 @@ function read_location_detail(array $req)
     $params = [];
     read_id_or_text_clause('locations.Id', 'locations.code', $req['params']['location'], $where, $types, $params);
     $row = api_db_one('SELECT ' . READ_LOC_SELECT . ' ' . READ_LOC_FROM . ' WHERE ' . $where[0] . ' ORDER BY (locations.Id = ' . (int) $req['params']['location'] . ') DESC LIMIT 1', $types, $params);
+    if (!$row) {
+        // Location codes a plugin renames (warm-start scenario hook location_aliases: alias => code).
+        $code = read_location_alias($req['params']['location']);
+        if ($code !== null) {
+            $row = api_db_one('SELECT ' . READ_LOC_SELECT . ' ' . READ_LOC_FROM . ' WHERE locations.code = ? LIMIT 1', 's', [$code]);
+        }
+    }
     if (!$row) {
         read_not_found('Location');
     }
@@ -442,6 +472,9 @@ function read_load_catalog()
 
 function read_workflow_name_file($name)
 {
+    if (strlen((string) $name) > 120) {
+        api_error(422, 'Workflow names are at most 120 characters', 'invalid');
+    }
     read_load_catalog();
     $dir = operational_steps_editor_dir();
     try {
@@ -498,13 +531,21 @@ api_route('GET', '/health', static function ($req) {
     } catch (Throwable $e) {
         $link = false;
     }
+    // During a restore the tables come and go: report it instead of querying them.
+    $restoring = function_exists('api_restore_in_progress') ? api_restore_in_progress() : null;
     if ($link) {
+        if ($restoring !== null) {
+            $db = 'restoring';
+        } else {
+            $rs = @mysqli_query($link, "SELECT setting_value FROM settings WHERE setting_name = 'session_nbr'");
+            $row = $rs ? mysqli_fetch_row($rs) : null;
+            $db = $rs ? 'ok' : 'error';
+            $session = $row ? (int) $row[0] : null;
+        }
         mysqli_close($link);
-        $db = 'ok';
-        $session = api_session_nbr();
     }
     return [
-        'status' => $db === 'ok' ? 'ok' : 'degraded',
+        'status' => $db === 'ok' ? 'ok' : ($db === 'restoring' ? 'maintenance' : 'degraded'),
         'version' => STS_API_VERSION,
         'stack' => getenv('STS_STACK_NAME') ?: 'live',
         'session_nbr' => $session,

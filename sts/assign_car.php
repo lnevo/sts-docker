@@ -39,7 +39,7 @@
       $dbc = open_db();
 
       // find out which car order is to be filled
-      for ($i=0; $i<$_POST['row_count']; $i++)
+      for ($i=0; $i<(int) sts_post('row_count'); $i++)
       {
         $button_name = 'fill' . $i;
         $wbnbr_name = 'wbnbr' . $i;
@@ -70,9 +70,9 @@
                     left join routing sta01 on sta01.id = loc01.station
                     left join routing sta02 on sta02.id = loc02.station
                     left join routing on routing.id = loc01.station
-                    where car_orders.waybill_number = "' . $_POST[$wbnbr_name] . '"';
+                    where car_orders.waybill_number = ?';
 // print 'SQL: ' . $sql . '<br /><br />';
-          $rs = mysqli_query($dbc, $sql);
+          $rs = sts_q($dbc, $sql, array(sts_post($wbnbr_name)));
           $row = mysqli_fetch_array($rs);
 
           if (mysqli_num_rows($rs) <= 0)
@@ -94,19 +94,19 @@
           // display the shipment information
           print '<table>
                    <tr>
-                     <td><b>Shipment</b></td><td>' . $shipment . '</td>
-                     <td><b>Loading Station</b></td><td>' . $loading_station . '</td></tr>
+                     <td><b>Shipment</b></td><td>' . sts_html($shipment) . '</td>
+                     <td><b>Loading Station</b></td><td>' . sts_html($loading_station) . '</td></tr>
                    <tr>
-                     <td><b>Description</b></td><td>' . $description . '</td>
-                     <td><b>Loading Location</b></td><td>' . $loading_location . '</td></tr>
+                     <td><b>Description</b></td><td>' . sts_html($description) . '</td>
+                     <td><b>Loading Location</b></td><td>' . sts_html($loading_location) . '</td></tr>
                    <tr>
-                     <td><b>Consignment</b></td><td>' . $consignment . '</td>
-                     <td><b>Unloading Station</b></td><td>' . $unloading_station . '</td></tr>
+                     <td><b>Consignment</b></td><td>' . sts_html($consignment) . '</td>
+                     <td><b>Unloading Station</b></td><td>' . sts_html($unloading_station) . '</td></tr>
                    <tr>
-                     <td><b>Car Code</b></td><td>' . $car_code . '</td>
-                     <td><b>Unloading Location</b></td><td>' . $unloading_location . '</td></tr>
+                     <td><b>Car Code</b></td><td>' . sts_html($car_code) . '</td>
+                     <td><b>Unloading Location</b></td><td>' . sts_html($unloading_location) . '</td></tr>
                    <tr>
-                     <td><b>Shipment Remarks</b></td><td colspan="3">' . $shipment_remarks . '</td></tr>
+                     <td><b>Shipment Remarks</b></td><td colspan="3">' . sts_html($shipment_remarks) . '</td></tr>
                  </table>';
 
           // build a query to find any cars in a pool assigned to this shipment
@@ -125,12 +125,12 @@
                   left join car_codes on car_codes.id = cars.car_code_id
                   where cars.status = "Empty"
                     and cars.id not in (select car from car_orders)
-                    and car_codes.code like REPLACE("' . $car_code . '", "*", "%")
+                    and car_codes.code like REPLACE(?, "*", "%")
                     and pool.car_id = cars.Id
-                    and pool.shipment_id = "' . $shipment_id . '"
+                    and pool.shipment_id = ?
               order by cars.load_count';
               
-          $rs_pool = mysqli_query($dbc,$sql);
+          $rs_pool = sts_q($dbc, $sql, array($car_code, $shipment_id));
 
 
           // build a query to find all of the cars at the current station
@@ -149,13 +149,13 @@
                   where cars.status = "Empty"
                     and cars.id not in (select car from car_orders)
                     and cars.id not in (select car_id from pool)
-                    and car_codes.code like REPLACE("' . $car_code . '", "*", "%")
+                    and car_codes.code like REPLACE(?, "*", "%")
                     and cars.current_location_id in (select locations.id
                                                      from locations, routing
-                                                     where locations.station = routing.id and routing.station = "' . $loading_station . '")
+                                                     where locations.station = routing.id and routing.station = ?)
                   order by priority, cars.load_count';
 
-          $rs1 = mysqli_query($dbc, $sql);
+          $rs1 = sts_q($dbc, $sql, array($car_code, $loading_station));
 //print '<p>$sql1 = ' . $sql . '</p>';
           // build a query to find out if this shipper has prioritized empty search locations
           $sql = 'select cars.reporting_marks as reporting_marks,
@@ -173,16 +173,16 @@
                   where cars.status = "Empty"
                     and cars.id not in (select car from car_orders)
                     and cars.id not in (select car_id from pool)
-                    and car_codes.code like REPLACE("' . $car_code . '", "*", "%")
+                    and car_codes.code like REPLACE(?, "*", "%")
                     and cars.current_location_id = empty_locations.location
                     and empty_locations.shipment = shipments.id
-                    and shipments.code = "' . $shipment . '"
+                    and shipments.code = ?
                     and cars.current_location_id not in (select locations.id
                                                       from locations, routing
-                                                      where locations.station = routing.id and routing.station = "' . $loading_station . '")
+                                                      where locations.station = routing.id and routing.station = ?)
                   order by priority, cars.load_count';
 
-          $rs2 = mysqli_query($dbc, $sql);
+          $rs2 = sts_q($dbc, $sql, array($car_code, $shipment, $loading_station));
 //print '<p>sql2: ' . $sql . '</p>';
           // build a query to find all remaining eligible cars on the system
           $sql = 'select distinct cars.reporting_marks as reporting_marks,
@@ -200,29 +200,29 @@
                   where cars.status = "Empty"
                     and cars.id not in (select car from car_orders)
                     and cars.id not in (select car_id from pool)
-                    and car_codes.code like REPLACE("' . $car_code . '", "*", "%")
+                    and car_codes.code like REPLACE(?, "*", "%")
                     and cars.reporting_marks not in
                     (select cars.reporting_marks
                      from cars
                      where cars.status = "Empty"
-                       and car_codes.code like REPLACE("' . $car_code . '", "*", "%")
+                       and car_codes.code like REPLACE(?, "*", "%")
                        and cars.current_location_id in (select locations.id
                                                         from locations, routing
-                                                        where locations.station = routing.id and routing.station = "' . $loading_station . '")
+                                                        where locations.station = routing.id and routing.station = ?)
                                                         union
                                                         select cars.reporting_marks
                                                         from (cars, empty_locations)
                                                         where cars.status = "Empty"
-                                                          and car_codes.code like REPLACE("' . $car_code . '", "*", "%")
+                                                          and car_codes.code like REPLACE(?, "*", "%")
                                                           and cars.current_location_id = empty_locations.location
-                                                          and empty_locations.shipment = "' . $shipment . '"
+                                                          and empty_locations.shipment = ?
                                                           and cars.current_location_id not in (select locations.id
                                                                                          from locations, routing
-                                                                                         where locations.station = routing.id and routing.station = "' . $loading_station . '")
+                                                                                         where locations.station = routing.id and routing.station = ?)
                     )
                   order by priority, cars.load_count';
 //print "<p>sql3: " . $sql . '</p>';
-          $rs3 = mysqli_query($dbc, $sql);
+          $rs3 = sts_q($dbc, $sql, array($car_code, $car_code, $loading_station, $car_code, $shipment, $loading_station));
 
           // check for no cars found
           $total_cars_found = mysqli_num_rows($rs_pool) + mysqli_num_rows($rs1) + mysqli_num_rows($rs2) + mysqli_num_rows($rs3);
@@ -240,7 +240,7 @@
             print '<br /><input type="submit" name="assign" value="ASSIGN" style="background-color: #80ff00; font-size: 24px;"><br /><br />';
 
             // insert a hidden field to pass the waybill number back to the fill_orders program
-            print '<input type="hidden" name="wbnbr" value="' . $_POST[$wbnbr_name] . '">';
+            print '<input type="hidden" name="wbnbr" value="' . sts_html(sts_post($wbnbr_name)) . '">';
 
             // set the first car flag to true
             $first_car = true;
@@ -266,34 +266,34 @@
             {
               if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row1['car_id'] . '.jpg'))
               {
-                $parm_string = '\'' . $row1['car_id'] . '\', \'' . $row1['reporting_marks'] . '\'';
+                $parm_string = json_encode((string) $row1['car_id'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ', ' . json_encode((string) $row1['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
               }
               else
               {
-                $parm_string = '\'\',\'' . $row1['reporting_marks'] . '\'';
+                $parm_string = '"", ' . json_encode((string) $row1['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
               }
               
               print '<tr style="color:White; background-color:Gray;">
                      <td style="text-align: center">';
               if ($first_car)
               {
-                print '<input name="car_id" type="radio" value="' . $row1['car_id'] . '" checked>';
+                print '<input name="car_id" type="radio" value="' . sts_html($row1['car_id']) . '" checked>';
                 $first_car = false;
               }
               else
               {
-                print '<input name="car_id" type="radio" value="' . $row1['car_id'] . '">';
+                print '<input name="car_id" type="radio" value="' . sts_html($row1['car_id']) . '">';
               }
               
               print '</td>
-                     <td onclick="show_image(' . $parm_string . ');">' . $row1['reporting_marks'] . '
-                       <input name="reporting_marks" value="' . $row1['reporting_marks'] . '" type="hidden">
+                     <td onclick="show_image(' . sts_html($parm_string) . ');">' . sts_html($row1['reporting_marks']) . '
+                       <input name="reporting_marks" value="' . sts_html($row1['reporting_marks']) . '" type="hidden">
                      </td>
-                     <td>' . $row1['car_code'] . '</td>
-                     <td><u>' . $row1['current_station'] . '</u><br />' . $row1['current_location'] . '</td>
-                     <td class="number">' . $row1['priority'] . '</td>
-                     <td class="number">' . $row1['load_count'] . '</td>
-                     <td>' . $row1['remarks'] . '</td>
+                     <td>' . sts_html($row1['car_code']) . '</td>
+                     <td><u>' . sts_html($row1['current_station']) . '</u><br />' . sts_html($row1['current_location']) . '</td>
+                     <td class="number">' . sts_html($row1['priority']) . '</td>
+                     <td class="number">' . sts_html($row1['load_count']) . '</td>
+                     <td>' . sts_html($row1['remarks']) . '</td>
                    </tr>';
             }
 
@@ -302,34 +302,34 @@
             {
               if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row1['car_id'] . '.jpg'))
               {
-                $parm_string = '\'' . $row1['car_id'] . '\', \'' . $row1['reporting_marks'] . '\'';
+                $parm_string = json_encode((string) $row1['car_id'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ', ' . json_encode((string) $row1['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
               }
               else
               {
-                $parm_string = '\'\',\'' . $row1['reporting_marks'] . '\'';
+                $parm_string = '"", ' . json_encode((string) $row1['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
               }
               
               print '<tr style="background-color:DarkGray;">
                      <td style="text-align: center">';
               if ($first_car)
               {
-                print '<input name="car_id" type="radio" value="' . $row1['car_id'] . '" checked>';
+                print '<input name="car_id" type="radio" value="' . sts_html($row1['car_id']) . '" checked>';
                 $first_car = false;
               }
               else
               {
-                print '<input name="car_id" type="radio" value="' . $row1['car_id'] . '">';
+                print '<input name="car_id" type="radio" value="' . sts_html($row1['car_id']) . '">';
               }
               
               print '</td>
-                     <td onclick="show_image(' . $parm_string . ');">' . $row1['reporting_marks'] . '
-                       <input name="reporting_marks" value="' . $row1['reporting_marks'] . '" type="hidden">
+                     <td onclick="show_image(' . sts_html($parm_string) . ');">' . sts_html($row1['reporting_marks']) . '
+                       <input name="reporting_marks" value="' . sts_html($row1['reporting_marks']) . '" type="hidden">
                      </td>
-                     <td>' . $row1['car_code'] . '</td>
-                     <td><u>' . $row1['current_station'] . '</u><br />' . $row1['current_location'] . '</td>
-                     <td class="number">' . $row1['priority'] . '</td>
-                     <td class="number">' . $row1['load_count'] . '</td>
-                     <td>' . $row1['remarks'] . '</td>
+                     <td>' . sts_html($row1['car_code']) . '</td>
+                     <td><u>' . sts_html($row1['current_station']) . '</u><br />' . sts_html($row1['current_location']) . '</td>
+                     <td class="number">' . sts_html($row1['priority']) . '</td>
+                     <td class="number">' . sts_html($row1['load_count']) . '</td>
+                     <td>' . sts_html($row1['remarks']) . '</td>
                    </tr>';
             }
 
@@ -340,31 +340,31 @@
                      <td style="text-align: center">';
               if ($first_car)
               {
-                print '<input name="car_id" type="radio" value="' . $row2['car_id'] . '" checked>';
+                print '<input name="car_id" type="radio" value="' . sts_html($row2['car_id']) . '" checked>';
                 $first_car = false;
               }
               else
               {
-                print '<input name="car_id" type="radio" value="' . $row2['car_id'] . '">';
+                print '<input name="car_id" type="radio" value="' . sts_html($row2['car_id']) . '">';
               }
               
               if (file_exists('/ImageStore/DB_Images/RollingStock/' . $row2['car_id'] . '.jpg'))
               {
-                $parm_string = '\'' . $row2['car_id'] . '\', \'' . $row2['reporting_marks'] . '\'';
+                $parm_string = json_encode((string) $row2['car_id'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ', ' . json_encode((string) $row2['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
               }
               else
               {
-                $parm_string = '\'\',\'' . $row2['reporting_marks'] . '\'';
+                $parm_string = '"", ' . json_encode((string) $row2['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
               }
               print '</td>
-                     <td onclick="show_image(' . $parm_string . ');">' . $row2['reporting_marks'] . '
-                       <input name="reporting_marks" value="' . $row2['reporting_marks'] . '" type="hidden">
+                     <td onclick="show_image(' . sts_html($parm_string) . ');">' . sts_html($row2['reporting_marks']) . '
+                       <input name="reporting_marks" value="' . sts_html($row2['reporting_marks']) . '" type="hidden">
                      </td>
-                     <td>' . $row2['car_code'] . '</td>
-                     <td><u>' . $row2['current_station'] . '</u><br />' . $row2['current_location'] . '</td>
-                     <td class="number">' . $row2['priority'] . '</td>
-                     <td class="number">' . $row2['load_count'] . '</td>
-                     <td>' . $row2['remarks'] . '</td>
+                     <td>' . sts_html($row2['car_code']) . '</td>
+                     <td><u>' . sts_html($row2['current_station']) . '</u><br />' . sts_html($row2['current_location']) . '</td>
+                     <td class="number">' . sts_html($row2['priority']) . '</td>
+                     <td class="number">' . sts_html($row2['load_count']) . '</td>
+                     <td>' . sts_html($row2['remarks']) . '</td>
                      </tr>';
             }
 
@@ -375,31 +375,31 @@
                      <td style="text-align: center">';
               if ($first_car)
               {
-                print '<input name="car_id" type="radio" value="' . $row3['car_id'] . '" checked>';
+                print '<input name="car_id" type="radio" value="' . sts_html($row3['car_id']) . '" checked>';
                 $first_car = false;
               }
               else
               {
-                print '<input name="car_id" type="radio" value="' . $row3['car_id'] . '">';
+                print '<input name="car_id" type="radio" value="' . sts_html($row3['car_id']) . '">';
               }
             
               if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row3['car_id'] . '.jpg'))
               {
-                $parm_string = '\'' . $row3['car_id'] . '\', \'' . $row3['reporting_marks'] . '\'';
+                $parm_string = json_encode((string) $row3['car_id'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ', ' . json_encode((string) $row3['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
               }
               else
               {
-                $parm_string = '\'\',\'' . $row3['reporting_marks'] . '\'';
+                $parm_string = '"", ' . json_encode((string) $row3['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
               }
               print '</td>
-                     <td onclick="show_image(' . $parm_string . ');">' . $row3['reporting_marks'] . '
-                       <input name="reporting_marks" value="' . $row3['reporting_marks'] . '" type="hidden">
+                     <td onclick="show_image(' . sts_html($parm_string) . ');">' . sts_html($row3['reporting_marks']) . '
+                       <input name="reporting_marks" value="' . sts_html($row3['reporting_marks']) . '" type="hidden">
                      </td>
-                     <td>' . $row3['car_code'] . '</td>
-                     <td><u>' . $row3['current_station'] . '</u><br />' . $row3['current_location'] . '</td>
-                     <td class="number">' . $row3['priority'] . '</td>
-                     <td class="number">' . $row3['load_count'] . '</td>
-                     <td>' . $row3['remarks'] . '</td>
+                     <td>' . sts_html($row3['car_code']) . '</td>
+                     <td><u>' . sts_html($row3['current_station']) . '</u><br />' . sts_html($row3['current_location']) . '</td>
+                     <td class="number">' . sts_html($row3['priority']) . '</td>
+                     <td class="number">' . sts_html($row3['load_count']) . '</td>
+                     <td>' . sts_html($row3['remarks']) . '</td>
                      </tr>';
             }
             print '</table>';

@@ -3,9 +3,10 @@
 function set_colors($dbc, $location_name)
 {
   // build a query to get the color for this location
-  $sql = 'select color from locations where code = "' . $location_name . '"';
-  $rs = mysqli_query($dbc, $sql);
-  $row = mysqli_fetch_row($rs);
+  require_once __DIR__ . '/sql_safe.php';
+  $rs = sts_q($dbc, 'select color from locations where code = ?', array((string) $location_name));
+  $row = ($rs instanceof mysqli_result) ? mysqli_fetch_row($rs) : array('None');
+  if (!$row) { $row = array('None'); }
 // print 'SQL: ' . $sql . '<br /><br />';
   if ($row[0] == 'None')
   {

@@ -11,6 +11,8 @@
  *
  * GET  ?action=catalog|list_workflows|recipe|run_options|compile|download
  * POST ?action=save|run_switchlists|import_workflow|normalize_recipe|set_active_workflow|delete_workflow|compile
+ * Role lock (editor_open=false, the default): save/import/set_active/delete need editor, run_switchlists,
+ * rerender_session_style and build_print_all_style need operator (401/403 JSON, sign in at /sts/api_admin.php).
  *      (action in query, form field, or JSON body)
  */
 
@@ -89,7 +91,21 @@ function operational_steps_api_workflow_file(array $sources, $session_dir)
     return operational_steps_active_workflow($session_dir, $requested);
 }
 
+// Role lock (policy flag editor_open, default off): reads stay open, writes and
+// runs need a signed-in role. See editor_lock.php.
+$write_roles = [
+    'save' => 'editor', 'import_workflow' => 'editor', 'import_csv' => 'editor',
+    'set_active_workflow' => 'editor', 'set_active_csv' => 'editor', 'delete_workflow' => 'editor',
+    'run_switchlists' => 'operator', 'rerender_session_style' => 'operator', 'build_print_all_style' => 'operator',
+];
 try {
+    if (isset($write_roles[$action])) {
+        require_once $sts_dir . '/editor_lock.php';
+        $needs_save = $action === 'run_switchlists' && isset($body['recipe']) && is_array($body['recipe']);
+        sts_editor_require($needs_save ? 'editor' : $write_roles[$action], static function ($code, $msg) {
+            operational_steps_api_json(['ok' => false, 'error' => $msg], $code);
+        }, $action === 'run_switchlists');
+    }
     switch ($action) {
         case 'catalog':
             $dbc = open_db();
@@ -208,9 +224,17 @@ try {
                     $mode = 'rerender';
                 }
             }
+            $respond_err = static function ($code, $msg) {
+                operational_steps_api_json(['ok' => false, 'error' => $msg], $code);
+            };
+            if ($mode !== 'rerender') {
+                $play = (int) ($body['session_count'] ?? 1) > 1 && (!isset($body['play_after']) || (bool) $body['play_after']);
+                sts_editor_precheck($recipe, (int) ($body['start_step'] ?? 0), $play ? 0 : (int) ($body['stop_step'] ?? 0), '', $respond_err);
+            }
             $dbc = open_db();
             $result = operational_steps_run_generator_web($dbc, [
                 'recipe' => $recipe,
+                'before_dispatch' => $GLOBALS['sts_before_dispatch'] ?? null,
                 'format' => $format,
                 'jobs' => $jobs,
                 'mode' => $mode,
@@ -440,5 +464,5 @@ try {
             ], 400);
     }
 } catch (Throwable $e) {
-    operational_steps_api_json(['ok' => false, 'error' => $e->getMessage()], 500);
+    operational_steps_api_json(['ok' => false, 'error' => $e->getMessage()], $e instanceof ApiTaskFailure ? 403 : 500);
 }

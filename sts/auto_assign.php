@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="operations_ui.css?v=2" rel="stylesheet">
+    <link href="operations_ui.css?v=3" rel="stylesheet">
     <style>
       body {font: normal 20px Verdana, Arial, sans-serif;}
       table {border-collapse: collapse;}
@@ -60,7 +60,7 @@
       else if (($row3['status'] == 'Ordered') && (strpos($row3['waybill_number'], 'E') !== false))
       {
         $sql6 = 'select routing.station, locations.code from routing, locations
-                 where locations.id = ' . $row3['shipment'] . ' and routing.id = locations.station';
+                 where locations.id = ' . intval($row3['shipment']) . ' and routing.id = locations.station';
         $rs6 = mysqli_query($dbc, $sql6);
         $row6 = mysqli_fetch_array($rs6);
         $pickup_list[$pickup_list_counter] .= ', REPOSITIONING EMPTY';
@@ -76,10 +76,11 @@
   $dbc = open_db();
 
 //  print 'Incoming Job: ' . $_GET['job'] . '<br /><br />';
-  $sql = 'select name from jobs where id = "' . $_GET['job'] . '"';
-  $rs = mysqli_query($dbc, $sql);
+  $job_id = sts_id(sts_get('job'));
+  $rs = sts_q($dbc, 'select name from jobs where id = ?', array($job_id));
   $row  = mysqli_fetch_array($rs);
   $job_name = $row['name'];
+  $job_name_h = sts_html($job_name);
 
   print '<a href="build_switchlists.php">Return to Assign Cars</a><br /><br />';
   
@@ -88,23 +89,19 @@
   {
     // assign the selected cars to the designated job/train
     $num_cars_assigned = 0;
-    for ($i=0; $i<$_GET['pickup_list_count']; $i++)
+    for ($i=0; $i<intval(sts_get('pickup_list_count')); $i++)
     {
       // only assign those cars with checked checkboxes
       if (isset($_GET['pu_car' . $i]))
       {
-        $sql = 'select reporting_marks from cars where id = ' . $_GET["car_id" . $i];
-        $rs = mysqli_query($dbc, $sql);
+        $rs = sts_q($dbc, 'select reporting_marks from cars where id = ?', array(sts_id(sts_get('car_id' . $i))));
         $row = mysqli_fetch_array($rs);
-        print 'Assigning ' . $row['reporting_marks'] . '...<br />';
+        print 'Assigning ' . sts_html($row['reporting_marks']) . '...<br />';
         
         // assign this car by updating the car's "handled_by" field
-        $sql = 'update cars set handled_by_job_id = "' . $_GET['job'];
-        $sql = $sql . '" where id = "' . $_GET["car_id" . $i] . '"';
-
-        if(!mysqli_query($dbc, $sql))
+        if(!sts_q($dbc, 'update cars set handled_by_job_id = ? where id = ?', array($job_id, sts_id(sts_get('car_id' . $i)))))
         {
-          print 'Update Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql;
+          print 'Update Error: ' . sts_html(sts_err($dbc));
         }
         
         // bump up the number of cars assigned counter
@@ -113,18 +110,18 @@
     }
     if ($num_cars_assigned > 0)
     {
-      print '<br />' . $num_cars_assigned . ' car(s) assigned to Job/Train ' . $job_name;
+      print '<br />' . $num_cars_assigned . ' car(s) assigned to Job/Train ' . $job_name_h;
     }
     else
     {
-      print '<br />No cars were selected to be assigned to Job/Train ' . $job_name;
+      print '<br />No cars were selected to be assigned to Job/Train ' . $job_name_h;
     }
     print '<br /><br /><a href="pick_up.php"><button type="button">Go to Pick Up Cars</button></a>';
   }
   else
   {  
     // get this job's pickup criteria (if any) and display iterator_apply
-    print '<b>Auto-Assign Cars to Job: ' . $job_name . '</b><br /><br />';
+    print '<b>Auto-Assign Cars to Job: ' . $job_name_h . '</b><br /><br />';
 
     $sql = 'select pu_criteria.id as id,
                    pu_criteria.job_id as job_id,
@@ -142,7 +139,7 @@
               left join commodities on pu_criteria.commodity_id = commodities.id
               left join car_codes on pu_criteria.car_code_id = car_codes.id
               left join routing on pu_criteria.dest_station_id = routing.id
-              where pu_criteria.job_id = "' . $job_name . '"';
+              where pu_criteria.job_id = "' . mysqli_real_escape_string($dbc, $job_name) . '"';
 
   //print 'SQL: ' . $sql . '<br /><br />';
     // build an array of cars that meet the pickup requirements
@@ -159,8 +156,9 @@
       while ($row = mysqli_fetch_array($rs))
       {
         // get the station name where this step takes place
-        $sql2 = 'select routing.station as station, routing.id as routing_id from routing, `' . $job_name . '` ' .
-                'where routing.id = `' . $job_name . '`.station and `' . $job_name . '`.step_number = "' . $row['step_nbr'] . '"';
+        $jt = sts_ident($job_name);
+        $sql2 = 'select routing.station as station, routing.id as routing_id from routing, ' . $jt . ' ' .
+                'where routing.id = ' . $jt . '.station and ' . $jt . '.step_number = ' . intval($row['step_nbr']);
   //print 'SQL: ' . $sql . '<br /><br />';
         $rs2 = mysqli_query($dbc, $sql2);
         $row2 = mysqli_fetch_array($rs2);
@@ -173,12 +171,12 @@
         
         // create a table row for each step in the job description
         print '<tr>';
-        print '<td style="text-align: center;">' . $row['step_nbr'] . '</td>';
-        print '<td>' . $row2['station'] . '</td>';
-        print '<td>' . $car_status . '</td>';
-        print '<td>' . $commodity . '</td>';
-        print '<td>' . $car_code . '</td>';
-        print '<td>' . $dest_station . '</td>';
+        print '<td style="text-align: center;">' . sts_html($row['step_nbr']) . '</td>';
+        print '<td>' . sts_html($row2['station']) . '</td>';
+        print '<td>' . sts_html($car_status) . '</td>';
+        print '<td>' . sts_html($commodity) . '</td>';
+        print '<td>' . sts_html($car_code) . '</td>';
+        print '<td>' . sts_html($dest_station) . '</td>';
         print '</tr>';
         
         // build an array of cars that meet the pickup criteria for this step
@@ -190,7 +188,7 @@
         
         // get the ids of the locations that belong to the pickup station
         $current_location_string = '';
-        $sql4 = 'select id from locations where station = "' . $row2['routing_id'] . '"';
+        $sql4 = 'select id from locations where station = ' . intval($row2['routing_id']);
         $rs4 = mysqli_query($dbc, $sql4);
         while ($row4 = mysqli_fetch_array($rs4))
         {
@@ -200,7 +198,7 @@
         
         // get the ids of the locations that belong to dest_search_id
         $dest_search_string = '';
-        $sql5 = 'select id from locations where station = "' . $dest_search_id . '"';
+        $sql5 = 'select id from locations where station = "' . mysqli_real_escape_string($dbc, $dest_search_id) . '"';
         $rs5 = mysqli_query($dbc, $sql5);
         while ($row5 = mysqli_fetch_array($rs5))
         {
@@ -268,7 +266,7 @@
       print '<form action="auto_assign.php" method="get">';
       
       // remember the job that called this form for the next time around
-      print '<input type="hidden" name="job" id="job" value="' . $_GET['job'] . '">';
+      print '<input type="hidden" name="job" id="job" value="' . sts_html(sts_get('job')) . '">';
       
       // remember how many cars were in the pickup list
       print '<input type="hidden" name="pickup_list_count" value="' . $pickup_list_counter . '">';
@@ -295,13 +293,13 @@
         $pickup_list_columns = explode(',', $pickup_list[$i]);
         print '<tr>
                  <td style="text-align: center;"><input type="checkbox" class="pu_car" name="pu_car' . $i . '" checked></td>
-                 <td>' . $pickup_list_columns[0] . '</td>
-                 <td>' . $pickup_list_columns[1] . '<input type="hidden" name="car_id' . $i . '" value="' . $pickup_list_columns[8] . '"></td>
-                 <td style="text-align: center";>' . $pickup_list_columns[2] . '</td>
-                 <td>' . $pickup_list_columns[3] . '</td>
-                 <td>' . $pickup_list_columns[4] . '</td>
-                 <td>' . $pickup_list_columns[5] . '</td>
-                 <td>' . $pickup_list_columns[6] . '<br />' . $pickup_list_columns[7] . '</td>
+                 <td>' . sts_html($pickup_list_columns[0]) . '</td>
+                 <td>' . sts_html($pickup_list_columns[1]) . '<input type="hidden" name="car_id' . $i . '" value="' . sts_html(trim($pickup_list_columns[8])) . '"></td>
+                 <td style="text-align: center";>' . sts_html($pickup_list_columns[2]) . '</td>
+                 <td>' . sts_html($pickup_list_columns[3]) . '</td>
+                 <td>' . sts_html($pickup_list_columns[4]) . '</td>
+                 <td>' . sts_html($pickup_list_columns[5]) . '</td>
+                 <td>' . sts_html($pickup_list_columns[6]) . '<br />' . sts_html($pickup_list_columns[7]) . '</td>
                </tr>';
       }
       print '</table>';
@@ -309,7 +307,7 @@
     }
     else
     {
-      print 'Job ' . $job_name . ' doesn\'t have any pickup criteria.';
+      print 'Job ' . $job_name_h . ' doesn\'t have any pickup criteria.';
     }
   }
 

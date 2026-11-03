@@ -9,7 +9,6 @@
 
   // generate some javascript to display the table name, identify this table to the form, and set the update button's tab index
   print '<script>
-           document.getElementById("table_name").innerHTML = "Stations and Routing Instructions";
            document.getElementById("tbl_name").value = "routing";
            document.getElementById("update_btn").tabIndex = "5";
          </script>';
@@ -21,14 +20,12 @@
   if (isset($_POST['update_btn']))
   {
     // yes, so check to see if there is anything in the input text boxes
-    if (strlen($_POST['station_name']) > 0)
+    if (strlen(sts_post('station_name')) > 0)
     {
       // add the new station code to the routing table
       // station_nbr is now used to identify the default set-out location for each particular station
-      $sql = 'insert into routing (station, station_nbr, instructions, sort_seq, color1, color2)
-              values ("' . $_POST['station_name'] . '", 0, "' . $_POST['instructions'] . '", "' . intval($_POST['sort_seq']) . '", 0, 0)';
-
-      $rs = mysqli_query($dbc, $sql);
+      sts_q($dbc, 'insert into routing (station, station_nbr, instructions, sort_seq, color1, color2) values (?, 0, ?, ?, 0, 0)',
+            array(sts_post('station_name'), sts_post('instructions'), intval(sts_post('sort_seq'))));
     }
   }
 
@@ -39,8 +36,8 @@
            order by sort_seq, station";
   $rs = mysqli_query($dbc, $sql);
 
-  print '<table class="sortable">
-           <caption style="font: bold 15px Verdana, Arial, sans-serif; text-align:left;">Add New Station</caption>
+  print '<table class="table table-sm table-bordered table-hover sts-table sortable">
+           <caption class="sts-table-caption">Add New Station</caption>
            <thead>
              <tr>
                <th>Station<br />Name</th>
@@ -49,9 +46,9 @@
                <th></th>
              </tr>
              <tr>
-               <td><input id="station_name" name="station_name" type="text" tabindex="1" required autofocus></td>
-               <td><textarea name="instructions" type="text" tabindex="3" cols="100" rows="5"></textarea></td>
-               <td><input id="sort_seq" name="sort_seq" type="text" tabindex="4" style="width: 75px;"></td>
+               <td><input class="form-control form-control-sm" id="station_name" name="station_name" type="text" tabindex="1" required autofocus></td>
+               <td><textarea class="form-control form-control-sm" name="instructions" type="text" tabindex="3" cols="100" rows="5"></textarea></td>
+               <td><input class="form-control form-control-sm" id="sort_seq" name="sort_seq" type="text" tabindex="4" style="width: 75px;"></td>
                <td></td>
              </tr>
              <tr>
@@ -71,10 +68,10 @@
     while ($row = mysqli_fetch_array($rs))
     {
       print '<tr>
-               <td><a href="db_edit.php?tbl_name=routing&obj_id=' . $row['id'] . '&obj_name=' . $row['station'] . '">' . $row['station'] . '</a></td>
-               <td>' . $row['instructions'] . '</td>
-               <td style="text-align: center;">' . $row['sort_seq'] . '</td>
-               <td>' . $row['code'] . '</td>
+               <td><a href="db_edit.php?tbl_name=routing&obj_id=' . sts_html($row['id']) . '&obj_name=' . urlencode($row['station']) . '">' . sts_html($row['station']) . '</a></td>
+               <td>' . sts_html($row['instructions']) . '</td>
+               <td style="text-align: center;">' . sts_html($row['sort_seq']) . '</td>
+               <td>' . sts_html($row['code']) . '</td>
              </tr>';
     }
   }

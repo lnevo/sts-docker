@@ -6,25 +6,8 @@
     <title>STS - Reposition Cars</title>
     <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="operations_ui.css?v=2" rel="stylesheet">
+    <link href="operations_ui.css?v=3" rel="stylesheet">
     <script src="sorttable.js"></script>
-    <style>
-      tr {vertical-align: top;}
-      th, td { font-size: 0.875rem; padding: 6px 8px; white-space: nowrap; }
-      td.checkbox {text-align: center; white-space: normal; }
-      @media print { .noprint {display:none;} }
-      .status-empty    { display:inline-block; background-color:#ffeaa7; color:#333;   padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-loaded   { display:inline-block; background-color:#a8e6cf; color:#333;   padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-loading  { display:inline-block; background-color:#74b9ff; color:white;  padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-unloading{ display:inline-block; background-color:#fab1a0; color:white;  padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-ordered  { display:inline-block; background-color:#dfe6e9; color:#333;   padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-unavailable{ display:inline-block; background-color:#d63031; color:white; padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      #repo_off_home_btn.active {
-        color: #fff;
-        background-color: #b45309;
-        border-color: #b45309;
-      }
-    </style>
     <?php
       require 'show_image.php';
     ?>
@@ -235,7 +218,7 @@
       }
     </script>
   </head>
-  <body class="bg-light">
+  <body class="bg-light ops-steppage ops-page-reposition">
     <?php
     require_once 'operations_nav.php';
     echo ops_render_navbar('reposition.php', 'Reposition Empty Cars', 'bi-arrows-move');
@@ -274,8 +257,8 @@
           $session_number = 0;
         }
 
-        $sql = 'select waybill_number from car_orders where waybill_number like "' . str_pad($session_number, 3, '0', STR_PAD_LEFT) .  '-E__" order by waybill_number desc limit 1';
-        $rs = mysqli_query($dbc, $sql);
+        $sql = 'select waybill_number from car_orders where waybill_number like ? order by waybill_number desc limit 1';
+        $rs = sts_q($dbc, $sql, array(str_pad($session_number, 3, '0', STR_PAD_LEFT) . '-E__'));
         if (mysqli_num_rows($rs) > 0)
         {
           $row = mysqli_fetch_row($rs);
@@ -286,52 +269,53 @@
           $waybill_counter = 1;
         }
 
-        for ($i=0; $i<$_POST['row_count']; $i++)
+        for ($i=0; $i<(int) sts_post('row_count'); $i++)
         {
           $list_name = 'list' . $i;
           $car_name = 'car' . $i;
 
-          if (!isset($_POST[$list_name]) || strlen($_POST[$list_name]) === 0)
+          if (!isset($_POST[$list_name]) || strlen(sts_post($list_name)) === 0)
           {
             continue;
           }
 
+          $car_pk = sts_id(sts_post($car_name));
+          if ($car_pk < 1 || sts_id(sts_post($list_name)) < 1)
+          {
+            continue;
+          }
           $wb_nbr = str_pad($session_number, 3, '0', STR_PAD_LEFT) . '-E' . str_pad($waybill_counter, 2, '0', STR_PAD_LEFT);
 
-          $sql = 'insert into car_orders values ("' . $wb_nbr . '", "' . $_POST[$list_name] . '", "' . $_POST[$car_name] . '")';
+          $sql = 'insert into car_orders values (?, ?, ?)';
 
-          if (!mysqli_query($dbc, $sql))
+          if (!sts_q($dbc, $sql, array($wb_nbr, sts_id(sts_post($list_name)), $car_pk)))
           {
-            print 'Insert Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql;
+            print 'Insert Error: ' . sts_html(sts_err($dbc)) . ' SQL: ' . $sql;
           }
 
-          $sql = 'update cars set status = "Ordered" where id = "' . $_POST[$car_name] . '"';
+          $sql = 'update cars set status = "Ordered" where id = ?';
 
-          if (!mysqli_query($dbc, $sql))
+          if (!sts_q($dbc, $sql, array($car_pk)))
           {
-            print 'Update Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql;
+            print 'Update Error: ' . sts_html(sts_err($dbc)) . ' SQL: ' . $sql;
           }
 
-          $sql = 'select current_location_id from cars where id = "' . $_POST[$car_name] . '"';
-          $rs = mysqli_query($dbc, $sql);
+          $sql = 'select current_location_id from cars where id = ?';
+          $rs = sts_q($dbc, $sql, array($car_pk));
           $row = mysqli_fetch_array($rs);
           $car_id = $row["current_location_id"];
 
-          $sql = 'select code from locations where id = "' . $_POST[$list_name] . '"';
-          $rs = mysqli_query($dbc, $sql);
+          $sql = 'select code from locations where id = ?';
+          $rs = sts_q($dbc, $sql, array(sts_id(sts_post($list_name))));
           $row = mysqli_fetch_array($rs);
           $destination = $row["code"];
 
           $sql = 'insert into history(car_id, session_nbr, event_date, event, location)
-                  values ("' . $_POST[$car_name] . '",
-                          "' . $session_number . '",
-                          "' . date("Y-m-d H:i:s") . '",
-                          "Repositioned to ' . $destination . '",
-                          "' . $car_id . '")';
+                  values (?, ?, ?, ?, ?)';
 
-          if (!mysqli_query($dbc, $sql))
+          if (!sts_q($dbc, $sql, array($car_pk, $session_number, date("Y-m-d H:i:s"), 'Repositioned to ' . $destination, $car_id)))
           {
-            print 'Insert error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+            print 'Insert error: ' . sts_html(sts_err($dbc)) . ' SQL: ' . $sql . '<br /><br />';
           }
 
           $waybill_counter++;

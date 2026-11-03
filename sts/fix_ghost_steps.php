@@ -44,16 +44,23 @@ HTML,
       if (isset($_GET['fix_ghosts_btn']))
       {
         // go through the incoming rows and fix the selected cars
-        for ($i=0; $i<$_GET['row_counter']; $i++)
+        for ($i=0; $i<(int) sts_get('row_counter'); $i++)
         {
           if (isset($_GET['check' . $i]))
           {
-            print '<br />Removing Step ' . $_GET['step' . $i] . ' in Job ' . $_GET['name' . $i] . '...';
+            print '<br />Removing Step ' . sts_html(sts_get('step' . $i)) . ' in Job ' . sts_html(sts_get('name' . $i)) . '...';
             
             // remove the ghost location
-            $sql = 'delete from `' . $_GET['name' . $i] . '` where step_number = "' . $_GET['step' . $i] . '"';
+            // the step table must belong to a real job
+            $chk = sts_q($dbc, 'select name from jobs where name = ?', array(sts_get('name' . $i)));
+            if (!$chk || mysqli_num_rows($chk) == 0)
+            {
+              print 'Unknown job<br />';
+              print '</div>'; sts_page_end(); die();
+            }
+            $sql = 'delete from ' . sts_ident(sts_get('name' . $i)) . ' where step_number = ?';
   //print 'SQL: ' . $sql . '<br />';
-            if (!mysqli_query($dbc, $sql))
+            if (!sts_q($dbc, $sql, array(sts_get('step' . $i))))
             {
               print 'Unable to remove location<br />';
               print '</div>'; sts_page_end(); die();
@@ -73,7 +80,7 @@ HTML,
         // use the list of job names from the first query to provide table names for the second search
         while ($row = mysqli_fetch_array($rs))
         {
-          $sql2 = 'select step_number as step from `' . $row['name'] . '` where station not in (select id from routing)';
+          $sql2 = 'select step_number as step from ' . sts_ident($row['name']) . ' where station not in (select id from routing)';
           $rs2 = mysqli_query($dbc, $sql2);
           
           // if we found some ghosts, ask the user to remove them
@@ -103,11 +110,11 @@ HTML,
                        <td style="text-align: center;">
                          <input type="checkbox" id="check' . $row_counter . '" name="check' . $row_counter . '">
                        </td>
-                       <td>' . $row['name'] . '
-                         <input type="hidden" id="name' . $row_counter . '" name="name' . $row_counter . '" value="' . $row['name'] . '">
+                       <td>' . sts_html($row['name']) . '
+                         <input type="hidden" id="name' . $row_counter . '" name="name' . $row_counter . '" value="' . sts_html($row['name']) . '">
                        </td>
-                       <td style="text-align: center;">' . $row2['step'] . '
-                         <input type="hidden" id="step' . $row_counter . '" name="step' . $row_counter . '" value="' . $row2['step'] . '">
+                       <td style="text-align: center;">' . sts_html($row2['step']) . '
+                         <input type="hidden" id="step' . $row_counter . '" name="step' . $row_counter . '" value="' . sts_html($row2['step']) . '">
                        </td>
                      </tr>';
               $row_counter++;

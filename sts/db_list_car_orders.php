@@ -9,7 +9,6 @@
 
   // generate some javascript to display the table name, identify this table to the program, and set the update button tab index
   print '<script>
-           document.getElementById("table_name").innerHTML = "Car Orders";
            document.getElementById("tbl_name").value = "car_orders";
            document.getElementById("update_btn").tabIndex = "10";
            document.getElementById("update_btn").value = "CANCEL ORDERS"
@@ -122,7 +121,7 @@
   if (isset($_POST['update_btn']))
   {
     // go through the car orders and see if any of them were marked for cancellation
-    $wb_count = $_POST['row_count'];
+    $wb_count = intval(sts_post('row_count'));
     for ($i=0; $i<$wb_count; $i++)
     {
       // check each the value of each check box
@@ -130,10 +129,9 @@
       if (isset($_POST[$chkbox]) > 0)
       {
         // delete the car order
-        $sql = 'delete from car_orders where waybill_number = "' . $_POST[$chkbox] . '"';
-        if (!mysqli_query($dbc, $sql))
+        if (!sts_q($dbc, 'delete from car_orders where waybill_number = ?', array(sts_post($chkbox))))
         {
-          print "Update Error: " . mysqli_error($dbc) . " SQL: " . $sql . "<br /><br />";
+          print "Update Error: " . sts_html(sts_err($dbc)) . "<br /><br />";
         }
       }
     }
@@ -178,21 +176,21 @@
            </script>';
 
     // generate a check box that when activated will run a javascript routine which will hide car orders that have been filled
-    print 'Hide filled car orders: <input tabindex="3" type="checkbox" id="hide_unavail" name="hide_unavail" onclick="hide_rows(2);"><br /><br />';
+    print 'Hide filled car orders: <input class="form-check-input" tabindex="3" type="checkbox" id="hide_unavail" name="hide_unavail" onclick="hide_rows(2);"><br /><br />';
     
     // generate the table
-    print '<table class="sortable" id="wb_tbl" style="font: normal 12px Verdana, Arial, sans-serif;"  style="white-space: nowrap;">
-             <caption style="font: bold 15px Verdana, Arial, sans-serif; text-align:left;">Row Filters</caption>
+    print '<table class="table table-sm table-bordered table-hover sts-table sortable" id="wb_tbl" style=""  style="white-space: nowrap;">
+             <caption class="sts-table-caption">Row Filters</caption>
              <thead>
                <tr>
                  <th style="border-bottom:0px; border-right:0px;">
-                   <input tabindex="4" type="button" id="clear_filters_btn" name="clear_filters_btn" value="CLEAR FILTERS"
-                   onclick="location.reload();" style="font: bold 10px Verdana, Arial, sans-serif; text-align:left;">
+                   <input class="btn btn-secondary btn-sm" tabindex="4" type="button" id="clear_filters_btn" name="clear_filters_btn" value="CLEAR FILTERS"
+                   onclick="location.reload();" style="text-align:left;">
                  </th>
                  <th style="border-bottom:0px; border-left:0px; border-right:0px;"
                      onchange="filter_rows(1, document.getElementById(\'wb_type_filter\').options[document.getElementById(\'wb_type_filter\').selectedIndex].value);
                      document.getElementById(\'wb_type_filter\').disabled=true;">
-                     <select id="wb_type_filter" name="wb_type_filter" tabindex="5">
+                     <select class="form-select form-select-sm" id="wb_type_filter" name="wb_type_filter" tabindex="5">
                        <option value=""></option>
                        <option value="A">Automatic</option>
                        <option value="M">Manual</option>
@@ -277,11 +275,11 @@
       // get the info needed to display the photo of the car associated with this waybill
       if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row['car_id'] . '.jpg'))
       {
-        $parm_string = '\'' . $row['car_id'] . '\', \'' . $row['car'] . '\'';
+        $parm_string = '\'' . sts_html(addslashes($row['car_id'])) . '\', \'' . sts_html(addslashes($row['car'])) . '\'';
       }
       else
       {
-        $parm_string = '\'\',\'' . $row['car'] . '\'';
+        $parm_string = '\'\',\'' . sts_html(addslashes($row['car'])) . '\'';
       }
               
       // if a car order is for a non-revenue move (reposition) find out about it's car
@@ -292,7 +290,7 @@
                                 locations.code as destination,
                                 routing.station as destination_station
                            from cars, car_codes, locations, car_orders, routing
-                          where reporting_marks = "' . $row['car'] . '"
+                          where reporting_marks = "' . mysqli_real_escape_string($dbc, $row['car']) . '"
                             and car_codes.id = cars.car_code_id
                             and car_orders.car = cars.id
                             and locations.id = car_orders.shipment
@@ -303,17 +301,17 @@
         // generate the empty way bill row
         print '<tr id="row' . $row_count . '">
                  <td style="text-align: center;">
-                   <input name=wb' . $row_count . ' value="' . $row['waybill_number'] . '" type="checkbox" disabled>
+                   <input class="form-check-input" name=wb' . $row_count . ' value="' . sts_html($row['waybill_number']) . '" type="checkbox" disabled>
                  </td>
-                 <td>' . $row['waybill_number'] . '</td>
-                 <td onclick="show_image(' . $parm_string . ');">' . $row['car'] . '</td>
-                 <td style="text-align: center;">' . $row_car_code['car_code'] . '</td>
+                 <td>' . sts_html($row['waybill_number']) . '</td>
+                 <td onclick="show_image(' . $parm_string . ');">' . sts_html($row['car']) . '</td>
+                 <td style="text-align: center;">' . sts_html($row_car_code['car_code']) . '</td>
                  <td>Non-Revenue</td>
                  <td>N/A</td>
-                 <td>' . $row['status'] . '</td>
+                 <td>' . sts_html($row['status']) . '</td>
                  <td>N/A</td>
-                 <td><u>' . $row['current_station'] . '</u><br />' . $row['current_location'] . '</td>
-                 <td><u>' . $row_car_code['destination_station'] . '</u><br />' . $row_car_code['destination'] . '</td>
+                 <td><u>' . sts_html($row['current_station']) . '</u><br />' . sts_html($row['current_location']) . '</td>
+                 <td><u>' . sts_html($row_car_code['destination_station']) . '</u><br />' . sts_html($row_car_code['destination']) . '</td>
                  <td>Reposition empty car</td>
                </tr>';
       }
@@ -325,35 +323,35 @@
         // run some quick queries to get this waybill's consignment, loading location, and unloading location
         $sql2 = 'select commodities.code as consignment
                    from commodities, shipments 
-                  where shipments.id = "' . $row['shipment_id'] . '" and commodities.id = shipments.consignment';
+                  where shipments.id = ' . intval($row['shipment_id']) . ' and commodities.id = shipments.consignment';
         $rs2 = mysqli_query($dbc, $sql2);
         $row2 = mysqli_fetch_array($rs2);
         
-        $sql3 = 'select code as loading_location from locations where locations.id = "' . $row['loading_location_id'] . '"';
+        $sql3 = 'select code as loading_location from locations where locations.id = ' . intval($row['loading_location_id']) . '';
         $rs3 = mysqli_query($dbc, $sql3);
         $row3 = mysqli_fetch_array($rs3);
         
-        $sql4 = 'select code as unloading_location from locations where locations.id = "' . $row['unloading_location_id'] . '"';
+        $sql4 = 'select code as unloading_location from locations where locations.id = ' . intval($row['unloading_location_id']) . '';
         $rs4 = mysqli_query($dbc, $sql4);
         $row4 = mysqli_fetch_array($rs4);
         
         $sql5 = 'select routing.station as loading_station
                    from routing, locations
                   where routing.id = locations.station
-                    and locations.id = "' . $row['loading_location_id'] . '"';
+                    and locations.id = ' . intval($row['loading_location_id']) . '';
         $rs5 = mysqli_query($dbc,$sql5);
         $row5 = mysqli_fetch_array($rs5);
         
         if (($row['car_id'] > 0) && ($row['current_location_id'] > 0))
         {
-          $current_station_location = '<u>' . $row['current_station'] . '</u><br />' . $row['current_location'];
+          $current_station_location = '<u>' . sts_html($row['current_station']) . '</u><br />' . sts_html($row['current_location']);
         }
         else if (($row['car_id'] > 0) && ($row['current_location_id'] == 0))
         {
           $sql7 = 'select jobs.name from jobs, cars where jobs.id = cars.handled_by_job_id';
           $rs7 = mysqli_query($dbc, $sql7);
           $row7 = mysqli_fetch_array($rs7);
-          $current_station_location = 'In Train ' . $row7['name'];
+          $current_station_location = 'In Train ' . sts_html($row7['name']);
         }
         else
         {
@@ -363,7 +361,7 @@
         $sql6 = 'select routing.station as unloading_station
                    from routing, locations
                   where routing.id = locations.station
-                    and locations.id = "' . $row['unloading_location_id'] . '"';
+                    and locations.id = ' . intval($row['unloading_location_id']) . '';
         $rs6 = mysqli_query($dbc,$sql6);
         $row6 = mysqli_fetch_array($rs6);        
         
@@ -372,26 +370,26 @@
         if (strlen($row['car']) > 0)
         {
           print '<td style="text-align: center;">
-                   <input name=wb' . $row_count . ' value="' . $row['waybill_number'] . '" type="checkbox" disabled>
+                   <input class="form-check-input" name=wb' . $row_count . ' value="' . sts_html($row['waybill_number']) . '" type="checkbox" disabled>
                  </td>';
         }
         else
         {
           print '<td style="text-align: center;">
-                   <input name=wb' . $row_count . ' value="' . $row['waybill_number'] . '" type="checkbox">
+                   <input class="form-check-input" name=wb' . $row_count . ' value="' . sts_html($row['waybill_number']) . '" type="checkbox">
                  </td>';
         }
         
-        print '<td>' . $row['waybill_number'] . '</td>
-               <td onclick="show_image(' . $parm_string . ');">' . $row['car'] . '</td>
-               <td style="text-align: center;">' . $row['car_code'] . '</td>
-               <td>' . $row['shipment'] . '</td>
-               <td>' . $row2['consignment'] . '</td>
-               <td>' . $row['status'] . '</td>
-               <td><u>' . $row5['loading_station'] . '</u><br />' . $row3['loading_location'] . '</td>
+        print '<td>' . sts_html($row['waybill_number']) . '</td>
+               <td onclick="show_image(' . $parm_string . ');">' . sts_html($row['car']) . '</td>
+               <td style="text-align: center;">' . sts_html($row['car_code']) . '</td>
+               <td>' . sts_html($row['shipment']) . '</td>
+               <td>' . sts_html($row2['consignment']) . '</td>
+               <td>' . sts_html($row['status']) . '</td>
+               <td><u>' . sts_html($row5['loading_station']) . '</u><br />' . sts_html($row3['loading_location']) . '</td>
                <td>' . $current_station_location . '</td>
-               <td><u>' . $row6['unloading_station'] . '</u></br>' . $row4['unloading_location'] . '</td>
-               <td>' . $row['remarks'] . '</td>
+               <td><u>' . sts_html($row6['unloading_station']) . '</u></br>' . sts_html($row4['unloading_location']) . '</td>
+               <td>' . sts_html($row['remarks']) . '</td>
              </tr>';
       }
       $row_count++;

@@ -425,23 +425,15 @@
   // has the submit button been clicked?
   if (isset($_POST['update_btn']))
   {
-    if (strlen($_POST['rptgmarks']) > 0)
+    if (strlen(sts_post('rptgmarks')) > 0)
     {
-      $position = (strlen($_POST['position']) > 0) ? $_POST['position'] : 0;
+      $position = (strlen(sts_post('position')) > 0) ? sts_post('position') : 0;
       $sql = 'insert into cars (reporting_marks, car_code_id, current_location_id, position, status, handled_by_job_id, remarks, home_location, load_count, RFID_code)
-              values ("' . $_POST['rptgmarks'] . '",
-                      "' . $_POST['car_code'] . '",
-                      "' . $_POST['current_location'] . '",
-                      "' . $position . '",
-                      "Empty",
-                       0,
-                      "' . $_POST['remarks'] . '",
-                      "' . $_POST['home_location'] . '",
-                      "0",
-                      "' . $_POST['RFID_code'] .'")';
-      if (!mysqli_query($dbc, $sql))
+              values (?, ?, ?, ?, "Empty", 0, ?, ?, "0", ?)';
+      if (!sts_q($dbc, $sql, array(sts_post('rptgmarks'), sts_post('car_code'), sts_post('current_location'),
+                                   $position, sts_post('remarks'), sts_post('home_location'), sts_post('RFID_code'))))
       {
-        print '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Insert Error: ' . mysqli_error($dbc) . '</div>';
+        print '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Insert Error: ' . sts_html(sts_err($dbc)) . '</div>';
       }
     }
   }
@@ -655,7 +647,7 @@
     while ($row = mysqli_fetch_array($rs))
     {
       // Pool highlight
-      $sql_pool = 'select count(*) from pool where car_id = "' . $row['id'] . '"';
+      $sql_pool = 'select count(*) from pool where car_id = ' . intval($row['id']) . '';
       $rs_pool = mysqli_query($dbc, $sql_pool);
       $row_pool = mysqli_fetch_array($rs_pool);
       $pool_class = ($row_pool[0] > 0) ? ' pool-highlight' : '';
@@ -663,23 +655,23 @@
       print '<tr class="' . $pool_class . '">';
 
       // col 0 – reporting marks (link to edit page)
-      print '<td><a href="db_edit.php?tbl_name=cars&obj_name=' . urlencode($row['id']) . '&obj_id=' . urlencode($row['reporting_marks']) . '">' . $row['reporting_marks'] . '</a></td>';
+      print '<td><a href="db_edit.php?tbl_name=cars&obj_name=' . urlencode($row['id']) . '&obj_id=' . urlencode($row['reporting_marks']) . '">' . sts_html($row['reporting_marks']) . '</a></td>';
 
       // col 1 – car code (editable)
-      print '<td class="editable-cell" style="text-align:center" onclick="makeEditable(this, ' . $row['id'] . ', \'car_code_id\', \'car_code\', ' . $row['car_code_id'] . ')">' . $row['car_code'] . '</td>';
+      print '<td class="editable-cell" style="text-align:center" onclick="makeEditable(this, ' . sts_html($row['id']) . ', \'car_code_id\', \'car_code\', ' . sts_html($row['car_code_id']) . ')">' . sts_html($row['car_code']) . '</td>';
 
       // col 2 – current location (editable)
       if ($row['current_location_id'] > 0)
       {
-        print '<td class="editable-cell" onclick="makeEditable(this, ' . $row['id'] . ', \'current_location_id\', \'location\', ' . $row['current_location_id'] . ')"><u>' . $row['current_station'] . '</u><br>' . $row['current_location'] . '</td>';
+        print '<td class="editable-cell" onclick="makeEditable(this, ' . sts_html($row['id']) . ', \'current_location_id\', \'location\', ' . sts_html($row['current_location_id']) . ')"><u>' . sts_html($row['current_station']) . '</u><br>' . sts_html($row['current_location']) . '</td>';
       }
       else
       {
-        print '<td class="editable-cell" onclick="makeEditable(this, ' . $row['id'] . ', \'current_location_id\', \'location\', 0)"><span class="badge bg-info text-dark">In Train</span></td>';
+        print '<td class="editable-cell" onclick="makeEditable(this, ' . sts_html($row['id']) . ', \'current_location_id\', \'location\', 0)"><span class="badge bg-info text-dark">In Train</span></td>';
       }
 
       // col 3 – position (editable)
-      print '<td class="editable-cell" style="text-align:center" onclick="makeEditable(this, ' . $row['id'] . ', \'position\')">' . $row['position'] . '</td>';
+      print '<td class="editable-cell" style="text-align:center" onclick="makeEditable(this, ' . sts_html($row['id']) . ', \'position\')">' . sts_html($row['position']) . '</td>';
 
       // col 4 – status (editable)
       $status_badge = '';
@@ -687,17 +679,17 @@
       elseif ($row['status'] == 'Ordered')   $status_badge = '<span class="badge bg-warning text-dark">Ordered</span>';
       elseif ($row['status'] == 'Loaded')    $status_badge = '<span class="badge bg-success">Loaded</span>';
       elseif ($row['status'] == 'Unavailable') $status_badge = '<span class="badge bg-danger">Unavailable</span>';
-      else $status_badge = $row['status'];
-      print '<td class="editable-cell" onclick="makeEditable(this, ' . $row['id'] . ', \'status\', \'status\')">' . $status_badge . '</td>';
+      else $status_badge = sts_html($row['status']);
+      print '<td class="editable-cell" onclick="makeEditable(this, ' . sts_html($row['id']) . ', \'status\', \'status\')">' . $status_badge . '</td>';
 
       // col 5 – handled by (editable)
-      print '<td class="editable-cell" onclick="makeEditable(this, ' . $row['id'] . ', \'handled_by_job_id\', \'job\', ' . $row['handled_by'] . ')">' . ($row['job_name'] ? $row['job_name'] : '<span class="text-muted">(none)</span>') . '</td>';
+      print '<td class="editable-cell" onclick="makeEditable(this, ' . sts_html($row['id']) . ', \'handled_by_job_id\', \'job\', ' . sts_html($row['handled_by']) . ')">' . ($row['job_name'] ? sts_html($row['job_name']) : '<span class="text-muted">(none)</span>') . '</td>';
 
       // col 6 – consignment
       if (substr($row['waybill_number'], 4, 1) == 'E')
         print '<td class="col-hide-md"><span class="text-info">Non-Revenue</span></td>';
       else
-        print '<td class="col-hide-md">' . $row['consignment'] . '</td>';
+        print '<td class="col-hide-md">' . sts_html($row['consignment']) . '</td>';
 
       // col 7 – loading location
       if (substr($row['waybill_number'], 4, 1) == 'E')
@@ -707,54 +699,54 @@
       else
       {
         if ($row['status'] == 'Ordered')
-          print '<td class="col-hide-sm"><b><u>' . $row['loading_station'] . '</u><br>' . $row['loading_location'] . '</b></td>';
+          print '<td class="col-hide-sm"><b><u>' . sts_html($row['loading_station']) . '</u><br>' . sts_html($row['loading_location']) . '</b></td>';
         else if (($row['status'] == "Empty") || ($row['status'] == "Unavailable"))
           print '<td class="col-hide-sm"></td>';
         else
-          print '<td class="col-hide-sm"><u>' . $row['loading_station'] . '</u><br>' . $row['loading_location'] . '</td>';
+          print '<td class="col-hide-sm"><u>' . sts_html($row['loading_station']) . '</u><br>' . sts_html($row['loading_location']) . '</td>';
       }
 
       // col 8 – unloading location
       if (substr($row['waybill_number'], 4, 1) == 'E')
       {
-        $sql2 = 'select code from locations where id = "' . $row['shipment'] . '"';
+        $sql2 = 'select code from locations where id = ' . intval($row['shipment']) . '';
         $rs2 = mysqli_query($dbc, $sql2);
         $row2 = mysqli_fetch_array($rs2);
-        $sql3 = 'select routing.station from routing, locations where routing.id = locations.station and locations.id = "' . $row['shipment'] . '"';
+        $sql3 = 'select routing.station from routing, locations where routing.id = locations.station and locations.id = ' . intval($row['shipment']) . '';
         $rs3 = mysqli_query($dbc, $sql3);
         $row3 = mysqli_fetch_array($rs3);
-        print '<td class="col-hide-sm"><b><u>' . $row3['station'] . '</u><br>' . $row2['code'] . '</b></td>';
+        print '<td class="col-hide-sm"><b><u>' . sts_html($row3['station']) . '</u><br>' . sts_html($row2['code']) . '</b></td>';
       }
       else
       {
         if ($row['status'] == 'Loaded')
-          print '<td class="col-hide-sm"><b><u>' . $row['unloading_station'] . '</u><br>' . $row['unloading_location'] . '</b></td>';
+          print '<td class="col-hide-sm"><b><u>' . sts_html($row['unloading_station']) . '</u><br>' . sts_html($row['unloading_location']) . '</b></td>';
         else if (($row['status'] == "Empty") || ($row['status'] == "Unavailable"))
           print '<td class="col-hide-sm"></td>';
         else
-          print '<td class="col-hide-sm"><u>' . $row['unloading_station'] . '</u><br>' . $row['unloading_location'] . '</td>';
+          print '<td class="col-hide-sm"><u>' . sts_html($row['unloading_station']) . '</u><br>' . sts_html($row['unloading_location']) . '</td>';
       }
 
       // col 9 – remarks (editable)
-      print '<td class="editable-cell" onclick="makeEditable(this, ' . $row['id'] . ', \'remarks\')">' . $row['remarks'] . '</td>';
+      print '<td class="editable-cell" onclick="makeEditable(this, ' . sts_html($row['id']) . ', \'remarks\')">' . sts_html($row['remarks']) . '</td>';
 
       // col 10 – home location (editable)
-      print '<td class="editable-cell col-hide-md" onclick="makeEditable(this, ' . $row['id'] . ', \'home_location\', \'location\', ' . $row['home_location_id'] . ')"><u>' . $row['home_station'] . '</u><br>' . $row['home_location'] . '</td>';
+      print '<td class="editable-cell col-hide-md" onclick="makeEditable(this, ' . sts_html($row['id']) . ', \'home_location\', \'location\', ' . sts_html($row['home_location_id']) . ')"><u>' . sts_html($row['home_station']) . '</u><br>' . sts_html($row['home_location']) . '</td>';
 
       // col 11 – load count
-      print '<td class="col-hide-md" style="text-align:center">' . $row['load_count'] . '</td>';
+      print '<td class="col-hide-md" style="text-align:center">' . sts_html($row['load_count']) . '</td>';
 
       // col 12 – pool
-      print '<td class="col-hide-md" style="text-align:center"><a href="db_edit.php?tbl_name=pool&obj_name=' . $row['id'] . '&obj_id=' . $row['reporting_marks'] . '" class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:11px">Edit</a></td>';
+      print '<td class="col-hide-md" style="text-align:center"><a href="db_edit.php?tbl_name=pool&obj_name=' . urlencode($row['id']) . '&obj_id=' . sts_html($row['reporting_marks']) . '" class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:11px">Edit</a></td>';
 
       // col 13 – RFID (editable)
-      print '<td class="editable-cell col-hide-sm" onclick="makeEditable(this, ' . $row['id'] . ', \'RFID_code\')">' . $row['RFID_code'] . '</td>';
+      print '<td class="editable-cell col-hide-sm" onclick="makeEditable(this, ' . sts_html($row['id']) . ', \'RFID_code\')">' . sts_html($row['RFID_code']) . '</td>';
 
       // col 14 – last spotted
-      print '<td class="col-hide-md" style="text-align:center">' . $row['last_spotted'] . '</td>';
+      print '<td class="col-hide-md" style="text-align:center">' . sts_html($row['last_spotted']) . '</td>';
 
       // col 15 – history
-      print '<td><a href="car_history.php?car_id=' . $row['id'] . '" class="btn btn-outline-primary btn-sm py-0 px-1" style="font-size:11px"><i class="bi bi-clock-history"></i></a></td>';
+      print '<td><a href="car_history.php?car_id=' . sts_html($row['id']) . '" class="btn btn-outline-primary btn-sm py-0 px-1" style="font-size:11px"><i class="bi bi-clock-history"></i></a></td>';
 
       print '</tr>';
     }

@@ -13,6 +13,7 @@ if (PHP_SAPI !== 'cli') {
 require_once dirname(__DIR__) . '/lib/tasks.php';
 
 $n = 0;
+api_restore_marker_clear();
 try {
     foreach (glob(api_tasks_dir() . '/*.json') ?: [] as $file) {
         $id = basename($file, '.json');

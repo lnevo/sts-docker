@@ -6,68 +6,7 @@
     <title>STS - View/Organize Cars</title>
     <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="operations_ui.css?v=2" rel="stylesheet">
-    <style>
-      tr {vertical-align: top;}
-      th, td { font-size: 0.875rem; padding: 6px 8px; white-space: nowrap; }
-      td.checkbox {text-align: center; white-space: normal; }
-      @media print { .noprint {display:none;} }
-      #car_table th,
-      #car_table td {
-        white-space: normal;
-        word-break: keep-all;
-        overflow-wrap: normal;
-        hyphens: none;
-      }
-      @media (max-width: 1024px) {
-        #car_table th,
-        #car_table td {
-          font-size: 0.8rem;
-          padding: 4px 6px;
-          line-height: 1.2;
-        }
-
-        /* Hide low-priority detail columns on tablet to avoid horizontal scroll. */
-        #car_table th:nth-child(6),
-        #car_table td:nth-child(6),
-        #car_table th:nth-child(8),
-        #car_table td:nth-child(8),
-        #car_table th:nth-child(9),
-        #car_table td:nth-child(9) {
-          display: none;
-        }
-      }
-      #car_table tbody tr { transition: transform 140ms ease, background-color 220ms ease, box-shadow 220ms ease; }
-      .drag-handle { cursor: grab; font-size: 1.2rem; line-height: 1; user-select: none; touch-action: none; display: inline-block; transition: transform 120ms ease; }
-      .drag-handle:active { transform: scale(1.18); }
-      body.drag-active { touch-action: none; overflow: hidden; user-select: none; }
-      .drag-cell-active {
-        background-color: #ffbf47 !important;
-        color: #222;
-        box-shadow: inset 0 0 0 2px #ff8f00;
-      }
-      .dragging-row {
-        opacity: 0.92;
-        box-shadow: 0 0.65rem 1.1rem rgba(0, 0, 0, 0.18);
-        transform: scale(1.01);
-      }
-      .dragging-row > td {
-        background-color: #ffbf47 !important;
-        color: #222;
-        box-shadow: inset 0 0 0 1px #ff8f00;
-      }
-      .row-moved-flash { animation: rowMovedFlash 420ms ease; }
-      @keyframes rowMovedFlash {
-        0% { background-color: #ffe08a; }
-        100% { background-color: transparent; }
-      }
-      .status-empty    { display:inline-block; background-color:#ffeaa7; color:#333;   padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-loaded   { display:inline-block; background-color:#a8e6cf; color:#333;   padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-loading  { display:inline-block; background-color:#74b9ff; color:white;  padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-unloading{ display:inline-block; background-color:#fab1a0; color:white;  padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-ordered  { display:inline-block; background-color:#dfe6e9; color:#333;   padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-unavailable{ display:inline-block; background-color:#d63031; color:white; padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-    </style>
+    <link href="operations_ui.css?v=3" rel="stylesheet">
     <script>
       function enable_org_loc_btn()
       {
@@ -320,7 +259,7 @@
       require 'show_image.php';
     ?>
   </head>
-  <body class="bg-light">
+  <body class="bg-light ops-steppage ops-page-organize_cars">
     <?php
     require_once 'operations_nav.php';
     echo ops_render_navbar('organize_cars.php', 'Organize Cars', 'bi-sort-numeric-up');

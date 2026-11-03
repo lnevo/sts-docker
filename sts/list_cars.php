@@ -185,25 +185,15 @@ $dbc = open_db();
   </style>
 </head>
 <body class="has-operating-session-line">
-  <nav class="navbar navbar-dark navbar-db noprint">
-    <div class="container-fluid">
-      <span class="navbar-brand"><i class="bi bi-boxcar-front"></i> Cars</span>
-      <div>
-        <a href="database.html" class="btn btn-outline-light btn-sm me-2">
-          <i class="bi bi-database"></i> Database
-        </a>
-        <a href="index.html" class="btn btn-outline-light btn-sm me-2">
-          <i class="bi bi-house"></i> Home
-        </a>
-        <a href="operations.php" class="btn btn-outline-light btn-sm me-2">
-          <i class="bi bi-train-freight-front"></i> Operations
-        </a>
-        <a href="index-t.html" class="btn btn-outline-light btn-sm">
-          <i class="bi bi-diagram-3"></i> Site Map
-        </a>
-      </div>
-    </div>
-  </nav>
+  <?php require_once __DIR__ . '/page_chrome.php'; echo sts_navbar_html([
+      'title' => 'Cars', 'icon' => 'bi-boxcar-front', 'nav_class' => 'bg-secondary',
+      'links' => [
+          ['href' => 'database.html', 'label' => 'Database', 'icon' => 'bi-database'],
+          ['href' => 'index.html', 'label' => 'Home', 'icon' => 'bi-house'],
+          ['href' => 'operations.php', 'label' => 'Operations', 'icon' => 'bi-train-freight-front'],
+          ['href' => 'index-t.html', 'label' => 'Site Map', 'icon' => 'bi-diagram-3'],
+      ],
+  ]); ?>
 
   <div class="container-fluid mt-3 px-3 px-md-4 cars-page">
     <div class="cars-page-title">

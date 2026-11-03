@@ -1,0 +1,97 @@
+name: API tests
+
+# Builds the sandbox stack (docker-compose.sandbox.yml: port 8981, throwaway DB
+# provisioned from sts/create_sts_db3.sql) and runs tests/api against it. No
+# private data: the suite restores the synthetic tests/api/fixtures/api_fixture
+# backup and makes its own backups in-run. Plugins are off (empty directory).
+
+on:
+  push:
+    paths:
+      - "sts/api/**"
+      - "sts/*.php"
+      - "docker-compose*.yml"
+      - "Dockerfile"
+      - "start.sh"
+      - "docker/**"
+      - "tests/api/**"
+      - ".github/workflows/api-tests.yml"
+  pull_request:
+    paths:
+      - "sts/api/**"
+      - "sts/*.php"
+      - "docker-compose*.yml"
+      - "Dockerfile"
+      - "start.sh"
+      - "docker/**"
+      - "tests/api/**"
+      - ".github/workflows/api-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      COMPOSE_PROJECT_NAME: sts-api-ci
+      STS_SANDBOX_DATA: ${{ github.workspace }}/.sandbox-data
+      STS_PLUGINS_DIR: ${{ github.workspace }}/.sandbox-data/plugins
+      STS_API_URL: http://localhost:8981/sts/api/v1
+      STS_API_BACKUPS_DIR: ${{ github.workspace }}/.sandbox-data/backups
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Prepare sandbox data and a CI admin token
+        run: |
+          mkdir -p "$STS_SANDBOX_DATA"/{backups,photos,config,plugins}
+          # the container's web user must be able to write here
+          chmod -R 777 "$STS_SANDBOX_DATA"
+          # a stateless admin token the web service accepts (STS_API_ADMIN_TOKEN)
+          token="sts_$(openssl rand -hex 20)"
+          echo "::add-mask::$token"
+          echo "STS_API_TOKEN=$token" >> "$GITHUB_ENV"
+          cat > "$STS_SANDBOX_DATA/ci.yml" <<EOF
+          services:
+            web:
+              environment:
+                - STS_API_ADMIN_TOKEN=$token
+          EOF
+
+      - name: Build and start the sandbox stack
+        run: |
+          docker compose \
+            -f docker-compose.yml -f docker-compose.sandbox.yml -f "$STS_SANDBOX_DATA/ci.yml" \
+            --profile build up -d --build
+
+      - name: Wait for /health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS "$STS_API_URL/health" | grep -q '"db":"ok"'; then
+              echo "API is up"; exit 0
+            fi
+            sleep 3
+          done
+          echo "API did not come up" >&2
+          docker compose -p "$COMPOSE_PROJECT_NAME" logs --tail 100
+          exit 1
+
+      - name: Run API tests
+        run: python3 -m unittest discover -s tests/api -p 'test_*.py' -v
+
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose -p "$COMPOSE_PROJECT_NAME" logs --tail 200
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose \
+            -f docker-compose.yml -f docker-compose.sandbox.yml -f "$STS_SANDBOX_DATA/ci.yml" \
+            --profile build down -v

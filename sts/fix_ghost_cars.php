@@ -49,16 +49,16 @@ HTML,
       if (isset($_GET['fix_it_btn']))
       {
         // go through the incoming rows and fix the selected cars
-        for ($i=0; $i<$_GET['row_counter']; $i++)
+        for ($i=0; $i<(int) sts_get('row_counter'); $i++)
         {
           if (isset($_GET['check' . $i]))
           {
-            print '<br />Fixing ' . $_GET['wb' . $i] . '...';
+            print '<br />Fixing ' . sts_html(sts_get('wb' . $i)) . '...';
             
             // remove the car order
-            $sql = 'delete from car_orders where waybill_number = "' . $_GET['wb' . $i] . '"';
+            $sql = 'delete from car_orders where waybill_number = ?';
   //print 'SQL: ' . $sql . '<br />';
-            if (!mysqli_query($dbc, $sql))
+            if (!sts_q($dbc, $sql, array(sts_get('wb' . $i))))
             {
               print 'Unable to remove car order<br />';
               print '</div>'; sts_page_end(); die();

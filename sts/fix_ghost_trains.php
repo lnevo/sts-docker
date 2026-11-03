@@ -40,30 +40,8 @@ HTML,
       // get a database connection
       $dbc = open_db();
 
-      // was the fix it button clicked?
-      if (isset($_GET['fix_ghosts_btn']))
-      {
-        // go through the incoming rows and fix the selected cars
-        for ($i=0; $i<$_GET['row_counter']; $i++)
-        {
-          if (isset($_GET['check' . $i]))
-          {
-            print '<br />Removing ' . $_GET['table_name' . $i] . ' abandoned job steps...';
-            
-            // remove the ghost table
-            $sql = 'drop table `' . $_GET['table_name' . $i] . '`';
-  //print 'SQL: ' . $sql . '<br />';
-            if (!mysqli_query($dbc, $sql))
-            {
-              print 'Unable to drop location<br />';
-              print '</div>'; sts_page_end(); die();
-            }
-          }
-        }
-      }
-
       // get a list of all job in the database that aren't in the jobs table
-      $sql = 'SELECT table_name
+      $ghost_sql = 'SELECT table_name
                 FROM information_schema.tables
                WHERE table_type = "base table"
                  AND table_schema="sts_db3"
@@ -83,7 +61,42 @@ HTML,
                                         "routing",
                                         "settings",
                                         "shipments")';
-      $rs = mysqli_query($dbc, $sql);
+
+      // was the fix it button clicked?
+      if (isset($_GET['fix_ghosts_btn']))
+      {
+        // go through the incoming rows and fix the selected cars
+        for ($i=0; $i<(int) sts_get('row_counter'); $i++)
+        {
+          if (isset($_GET['check' . $i]))
+          {
+            print '<br />Removing ' . sts_html(sts_get('table_name' . $i)) . ' abandoned job steps...';
+            
+            // remove the ghost table
+            // only abandoned job-step tables (same list shown below) may be dropped
+            $ghost_ok = false;
+            $ghost_rs = mysqli_query($dbc, $ghost_sql);
+            while ($ghost_rs && ($ghost_row = mysqli_fetch_array($ghost_rs)))
+            {
+              if ($ghost_row['table_name'] === sts_get('table_name' . $i)) $ghost_ok = true;
+            }
+            if (!$ghost_ok)
+            {
+              print 'Not an abandoned job table<br />';
+              print '</div>'; sts_page_end(); die();
+            }
+            $sql = 'drop table ' . sts_ident(sts_get('table_name' . $i));
+  //print 'SQL: ' . $sql . '<br />';
+            if (!mysqli_query($dbc, $sql))
+            {
+              print 'Unable to drop location<br />';
+              print '</div>'; sts_page_end(); die();
+            }
+          }
+        }
+      }
+
+      $rs = mysqli_query($dbc, $ghost_sql);
       if (mysqli_num_rows($rs) > 0)
       {
         print'<div id="instructions" class="alert alert-warning">
@@ -107,8 +120,8 @@ HTML,
                    <td style="text-align: center;">
                      <input type="checkbox" id="check' . $row_counter . '" name="check' . $row_counter . '">
                    </td>
-                   <td>' . $row['table_name'] . '
-                     <input type="hidden" id="table_name' . $row_counter . '" name="table_name' . $row_counter . '" value="' . $row['table_name'] . '">
+                   <td>' . sts_html($row['table_name']) . '
+                     <input type="hidden" id="table_name' . $row_counter . '" name="table_name' . $row_counter . '" value="' . sts_html($row['table_name']) . '">
                    </td>
                  </tr>';
           $row_counter++;

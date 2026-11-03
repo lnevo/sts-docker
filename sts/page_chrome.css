@@ -119,3 +119,12 @@ body.sts-page {
     padding: 0;
   }
 }
+
+/* Data editor tables (db_list / db_edit bodies): Bootstrap table look on the
+   shared STS data-table styling; captions and drop-downs from shared helpers. */
+.sts-page-body table.sts-table { width: auto; }
+.sts-page-body .sts-table-caption { font-weight: 600; font-size: 1rem; text-align: left; color: #333; }
+.sts-page-body table.sts-table select,
+.sts-page-body table.sts-table input[type="text"],
+.sts-page-body table.sts-table textarea { font-size: 0.875rem; padding: 0.25rem 0.5rem; border: 1px solid #ced4da; border-radius: 4px; min-width: 4rem; }
+.sts-page-body table.sts-table .form-check-input { margin-top: 0.2rem; }

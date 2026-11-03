@@ -10,12 +10,12 @@
   // query the sts database for the instructions associated with the incoming job_id
   require 'open_db.php';
   $dbc = open_db();
-  $sql = 'select name, description from jobs where id = "' . $_GET['job_id'] . '"';
-  $rs = mysqli_query($dbc, $sql);
+  $sql = 'select name, description from jobs where id = ?';
+  $rs = sts_q($dbc, $sql, array(sts_id(sts_get('job_id'))));
   $row = mysqli_fetch_array($rs);
   
-  print '<h1>Job Name: ' . $row['name'] . '</h1>';
-  print '<h2>Instructions: <br /><hr />' . nl2br($row['description']) . '</h2><br /><br />';
+  print '<h1>Job Name: ' . sts_html($row['name']) . '</h1>';
+  print '<h2>Instructions: <br /><hr />' . nl2br(sts_html($row['description'])) . '</h2><br /><br />';
   
 ?>
   </body>

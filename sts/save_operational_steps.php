@@ -12,6 +12,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+require_once __DIR__ . '/editor_lock.php';
+sts_editor_require('editor', static function ($code, $msg) {
+    http_response_code($code);
+    echo json_encode(['ok' => false, 'error' => $msg]);
+    exit;
+});
+
 require_once __DIR__ . '/operational_steps_catalog.php';
 
 $raw = file_get_contents('php://input');

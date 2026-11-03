@@ -42,6 +42,13 @@ function admin_opt_int(array $body, $key, $min, $max)
     return $v;
 }
 
+/** timeout_seconds: admins any value from 1; other roles at least 60 (up to 86400). */
+function admin_timeout(array $body, $user)
+{
+    $min = api_role_allows($user, 'admin') ? 1 : 60;
+    return admin_opt_int($body, 'timeout_seconds', $min, 86400);
+}
+
 function admin_opt_bool(array $body, $key)
 {
     if (!array_key_exists($key, $body) || $body[$key] === null) {
@@ -118,7 +125,7 @@ api_route('POST', '/admin/restore', static function ($req) {
     }
     $photos = admin_opt_bool($body, 'photos') ?? false;
     $full = admin_opt_bool($body, 'full') ?? true;
-    $rec = api_task_create('restore', ['backup' => $backup, 'photos' => $photos, 'full' => $full], $req['user'], ['exclusive' => true]);
+    $rec = api_task_create('restore', admin_compact(['backup' => $backup, 'photos' => $photos, 'full' => $full, 'timeout_seconds' => admin_opt_int($body, 'timeout_seconds', 1, 86400)]), $req['user'], ['exclusive' => true]);
     api_task_accepted($rec);
 }, 'admin', ['summary' => 'Restore a backup (task)', 'maint' => 'self']);
 
@@ -126,6 +133,7 @@ api_route('POST', '/admin/warm-start', static function ($req) {
     $body = api_body();
     $config = admin_opt_object($body, 'config');
     $spec = admin_compact([
+        'timeout_seconds' => admin_opt_int($body, 'timeout_seconds', 1, 86400),
         'sessions' => admin_opt_int($body, 'sessions', 1, 1000),
         'max_sessions' => admin_opt_int($body, 'max_sessions', 1, 1000),
         'seed' => admin_opt_int($body, 'seed', 0, 2147483647),
@@ -147,6 +155,7 @@ api_route('POST', '/admin/warm-start', static function ($req) {
 api_route('POST', '/admin/sessions/begin', static function ($req) {
     $body = api_body();
     $spec = admin_compact([
+        'timeout_seconds' => admin_opt_int($body, 'timeout_seconds', 1, 86400),
         'load_unload' => admin_opt_bool($body, 'load_unload'),
         'increment' => admin_opt_bool($body, 'increment'),
         'reposition' => admin_opt_bool($body, 'reposition'),
@@ -167,6 +176,7 @@ api_route('POST', '/admin/sessions/begin', static function ($req) {
 api_route('POST', '/admin/sessions/play', static function ($req) {
     $body = api_body();
     $spec = admin_compact([
+        'timeout_seconds' => admin_opt_int($body, 'timeout_seconds', 1, 86400),
         'seed' => admin_opt_int($body, 'seed', 0, 2147483647),
         'config' => admin_opt_object($body, 'config'),
         'backup' => array_key_exists('backup', $body) && $body['backup'] !== null ? admin_backup_name($body['backup'], 'backup') : null,
@@ -179,7 +189,6 @@ api_route('POST', '/workflows/{name}/run', static function ($req) {
     $body = api_body();
     [$dir, $file] = read_workflow_name_file($req['params']['name']);
     $recipe = operational_steps_load_recipe_from_json_file(operational_steps_workflow_path($dir, $file));
-    api_recipe_require_admin_for_destructive($recipe, $req['user']);
     $total = count($recipe['steps'] ?? []);
     $start = admin_opt_int($body, 'start_step', 1, max(1, $total));
     $stop = admin_opt_int($body, 'stop_step', 1, max(1, $total));
@@ -218,8 +227,9 @@ api_route('POST', '/workflows/{name}/run', static function ($req) {
     }
     $render = admin_opt_bool($body, 'render');
     $spec = admin_compact([
+        'timeout_seconds' => admin_timeout($body, $req['user']),
         'workflow' => $file,
-        'allow_destructive' => api_role_rank($req['user']['role'] ?? '') >= api_role_rank('admin') ? true : null,
+        'creator_role' => $req['user']['role'] ?? null,
         'seed' => admin_opt_int($body, 'seed', 0, 2147483647),
         'start_step' => $start,
         'stop_step' => $stop,
@@ -227,6 +237,16 @@ api_route('POST', '/workflows/{name}/run', static function ($req) {
         'session_count' => admin_opt_int($body, 'session_count', 1, 50),
         'render' => $render,
     ]);
+    $role = $req['user']['role'] ?? null;
+    // Refuse before anything runs when a certain (non-conditional) step needs more than the caller has.
+    $refuse = api_workflow_precheck($recipe, $role, $start ?? 1, $stop ?? 0, $skip_steps);
+    if ($refuse !== null) {
+        api_error(403, $refuse);
+    }
     $rec = api_task_create('workflow_run', $spec, $req['user'], ['exclusive' => true]);
-    api_task_accepted($rec);
+    api_ok([
+        'task_id' => $rec['id'], 'status' => $rec['status'], 'kind' => $rec['kind'],
+        'caller_role' => $role,
+        'role_warnings' => api_recipe_role_warnings($recipe, $role),
+    ], null, 202);
 }, 'operator', ['summary' => 'Run a saved workflow (task)', 'maint' => 'self']);

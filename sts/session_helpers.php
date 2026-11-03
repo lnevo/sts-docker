@@ -4,6 +4,7 @@
  */
 
 require_once __DIR__ . '/session_runtime.php';
+require_once __DIR__ . '/page_chrome.php';
 session_runtime_bootstrap();
 
 function session_merge_runtime_config(array $config = [])
@@ -1884,62 +1885,30 @@ function session_nav_icon_for_label($label)
 /** @param list<array{href: string, label: string, icon?: string, active?: bool}> $links */
 function session_nav_bar_html(array $links, $trail = '', $extra_class = 'noprint')
 {
-    $class = 'navbar navbar-dark';
-    if ($extra_class !== '') {
-        $class .= ' ' . $extra_class;
-    }
-    // Split into left- and right-aligned groups. Links flagged 'right' => true are
-    // rendered at the right edge of the bar (after the trail text).
-    $left = [];
-    $right = [];
+    // Markup comes from the shared sts_navbar_html() (page_chrome.php). Session pages
+    // are static output with no page_chrome.css, so the bar is Bootstrap-only.
+    $nav_links = [];
     foreach ($links as $link) {
-        if (!empty($link['right'])) {
-            $right[] = $link;
-        } else {
-            $left[] = $link;
-        }
-    }
-
-    $render_link = static function (array $link, $with_spacer) {
-        $href = trim((string) ($link['href'] ?? ''));
         $label = trim((string) ($link['label'] ?? ''));
-        if ($href === '' || $label === '') {
-            return '';
-        }
         $icon = trim((string) ($link['icon'] ?? session_nav_icon_for_label($label)));
-        $btn_class = 'btn btn-outline-light btn-sm';
-        if ($with_spacer) {
-            $btn_class .= ' ms-auto';
-        }
-        if (!empty($link['active'])) {
-            $btn_class .= ' active';
-        }
-        $out = '<a href="' . htmlspecialchars($href) . '" class="' . $btn_class . '">';
-        if ($icon !== '') {
-            $out .= '<i class="bi bi-' . htmlspecialchars($icon) . '"></i> ';
-        }
-        return $out . htmlspecialchars($label) . '</a>';
-    };
+        $nav_links[] = [
+            'href' => $link['href'] ?? '',
+            'label' => $label,
+            'icon' => $icon !== '' ? 'bi-' . $icon : '',
+            'active' => !empty($link['active']),
+            'right' => !empty($link['right']),
+        ];
+    }
 
-    $html = '<nav class="' . $class . '" style="background-color: #343a40;">';
-    $html .= '<div class="container-fluid"><div class="d-flex flex-wrap align-items-center gap-2 w-100">';
-    // The ms-auto spacer goes on the first element after the left group: the trail
-    // if present, otherwise the first right-aligned link.
-    $spacer_used = false;
-    foreach ($left as $link) {
-        $html .= $render_link($link, false);
-    }
-    if ($trail !== '') {
-        $html .= '<span class="navbar-text text-white-50 small ms-auto">' . htmlspecialchars($trail) . '</span>';
-        $spacer_used = true;
-    }
-    foreach ($right as $link) {
-        $html .= $render_link($link, !$spacer_used);
-        $spacer_used = true;
-    }
-    $html .= '</div></div></nav>';
-
-    return $html;
+    return sts_navbar_html([
+        'nav_class' => trim(str_replace('noprint', '', (string) $extra_class)),
+        'style' => 'background-color: #343a40;',
+        'flush' => true,
+        'inner_class' => 'container-fluid',
+        'links_class' => 'd-flex flex-wrap align-items-center gap-2 w-100',
+        'links' => $nav_links,
+        'trail' => (string) $trail,
+    ]);
 }
 
 /** @param list<array{href: string, label: string, icon?: string, active?: bool}> $links */
@@ -3838,6 +3807,14 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
         }
         $refresh_ctx();
     };
+    // Optional guard: before_dispatch(string $function_id, int $step_number, array $step)
+    // runs right before a step that does work is dispatched; it may throw to stop the run.
+    // The legacy editor pages set $GLOBALS['sts_before_dispatch'] (see editor_lock.php).
+    $before_dispatch = isset($options['before_dispatch']) && is_callable($options['before_dispatch'])
+        ? $options['before_dispatch']
+        : (isset($GLOBALS['sts_before_dispatch']) && is_callable($GLOBALS['sts_before_dispatch'])
+            ? $GLOBALS['sts_before_dispatch']
+            : null);
     $log = [];
     $stopped = false;
     $loop_error = null;
@@ -3975,6 +3952,9 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
         }
 
         if ($fid === 'generate_switchlists') {
+            if ($before_dispatch !== null) {
+                $before_dispatch($fid, $n, $step);
+            }
             $sync_output_session();
             $phase_num++;
             $jobs = session_resolve_jobs_param($step['params']['jobs'] ?? 'all', $dbc);
@@ -4037,6 +4017,9 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
             continue;
         }
         if ($fid === 'generate_waybills') {
+            if ($before_dispatch !== null) {
+                $before_dispatch($fid, $n, $step);
+            }
             $sync_output_session();
             if ($phase_num < 1) {
                 $phase_num = 1;
@@ -4067,6 +4050,9 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
             continue;
         }
         if ($fid === 'generate_station_report') {
+            if ($before_dispatch !== null) {
+                $before_dispatch($fid, $n, $step);
+            }
             $sync_output_session();
             $info = trim((string) ($step['params']['info'] ?? ''));
             $snap = session_generate_station_report_phase($dbc, $session_nbr, $info, $root);
@@ -4081,6 +4067,9 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
             continue;
         }
         if ($fid === 'generate_wheel_report') {
+            if ($before_dispatch !== null) {
+                $before_dispatch($fid, $n, $step);
+            }
             $sync_output_session();
             $info = trim((string) ($step['params']['info'] ?? ''));
             $snap = session_generate_wheel_report_phase($dbc, $session_nbr, $info, $root);
@@ -4095,6 +4084,9 @@ function session_run_recipe($dbc, array $recipe, array $options = [])
             continue;
         }
 
+        if ($before_dispatch !== null) {
+            $before_dispatch($fid, $n, $step);
+        }
         $dispatch_opts = array_merge($config, [
             'session_root' => $root,
             'phase' => $phase_num,

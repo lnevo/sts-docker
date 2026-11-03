@@ -50,16 +50,16 @@ HTML,
       if (isset($_GET['fix_ghosts_btn']))
       {
         // go through the incoming rows and fix the selected cars
-        for ($i=0; $i<$_GET['row_counter']; $i++)
+        for ($i=0; $i<(int) sts_get('row_counter'); $i++)
         {
           if (isset($_GET['check' . $i]))
           {
-            print '<br />Removing ' . $_GET['loc' . $i] . '...';
+            print '<br />Removing ' . sts_html(sts_get('loc' . $i)) . '...';
             
             // remove the ghost location
-            $sql = 'delete from locations where id = "' . $_GET['loc' . $i] . '"';
+            $sql = 'delete from locations where id = ?';
   //print 'SQL: ' . $sql . '<br />';
-            if (!mysqli_query($dbc, $sql))
+            if (!sts_q($dbc, $sql, array(sts_id(sts_get('loc' . $i)))))
             {
               print 'Unable to remove location<br />';
               print '</div>'; sts_page_end(); die();

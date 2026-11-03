@@ -12,6 +12,8 @@
  *   sts_page_end();
  */
 
+require_once __DIR__ . '/html_helpers.php';
+
 /** Navbar colour, default back link and label per page section (ui-conventions 4.1 / 4.10). */
 function sts_page_sections()
 {
@@ -23,11 +25,6 @@ function sts_page_sections()
         'club'    => ['nav_class' => 'bg-secondary', 'back' => 'club_index.html', 'back_label' => 'Club Operations', 'back_icon' => 'bi-people'],
         'session' => ['nav_class' => 'bg-dark',      'back' => 'session_overview.php', 'back_label' => 'Sessions', 'back_icon' => 'bi-calendar-check'],
     ];
-}
-
-function sts_h($value)
-{
-    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
 /**
@@ -80,25 +77,108 @@ function sts_page_start(array $opts = [])
         echo '<main class="' . $container . " sts-page-body pt-3\">\n";
         return;
     }
-    echo '<nav class="navbar navbar-dark noprint mb-3 ' . sts_h($section['nav_class']) . "\">\n";
-    echo "  <div class=\"container-fluid sts-navbar-inner\">\n";
-    echo '    <span class="navbar-brand"><i class="bi ' . sts_h($icon) . '"></i> ' . sts_h($title) . "</span>\n";
-    echo "    <div class=\"sts-navbar-links\">\n";
+    $nav_links = [];
     if ($back_href !== '') {
-        echo sts_page_nav_link($back_href, $back_label, $back_icon);
+        $nav_links[] = ['href' => $back_href, 'label' => $back_label, 'icon' => $back_icon];
     }
     foreach ($links as $link) {
         if (!empty($link['href']) && !empty($link['label'])) {
-            echo sts_page_nav_link($link['href'], $link['label'], isset($link['icon']) ? $link['icon'] : '');
+            $nav_links[] = $link;
         }
     }
-    echo sts_page_nav_link('index.html', 'Home', 'bi-house');
-    echo sts_page_nav_link('index-t.html', 'Site Map', 'bi-diagram-3');
-    if (!empty($opts['print'])) {
-        echo "      <button type=\"button\" class=\"btn btn-light btn-sm\" onclick=\"window.print()\"><i class=\"bi bi-printer\"></i> Print</button>\n";
-    }
-    echo "    </div>\n  </div>\n</nav>\n";
+    $nav_links[] = ['href' => 'index.html', 'label' => 'Home', 'icon' => 'bi-house'];
+    $nav_links[] = ['href' => 'index-t.html', 'label' => 'Site Map', 'icon' => 'bi-diagram-3'];
+    echo sts_navbar_html([
+        'title' => $title,
+        'icon' => $icon,
+        'nav_class' => $section['nav_class'],
+        'links' => $nav_links,
+        'print' => !empty($opts['print']),
+    ]);
     echo '<main class="' . $container . " sts-page-body\">\n";
+}
+
+/**
+ * The one navbar implementation (ui-conventions 4.1 / 4.10). Returns markup only, and relies on
+ * Bootstrap alone (no page_chrome.css), so standalone and generated pages can use it too.
+ *
+ * Options:
+ *   title        Brand text ('' with no icon omits the brand, e.g. the session bar).
+ *   icon         Brand icon class, e.g. 'bi-upc-scan'.
+ *   nav_class    Extra classes on <nav> (section colour: bg-primary, bg-secondary, sts-nav-ops, ...).
+ *   style        Inline style on <nav> (for pages that cannot load a stylesheet).
+ *   inner_class  Classes on the container div (default 'container-fluid sts-navbar-inner').
+ *   links_class  Classes on the links div (default 'sts-navbar-links d-flex flex-wrap gap-2').
+ *   links        [['href','label','icon' (full 'bi-x' class), 'active', 'right', 'attrs' (raw), 'html' (raw
+ *                 markup used instead of a link)], ...]. 'right' links sit after the trail at the far edge.
+ *   trail        Muted text between left and right links.
+ *   flush        true omits the bottom margin (mb-3).
+ *   print        true appends a Print button.
+ *   extra_html   Trusted markup appended after the links.
+ */
+function sts_navbar_html(array $opts = [])
+{
+    $title = isset($opts['title']) ? (string) $opts['title'] : '';
+    $icon = isset($opts['icon']) ? (string) $opts['icon'] : '';
+    $inner_class = isset($opts['inner_class']) ? (string) $opts['inner_class'] : 'container-fluid sts-navbar-inner';
+    $links_class = isset($opts['links_class']) ? (string) $opts['links_class'] : 'sts-navbar-links d-flex flex-wrap gap-2';
+    $links = isset($opts['links']) && is_array($opts['links']) ? $opts['links'] : [];
+    $trail = isset($opts['trail']) ? (string) $opts['trail'] : '';
+
+    $html = '<nav class="navbar navbar-dark noprint' . (!empty($opts['flush']) ? '' : ' mb-3')
+        . (!empty($opts['nav_class']) ? ' ' . sts_h($opts['nav_class']) : '') . '"'
+        . (!empty($opts['style']) ? ' style="' . sts_h($opts['style']) . '"' : '') . ">\n";
+    $html .= '  <div class="' . sts_h($inner_class) . "\">\n";
+    if ($title !== '' || $icon !== '') {
+        $html .= '    <span class="navbar-brand">' . ($icon !== '' ? '<i class="bi ' . sts_h($icon) . '"></i> ' : '')
+            . sts_h($title) . "</span>\n";
+    }
+    $html .= '    <div class="' . sts_h($links_class) . "\">\n";
+    $left = [];
+    $right = [];
+    foreach ($links as $link) {
+        if (!empty($link['right'])) {
+            $right[] = $link;
+        } else {
+            $left[] = $link;
+        }
+    }
+    foreach ($left as $link) {
+        $html .= sts_page_nav_link_ex($link, false);
+    }
+    // The ms-auto spacer goes on the first element after the left group.
+    $spacer_used = false;
+    if ($trail !== '') {
+        $html .= '      <span class="navbar-text text-white-50 small ms-auto">' . sts_h($trail) . "</span>\n";
+        $spacer_used = true;
+    }
+    foreach ($right as $link) {
+        $html .= sts_page_nav_link_ex($link, !$spacer_used);
+        $spacer_used = true;
+    }
+    if (!empty($opts['print'])) {
+        $html .= "      <button type=\"button\" class=\"btn btn-light btn-sm\" onclick=\"window.print()\"><i class=\"bi bi-printer\"></i> Print</button>\n";
+    }
+    if (!empty($opts['extra_html'])) {
+        $html .= $opts['extra_html'];
+    }
+    return $html . "    </div>\n  </div>\n</nav>\n";
+}
+
+function sts_page_nav_link_ex(array $link, $spacer)
+{
+    if (!empty($link['html'])) {
+        return $link['html'];
+    }
+    $href = trim((string) ($link['href'] ?? ''));
+    $label = trim((string) ($link['label'] ?? ''));
+    if ($href === '' || $label === '') {
+        return '';
+    }
+    $icon = trim((string) ($link['icon'] ?? ''));
+    $class = 'btn btn-outline-light btn-sm' . ($spacer ? ' ms-auto' : '') . (!empty($link['active']) ? ' active' : '');
+    return '      <a href="' . sts_h($href) . '" class="' . $class . '"' . (!empty($link['attrs']) ? ' ' . $link['attrs'] : '') . '>'
+        . ($icon !== '' ? '<i class="bi ' . sts_h($icon) . '"></i> ' : '') . sts_h($label) . "</a>\n";
 }
 
 function sts_page_nav_link($href, $label, $icon = '')

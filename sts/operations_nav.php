@@ -3,6 +3,9 @@
 // Defines the ordered step list, the green navbar, and the step bar.
 // Styles live in operations_ui.css.
 
+require_once __DIR__ . '/html_helpers.php';
+require_once __DIR__ . '/page_chrome.php';
+
 // Ordered workflow steps: file => [group, label, short label, icon]
 function ops_steps()
 {
@@ -20,7 +23,7 @@ function ops_steps()
 
 function ops_h($text)
 {
-    return htmlspecialchars((string)$text, ENT_QUOTES, 'UTF-8');
+    return sts_h($text);
 }
 
 // Green operations navbar. $extra_html is trusted markup (e.g. a Print button).
@@ -34,16 +37,20 @@ function ops_render_navbar($current, $title, $icon, $extra_html = '')
         array('index.html',           'bi-house',          'Home'),
         array('index-t.html',         'bi-diagram-3',      'Site Map'),
     );
-    $html = '<nav class="navbar navbar-dark noprint mb-3 ops-navbar" style="background-color: #2e7d32;">'
-          . '<div class="container-fluid">'
-          . '<span class="navbar-brand"><i class="bi ' . ops_h($icon) . '"></i> ' . ops_h($title) . '</span>'
-          . '<div class="ops-navbar-links">';
+    $nav_links = array();
     foreach ($links as $l) {
-        $html .= '<a href="' . ops_h($l[0]) . '" class="btn btn-outline-light btn-sm">'
-               . '<i class="bi ' . ops_h($l[1]) . '"></i> ' . ops_h($l[2]) . '</a>';
+        $nav_links[] = array('href' => $l[0], 'icon' => $l[1], 'label' => $l[2]);
     }
-    $html .= $extra_html . '</div></div></nav>';
-    return $html;
+    return sts_navbar_html(array(
+        'title' => $title,
+        'icon' => $icon,
+        'nav_class' => 'ops-navbar',
+        'style' => 'background-color: #2e7d32;',
+        'inner_class' => 'container-fluid',
+        'links_class' => 'ops-navbar-links',
+        'links' => $nav_links,
+        'extra_html' => $extra_html,
+    ));
 }
 
 // Step bar: Prev, grouped step pills, Next, optional session badge.

@@ -1325,3 +1325,43 @@ pre.log {
   max-width: 200px;
 }
 
+
+/* ── REST API v1 sign-in, read-only state and run warnings ── */
+.auth-box .form-control { width: 190px; font-size: 13px; }
+.auth-banner {
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  background: #fff8e1;
+  color: #5c4a00;
+  border: 1px solid #f0dca0;
+}
+.wf-gated, .btn.wf-gated:disabled, .dropdown-item.wf-gated { pointer-events: auto; cursor: not-allowed; }
+.wf-readonly #steps-list { cursor: default; }
+.run-warnings {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff4e0;
+  border: 1px solid #e0a030;
+  color: #5a3a00;
+  font-size: 13px;
+}
+.run-warnings-title { font-weight: 600; margin-bottom: 4px; }
+.run-warnings ul { margin: 0 0 6px 18px; padding: 0; }
+.run-warnings li.is-hard { color: #8a1c1c; font-weight: 600; }
+.run-warnings li.is-outside { opacity: 0.55; font-weight: normal; }
+.run-error {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fdecea;
+  border: 1px solid #d9534f;
+  color: #8a1c1c;
+  font-size: 14px;
+}
+.run-warnings + .run-error, .run-error + pre.log { margin-top: 12px; }
+#run-warnings + #run-error { margin-top: 8px; }
+pre.log { margin-top: 12px; }
+.auth-box[hidden] { display: none !important; }

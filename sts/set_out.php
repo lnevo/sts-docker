@@ -6,50 +6,14 @@
     <title>STS - Set Out Cars</title>
     <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="operations_ui.css?v=2" rel="stylesheet">
+    <link href="operations_ui.css?v=3" rel="stylesheet">
     <script src="operations_table_filters.js"></script>
-    <style>
-      tr {vertical-align: top;}
-      th, td { font-size: 0.875rem; padding: 6px 8px; white-space: nowrap; }
-      #job_table th,
-      #job_table td {
-        white-space: normal;
-        word-break: keep-all;
-        overflow-wrap: normal;
-        hyphens: none;
-      }
-      @media (max-width: 1024px) {
-        #job_table th,
-        #job_table td {
-          font-size: 0.8rem;
-          padding: 4px 6px;
-          line-height: 1.2;
-        }
-
-        /* Hide lower-priority detail columns on tablet to reduce horizontal scroll. */
-        #job_table th:nth-child(7),
-        #job_table td:nth-child(7),
-        #job_table th:nth-child(8),
-        #job_table td:nth-child(8),
-        #job_table th:nth-child(9),
-        #job_table td:nth-child(9) {
-          display: none;
-        }
-      }
-      @media print { .noprint {display:none;} }
-      .status-empty    { display:inline-block; background-color:#ffeaa7; color:#333;   padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-loaded   { display:inline-block; background-color:#a8e6cf; color:#333;   padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-loading  { display:inline-block; background-color:#74b9ff; color:white;  padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-unloading{ display:inline-block; background-color:#fab1a0; color:white;  padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-ordered  { display:inline-block; background-color:#dfe6e9; color:#333;   padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-unavailable{ display:inline-block; background-color:#d63031; color:white; padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-    </style>
     <?php
       // bring in the javascript function that shows rollingstock photos
       require 'show_image.php';
     ?>
   </head>
-  <body class="bg-light">
+  <body class="bg-light ops-steppage ops-page-set_out">
     <?php
     require_once 'operations_nav.php';
     echo ops_render_navbar('set_out.php', 'Set Out Cars', 'bi-arrow-down-circle', '<button class="btn btn-light btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>');
@@ -81,7 +45,7 @@
         if (isset($_GET['row_count']))
         {
           // get the number of rows that were on the page
-          $row_count = $_GET['row_count'];
+          $row_count = (int) sts_get('row_count');
 
           // update the current location of the cars as specified by the user
           for ($i=0; $i<$row_count; $i++)
@@ -91,27 +55,32 @@
             $car_name = 'car' . $i;
 
             // does the drop-down list have a job name in it?
-            if (isset($_GET[$list_name]) && strlen($_GET[$list_name]) > 0)
+            if (isset($_GET[$list_name]) && strlen(sts_get($list_name)) > 0)
             {
+              $car_id = sts_id(sts_get($car_name));
+              if ($car_id < 1)
+              {
+                continue;   // an invalid car id must never reach the car_orders deletes below
+              }
               // before marking the car as set out, save the job that is handling it for the history file
               $sql = 'select jobs.name as job_name
                       from jobs, cars
-                      where cars.id = "' . $_GET[$car_name] . '"
+                      where cars.id = ?
                         and jobs.id = cars.handled_by_job_id';
-              $rs = mysqli_query($dbc, $sql);
+              $rs = sts_q($dbc, $sql, array($car_id));
               $row = mysqli_fetch_array($rs);
               $job_name = $row['job_name'];
 //print 'SQL: ' . $sql . ' / job name: ' . $job_name . '<br /><br />';
               // build a query to update the car's current location field, remove the contents of it's "handled_by" field, and set it's position to 0
               $sql = 'update cars
-                      set current_location_id = "' . $_GET[$list_name] . '",
+                      set current_location_id = ?,
                           handled_by_job_id = 0,
                           position = "0"
-                      where id = "' . $_GET[$car_name] . '"';
+                      where id = ?';
   // print 'SQL: ' . $sql . '<br /><br />';
-              if(!mysqli_query($dbc, $sql))
+              if(!sts_q($dbc, $sql, array(sts_id(sts_get($list_name)), $car_id)))
               {
-                print 'Update Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br />';
+                print 'Update Error: ' . sts_html(sts_err($dbc)) . ' SQL: ' . $sql . '<br />';
               }
               else
               {
@@ -124,22 +93,18 @@
               $row = mysqli_fetch_array($rs);
               $session_nbr = $row['setting_value'];
 
-              $sql = 'select current_location_id from cars where id = "' . $_GET[$car_name] . '"';
-              $rs = mysqli_query($dbc, $sql);
+              $sql = 'select current_location_id from cars where id = ?';
+              $rs = sts_q($dbc, $sql, array($car_id));
               $row = mysqli_fetch_array($rs);
               $location = $row['current_location_id'];
 //print 'SQL: ' . $sql . ' Location: ' . $location . '<br /><br />';
               // insert a car history record
               $sql = 'insert into history(car_id, session_nbr, event_date, event, location)
-                      values ("' . $_GET[$car_name] . '",
-                              "' . $session_nbr . '",
-                              "' . date("Y-m-d H:i:s") . '",
-                              "Set out by Job ' . $job_name . '",
-                              "' . $location . '")';
+                      values (?, ?, ?, ?, ?)';
 
-              if (!mysqli_query($dbc, $sql))
+              if (!sts_q($dbc, $sql, array($car_id, $session_nbr, date("Y-m-d H:i:s"), 'Set out by Job ' . $job_name, $location)))
               {
-                print 'Insert error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+                print 'Insert error: ' . sts_html(sts_err($dbc)) . ' SQL: ' . $sql . '<br /><br />';
               }
 
 
@@ -150,16 +115,16 @@
                              car_orders,
                              shipments
                       set cars.status = "Loading",
-                          cars.last_spotted = "' . $current_session . '"
-                      where cars.id = "' . $_GET[$car_name] . '"
+                          cars.last_spotted = ?
+                      where cars.id = ?
                         and cars.status = "Ordered"
                         and car_orders.car = cars.id
                         and car_orders.shipment = shipments.id
                         and cars.current_location_id = shipments.loading_location';
 // print 'SQL: ' . $sql . '<br /><br />';
-              if(!mysqli_query($dbc, $sql))
+              if(!sts_q($dbc, $sql, array($current_session, $car_id)))
               {
-                print 'Update Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br />';
+                print 'Update Error: ' . sts_html(sts_err($dbc)) . ' SQL: ' . $sql . '<br />';
               }
 
               // build a query to update a "Loaded" car's status if it is at it's unloading location
@@ -168,16 +133,16 @@
                              car_orders,
                              shipments
                       set cars.status = "Unloading",
-                          cars.last_spotted = "' . $current_session . '"
-                      where cars.id = "' . $_GET[$car_name] . '"
+                          cars.last_spotted = ?
+                      where cars.id = ?
                         and cars.status = "Loaded"
                         and car_orders.car = cars.id
                         and car_orders.shipment = shipments.id
                         and cars.current_location_id = shipments.unloading_location';
 // print 'SQL: ' . $sql . '<br /><br />';
-              if(!mysqli_query($dbc, $sql))
+              if(!sts_q($dbc, $sql, array($current_session, $car_id)))
               {
-                print 'Update Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br />';
+                print 'Update Error: ' . sts_html(sts_err($dbc)) . ' SQL: ' . $sql . '<br />';
               }
 
               // build a query to update the car's status if it is a non-revenue move and at it's destination
@@ -188,12 +153,12 @@
                         and car_orders.waybill_number like "___-E__"
                         and cars.status = "Ordered"
                         and cars.current_location_id = car_orders.shipment
-                        and cars.id = "' . $_GET[$car_name] . '"';
+                        and cars.id = ' . $car_id;   // $car_id is an integer (sts_id); run unprepared so mysqli_affected_rows() below works
 
 // print 'SQL: ' . $sql . '<br /><br />';
               if(!mysqli_query($dbc, $sql))
               {
-                print 'Update Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br />';
+                print 'Update Error: ' . sts_html(mysqli_error($dbc)) . ' SQL: ' . $sql . '<br />';
               }
               else
               {
@@ -201,17 +166,17 @@
                 if (mysqli_affected_rows($dbc) > 0)
                 {
                   // if the repositioned car was successfully changed from "Ordered" to "Empty", remove it's car order
-                  $sql = 'delete from car_orders where car = "' . $_GET[$car_name]. '"';
-                  if (!mysqli_query($dbc, $sql))
+                  $sql = 'delete from car_orders where car = ?';
+                  if (!sts_q($dbc, $sql, array($car_id)))
                   {
-                    print 'Delete Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql;
+                    print 'Delete Error: ' . sts_html(sts_err($dbc)) . ' SQL: ' . $sql;
                   }
                   else
                   {
-                    $sql2 = 'select reporting_marks from cars where id = ' . $_GET[$car_name];
-                    $rs2 = mysqli_query($dbc, $sql2);
+                    $sql2 = 'select reporting_marks from cars where id = ?';
+                    $rs2 = sts_q($dbc, $sql2, array($car_id));
                     $row2 = mysqli_fetcH_array($rs2);
-                    print $row2['reporting_marks'] . ' has been successfully repositioned and is now ready for further use.<br />';
+                    print sts_html($row2['reporting_marks']) . ' has been successfully repositioned and is now ready for further use.<br />';
                   }
                 }
               }
@@ -228,10 +193,10 @@
                               cars.status as status
                          from shipments, car_orders, cars
                         where car_orders.shipment = shipments.id
-                          and car_orders.car = "' . $_GET[$car_name] . '"
-                          and cars.id = "' . $_GET[$car_name] . '"';
+                          and car_orders.car = ?
+                          and cars.id = ?';
 
-              $rs = mysqli_query($dbc, $sql);
+              $rs = sts_q($dbc, $sql, array($car_id, $car_id));
               $row = mysqli_fetch_array($rs);
 // print 'SQL: ' . $sql . '<br /><br />';
               // convert blank min & max load & unload times to an integer value
@@ -244,10 +209,10 @@
               // change it's status to "Loaded"
               if (($row['status'] == "Loading") && (($min_load_time < 0) || ($max_load_time < 0)))
               {
-                $sql2 = 'update cars set status = "Loaded", last_spotted = "0" where id = "' . $_GET[$car_name] . '"';
-                if (!mysqli_query($dbc, $sql2))
+                $sql2 = 'update cars set status = "Loaded", last_spotted = "0" where id = ?';
+                if (!sts_q($dbc, $sql2, array($car_id)))
                 {
-                  print 'Update Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql2;
+                  print 'Update Error: ' . sts_html(sts_err($dbc)) . ' SQL: ' . $sql2;
                 }
               }
 
@@ -255,16 +220,16 @@
               // change it's status to "Empty"
               if (($row['status'] == "Unloading") && (($min_unload_time < 0) || ($max_unload_time < 0)))
               {
-                $sql2 = 'update cars set status = "Empty", last_spotted = "0" where id = "' . $_GET[$car_name] . '"';
-                if (!mysqli_query($dbc, $sql2))
+                $sql2 = 'update cars set status = "Empty", last_spotted = "0" where id = ?';
+                if (!sts_q($dbc, $sql2, array($car_id)))
                 {
-                  print 'Update Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql2;
+                  print 'Update Error: ' . sts_html(sts_err($dbc)) . ' SQL: ' . $sql2;
                 }
                 // for the cars with this new status, delete the car orders linked to them
-                $sql2 = 'delete from car_orders where car = "' . $_GET[$car_name]. '"';
-                if (!mysqli_query($dbc, $sql2))
+                $sql2 = 'delete from car_orders where car = ?';
+                if (!sts_q($dbc, $sql2, array($car_id)))
                 {
-                  print 'Delete Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql2;
+                  print 'Delete Error: ' . sts_html(sts_err($dbc)) . ' SQL: ' . $sql2;
                 }
               }
             }

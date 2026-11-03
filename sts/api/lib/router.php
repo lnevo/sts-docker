@@ -137,9 +137,19 @@ function api_dispatch()
         api_legacy_error(403, $msg);
     }
     $rel = $is_v1 ? (substr($path, 3) ?: '/') : $path;
+    if ($is_v1 && !preg_match('#^/(health|openapi\.json|tasks(/|$)|auth/|admin/(tokens|policy)(/|$))#', $rel) && api_restore_in_progress() !== null) {
+        header('Retry-After: 5');
+        api_error(503, 'restore in progress', 'maintenance');
+    }
 
+    // Literal paths win over {name} patterns (PUT /workflows/active before PUT /workflows/{name}),
+    // whatever order the route files register in; the sort is stable.
+    $routes = $GLOBALS['api_routes'];
+    usort($routes, static function ($a, $b) {
+        return substr_count($a['pattern'], '{') <=> substr_count($b['pattern'], '{');
+    });
     $allowed = [];
-    foreach ($GLOBALS['api_routes'] as $r) {
+    foreach ($routes as $r) {
         if ($r['legacy'] === $is_v1) {
             continue;
         }

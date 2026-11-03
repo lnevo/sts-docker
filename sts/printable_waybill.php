@@ -1,35 +1,14 @@
-<html>
-  <head>
-    <title>STS - Print Waybill</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-      @media print
-      {
-        .noprint {display:none;}
-      }
-    </style>
-  </head>
-  <body>
-    <?php
-      require 'open_db.php';
-      require 'waybill_print_helpers.php';
-
-      if (isset($_POST['display_btn']))
-      {
-        $dbc = open_db();
-        $waybill_number = $_POST['waybill_number'] ?? '';
-        echo waybill_print_render_page($dbc, $waybill_number, [
-          'show_controls' => true,
-          'nav_html' => '<a href="display_waybill.php">Return to Display Waybill page</a>',
-        ]);
-      }
-    ?>
-    <div class="noprint">
-      <br /><a href="display_waybill.php">Return to Display Waybill page</a>
-    </div>
-  </body>
-</html>
+<?php
+// Kept so old links and bookmarks work: the waybill now lives in
+// display_waybill.php, which runs it when given the waybill number as a GET
+// parameter. This page used to take a POST, so accept either.
+$params = $_GET;
+if (isset($_POST['waybill_number'])) {
+  $params['waybill_number'] = $_POST['waybill_number'];
+}
+if (isset($_POST['display_btn']) || isset($_GET['display_btn'])) {
+  $params['display_btn'] = $_POST['display_btn'] ?? $_GET['display_btn'];
+}
+$qs = http_build_query($params);
+header('Location: display_waybill.php' . ($qs !== '' ? '?' . $qs : ''), true, 302);
+exit;

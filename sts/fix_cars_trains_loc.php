@@ -51,16 +51,16 @@ HTML,
       if (isset($_GET['fix_it_btn']))
       {
         // go through the incoming rows and fix the selected cars
-        for ($i=0; $i<$_GET['row_counter']; $i++)
+        for ($i=0; $i<(int) sts_get('row_counter'); $i++)
         {
           if (isset($_GET['check' . $i]))
           {
-            print '<br />Fixing ' . $_GET['car_name' . $i] . '...';
+            print '<br />Fixing ' . sts_html(sts_get('car_name' . $i)) . '...';
             
             // set the car's current location to 0 (zero)
-            $sql = 'update cars set current_location_id = 0 where id = ' . $_GET['car_id' . $i];
+            $sql = 'update cars set current_location_id = 0 where id = ?';
 //print 'SQL: ' . $sql . '<br />';
-            if (!mysqli_query($dbc, $sql))
+            if (!sts_q($dbc, $sql, array(sts_id(sts_get('car_id' . $i)))))
             {
               print 'Unable to update car current location<br />';
               print '</div>'; sts_page_end(); die();

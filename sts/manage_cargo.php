@@ -32,8 +32,14 @@ function saveCargo() {
 
         // Validate the input
         if (isset($data['cargo']) && is_array($data['cargo'])) {
-            // Save the cargo data to the file
-            $cargo_data = implode("\n", $data['cargo']);
+            // Save the cargo data to the file (one plain-text name per line)
+            $clean = [];
+            foreach ($data['cargo'] as $item) {
+                if (is_scalar($item)) {
+                    $clean[] = trim(str_replace(["\r", "\n"], ' ', (string) $item));
+                }
+            }
+            $cargo_data = implode("\n", $clean);
             file_put_contents($cargo_file, $cargo_data);
 
             // Return a success response
@@ -47,14 +53,15 @@ function saveCargo() {
 }
 
 
-$action = $_GET['action'] ?? '';
+$action = (isset($_GET['action']) && is_string($_GET['action'])) ? $_GET['action'] : '';
+header('Content-Type: application/json');
 
 switch ($action) {
     case 'get':
         echo json_encode(get_cargo());
         break;
     case 'remove':
-        $cargo = $_GET['cargo'] ?? '';
+        $cargo = (isset($_GET['cargo']) && is_string($_GET['cargo'])) ? $_GET['cargo'] : '';
         if ($cargo) {
             remove_cargo($cargo);
         }

@@ -52,7 +52,8 @@ api_route('POST', '/admin/tasks/{id}/fail', static function ($req) {
     $force = !empty($body['force']);
     $who = $req['user']['name'] ?? 'admin';
     $err = null;
-    $updated = api_task_update($id, static function ($r) use ($force, $who, &$err) {
+    $was_running = false;
+    $updated = api_task_update($id, static function ($r) use ($force, $who, &$err, &$was_running) {
         if (!in_array($r['status'] ?? '', ['queued', 'running'], true)) {
             $err = ['Task is already ' . ($r['status'] ?? 'finished') . '; only queued or running tasks can be failed'];
             return $r;
@@ -61,6 +62,7 @@ api_route('POST', '/admin/tasks/{id}/fail', static function ($req) {
             $err = ['Task process ' . (int) $r['pid'] . ' is still alive; pass force true to mark it failed anyway'];
             return $r;
         }
+        $was_running = ($r['status'] ?? '') === 'running';
         $r['status'] = 'failed';
         $r['finished_at'] = api_task_now();
         $r['error'] = 'Marked failed by ' . $who;
@@ -68,6 +70,9 @@ api_route('POST', '/admin/tasks/{id}/fail', static function ($req) {
     });
     if ($err !== null) {
         api_error(409, $err[0]);
+    }
+    if ($was_running && $updated !== null) {
+        api_task_kill($updated); // the whole process group, not just the supervisor
     }
     unset($updated['result']);
     return $updated;

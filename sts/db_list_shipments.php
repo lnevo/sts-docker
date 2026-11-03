@@ -14,7 +14,6 @@
 
   // generate some javascript to display the table name, identify this table to the program, and set the update button's tab index
   print '<script>
-           document.getElementById("table_name").innerHTML = "Shipments";
            document.getElementById("tbl_name").value = "shipments";
            document.getElementById("update_btn").tabIndex = "18";
            document.getElementById("update_btn").disabled = true;
@@ -169,44 +168,11 @@
   if (isset($_POST['update_btn']))
   {
     // yes, so check to see if there is anything in the input text boxes
-    if (strlen($_POST['code']) > 0)
+    if (strlen(sts_post('code')) > 0)
     {
       // add the new shipment to the shipments table
-      $sql = 'insert into shipments (code,
-                                    description,
-                                    consignment,
-                                    car_code,
-                                    loading_location,
-                                    unloading_location,
-                                    last_ship_date,
-                                    min_interval,
-                                    max_interval,
-                                    min_amount,
-                                    max_amount,
-                                    special_instructions,
-                                    remarks,
-                                    min_load_time,
-                                    max_load_time,
-                                    min_unload_time,
-                                    max_unload_time)
-              values ("' . $_POST['code'] . '",
-                      "' . $_POST['description'] . '",
-                      "' . $_POST['consignment'] . '",
-                      "' . $_POST['car_code'] . '",
-                      "' . $_POST['loading_location'] . '",
-                      "' . $_POST['unloading_location'] . '",
-                      "' . $_POST['last_ship_date'] . '",
-                      "' . $_POST['min_interval'] . '",
-                      "' . $_POST['max_interval'] . '",
-                      "' . $_POST['min_amount'] . '",
-                      "' . $_POST['max_amount'] . '",
-                      "' . $_POST['special_instructions'] . '",
-                      "' . $_POST['remarks'] . '",
-                      "' . $_POST['min_load_time'] . '",
-                      "' . $_POST['max_load_time'] . '",
-                      "' . $_POST['min_unload_time'] . '",
-                      "' . $_POST['max_unload_time'] . '")';
-      $rs = mysqli_query($dbc, $sql);
+      sts_q($dbc, 'insert into shipments (code, description, consignment, car_code, loading_location, unloading_location, last_ship_date, min_interval, max_interval, min_amount, max_amount, special_instructions, remarks, min_load_time, max_load_time, min_unload_time, max_unload_time) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            array(sts_post('code'), sts_post('description'), sts_post('consignment'), sts_post('car_code'), sts_post('loading_location'), sts_post('unloading_location'), sts_post('last_ship_date'), sts_post('min_interval'), sts_post('max_interval'), sts_post('min_amount'), sts_post('max_amount'), sts_post('special_instructions'), sts_post('remarks'), sts_post('min_load_time'), sts_post('max_load_time'), sts_post('min_unload_time'), sts_post('max_unload_time')));
     }
   }
 
@@ -248,9 +214,9 @@
 
   // generate the table
 
-  print '<table class="sortable" id="ship_tbl" style="font: normal 12px Verdana, Arial, sans-serif; white-space: nowrap;">
-           <caption style="font: bold 15px Verdana, Arial, sans-serif; text-align:left;">
-             <input type="radio" name="entry-filter" id="entry" value="entry" checked=false onclick="add_shipments()">Add New Shipment
+  print '<table class="table table-sm table-bordered table-hover sts-table sortable" id="ship_tbl" style="white-space: nowrap;">
+           <caption class="sts-table-caption">
+             <input class="form-check-input" type="radio" name="entry-filter" id="entry" value="entry" checked=false onclick="add_shipments()">Add New Shipment
            </caption>
            <thead>
              <tr style="background-color: lightgreen;">
@@ -275,23 +241,23 @@
                <th>Empty Location<br />Search Priority</th>
              </tr>
              <tr style="background-color: lightgreen;">
-               <td style="text-align:center;"><input id="code" name="code" type="text" tabindex="1" required autofocus></td>
-               <td style="text-align:center;"><input id="description" name="description" type="text" tabindex="2"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="code" name="code" type="text" tabindex="1" required autofocus></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="description" name="description" type="text" tabindex="2"></td>
                <td style="text-align:center;">' . drop_down_commodities('consignment', 3) . '</td>
                <td style="text-align:center;">' . drop_down_car_codes('car_code', 4, 'wild_ok') . '</td>
                <td style="text-align:center;">' . drop_down_locations('loading_location', 5, '') . '</td>
                <td style="text-align:center;">' . drop_down_locations('unloading_location', 6, '') . '</td>
-               <td style="text-align:center;"><input id="last_ship_date" name="last_ship_date" type="text" size="1" tabindex="7" value="0" required style="text-align: center;"></td>
-               <td style="text-align:center;"><input id="min_interval" name="min_interval" type="text" size="1" tabindex="8" required onchange="check_min_interval(this.value);" id="min_int" style="text-align: center;"></td>
-               <td style="text-align:center;"><input id="max_interval" name="max_interval" type="text" size="1" tabindex="9" required onchange="check_max_interval(this.value);" id="max_int" style="text-align: center;"></td>
-               <td style="text-align:center;"><input id="min_amount" name="min_amount" type="text" size="1" tabindex="10" required onchange="check_min_amount(this.value);" id="min_amt" style="text-align: center;"></td>
-               <td style="text-align:center;"><input id="max_amount" name="max_amount" type="text" size="1" tabindex="11" required onchange="check_max_amount(this.value);" id="max_amt" style="text-align: center;"></td>
-               <td style="text-align:center;"><input id="special_instructions" name="special_instructions" type="text" tabindex="12"></td>
-               <td style="text-align:center;"><input id="remarks" name="remarks" type="text" tabindex="13"></td>
-               <td style="text-align:center;"><input id="min_load_time" name="min_load_time" type="text" value="0" size="1" tabindex="14" style="text-align: center;"></td>
-               <td style="text-align:center;"><input id="max_load_time" name="max_load_time" type="text" value="0" size="1" tabindex="15" style="text-align: center;"></td>
-               <td style="text-align:center;"><input id="min_unload_time" name="min_unload_time" type="text" value="0" size="1" tabindex="16" style="text-align: center;"></td>
-               <td style="text-align:center;"><input id="max_unload_time" name="max_unload_time" type="text" value="0" size="1" tabindex="17" style="text-align: center;"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="last_ship_date" name="last_ship_date" type="text" size="1" tabindex="7" value="0" required style="text-align: center;"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="min_interval" name="min_interval" type="text" size="1" tabindex="8" required onchange="check_min_interval(this.value);" id="min_int" style="text-align: center;"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="max_interval" name="max_interval" type="text" size="1" tabindex="9" required onchange="check_max_interval(this.value);" id="max_int" style="text-align: center;"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="min_amount" name="min_amount" type="text" size="1" tabindex="10" required onchange="check_min_amount(this.value);" id="min_amt" style="text-align: center;"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="max_amount" name="max_amount" type="text" size="1" tabindex="11" required onchange="check_max_amount(this.value);" id="max_amt" style="text-align: center;"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="special_instructions" name="special_instructions" type="text" tabindex="12"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="remarks" name="remarks" type="text" tabindex="13"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="min_load_time" name="min_load_time" type="text" value="0" size="1" tabindex="14" style="text-align: center;"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="max_load_time" name="max_load_time" type="text" value="0" size="1" tabindex="15" style="text-align: center;"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="min_unload_time" name="min_unload_time" type="text" value="0" size="1" tabindex="16" style="text-align: center;"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="max_unload_time" name="max_unload_time" type="text" value="0" size="1" tabindex="17" style="text-align: center;"></td>
                <td></td>
                <td></td>
              </tr>
@@ -299,14 +265,14 @@
                <td colspan="19" style="border:0px;">&nbsp;</td>
              </tr>
              <tr>
-              <td colspan="19" style="border:0px; font: bold 15px Verdana, Arial, sans-serif; text-align:left;">
-                <input type="radio" name="entry-filter" id="entry" value="entry" checked=false onclick="filter_shipments()">Filters
+              <td colspan="19" style="border:0px; text-align:left;">
+                <input class="form-check-input" type="radio" name="entry-filter" id="entry" value="entry" checked=false onclick="filter_shipments()">Filters
               </td>
              </tr>
              <tr style="background-color: yellow;">
                <td style="border-bottom: 0px; border-right:0px; text-align:center;">
-                 <input type="button" id="clear_filters_btn" name="clear_filters_btn" value="CLEAR FILTERS"
-                 onclick="clear_filters();" style="font: normal 10px Verdana, Arial, sans-serif; white-space: nowrap;">
+                 <input class="btn btn-secondary btn-sm" type="button" id="clear_filters_btn" name="clear_filters_btn" value="CLEAR FILTERS"
+                 onclick="clear_filters();" style="white-space: nowrap;">
                </td>
                <td style="border-bottom: 0px; border-left: 0px; border-right:0px; text-align:center;">
                </td>
@@ -385,7 +351,7 @@
     while ($row = mysqli_fetch_array($rs))
     {
       // if a shipment is in a pool arrangement with certain cars, highlight the background-color
-      $sql_pool = 'select count(*) from pool where shipment_id = "' . $row['id'] . '"';
+      $sql_pool = 'select count(*) from pool where shipment_id = ' . intval($row['id']) . '';
       $rs_pool = mysqli_query($dbc, $sql_pool);
       $row_pool = mysqli_fetch_array($rs_pool);
       if ($row_pool[0] > 0)
@@ -398,23 +364,23 @@
       }
 
       print '<tr style="background-color:' . $background . ';">';
-      print '  <td><a href="db_edit.php?tbl_name=shipments&obj_id=' . $row['id'] . '&obj_name=' . urlencode($row['code']) . '">' . $row['code'] . '</td>';
-      print '  <td>' . $row['description'] . '</td>';
-      print '  <td>' . $row['consignment'] . '</td>';
-      print '  <td style="text-align: center;">' . $row['car_code'] . '</td>';
-      print '  <td><u>' . $row['loading_station'] . '</u><br />' . $row['loading_location'] . '</td>';
-      print '  <td><u>' . $row['unloading_station'] . '</u><br />' . $row['unloading_location'] . '</td>';
-      print '  <td style="text-align: center">' . $row['last_ship_date'] . '</td>';
-      print '  <td style="text-align: center">' . $row['min_interval'] . '</td>';
-      print '  <td style="text-align: center">' . $row['max_interval'] . '</td>';
-      print '  <td style="text-align: center">' . $row['min_amount'] . '</td>';
-      print '  <td style="text-align: center">' . $row['max_amount'] . '</td>';
-      print '  <td>' . $row['special_instructions'] . '</td>';
-      print '  <td>' . $row['remarks'] . '</td>';
-      print '  <td style="text-align: center">' . $row['min_load_time'] . '</td>';
-      print '  <td style="text-align: center">' . $row['max_load_time'] . '</td>';
-      print '  <td style="text-align: center">' . $row['min_unload_time'] . '</td>';
-      print '  <td style="text-align: center">' . $row['max_unload_time'] . '</td>';
+      print '  <td><a href="db_edit.php?tbl_name=shipments&obj_id=' . sts_html($row['id']) . '&obj_name=' . urlencode($row['code']) . '">' . sts_html($row['code']) . '</td>';
+      print '  <td>' . sts_html($row['description']) . '</td>';
+      print '  <td>' . sts_html($row['consignment']) . '</td>';
+      print '  <td style="text-align: center;">' . sts_html($row['car_code']) . '</td>';
+      print '  <td><u>' . sts_html($row['loading_station']) . '</u><br />' . sts_html($row['loading_location']) . '</td>';
+      print '  <td><u>' . sts_html($row['unloading_station']) . '</u><br />' . sts_html($row['unloading_location']) . '</td>';
+      print '  <td style="text-align: center">' . sts_html($row['last_ship_date']) . '</td>';
+      print '  <td style="text-align: center">' . sts_html($row['min_interval']) . '</td>';
+      print '  <td style="text-align: center">' . sts_html($row['max_interval']) . '</td>';
+      print '  <td style="text-align: center">' . sts_html($row['min_amount']) . '</td>';
+      print '  <td style="text-align: center">' . sts_html($row['max_amount']) . '</td>';
+      print '  <td>' . sts_html($row['special_instructions']) . '</td>';
+      print '  <td>' . sts_html($row['remarks']) . '</td>';
+      print '  <td style="text-align: center">' . sts_html($row['min_load_time']) . '</td>';
+      print '  <td style="text-align: center">' . sts_html($row['max_load_time']) . '</td>';
+      print '  <td style="text-align: center">' . sts_html($row['min_unload_time']) . '</td>';
+      print '  <td style="text-align: center">' . sts_html($row['max_unload_time']) . '</td>';
       if ($row['last_ship_date'] > 1000000)
       {
         print '  <td style="text-align:center;">OFF</td>';
@@ -424,7 +390,7 @@
         print '  <td style="text-align:center;">ON</td>';
       }
       print '  <td style="text-align:center;">
-                 <a href="db_edit.php?tbl_name=empty_locations&obj_id=' . $row['id'] . '&obj_name=' . urlencode($row['code']) . '">Add/Edit
+                 <a href="db_edit.php?tbl_name=empty_locations&obj_id=' . sts_html($row['id']) . '&obj_name=' . urlencode($row['code']) . '">Add/Edit
                </td>';
       print '</tr>';
     }
