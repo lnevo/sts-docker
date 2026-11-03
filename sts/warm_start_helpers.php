@@ -648,7 +648,7 @@ function warm_start_default_fractions(array $config = [])
  * Run local/staging work for the current operating session (no session increment).
  * Call after begin_session has opened the session. A registered scenario may replace this.
  */
-function warm_start_play_operating_session($dbc, array $config = [], array $fractions = null, $label = '')
+function warm_start_play_operating_session($dbc, array $config = [], ?array $fractions = null, $label = '')
 {
     return plugins_scenario_call(
         'play_session',
@@ -657,7 +657,7 @@ function warm_start_play_operating_session($dbc, array $config = [], array $frac
     );
 }
 
-function warm_start_core_play_operating_session($dbc, array $config = [], array $fractions = null, $label = '')
+function warm_start_core_play_operating_session($dbc, array $config = [], ?array $fractions = null, $label = '')
 {
     $config = warm_start_merge_config(array_merge(['play_operating_session' => true], $config));
     $fractions = $fractions ?? warm_start_default_fractions($config);

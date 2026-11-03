@@ -103,8 +103,8 @@ sort($car_filter_location_options, SORT_NATURAL | SORT_FLAG_CASE);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>STS - Fill Car Orders</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
     <link href="operations_ui.css" rel="stylesheet">
     <style>
         .order-card {
@@ -616,8 +616,8 @@ sort($car_filter_location_options, SORT_NATURAL | SORT_FLAG_CASE);
         <?php } ?>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="vendor/jquery/jquery-3.6.0.min.js"></script>
     <script>
         function renderAllFilledMessageHtml()
         {

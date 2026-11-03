@@ -55,7 +55,7 @@ function warm_start_record_job_setout($dbc, $job_name, $location_id)
  * Snapshot the current session's counters (every bucket the scenario defines) plus
  * scenario columns derived from the named-stats deltas, append it to the log, and reset.
  */
-function warm_start_session_stats_commit($session, $label, array $stats_before = null)
+function warm_start_session_stats_commit($session, $label, ?array $stats_before = null)
 {
     $s = warm_start_session_stats_current();
     $delta = $stats_before === null

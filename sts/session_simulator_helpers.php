@@ -389,7 +389,7 @@ function session_simulator_format_dashboard_summary(array $dashboard)
     return $has ? $lines : [];
 }
 
-function session_simulator_format_summary(array $cycles, array $warnings = [], array $move_summary = null, array $operations = null, array $station_counts = null, $on_train_count = null, array $dashboard = null)
+function session_simulator_format_summary(array $cycles, array $warnings = [], ?array $move_summary = null, ?array $operations = null, ?array $station_counts = null, $on_train_count = null, ?array $dashboard = null)
 {
     $lines = [];
     foreach ($cycles as $cycle) {

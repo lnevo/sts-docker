@@ -475,11 +475,11 @@ if (isset($_GET['generate_report'])) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>STS - Station Car Report</title>
   <!-- Bootstrap CSS -->
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+  <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
   <!-- Bootstrap Icons -->
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <!-- Lexend font - designed for reading ease / reading ease -->
-  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="vendor/fonts/lexend/lexend.css" rel="stylesheet">
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -1053,8 +1053,8 @@ if (isset($_GET['generate_report'])) {
   </div>
 
   <!-- Bootstrap JS -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
+  <script src="vendor/jquery/jquery-3.6.0.min.js"></script>
 
   <script>
     // ── Dyslexia mode ────────────────────────────────────────────

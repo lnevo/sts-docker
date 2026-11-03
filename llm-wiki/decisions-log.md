@@ -35,6 +35,20 @@ independently later in the shift. Traffic tuning must optimize within this fixed
 sequence even when a simulated throughput score favors the former interleaved
 order.
 
+## 2026-07-10 — Vendored all legacy `sts/` frontend assets, dropped CDN links
+
+All 12 `sts/` pages loaded Bootstrap, Bootstrap Icons, jQuery, and (one page)
+the Lexend font from external CDNs (cdnjs, code.jquery.com,
+fonts.googleapis.com). STS is designed for private-network use (see
+`sts/api/README.md`'s no-auth rationale), so any install without outbound
+internet silently degraded — unstyled Bootstrap, fallback system fonts, no
+error. Downloaded the exact versions already in use into `sts/vendor/`
+(`bootstrap/`, `bootstrap-icons/`, `jquery/`, `fonts/lexend/`) and repointed
+every page at the local paths; the Dockerfile already `COPY`s all of `sts/`
+into the image, so no build/CI change was needed. See
+[ui-conventions.md](ui-conventions.md) §1 — new pages must vendor any new
+frontend dependency the same way, never link a CDN.
+
 ## 2026-07-09 — Mined old Copilot chat history for durable findings
 
 Reviewed ~35MB of archived VS Code chat session history (from a prior machine

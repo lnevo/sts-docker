@@ -8,6 +8,11 @@
  * with: Table 'job1' already exists.
  */
 
+// Callers that bypass open_db() (CLI seed / rewind scripts) would otherwise get
+// mysqli_sql_exception on PHP 8.1+ for expected failures such as FLUSH TABLES
+// without the RELOAD privilege. Web pages already run with reporting off.
+mysqli_report(MYSQLI_REPORT_OFF);
+
 /**
  * Drop every table whose name matches $table case-insensitively, using the
  * exact stored TABLE_NAME from information_schema.

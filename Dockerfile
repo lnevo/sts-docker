@@ -1,17 +1,15 @@
 #checkov:skip=CKV_DOCKER_3: not using a default user.
-# Use php:8.0-apache-buster as base image
-FROM php:8.0-apache-buster
+# Use php:8.4.27-apache-bookworm as base image
+# 8.4.27 is the first 8.4 release patched against PHP2Shell (CVE-2026-109618 / CVE-2026-109619).
+# Do not drop below it.
+FROM php:8.4.27-apache-bookworm
 
 # Expose port 80
 EXPOSE 80
 
 # Update sources and install all dependencies in a single RUN statement to reduce layers and image size
-# Base is EOL php:8.0-apache-buster served from archive.debian.org; versions there are frozen
-# and pinning specific ones would just make future archive changes brittle.
 # hadolint ignore=DL3008
-RUN sed -i 's|http://deb.debian.org/debian|http://archive.debian.org/debian|g' /etc/apt/sources.list && \
-    sed -i '/security.debian.org/d' /etc/apt/sources.list && \
-    apt-get update && \
+RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     mariadb-client \
     zlib1g-dev \
@@ -20,6 +18,16 @@ RUN sed -i 's|http://deb.debian.org/debian|http://archive.debian.org/debian|g' /
     docker-php-ext-install -j"$(nproc)" gd mysqli && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# PHP settings:
+# - session.upload_progress.enabled=0 is the PHP2Shell interim mitigation for CVE-2026-109619,
+#   kept as defence in depth (STS doesn't use upload progress).
+# - E_DEPRECATED is suppressed so 8.1+ deprecation notices from legacy code (incl. phpqrcode /
+#   php-barcode) don't print into pages or corrupt generated images.
+RUN printf '%s\n' \
+    'session.upload_progress.enabled = 0' \
+    'error_reporting = E_ALL & ~E_DEPRECATED' \
+    > "$PHP_INI_DIR/conf.d/zz-sts.ini"
 
 # Add additional folders
 COPY php-barcode /var/www/html/php-barcode

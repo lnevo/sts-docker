@@ -1,0 +1,9 @@
+# sts/ pages pull shared helpers (open_db, drop_down_*, set_colors) in via
+# require, which PHPStan can't follow when linting changed files one by one.
+# Scanning sts/ lets it resolve those symbols; level 0 still catches
+# undefined functions/classes and wrong arg counts without flagging the
+# legacy app's loose typing.
+parameters:
+  level: 0
+  scanDirectories:
+    - ../../sts

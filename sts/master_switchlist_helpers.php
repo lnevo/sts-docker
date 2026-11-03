@@ -1158,7 +1158,7 @@ function master_sw_build_phase_list_html(array $sections, $layout, $session_nbr 
     return $items;
 }
 
-function master_sw_build_phase_nav($job_dir, $phase_index, $phase_total, $layout, array $available_styles = null)
+function master_sw_build_phase_nav($job_dir, $phase_index, $phase_total, $layout, ?array $available_styles = null)
 {
     $layout = master_sw_normalize_layout($layout);
     $styles = $available_styles ?? master_sw_all_styles();
@@ -1238,7 +1238,7 @@ function master_sw_render_phase_nav_bar($table_name, $session_nbr, array $nav)
         . 'window.location.href=window.location.href.replace(re,"_"+this.value+".html");});})();</script>';
 }
 
-function master_sw_render_job_index($dbc, $job_name, array $sections, $job_dir, $session_nbr, $preferred_style = 'mobile', array $available_styles = null, array $index_options = [])
+function master_sw_render_job_index($dbc, $job_name, array $sections, $job_dir, $session_nbr, $preferred_style = 'mobile', ?array $available_styles = null, array $index_options = [])
 {
     if (!function_exists('session_nav_bar_html')) {
         require_once __DIR__ . '/session_helpers.php';

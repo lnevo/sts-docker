@@ -51,5 +51,7 @@ jobs:
           # Bundled dictionary enforces house style we didn't opt into
           # (AJAX->Ajax, repo->repository, Id->ID, etc.) across all prose
           VALIDATE_NATURAL_LANGUAGE: false
+          # Third-party minified libraries vendored as-is
+          FILTER_REGEX_EXCLUDE: "sts/vendor/.*"
           DEFAULT_BRANCH: "master"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
