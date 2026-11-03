@@ -65,8 +65,6 @@ body { background-color: #f8f9fa; }
 /* Link accents: --c is the icon/border colour, --h the hover tint */
 .green-link { --c: #2e7d32; --h: #f0fff4; }
 .blue-link { --c: #0000cc; --h: #f2f4ff; }
-.teal-link { --c: #00897b; --h: #f0faf9; }
-.purple-link { --c: #6f42c1; --h: #f6f2fc; }
 .brown-link { --c: #795548; --h: #fff8f4; }
 .dark-brown-link { --c: #8d6e63; --h: #faf5f2; }
 .tan-link { --c: #8d6e63; --h: #fbf6f2; }
