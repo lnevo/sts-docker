@@ -78,11 +78,21 @@ Read this first when starting a session on the STS work. Last updated
 - `assign_car.php`, `fix_win2linux.php`, `manage_cargo.php` and
   `session-pages.css` were removed after a search of all three repos, the
   stored session output and the access log found no reference.
-- Next: [2026-11-03-roadmap-v2-convergence.md](2026-11-03-roadmap-v2-convergence.md)
-  covers Phase 1 fixes and cleanups (SQL injection in the CRUD family, dead
-  files, duplicate helpers, remaining legacy pages), the behaviour fixes v2
-  already made, additive schema convergence toward v2, a data-access layer,
-  and the port-or-stay decision with Aaron.
+- Current priority: API v1 ([2026-11-03-api-v1.md](2026-11-03-api-v1.md)).
+  One base URL `/sts/api/v1/` with Swagger UI, token auth with roles,
+  `sts-helpers` moved onto the API, and an agent plugin (skill, MCP server,
+  agents) under `agent/`.
+- Cleanups from the 2026-11-03 review, not scheduled:
+  - SQL injection in the CRUD family (`db_list_jobs.php:32` runs
+    `create table` on a raw POST value; the `db_edit_*` pages delete by GET).
+  - `remove_img.php` unlinks a path built from a POST value.
+  - `get_table_guts.php:14` calls `$mysql_error(...)`.
+  - `open_db.php` hides query errors.
+  - Duplicate escape helpers and navbar builders.
+  - Large inline `<style>` blocks on the step pages.
+  - `printable_*` and the `db_list_*`/`db_edit_*` bodies are still legacy.
+- Aaron's v2 is reference only ([2026-11-03-v2-notes.md](2026-11-03-v2-notes.md));
+  the roadmap does not converge on it.
 - Pre-existing, untouched: `sts/db_edit.php` requires a missing
   `db_edit_waybills.php`; the QR and barcode libraries live outside `sts/`
   (phpstan cannot see them); a few include fragments and CLI scripts fatal when
