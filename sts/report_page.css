@@ -1,0 +1,133 @@
+/* Shared styles for the single-file report pages (display_*.php with
+   ?generate_report=1): on-screen look follows ui-conventions section 4.3, and
+   the print rules reproduce the legacy printable_* page (plain Verdana 20px
+   body, black-bordered tables) so printed output is unchanged.
+   Report fragments (?generate_report=1) carry no <style> of their own;
+   everything they need is here. */
+
+.report-card[hidden] {
+  display: none;
+}
+
+.report-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.report-output .report-table {
+  font-size: 0.8rem;
+  width: auto;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.report-output .report-table th {
+  color: #fff;
+  font-weight: 600;
+  padding: 6px 8px;
+  border: none;
+  background-color: #4a90e2;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  text-align: center;
+}
+
+.report-output .report-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #dee2e6;
+  vertical-align: top;
+}
+
+.report-output .report-table tbody tr:hover td {
+  background-color: #f8f9fa;
+}
+
+@media print {
+  body.sts-page {
+    background: #fff;
+    color: #000;
+    font: normal 20px Verdana, Arial, sans-serif;
+    line-height: normal;
+    margin: 8px;
+  }
+
+  .report-screen-only {
+    display: none !important;
+  }
+
+  .sts-page-body {
+    padding: 0 !important;
+    max-width: none;
+  }
+
+  .report-card {
+    background: none;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+  }
+
+  .report-output h1,
+  .report-output h2,
+  .report-output h3 {
+    color: #000;
+    font-family: inherit;
+    font-weight: bold;
+    line-height: normal;
+  }
+
+  .report-output h1 {
+    font-size: 2em;
+    margin: 0.67em 0;
+  }
+
+  /* the legacy page rendered in quirks mode, which ignores the top margin of
+     the first element in the body */
+  .report-output > h1:first-child {
+    margin-top: 0;
+  }
+
+  .report-output h2 {
+    font-size: 1.5em;
+    margin: 0.83em 0;
+  }
+
+  .report-output h3 {
+    font-size: 1.17em;
+    margin: 1em 0;
+  }
+
+  /* legacy tables rendered at the browser default size unless they set their
+     own (the fleet and car reports do, inline) */
+  .report-output .report-table {
+    width: auto;
+    font-size: 16px;
+  }
+
+  .report-output .report-table th,
+  .report-output .report-table td {
+    border: 1px solid #000;
+    padding: 10px;
+    color: #000;
+    background: none;
+    position: static;
+    vertical-align: top;
+  }
+
+  .report-output .report-table th {
+    font-weight: bold;
+    text-align: center;
+  }
+
+  .report-output .report-table tbody tr:hover td {
+    background: none;
+  }
+
+  .report-output .report-table td.report-gap {
+    border: 0;
+  }
+}
