@@ -46,3 +46,4 @@ sts/_*.php
 sts/plugins/*
 !sts/plugins/README.md
 __pycache__/
+.claude/worktrees/

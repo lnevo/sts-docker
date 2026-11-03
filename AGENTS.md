@@ -28,6 +28,15 @@ Session workflow editor, recipe JSON, and simulator HTTP API.
 | Catalog implementation          | `sts/operational_steps_catalog.php`                              |
 | Editor UI                       | `sts/editor.html`, `sts/workflow-shared.js`                      |
 
+**REST API v1 is the primary surface.** The editor's actions also exist under
+`/sts/api/v1/` (`workflows/*`, `sessions/{n}/*`, `simulator/status`; see
+`sts/api/README.md`), with token auth and per-step role checks. The legacy
+`operational_steps_api.php`, `simulator_api.php` and `save_operational_steps.php`
+still work, but with the policy flag `editor_open` false (the default) only their
+reads are open. Saves, imports, deletes, set-active and runs need a signed-in user
+or a bearer token with the right role (`sts/editor_lock.php`). Keep v1 and the
+legacy actions in step when you change either.
+
 **When you change the API** (new/removed `action`, POST fields, or response
 shapes): update the file header in `operational_steps_api.php`, the action tables
 in `operational_steps_api.openapi.yaml`, and this section if paths move.
