@@ -42,7 +42,11 @@ Read this first when starting a session on the STS work. Last updated
   `docker compose --profile build up -d --build web`.
 - Gate before merging (all must pass):
   1. `bin/check_plugin_boundary.sh` exits 0.
-  2. `cd ../sts-helpers && RUN_WORKFLOW=0 bin/run_catalog_tests.sh` (export
+  2. API suite on the sandbox:
+     `STS_API_URL=http://localhost:8981/sts/api/v1 STS_API_TOKEN_FILE=$STS_SANDBOX_DATA/config/bootstrap_admin.token STS_API_BACKUPS_DIR=$STS_SANDBOX_DATA/backups python3 -m unittest discover -s tests/api -p 'test_*.py'`,
+     `python3 -m unittest discover -s agent/tests`, and `shellcheck -S warning -x`
+     on changed scripts. Then
+     `cd ../sts-helpers && RUN_WORKFLOW=0 bin/run_catalog_tests.sh` (export
      the sandbox env first to run it there; the helpers now talk to the API of
      whichever stack `COMPOSE_PROJECT_NAME` selects) prints
      `Catalog tests OK` (then `git checkout -- docs/WORKFLOW_TEST_ALL_TYPES.recipe.json`
@@ -88,11 +92,26 @@ Read this first when starting a session on the STS work. Last updated
   sweeps, waves and diagnostics stay on docker by design. The agent plugin is
   under `agent/`. Parity capture `phase6-api-final` matches `phase5-ui-nav`
   (masked dumps identical; logs differ only by the API target line).
-- API follow-ups: no wall-clock timeout on tasks; no API for the legacy
-  location aliases, for clearing the container `switchlists/` dir, or for the
-  `--ck1-test` warm start (those helper paths still use docker); the stock
-  `hart_session` / `start_session` workflows contain restore and backup steps,
-  so running them needs an admin token.
+- Phase 2 and the backlog waves landed 2026-11-04 (branch `api-admin`):
+  - Browser sign-in, command-role policy and the API Access page (Database
+    Maintenance).
+  - The session editor runs on v1: read-only until signed in, role warnings
+    before Run, and per-step role checks with an up-front pre-check. Defaults:
+    restore, wipe and reset are admin; backup and restart are operator;
+    `*seed*` and `*_locked*` backups are protected.
+  - The legacy editor endpoints are write-locked.
+  - Legacy SQL hardening (W1a/c/d), shared CSS and escape helper, one navbar,
+    single-file report pages (fleet, QR, waybill, switch list), data editor
+    bodies, `open_db.php` error logging.
+  - The API test suite in `tests/api/` with CI, the agent plugin with 33
+    tools, and the remaining helper paths moved onto the API.
+  - Parity capture `phase9-final` matches `phase6-api-final` (masked dumps
+    identical).
+- Open: a CSP for the legacy pages (the HttpOnly cookie doesn't stop XSS in
+  `/sts/`); `get_car_data_ajax.php` and the `fill_order_*` parsers still use
+  `real_escape_string`; `get_table_guts.php` allows a single arbitrary SELECT;
+  CI (`api-tests.yml`) has not run on GitHub yet; no wall-clock limit on tasks
+  without `timeout_seconds`.
 - Cleanups from the 2026-11-03 review, not scheduled:
   - SQL injection in the CRUD family (`db_list_jobs.php:32` runs
     `create table` on a raw POST value; the `db_edit_*` pages delete by GET).
