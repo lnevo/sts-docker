@@ -22,37 +22,45 @@ last_updated: 09/07/2026
 
 ## 1. Technology Stack
 
-| Layer         | Technology       | Version | CDN                                                                                          |
-| ------------- | ---------------- | ------- | -------------------------------------------------------------------------------------------- |
-| CSS Framework | Bootstrap        | 5.3.0   | `https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css`               |
-| Icons         | Bootstrap Icons  | 1.11.0  | `https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css` |
-| JS Framework  | jQuery           | 3.6.0   | `https://code.jquery.com/jquery-3.6.0.min.js`                                                |
-| JS Framework  | Bootstrap Bundle | 5.3.0   | `https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js`          |
-| Table Sorting | sorttable.js     | local   | `sorttable.js` (legacy, retain where already used)                                           |
+All frontend dependencies are **vendored locally** under `sts/vendor/` and
+shipped inside the Docker image (`COPY sts /var/www/html/sts` in the
+`Dockerfile`) — no page may load CSS/JS/fonts from an external CDN. STS is a
+private-network app (see `sts/api/README.md`), and CDN links break silently
+(fonts fall back, Bootstrap renders unstyled) on installs without outbound
+internet.
+
+| Layer         | Technology       | Version | Local path                                                                   |
+| ------------- | ---------------- | ------- | ---------------------------------------------------------------------------- |
+| CSS Framework | Bootstrap        | 5.3.0   | `vendor/bootstrap/bootstrap.min.css`                                         |
+| Icons         | Bootstrap Icons  | 1.11.0  | `vendor/bootstrap-icons/bootstrap-icons.min.css` (+ `fonts/` subfolder)      |
+| Font          | Lexend           | v26     | `vendor/fonts/lexend/lexend.css` (used only by `display_station_report.php`) |
+| JS Framework  | jQuery           | 3.6.0   | `vendor/jquery/jquery-3.6.0.min.js`                                          |
+| JS Framework  | Bootstrap Bundle | 5.3.0   | `vendor/bootstrap/bootstrap.bundle.min.js`                                   |
+| Table Sorting | sorttable.js     | local   | `sorttable.js` (legacy, retain where already used)                           |
 
 ### Load Order (in `<head>`)
 
 ```html
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<link
-  href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css"
-  rel="stylesheet"
-/>
-<link
-  href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css"
-  rel="stylesheet"
-/>
+<link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet" />
+<link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet" />
 ```
 
 ### Load Order (before `</body>`)
 
 ```html
-<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
+<script src="vendor/jquery/jquery-3.6.0.min.js"></script>
 ```
 
 > **Note:** Always include the `viewport` meta tag. It prevents iOS zoom on form
 > inputs and enables responsive breakpoints.
+>
+> **Never add a `<link>`/`<script>` pointing at an external CDN** (cdnjs,
+> code.jquery.com, fonts.googleapis.com, etc.) to any `sts/` page. If a new page
+> needs a dependency that isn't already in `sts/vendor/`, download it into a
+> matching subfolder there and reference it with a relative path — the same
+> pattern as the entries above.
 
 ---
 
