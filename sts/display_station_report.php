@@ -939,19 +939,15 @@ if (isset($_GET['generate_report'])) {
 </head>
 <body>
   <!-- Navigation Bar -->
-  <nav class="navbar navbar-dark bg-primary no-print">
-    <div class="container-fluid">
-      <span class="navbar-brand"><i class="bi bi-graph-up"></i> Station Report</span>
-      <div class="d-flex align-items-center gap-2">
-        <button id="reading-btn" class="btn btn-outline-light btn-sm" onclick="toggleReadingMode()" title="Toggle easy reading mode">
-          <i class="bi bi-eye"></i> Aa
-        </button>
-        <a href="index.html" class="btn btn-outline-light btn-sm me-2"><i class="bi bi-house"></i> Home</a>
-        <a href="reports.html" class="btn btn-outline-light btn-sm me-2"><i class="bi bi-file-text"></i> Reports</a>
-        <a href="index-t.html" class="btn btn-outline-light btn-sm"><i class="bi bi-diagram-3"></i> Site Map</a>
-      </div>
-    </div>
-  </nav>
+  <?php require_once __DIR__ . '/page_chrome.php'; echo sts_navbar_html([
+      'title' => 'Station Report', 'icon' => 'bi-graph-up', 'nav_class' => 'bg-primary',
+      'links' => [
+          ['html' => '<button id="reading-btn" class="btn btn-outline-light btn-sm" onclick="toggleReadingMode()" title="Toggle easy reading mode"><i class="bi bi-eye"></i> Aa</button>'],
+          ['href' => 'index.html', 'label' => 'Home', 'icon' => 'bi-house'],
+          ['href' => 'reports.html', 'label' => 'Reports', 'icon' => 'bi-file-text'],
+          ['href' => 'index-t.html', 'label' => 'Site Map', 'icon' => 'bi-diagram-3'],
+      ],
+  ]); ?>
 
   <!-- Main Content -->
   <div class="container mt-5 mb-5">

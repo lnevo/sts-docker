@@ -87,17 +87,14 @@
   </head>
   <body>
     <!-- Navigation Bar -->
-    <nav class="navbar navbar-dark bg-primary noprint">
-      <div class="container-fluid">
-        <span class="navbar-brand"><i class="bi bi-graph-up"></i> Wheel Reports</span>
-        <div>
-          <a href="index.html" class="btn btn-outline-light btn-sm me-2"><i class="bi bi-house"></i> Home</a>
-          <a href="reports.html" class="btn btn-outline-light btn-sm me-2"><i class="bi bi-file-text"></i> Reports</a>
-          <button class="btn btn-light btn-sm me-2" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
-          <a href="index-t.html" class="btn btn-outline-light btn-sm"><i class="bi bi-diagram-3"></i> Site Map</a>
-        </div>
-      </div>
-    </nav>
+    <?php require_once __DIR__ . '/page_chrome.php'; echo sts_navbar_html([
+        'title' => 'Wheel Reports', 'icon' => 'bi-graph-up', 'nav_class' => 'bg-primary',
+        'links' => [
+            ['href' => 'index.html', 'label' => 'Home', 'icon' => 'bi-house'],
+            ['href' => 'reports.html', 'label' => 'Reports', 'icon' => 'bi-file-text'],
+        ],
+        'print' => true,
+    ]); ?>
 
     <!-- Header Section -->
     <div class="noprint">
