@@ -7,12 +7,7 @@
   // it also edits the rows in the table associated with this job
   // rows can be added and updated; to remove a row it's index value is set to zerio
 
-  // generate a javascript line to display the table name
-  print '<script>document.getElementById("table_name").innerHTML = "Jobs";</script>';
   
-  // generate a javascript line to set the proper return link and text
-  print '<script>document.getElementById("return_link").innerHTML = "Return to Job Management page";</script>';
-  print '<script>document.getElementById("return_link").href = "db_list.php?tbl_name=jobs";</script>';
 
   // get a database connection
   $dbc = open_db();
@@ -215,18 +210,18 @@
   print '<input id="obj_id" name="obj_id" value="' . sts_html($row['id']) . '" type="hidden">';
   
   print
-    '<table>
+    '<table class="table table-sm table-bordered table-hover sts-table">
       <tr>
         <th>Property</th>
         <th>Value</th>
       </tr>
       <tr>
         <td>Job Name</td>
-        <td><input id="obj_name" name="obj_name" type="text" value="' . sts_html($row['name']) . '" tabindex="1" autofocus></td>
+        <td><input class="form-control form-control-sm" id="obj_name" name="obj_name" type="text" value="' . sts_html($row['name']) . '" tabindex="1" autofocus></td>
       </tr>
       <tr>
         <td>Description</td>
-        <td><textarea name="description" rows="8" cols="128" tabindex="2">' . sts_html($row['description']) . '</textarea></td>
+        <td><textarea class="form-control form-control-sm" name="description" rows="8" cols="128" tabindex="2">' . sts_html($row['description']) . '</textarea></td>
       </tr>
     </table>';
 
@@ -263,10 +258,10 @@
   print 'To add, modify or remove a step\'s auto-assign pickup criteria, click on it\'s station link<br /><br />';
 
   // generate another submit button
-  print '<input id="update_btn" name="update_btn" value="UPDATE" type="submit"><br /><br />';
+  print '<input class="btn btn-primary btn-sm" id="update_btn" name="update_btn" value="UPDATE" type="submit"><br /><br />';
 
   // generate a table of this job's steps
-  print '<table>
+  print '<table class="table table-sm table-bordered table-hover sts-table">
            <tr>
              <th>Sequence<br />Number</th>
              <th>Station</th>
@@ -276,11 +271,11 @@
            </tr>
            <tr>
            </tr>
-             <td><input id="seq_nbr" name="seq_nbr" type="text" size="5" tabindex="3"></td>
+             <td><input class="form-control form-control-sm" id="seq_nbr" name="seq_nbr" type="text" size="5" tabindex="3"></td>
              <td>' . drop_down_stations("station", "4", "") . '</td>
-             <td style="text-align: center"><input id="setout" name="setout" value="T" type="checkbox" checked tabindex="5"></td>
-             <td style="text-align: center"><input id="pickup" name="pickup" value="T" type="checkbox" checked tabindex="6"></td>
-             <td><input id="step_remarks" name="step_remarks" type="text" size="64" tabindex="7"></td>
+             <td style="text-align: center"><input class="form-check-input" id="setout" name="setout" value="T" type="checkbox" checked tabindex="5"></td>
+             <td style="text-align: center"><input class="form-check-input" id="pickup" name="pickup" value="T" type="checkbox" checked tabindex="6"></td>
+             <td><input class="form-control form-control-sm" id="step_remarks" name="step_remarks" type="text" size="64" tabindex="7"></td>
            </tr>';
 
   // keep track of how many rows are on in the step table on the web page
@@ -311,7 +306,7 @@
     }
     
     print '<tr>';
-    print '<td><input name="step' . $row_count . '" type="text" value="' . sts_html($row['step_number']) . '" size="5" tabindex="' . $tabindex1 . '"></td>';
+    print '<td><input class="form-control form-control-sm" name="step' . $row_count . '" type="text" value="' . sts_html($row['step_number']) . '" size="5" tabindex="' . $tabindex1 . '"></td>';
 
     print '<td>
              <a href="pu_criteria.php?job_id=' . urlencode(sts_get('obj_id')) . '&job_name=' . urlencode($obj_name) . '&step_nbr=' . urlencode($row['step_number']) .
@@ -323,24 +318,24 @@
     print '<td style="text-align: center">';
     if ($row['setout'] == "T")
     {
-      print '<input name="setout' . $row_count . '" value="T" type="checkbox" checked tabindex="' . $tabindex2 . '">';
+      print '<input class="form-check-input" name="setout' . $row_count . '" value="T" type="checkbox" checked tabindex="' . $tabindex2 . '">';
     }
     else
     {
-      print '<input name="setout' . $row_count . '" value="F" type="checkbox" tabindex="' . $tabindex2 . '">';
+      print '<input class="form-check-input" name="setout' . $row_count . '" value="F" type="checkbox" tabindex="' . $tabindex2 . '">';
     }
     print '</td>';
     print '<td style="text-align: center">';
     if ($row['pickup'] == "T")
     {
-      print '<input name="pickup' . $row_count . '" value="T" type="checkbox" checked tabindex="' . $tabindex3 . '">';
+      print '<input class="form-check-input" name="pickup' . $row_count . '" value="T" type="checkbox" checked tabindex="' . $tabindex3 . '">';
     }
     else
     {
-      print '<input name="pickup' . $row_count . '" value="F" type="checkbox" tabindex="' . $tabindex3 . '">';
+      print '<input class="form-check-input" name="pickup' . $row_count . '" value="F" type="checkbox" tabindex="' . $tabindex3 . '">';
     }
     print '</td>';
-    print '<td><input name="step_remarks' . $row_count . '" type="text" value="' . sts_html($row['remarks']) . '" size="80" tabindex="' . $tabindex4 . '"></td>';
+    print '<td><input class="form-control form-control-sm" name="step_remarks' . $row_count . '" type="text" value="' . sts_html($row['remarks']) . '" size="80" tabindex="' . $tabindex4 . '"></td>';
     print '</tr>';
     $row_count++;
     $tab_count = $tab_count + 4;

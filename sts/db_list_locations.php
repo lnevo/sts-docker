@@ -9,7 +9,6 @@
 
   // generate some javascript to display the table name, identify this table to the form, and set the update button's tab index
   print '<script>
-           document.getElementById("table_name").innerHTML = "Locations";
            document.getElementById("tbl_name").value = "locations";
            document.getElementById("update_btn").tabIndex = "8";
 
@@ -57,8 +56,8 @@
 //print $sql;
   $rs = mysqli_query($dbc, $sql);
 
-  print '<table class="sortable" id="loc_tbl">
-          <caption style="font: bold 15px Verdana, Arial, sans-serif; text-align:left;">Add New Location</caption>
+  print '<table class="table table-sm table-bordered table-hover sts-table sortable" id="loc_tbl">
+          <caption class="sts-table-caption">Add New Location</caption>
           <thead>
            <tr>
              <th>Station</th>
@@ -71,11 +70,11 @@
            </tr>
            <tr>
              <td>' . drop_down_stations('station', '1', '') . '</td>
-             <td><input id="code" name="code" type="text" tabindex="2" required></td>
-             <td><input name="track" type="text" tabindex="3"></td>
-             <td><input name="spot" type="text" tabindex="4"></td>
-             <td style="text-align: center;"><input name="rpt_station" type="text" tabindex="5" size="25"></td>
-             <td style="text-align: center;"><input name="remarks" type="text" tabindex="6" size="25"></td>
+             <td><input class="form-control form-control-sm" id="code" name="code" type="text" tabindex="2" required></td>
+             <td><input class="form-control form-control-sm" name="track" type="text" tabindex="3"></td>
+             <td><input class="form-control form-control-sm" name="spot" type="text" tabindex="4"></td>
+             <td style="text-align: center;"><input class="form-control form-control-sm" name="rpt_station" type="text" tabindex="5" size="25"></td>
+             <td style="text-align: center;"><input class="form-control form-control-sm" name="remarks" type="text" tabindex="6" size="25"></td>
              <td>' . drop_down_colors('color', '7', '') . '</td>
            </tr>
            <tr>

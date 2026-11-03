@@ -4,12 +4,8 @@
   // edits the selected cars's list of shipments to which it is assigned
   // it replaces only those items where a new value was submitted
 
-  // generate a javascript line to display the table name
-  print '<script>document.getElementById("table_name").innerHTML = "Edit Special Shipment Pool Cars";</script>';
   
   // generate some javascript to set the proper return link and text
-  print '<script>document.getElementById("return_link").innerHTML = "Return to Car Management page";</script>';
-  print '<script>document.getElementById("return_link").href = "db_list.php?tbl_name=cars";</script>';
   
   // get a database connection
   $dbc = open_db();
@@ -98,8 +94,8 @@
   print '<input id="prev_obj_id" name="prev_obj_id" value="' . sts_html($obj_id) . '" type="hidden">';
 
   // set up input fields for new entries to the table and the column headings
-  print '<table>
-           <caption style="font: bold 15px Verdana, Arial, sans-serif;">Add new Shipment to Pool</caption>
+  print '<table class="table table-sm table-bordered table-hover sts-table">
+           <caption class="sts-table-caption">Add new Shipment to Pool</caption>
            <thead>
              <tr>
                <td style="border-right:0px;">Shipment:</td>
@@ -132,7 +128,7 @@
     {
       print '<tr>
                <td style="text-align: center;">
-                 <input name="checkbox' . $row_count . '" type="checkbox" style="text-align: center;">
+                 <input class="form-check-input" name="checkbox' . $row_count . '" type="checkbox" style="text-align: center;">
                </td>
                <td>
                  <input name="shipment' . $row_count . '" type="hidden" value="' . sts_html($row['shipment_id']) . '">' . sts_html($row['shipment_code']) . ' - ' . sts_html(substr($row['description'], 0, 20)) . '

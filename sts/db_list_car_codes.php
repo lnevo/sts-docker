@@ -9,7 +9,6 @@
 
   // generate some javascript to display the table name, identify this table to the form, and set the update button's tab index
   print '<script>
-           document.getElementById("table_name").innerHTML = "Car Codes";
            document.getElementById("tbl_name").value = "car_codes";
            document.getElementById("update_btn").tabIndex = "4";
          </script>';
@@ -33,8 +32,8 @@
   $sql = 'select id, code, description, remarks from car_codes order by code';
   $rs = mysqli_query($dbc, $sql);
 
-  print '<table class="sortable">
-           <caption style="font: bold 15px Verdana, Arial, sans-serif; text-align:left;">Add New Car Code</caption>
+  print '<table class="table table-sm table-bordered table-hover sts-table sortable">
+           <caption class="sts-table-caption">Add New Car Code</caption>
            <thead>
              <tr>
                <th>Car Code</th>
@@ -42,9 +41,9 @@
                ><th>Remarks</th>
              </tr>
              <tr>
-               <td><input id="car_code" name="car_code" type="text" tabindex="1" size="10" required autofocus></td>
-               <td style="text-align: center;"><input name="description" type="text" tabindex="2" size="25"></td>
-               <td style="text-align: center;"><input name="remarks" type="text" tabindex="3" size="25"></td>
+               <td><input class="form-control form-control-sm" id="car_code" name="car_code" type="text" tabindex="1" size="10" required autofocus></td>
+               <td style="text-align: center;"><input class="form-control form-control-sm" name="description" type="text" tabindex="2" size="25"></td>
+               <td style="text-align: center;"><input class="form-control form-control-sm" name="remarks" type="text" tabindex="3" size="25"></td>
              </tr>
              <tr>
                <td style="border:0px;">

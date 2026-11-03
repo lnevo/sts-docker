@@ -14,7 +14,6 @@
 
   // generate some javascript to display the table name, identify this table to the program, and set the update button's tab index
   print '<script>
-           document.getElementById("table_name").innerHTML = "Shipments";
            document.getElementById("tbl_name").value = "shipments";
            document.getElementById("update_btn").tabIndex = "18";
            document.getElementById("update_btn").disabled = true;
@@ -215,9 +214,9 @@
 
   // generate the table
 
-  print '<table class="sortable" id="ship_tbl" style="font: normal 12px Verdana, Arial, sans-serif; white-space: nowrap;">
-           <caption style="font: bold 15px Verdana, Arial, sans-serif; text-align:left;">
-             <input type="radio" name="entry-filter" id="entry" value="entry" checked=false onclick="add_shipments()">Add New Shipment
+  print '<table class="table table-sm table-bordered table-hover sts-table sortable" id="ship_tbl" style="white-space: nowrap;">
+           <caption class="sts-table-caption">
+             <input class="form-check-input" type="radio" name="entry-filter" id="entry" value="entry" checked=false onclick="add_shipments()">Add New Shipment
            </caption>
            <thead>
              <tr style="background-color: lightgreen;">
@@ -242,23 +241,23 @@
                <th>Empty Location<br />Search Priority</th>
              </tr>
              <tr style="background-color: lightgreen;">
-               <td style="text-align:center;"><input id="code" name="code" type="text" tabindex="1" required autofocus></td>
-               <td style="text-align:center;"><input id="description" name="description" type="text" tabindex="2"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="code" name="code" type="text" tabindex="1" required autofocus></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="description" name="description" type="text" tabindex="2"></td>
                <td style="text-align:center;">' . drop_down_commodities('consignment', 3) . '</td>
                <td style="text-align:center;">' . drop_down_car_codes('car_code', 4, 'wild_ok') . '</td>
                <td style="text-align:center;">' . drop_down_locations('loading_location', 5, '') . '</td>
                <td style="text-align:center;">' . drop_down_locations('unloading_location', 6, '') . '</td>
-               <td style="text-align:center;"><input id="last_ship_date" name="last_ship_date" type="text" size="1" tabindex="7" value="0" required style="text-align: center;"></td>
-               <td style="text-align:center;"><input id="min_interval" name="min_interval" type="text" size="1" tabindex="8" required onchange="check_min_interval(this.value);" id="min_int" style="text-align: center;"></td>
-               <td style="text-align:center;"><input id="max_interval" name="max_interval" type="text" size="1" tabindex="9" required onchange="check_max_interval(this.value);" id="max_int" style="text-align: center;"></td>
-               <td style="text-align:center;"><input id="min_amount" name="min_amount" type="text" size="1" tabindex="10" required onchange="check_min_amount(this.value);" id="min_amt" style="text-align: center;"></td>
-               <td style="text-align:center;"><input id="max_amount" name="max_amount" type="text" size="1" tabindex="11" required onchange="check_max_amount(this.value);" id="max_amt" style="text-align: center;"></td>
-               <td style="text-align:center;"><input id="special_instructions" name="special_instructions" type="text" tabindex="12"></td>
-               <td style="text-align:center;"><input id="remarks" name="remarks" type="text" tabindex="13"></td>
-               <td style="text-align:center;"><input id="min_load_time" name="min_load_time" type="text" value="0" size="1" tabindex="14" style="text-align: center;"></td>
-               <td style="text-align:center;"><input id="max_load_time" name="max_load_time" type="text" value="0" size="1" tabindex="15" style="text-align: center;"></td>
-               <td style="text-align:center;"><input id="min_unload_time" name="min_unload_time" type="text" value="0" size="1" tabindex="16" style="text-align: center;"></td>
-               <td style="text-align:center;"><input id="max_unload_time" name="max_unload_time" type="text" value="0" size="1" tabindex="17" style="text-align: center;"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="last_ship_date" name="last_ship_date" type="text" size="1" tabindex="7" value="0" required style="text-align: center;"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="min_interval" name="min_interval" type="text" size="1" tabindex="8" required onchange="check_min_interval(this.value);" id="min_int" style="text-align: center;"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="max_interval" name="max_interval" type="text" size="1" tabindex="9" required onchange="check_max_interval(this.value);" id="max_int" style="text-align: center;"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="min_amount" name="min_amount" type="text" size="1" tabindex="10" required onchange="check_min_amount(this.value);" id="min_amt" style="text-align: center;"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="max_amount" name="max_amount" type="text" size="1" tabindex="11" required onchange="check_max_amount(this.value);" id="max_amt" style="text-align: center;"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="special_instructions" name="special_instructions" type="text" tabindex="12"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="remarks" name="remarks" type="text" tabindex="13"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="min_load_time" name="min_load_time" type="text" value="0" size="1" tabindex="14" style="text-align: center;"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="max_load_time" name="max_load_time" type="text" value="0" size="1" tabindex="15" style="text-align: center;"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="min_unload_time" name="min_unload_time" type="text" value="0" size="1" tabindex="16" style="text-align: center;"></td>
+               <td style="text-align:center;"><input class="form-control form-control-sm" id="max_unload_time" name="max_unload_time" type="text" value="0" size="1" tabindex="17" style="text-align: center;"></td>
                <td></td>
                <td></td>
              </tr>
@@ -266,14 +265,14 @@
                <td colspan="19" style="border:0px;">&nbsp;</td>
              </tr>
              <tr>
-              <td colspan="19" style="border:0px; font: bold 15px Verdana, Arial, sans-serif; text-align:left;">
-                <input type="radio" name="entry-filter" id="entry" value="entry" checked=false onclick="filter_shipments()">Filters
+              <td colspan="19" style="border:0px; text-align:left;">
+                <input class="form-check-input" type="radio" name="entry-filter" id="entry" value="entry" checked=false onclick="filter_shipments()">Filters
               </td>
              </tr>
              <tr style="background-color: yellow;">
                <td style="border-bottom: 0px; border-right:0px; text-align:center;">
-                 <input type="button" id="clear_filters_btn" name="clear_filters_btn" value="CLEAR FILTERS"
-                 onclick="clear_filters();" style="font: normal 10px Verdana, Arial, sans-serif; white-space: nowrap;">
+                 <input class="btn btn-secondary btn-sm" type="button" id="clear_filters_btn" name="clear_filters_btn" value="CLEAR FILTERS"
+                 onclick="clear_filters();" style="white-space: nowrap;">
                </td>
                <td style="border-bottom: 0px; border-left: 0px; border-right:0px; text-align:center;">
                </td>

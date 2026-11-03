@@ -9,7 +9,6 @@
 
   // generate some javascript to display the table name, identify this table to the form, and set the update button's tab index
   print '<script>
-           document.getElementById("table_name").innerHTML = "Stations and Routing Instructions";
            document.getElementById("tbl_name").value = "routing";
            document.getElementById("update_btn").tabIndex = "5";
          </script>';
@@ -37,8 +36,8 @@
            order by sort_seq, station";
   $rs = mysqli_query($dbc, $sql);
 
-  print '<table class="sortable">
-           <caption style="font: bold 15px Verdana, Arial, sans-serif; text-align:left;">Add New Station</caption>
+  print '<table class="table table-sm table-bordered table-hover sts-table sortable">
+           <caption class="sts-table-caption">Add New Station</caption>
            <thead>
              <tr>
                <th>Station<br />Name</th>
@@ -47,9 +46,9 @@
                <th></th>
              </tr>
              <tr>
-               <td><input id="station_name" name="station_name" type="text" tabindex="1" required autofocus></td>
-               <td><textarea name="instructions" type="text" tabindex="3" cols="100" rows="5"></textarea></td>
-               <td><input id="sort_seq" name="sort_seq" type="text" tabindex="4" style="width: 75px;"></td>
+               <td><input class="form-control form-control-sm" id="station_name" name="station_name" type="text" tabindex="1" required autofocus></td>
+               <td><textarea class="form-control form-control-sm" name="instructions" type="text" tabindex="3" cols="100" rows="5"></textarea></td>
+               <td><input class="form-control form-control-sm" id="sort_seq" name="sort_seq" type="text" tabindex="4" style="width: 75px;"></td>
                <td></td>
              </tr>
              <tr>

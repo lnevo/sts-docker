@@ -9,7 +9,6 @@
 
   // generate some javascript to display the table name, identify this table to the program, and set the update button tab index
   print '<script>
-           document.getElementById("table_name").innerHTML = "Car Orders";
            document.getElementById("tbl_name").value = "car_orders";
            document.getElementById("update_btn").tabIndex = "10";
            document.getElementById("update_btn").value = "CANCEL ORDERS"
@@ -177,21 +176,21 @@
            </script>';
 
     // generate a check box that when activated will run a javascript routine which will hide car orders that have been filled
-    print 'Hide filled car orders: <input tabindex="3" type="checkbox" id="hide_unavail" name="hide_unavail" onclick="hide_rows(2);"><br /><br />';
+    print 'Hide filled car orders: <input class="form-check-input" tabindex="3" type="checkbox" id="hide_unavail" name="hide_unavail" onclick="hide_rows(2);"><br /><br />';
     
     // generate the table
-    print '<table class="sortable" id="wb_tbl" style="font: normal 12px Verdana, Arial, sans-serif;"  style="white-space: nowrap;">
-             <caption style="font: bold 15px Verdana, Arial, sans-serif; text-align:left;">Row Filters</caption>
+    print '<table class="table table-sm table-bordered table-hover sts-table sortable" id="wb_tbl" style=""  style="white-space: nowrap;">
+             <caption class="sts-table-caption">Row Filters</caption>
              <thead>
                <tr>
                  <th style="border-bottom:0px; border-right:0px;">
-                   <input tabindex="4" type="button" id="clear_filters_btn" name="clear_filters_btn" value="CLEAR FILTERS"
-                   onclick="location.reload();" style="font: bold 10px Verdana, Arial, sans-serif; text-align:left;">
+                   <input class="btn btn-secondary btn-sm" tabindex="4" type="button" id="clear_filters_btn" name="clear_filters_btn" value="CLEAR FILTERS"
+                   onclick="location.reload();" style="text-align:left;">
                  </th>
                  <th style="border-bottom:0px; border-left:0px; border-right:0px;"
                      onchange="filter_rows(1, document.getElementById(\'wb_type_filter\').options[document.getElementById(\'wb_type_filter\').selectedIndex].value);
                      document.getElementById(\'wb_type_filter\').disabled=true;">
-                     <select id="wb_type_filter" name="wb_type_filter" tabindex="5">
+                     <select class="form-select form-select-sm" id="wb_type_filter" name="wb_type_filter" tabindex="5">
                        <option value=""></option>
                        <option value="A">Automatic</option>
                        <option value="M">Manual</option>
@@ -302,7 +301,7 @@
         // generate the empty way bill row
         print '<tr id="row' . $row_count . '">
                  <td style="text-align: center;">
-                   <input name=wb' . $row_count . ' value="' . sts_html($row['waybill_number']) . '" type="checkbox" disabled>
+                   <input class="form-check-input" name=wb' . $row_count . ' value="' . sts_html($row['waybill_number']) . '" type="checkbox" disabled>
                  </td>
                  <td>' . sts_html($row['waybill_number']) . '</td>
                  <td onclick="show_image(' . $parm_string . ');">' . sts_html($row['car']) . '</td>
@@ -371,13 +370,13 @@
         if (strlen($row['car']) > 0)
         {
           print '<td style="text-align: center;">
-                   <input name=wb' . $row_count . ' value="' . sts_html($row['waybill_number']) . '" type="checkbox" disabled>
+                   <input class="form-check-input" name=wb' . $row_count . ' value="' . sts_html($row['waybill_number']) . '" type="checkbox" disabled>
                  </td>';
         }
         else
         {
           print '<td style="text-align: center;">
-                   <input name=wb' . $row_count . ' value="' . sts_html($row['waybill_number']) . '" type="checkbox">
+                   <input class="form-check-input" name=wb' . $row_count . ' value="' . sts_html($row['waybill_number']) . '" type="checkbox">
                  </td>';
         }
         
