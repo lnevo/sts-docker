@@ -21,8 +21,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mcp_stdio import Tool, serve  # noqa: E402
 
 DEFAULT_URL = "http://localhost:8980/sts/api/v1"
-# Defaults; the live policy (GET /admin/policy, admin only) overrides them when readable.
-ADMIN_COMMANDS = {"restore_database", "wipe_database", "reset_session"}
+# Published defaults only; the server decides (GET /admin/policy with an admin token) and its 403 is final.
+DEFAULT_ADMIN_COMMANDS = {"restore_database", "wipe_database", "reset_session"}
 _POLICY_ROLES: dict | None = None
 DONE = ("succeeded", "failed")
 
@@ -48,7 +48,7 @@ def token() -> str:
 
 
 def request(method: str, path: str, query: dict | None = None, body: object = None,
-            role: str = "reader") -> tuple[int, dict]:
+            role: str = "reader", bare: bool = False) -> tuple[int, dict]:
     """Call the API; return (status, parsed envelope). Raise ApiError on failure."""
     url = base_url() + path
     pairs = {k: v for k, v in (query or {}).items() if v is not None and v != ""}
@@ -88,6 +88,8 @@ def request(method: str, path: str, query: dict | None = None, body: object = No
         raise ApiError(f"STS API error {status} {code}: {message}{hint}")
     if not isinstance(payload, dict):
         raise ApiError(f"HTTP {status} from {method} {path}: unexpected response shape")
+    if bare:  # A file download: the body is the document itself, not an envelope.
+        return status, {"data": payload}
     return status, payload
 
 
@@ -95,15 +97,20 @@ def unwrap(status: int, payload: dict) -> object:
     data = payload.get("data")
     if status == 202:
         task_id = data.get("task_id") if isinstance(data, dict) else None
-        return {"accepted": True, "task": data,
-                "next": f"Call sts_task with id={task_id} and wait_seconds (e.g. 60) to follow it."}
+        out = {"accepted": True, "task": data,
+               "next": f"Call sts_task with id={task_id} and wait_seconds (e.g. 60) to follow it."}
+        if isinstance(data, dict):
+            for key in ("caller_role", "role_warnings"):
+                if key in data:
+                    out[key] = data[key]
+        return out
     if payload.get("meta"):
         return {"data": data, "meta": payload["meta"]}
     return data
 
 
-def call(method, path, query=None, body=None, role="reader"):
-    return unwrap(*request(method, path, query, body, role))
+def call(method, path, query=None, body=None, role="reader", bare=False):
+    return unwrap(*request(method, path, query, body, role, bare))
 
 
 def seg(value: object) -> str:
@@ -207,7 +214,7 @@ def command_role(command: str) -> str:
             _POLICY_ROLES = {}
     if command in _POLICY_ROLES:
         return _POLICY_ROLES[command]
-    return "admin" if command in ADMIN_COMMANDS else "operator"
+    return "admin" if command in DEFAULT_ADMIN_COMMANDS else "operator"
 
 
 def t_command(args):
@@ -328,6 +335,68 @@ def t_policy(args):
     raise ApiError("action must be get or put")
 
 
+def t_wf_compile(args):
+    return call("POST", "/workflows/compile", body={"recipe": args["recipe"]} if args.get("recipe") else {})
+
+
+def t_wf_normalize(args):
+    body = {k: args[k] for k in ("recipe", "use_file", "workflow_file") if args.get(k) is not None}
+    return call("POST", "/workflows/normalize", body=body)
+
+
+def t_wf_import(args):
+    body = {k: args[k] for k in ("recipe", "workflow", "use_file", "workflow_file") if args.get(k) is not None}
+    if not body:
+        raise ApiError("Give recipe, workflow (JSON text or object), or use_file with workflow_file")
+    return call("POST", "/workflows/import", body=body, role="editor")
+
+
+def t_wf_active(args):
+    action = args.get("action", "get")
+    if action == "get":
+        return call("GET", "/workflows/active", {"workflow_file": args.get("workflow_file")})
+    if action == "set":
+        need(args, "workflow_file")
+        return call("PUT", "/workflows/active", body={"workflow_file": args["workflow_file"]}, role="editor")
+    raise ApiError("action must be get or set")
+
+
+def t_wf_run_options(args):
+    need(args, "name")
+    return call("GET", f"/workflows/{seg(args['name'])}/run-options")
+
+
+def t_wf_download(args):
+    need(args, "name")
+    return call("GET", f"/workflows/{seg(args['name'])}/download", bare=True)
+
+
+def t_rerender(args):
+    need(args, "session")
+    body = {k: args[k] for k in ("style", "force") if args.get(k) is not None}
+    return call("POST", f"/sessions/{seg(args['session'])}/rerender", body=body, role="operator")
+
+
+def t_print_all(args):
+    need(args, "session")
+    body = {k: args[k] for k in ("style", "job") if args.get(k) is not None}
+    return call("POST", f"/sessions/{seg(args['session'])}/print-all", body=body, role="operator")
+
+
+def t_simulator_status(args):
+    return call("GET", "/simulator/status")
+
+
+def t_clear_output(args):
+    return call("DELETE", "/sessions/output", role="operator")
+
+
+def t_task_fail(args):
+    need(args, "id")
+    body = {"force": True} if args.get("force") else {}
+    return call("POST", f"/admin/tasks/{seg(args['id'])}/fail", body=body, role="admin")
+
+
 # ---- tool table -------------------------------------------------------------
 
 def obj(props: dict, required: list[str] | None = None) -> dict:
@@ -353,8 +422,8 @@ TOOLS = [
          obj({"entity": {"type": "string", "enum": list(LIST_PATHS)},
               "filters": {"type": "object", "description": "Query filters, e.g. {\"status\":\"Empty\"}."},
               **LIM}, ["entity"]), t_list),
-    Tool("sts_get", "Role: reader. One record. cars accept id, reporting marks or RFID; locations id or "
-         "code (includes cars there); jobs id or name (includes steps, pickup criteria, cars); "
+    Tool("sts_get", "Role: reader. One record. cars accept id, reporting marks or RFID; locations id, "
+         "code or a plugin-registered alias such as SCL (includes cars there); jobs id or name (includes steps, pickup criteria, cars); "
          "car-orders by waybill; sessions by number; workflows by name.",
          obj({"entity": {"type": "string", "enum": list(GET_ENTITIES)}, "id": {"type": ["string", "integer"]}},
              ["entity", "id"]), t_get),
@@ -393,12 +462,58 @@ TOOLS = [
          obj({"name": S, "recipe": O}, ["name", "recipe"]), t_wf_save, read_only=False, destructive=True),
     Tool("sts_workflow_delete", "Role: editor. Delete a named workflow recipe.",
          obj({"name": S}, ["name"]), t_wf_delete, read_only=False, destructive=True),
-    Tool("sts_workflow_run", "Role: operator. Run a saved workflow as a task (always async). Optional "
-         "seed, start_step, stop_step, skip, sections, session_count, render. The recipe may contain "
-         "any command, so read it first with sts_get workflows.",
-         obj({"name": S, "seed": I, "start_step": I, "stop_step": I, "skip": {"type": "array"},
-              "sections": {"type": "array"}, "session_count": I, "render": B}, ["name"]),
+    Tool("sts_workflow_run", "Role: operator. Run a saved workflow as a task (always async, exclusive). "
+         "Call sts_workflow_run_options FIRST and read role_warnings: each step is checked against your role "
+         "as it runs and the task fails at the first step that needs more (e.g. restore_database needs admin). "
+         "Steps skipped by conditions or ranges are not checked. The 202 result repeats caller_role and "
+         "role_warnings at the top level. Optional seed, start_step, stop_step, skip (step numbers/ranges), "
+         "sections, session_count, timeout_seconds (kills the task, marked failed), render. The recipe may "
+         "contain any command, so read it first with sts_get workflows.",
+         obj({"name": S, "seed": I, "start_step": I, "stop_step": I,
+              "skip": {"type": ["string", "array"], "description": "e.g. \"1-2,5\" or [1,2,5]"},
+              "sections": {"type": "array"}, "session_count": I, "timeout_seconds": I, "render": B}, ["name"]),
          t_wf_run, read_only=False, destructive=True),
+
+    Tool("sts_workflow_compile", "Role: reader. Compile a recipe (or the active workflow when recipe is "
+         "omitted) to its display rows. Saves and runs nothing.",
+         obj({"recipe": O}), t_wf_compile),
+    Tool("sts_workflow_normalize", "Role: reader. Normalize a recipe, or with use_file reload workflow_file "
+         "(or the active one). Saves nothing.",
+         obj({"recipe": O, "use_file": B, "workflow_file": S}), t_wf_normalize),
+    Tool("sts_workflow_import", "Role: editor. Import workflow JSON (recipe object, workflow text/object, or "
+         "use_file + workflow_file). A given workflow_file becomes the active workflow. Does not save the "
+         "recipe; use sts_workflow_save.",
+         obj({"recipe": O, "workflow": {"type": ["string", "object"]}, "use_file": B, "workflow_file": S}),
+         t_wf_import, read_only=False, destructive=True),
+    Tool("sts_workflow_active", "Role: reader for action get (default; optional workflow_file), editor for "
+         "action set (workflow_file required). Shows or changes which workflow file the editor treats as active.",
+         obj({"action": {"type": "string", "enum": ["get", "set"]}, "workflow_file": S}),
+         t_wf_active, read_only=False, destructive=True),
+    Tool("sts_workflow_run_options", "Role: reader. Run options for a workflow: step indices, sections, "
+         "compiled rows, condition context, current and existing sessions, plus caller_role and "
+         "role_warnings (steps needing a higher role than your token; conditional=true means a goto or "
+         "condition may skip it, e.g. hart_session step 3 restore_database runs only at session 0). "
+         "Call before sts_workflow_run; if a non-conditional warning applies, stop and ask the user.",
+         obj({"name": S}, ["name"]), t_wf_run_options),
+    Tool("sts_workflow_download", "Role: reader. The raw workflow JSON file as text (not an envelope).",
+         obj({"name": S}, ["name"]), t_wf_download),
+    Tool("sts_session_rerender", "Role: operator. Re-render a session's switch lists in a style "
+         "(default mobile); force overwrites. Synchronous. Rewrites that session's generated output.",
+         obj({"session": {"type": ["integer", "string"]}, "style": S, "force": B}, ["session"]),
+         t_rerender, read_only=False, destructive=True),
+    Tool("sts_session_print_all", "Role: operator. Build the print-all bundle for a session and style "
+         "(job limits it to one consolidated train); 404 when nothing renders. Writes output files.",
+         obj({"session": {"type": ["integer", "string"]}, "style": S, "job": S}, ["session"]),
+         t_print_all, read_only=False, destructive=False),
+    Tool("sts_simulator_status", "Role: reader. Simulator runtime availability, current session, condition "
+         "context and warm-start summary.", obj({}), t_simulator_status),
+    Tool("sts_clear_session_output", "Role: operator. DELETES every generated session output directory "
+         "(switch lists, waybills); the database is untouched. 409 while any task is queued or running. "
+         "Confirm with the user.", obj({}), t_clear_output, read_only=False, destructive=True),
+    Tool("sts_task_fail", "Role: admin. Mark a stuck queued or running task failed, which releases the "
+         "maintenance lock. A task whose process is still alive is refused (409) unless force=true; the "
+         "process is not killed. Confirm with the user.",
+         obj({"id": S, "force": B}, ["id"]), t_task_fail, read_only=False, destructive=True),
 
     Tool("sts_backup", "Role: admin. Write a database backup named name into the backups directory.",
          obj({"name": S}, ["name"]), t_backup, read_only=False, destructive=False),
@@ -430,8 +545,8 @@ TOOLS = [
 ]
 
 INSTRUCTIONS = ("STS API v1 tools. Check sts_health to see whether you are on the live or sandbox stack "
-                "before any write. Write tools need a token (STS_API_TOKEN). Use sts_session counts "
-                "between operating steps. restore, warm start, wipe and reset replace the database.")
+                "before any write. Write tools need a bearer token (STS_API_TOKEN). Use sts_session counts "
+                "between operating steps. Call sts_workflow_run_options before sts_workflow_run and heed role_warnings. restore, warm start, wipe and reset replace the database.")
 
 if __name__ == "__main__":
     serve("sts-api", TOOLS, INSTRUCTIONS)
