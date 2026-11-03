@@ -6,44 +6,8 @@
     <title>STS - Pick Up Cars</title>
     <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="operations_ui.css?v=2" rel="stylesheet">
+    <link href="operations_ui.css?v=3" rel="stylesheet">
     <script src="operations_table_filters.js"></script>
-    <style>
-      tr {vertical-align: top;}
-      th, td { font-size: 0.875rem; padding: 6px 8px; white-space: nowrap; }
-      #job_table th,
-      #job_table td {
-        white-space: normal;
-        word-break: keep-all;
-        overflow-wrap: normal;
-        hyphens: none;
-      }
-      @media (max-width: 1024px) {
-        #job_table th,
-        #job_table td {
-          font-size: 0.8rem;
-          padding: 4px 6px;
-          line-height: 1.2;
-        }
-
-        /* Hide lower-priority detail columns on tablet to reduce horizontal scroll. */
-        #job_table th:nth-child(6),
-        #job_table td:nth-child(6),
-        #job_table th:nth-child(7),
-        #job_table td:nth-child(7),
-        #job_table th:nth-child(8),
-        #job_table td:nth-child(8) {
-          display: none;
-        }
-      }
-      @media print { .noprint {display:none;} }
-      .status-empty    { display:inline-block; background-color:#ffeaa7; color:#333;   padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-loaded   { display:inline-block; background-color:#a8e6cf; color:#333;   padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-loading  { display:inline-block; background-color:#74b9ff; color:white;  padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-unloading{ display:inline-block; background-color:#fab1a0; color:white;  padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-ordered  { display:inline-block; background-color:#dfe6e9; color:#333;   padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-      .status-unavailable{ display:inline-block; background-color:#d63031; color:white; padding:3px 7px; border-radius:3px; font-weight:600; font-size:0.82rem; }
-    </style>
     <?php
       // bring in the javascript function that shows rollingstock photos
       require 'show_image.php';
@@ -66,7 +30,7 @@
       }
     </script>
   </head>
-  <body class="bg-light">
+  <body class="bg-light ops-steppage ops-page-pick_up">
     <?php
     require_once 'operations_nav.php';
     echo ops_render_navbar('pick_up.php', 'Pick Up Cars', 'bi-arrow-up-circle', '<button class="btn btn-light btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>');

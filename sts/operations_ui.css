@@ -310,3 +310,589 @@
   text-decoration: none;
   color: #2e7d32;
 }
+
+/* Step pages (pick up, set out, generate, load/unload, reposition, organize).
+   Pages opt in with body.ops-steppage; :where() keeps specificity at the level
+   of the old unscoped inline rules, so Bootstrap precedence is unchanged. */
+
+:where(.ops-steppage) tr {
+  vertical-align: top;
+}
+
+:where(.ops-steppage) th,
+:where(.ops-steppage) td {
+  font-size: 0.875rem;
+  padding: 6px 8px;
+  white-space: nowrap;
+}
+
+:where(.ops-page-load_unload, .ops-page-reposition, .ops-page-organize_cars) td.checkbox {
+  text-align: center;
+  white-space: normal;
+}
+
+:where(.ops-page-pick_up, .ops-page-set_out) #job_table th,
+:where(.ops-page-pick_up, .ops-page-set_out) #job_table td,
+:where(.ops-page-load_unload, .ops-page-organize_cars) #car_table th,
+:where(.ops-page-load_unload, .ops-page-organize_cars) #car_table td,
+:where(.ops-page-generate) #ship_tbl th,
+:where(.ops-page-generate) #ship_tbl td {
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+
+@media (max-width: 1024px) {
+  :where(.ops-page-pick_up, .ops-page-set_out) #job_table th,
+  :where(.ops-page-pick_up, .ops-page-set_out) #job_table td,
+  :where(.ops-page-load_unload, .ops-page-organize_cars) #car_table th,
+  :where(.ops-page-load_unload, .ops-page-organize_cars) #car_table td,
+  :where(.ops-page-generate) #ship_tbl th,
+  :where(.ops-page-generate) #ship_tbl td {
+    font-size: 0.8rem;
+    padding: 4px 6px;
+    line-height: 1.2;
+  }
+
+  /* Hide lower-priority detail columns on tablet to reduce horizontal scroll. */
+  :where(.ops-page-pick_up) #job_table th:nth-child(6),
+  :where(.ops-page-pick_up) #job_table td:nth-child(6),
+  :where(.ops-page-pick_up) #job_table th:nth-child(7),
+  :where(.ops-page-pick_up) #job_table td:nth-child(7),
+  :where(.ops-page-pick_up) #job_table th:nth-child(8),
+  :where(.ops-page-pick_up) #job_table td:nth-child(8) {
+    display: none;
+  }
+
+  :where(.ops-page-set_out) #job_table th:nth-child(7),
+  :where(.ops-page-set_out) #job_table td:nth-child(7),
+  :where(.ops-page-set_out) #job_table th:nth-child(8),
+  :where(.ops-page-set_out) #job_table td:nth-child(8),
+  :where(.ops-page-set_out) #job_table th:nth-child(9),
+  :where(.ops-page-set_out) #job_table td:nth-child(9) {
+    display: none;
+  }
+
+  :where(.ops-page-load_unload) #car_table th:nth-child(7),
+  :where(.ops-page-load_unload) #car_table td:nth-child(7),
+  :where(.ops-page-load_unload) #car_table th:nth-child(8),
+  :where(.ops-page-load_unload) #car_table td:nth-child(8),
+  :where(.ops-page-load_unload) #car_table th:nth-child(9),
+  :where(.ops-page-load_unload) #car_table td:nth-child(9) {
+    display: none;
+  }
+
+  :where(.ops-page-organize_cars) #car_table th:nth-child(6),
+  :where(.ops-page-organize_cars) #car_table td:nth-child(6),
+  :where(.ops-page-organize_cars) #car_table th:nth-child(8),
+  :where(.ops-page-organize_cars) #car_table td:nth-child(8),
+  :where(.ops-page-organize_cars) #car_table th:nth-child(9),
+  :where(.ops-page-organize_cars) #car_table td:nth-child(9) {
+    display: none;
+  }
+
+  :where(.ops-page-generate) #ship_tbl th:nth-child(8),
+  :where(.ops-page-generate) #ship_tbl td:nth-child(8),
+  :where(.ops-page-generate) #ship_tbl th:nth-child(9),
+  :where(.ops-page-generate) #ship_tbl td:nth-child(9),
+  :where(.ops-page-generate) #ship_tbl th:nth-child(10),
+  :where(.ops-page-generate) #ship_tbl td:nth-child(10),
+  :where(.ops-page-generate) #ship_tbl th:nth-child(11),
+  :where(.ops-page-generate) #ship_tbl td:nth-child(11),
+  :where(.ops-page-generate) #ship_tbl th:nth-child(12),
+  :where(.ops-page-generate) #ship_tbl td:nth-child(12) {
+    display: none;
+  }
+}
+
+@media print {
+  :where(.ops-steppage) .noprint {
+    display: none;
+  }
+}
+
+/* Status pills: pick up, set out, load/unload, reposition, organize */
+:where(.ops-page-pick_up, .ops-page-set_out, .ops-page-load_unload, .ops-page-reposition, .ops-page-organize_cars) :is(.status-empty, .status-loaded, .status-loading, .status-unloading, .status-ordered, .status-unavailable) {
+  display: inline-block;
+  padding: 3px 7px;
+  border-radius: 3px;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+:where(.ops-page-pick_up, .ops-page-set_out, .ops-page-load_unload, .ops-page-reposition, .ops-page-organize_cars) .status-empty {
+  background-color: #ffeaa7;
+  color: #333;
+}
+:where(.ops-page-pick_up, .ops-page-set_out, .ops-page-load_unload, .ops-page-reposition, .ops-page-organize_cars) .status-loaded {
+  background-color: #a8e6cf;
+  color: #333;
+}
+:where(.ops-page-pick_up, .ops-page-set_out, .ops-page-load_unload, .ops-page-reposition, .ops-page-organize_cars) .status-loading {
+  background-color: #74b9ff;
+  color: white;
+}
+:where(.ops-page-pick_up, .ops-page-set_out, .ops-page-load_unload, .ops-page-reposition, .ops-page-organize_cars) .status-unloading {
+  background-color: #fab1a0;
+  color: white;
+}
+:where(.ops-page-pick_up, .ops-page-set_out, .ops-page-load_unload, .ops-page-reposition, .ops-page-organize_cars) .status-ordered {
+  background-color: #dfe6e9;
+  color: #333;
+}
+:where(.ops-page-pick_up, .ops-page-set_out, .ops-page-load_unload, .ops-page-reposition, .ops-page-organize_cars) .status-unavailable {
+  background-color: #d63031;
+  color: white;
+}
+
+/* Reposition */
+:where(.ops-page-reposition) #repo_off_home_btn.active {
+  color: #fff;
+  background-color: #b45309;
+  border-color: #b45309;
+}
+
+/* Organize cars: drag-and-drop engine */
+:where(.ops-page-organize_cars) #car_table tbody tr {
+  transition: transform 140ms ease, background-color 220ms ease, box-shadow 220ms ease;
+}
+
+:where(.ops-page-organize_cars) .drag-handle {
+  cursor: grab;
+  font-size: 1.2rem;
+  line-height: 1;
+  user-select: none;
+  touch-action: none;
+  display: inline-block;
+  transition: transform 120ms ease;
+}
+
+:where(.ops-page-organize_cars) .drag-handle:active {
+  transform: scale(1.18);
+}
+
+body:where(.ops-page-organize_cars).drag-active {
+  touch-action: none;
+  overflow: hidden;
+  user-select: none;
+}
+
+:where(.ops-page-organize_cars) .drag-cell-active {
+  background-color: #ffbf47 !important;
+  color: #222;
+  box-shadow: inset 0 0 0 2px #ff8f00;
+}
+
+:where(.ops-page-organize_cars) .dragging-row {
+  opacity: 0.92;
+  box-shadow: 0 0.65rem 1.1rem rgba(0, 0, 0, 0.18);
+  transform: scale(1.01);
+}
+
+:where(.ops-page-organize_cars) .dragging-row > td {
+  background-color: #ffbf47 !important;
+  color: #222;
+  box-shadow: inset 0 0 0 1px #ff8f00;
+}
+
+:where(.ops-page-organize_cars) .row-moved-flash {
+  animation: rowMovedFlash 420ms ease;
+}
+
+@keyframes rowMovedFlash {
+  0% { background-color: #ffe08a; }
+  100% { background-color: transparent; }
+}
+
+/* Fill orders page (fill_orders.php), scoped via body.ops-page-fill_orders */
+:where(.ops-page-fill_orders) .order-card {
+  margin-bottom: 1rem;
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+}
+:where(.ops-page-fill_orders) .order-card.pool {
+  background-color: #ffff80;
+}
+:where(.ops-page-fill_orders) .order-header {
+  padding: 1rem;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #f8f9fa;
+  border-radius: 0.375rem 0.375rem 0 0;
+  gap: 0.75rem;
+}
+:where(.ops-page-fill_orders) .order-header-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+:where(.ops-page-fill_orders) .order-row-check {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+:where(.ops-page-fill_orders) .order-header:hover {
+  background-color: #e9ecef;
+}
+:where(.ops-page-fill_orders) .order-details {
+  padding: 1rem;
+  border-top: 1px solid #dee2e6;
+}
+:where(.ops-page-fill_orders) .car-row {
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+:where(.ops-page-fill_orders) .car-row:hover {
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
+}
+:where(.ops-page-fill_orders) .car-row.pool {
+  background-color: rgba(128, 128, 128, 0.3);
+  color: white;
+  background-color: gray;
+}
+:where(.ops-page-fill_orders) .car-row.station {
+  background-color: rgba(169, 169, 169, 0.3);
+  background-color: darkgray;
+  color: white;
+}
+:where(.ops-page-fill_orders) .car-row.priority {
+  background-color: rgba(211, 211, 211, 0.3);
+  background-color: lightgray;
+}
+:where(.ops-page-fill_orders) .car-row.system {
+  background-color: white;
+  border: 1px solid #dee2e6;
+}
+:where(.ops-page-fill_orders) .car-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 0.5rem;
+}
+:where(.ops-page-fill_orders) .load-count {
+  background-color: #e9ecef;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.85rem;
+  font-weight: bold;
+  color: black;
+}
+:where(.ops-page-fill_orders) .badge-category {
+  font-size: 0.75rem;
+  margin-left: 0.25rem;
+}
+:where(.ops-page-fill_orders) .cars-container {
+  max-height: 600px;
+  overflow-y: auto;
+}
+:where(.ops-page-fill_orders) .order-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+:where(.ops-page-fill_orders) .order-info-item {
+  display: flex;
+  flex-direction: column;
+}
+:where(.ops-page-fill_orders) .order-info-label {
+  font-weight: bold;
+  color: #666;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+:where(.ops-page-fill_orders) .order-info-value {
+  font-size: 1rem;
+  margin-top: 0.25rem;
+}
+:where(.ops-page-fill_orders) .spinner-container {
+  text-align: center;
+  padding: 2rem;
+}
+:where(.ops-page-fill_orders) .fill-orders-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+:where(.ops-page-fill_orders) .fill-orders-summary {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  padding: 0.65rem 0.9rem;
+}
+:where(.ops-page-fill_orders) .fill-orders-summary strong {
+  font-size: 0.95rem;
+}
+:where(.ops-page-fill_orders) .fill-orders-summary p {
+  font-size: 0.85rem;
+  color: #6c757d;
+  margin: 0.15rem 0 0;
+}
+:where(.ops-page-fill_orders) .fill-orders-filters-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: stretch;
+}
+:where(.ops-page-fill_orders) .fill-orders-bulk-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+}
+:where(.ops-page-fill_orders) .fill-filter-panel {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  padding: 0.65rem 0.75rem;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+:where(.ops-page-fill_orders) .fill-filter-panel.auto-assign {
+  background: #e8f3ea;
+  border-color: #c5dcc8;
+}
+:where(.ops-page-fill_orders) .fill-filter-panel-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #495057;
+  margin-bottom: 0.15rem;
+}
+:where(.ops-page-fill_orders) .fill-filter-panel-hint {
+  font-size: 0.75rem;
+  color: #6c757d;
+  margin-bottom: 0.5rem;
+  line-height: 1.3;
+}
+:where(.ops-page-fill_orders) .fill-filter-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem 0.5rem;
+}
+:where(.ops-page-fill_orders) .fill-filter-grid .form-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #6c757d;
+  margin-bottom: 0.1rem;
+}
+:where(.ops-page-fill_orders) .fill-car-filter-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.35rem 0.5rem;
+  align-items: flex-end;
+}
+:where(.ops-page-fill_orders) .fill-car-filter-row .fill-car-filter-field {
+  flex: 1 1 0;
+  min-width: 0;
+}
+:where(.ops-page-fill_orders) .fill-car-filter-row .fill-car-filter-type {
+  flex: 0 0 4.25rem;
+  max-width: 4.25rem;
+}
+:where(.ops-page-fill_orders) .fill-car-filter-row .form-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #6c757d;
+  margin-bottom: 0.1rem;
+}
+:where(.ops-page-fill_orders) .fill-car-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  margin-bottom: 0;
+}
+:where(.ops-page-fill_orders) .fill-car-sources .form-check {
+  margin-bottom: 0;
+  min-height: auto;
+}
+:where(.ops-page-fill_orders) .fill-car-sources .form-check-label {
+  font-size: 0.82rem;
+}
+:where(.ops-page-fill_orders) .fill-auto-assign-sources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+}
+:where(.ops-page-fill_orders) .fill-auto-assign-sources-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #6c757d;
+  flex-shrink: 0;
+}
+:where(.ops-page-fill_orders) .fill-auto-assign-sources .fill-car-sources {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+:where(.ops-page-fill_orders) .fill-auto-assign-sources .fill-filter-actions {
+  margin-top: 0;
+  flex: 0 0 auto;
+}
+:where(.ops-page-fill_orders) .fill-auto-assign-footer {
+  margin-top: auto;
+  padding-top: 0.75rem;
+  display: flex;
+  justify-content: flex-end;
+}
+:where(.ops-page-fill_orders) .fill-filter-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: 0.75rem;
+}
+:where(.ops-page-fill_orders) .order-card.filtered-out {
+  display: none;
+}
+@media (max-width: 991.98px) {
+  :where(.ops-page-fill_orders) .fill-orders-filters-row {
+    grid-template-columns: 1fr;
+  }
+}
+:where(.ops-page-fill_orders) .bi-chevron-down::before,
+:where(.ops-page-fill_orders) .bi-chevron-up::before {
+  font-size: 1.5rem;
+}
+
+/* Operations menu (operations.php), scoped via body.ops-page-operations */
+body:where(.ops-page-operations) {
+  background-color: #f8f9fa;
+}
+:where(.ops-page-operations) .section-header {
+  background-color: #2e7d32;
+  color: white;
+  font-weight: 600;
+  padding: 10px 16px;
+  border-radius: 6px 6px 0 0;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+:where(.ops-page-operations) .op-group {
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  overflow: hidden;
+  width: 100%;
+  min-width: 0;
+}
+:where(.ops-page-operations) .op-btn {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) 5.25rem;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #dee2e6;
+  background: #fff;
+  text-decoration: none;
+  color: #333;
+  transition: background-color 0.15s;
+  min-width: 0;
+}
+:where(.ops-page-operations) .op-btn:last-child {
+  border-bottom: none;
+}
+:where(.ops-page-operations) .op-btn:hover {
+  background-color: #f0fff4;
+  color: #333;
+  text-decoration: none;
+}
+:where(.ops-page-operations) .op-btn i.op-icon {
+  font-size: 1.4rem;
+  color: #2e7d32;
+  width: 26px;
+  justify-self: center;
+}
+:where(.ops-page-operations) .op-btn-body {
+  min-width: 0;
+}
+:where(.ops-page-operations) .op-btn-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.25;
+  overflow-wrap: break-word;
+}
+:where(.ops-page-operations) .op-btn-stat-cols {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding-left: 12px;
+  border-left: 1px solid #e9ecef;
+  box-sizing: border-box;
+  width: 5.25rem;
+  min-width: 5.25rem;
+  max-width: 5.25rem;
+}
+:where(.ops-page-operations) .op-btn-stat-cols-multi {
+  gap: 0;
+  padding-left: 8px;
+  overflow: hidden;
+}
+:where(.ops-page-operations) .op-btn-stat-cols-multi .op-stat-col {
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+}
+:where(.ops-page-operations) .op-btn-stat-cols-multi .op-stat-label {
+  font-size: 0.55rem;
+}
+:where(.ops-page-operations) .op-btn-stat-cols-multi .op-stat-value {
+  font-size: 0.9rem;
+}
+:where(.ops-page-operations) .op-stat-sep {
+  color: #ccc;
+  font-size: 0.7rem;
+  line-height: 1;
+  padding: 0 1px;
+  align-self: center;
+  flex-shrink: 0;
+}
+:where(.ops-page-operations) .op-stat-col {
+  text-align: center;
+  width: 100%;
+}
+:where(.ops-page-operations) .op-stat-label {
+  font-size: 0.65rem;
+  color: #888;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+:where(.ops-page-operations) .op-stat-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #2e7d32;
+  line-height: 1.2;
+  margin-top: 2px;
+}
+:where(.ops-page-operations) .ops-columns > .col {
+  min-width: 0;
+  display: flex;
+}
+@media (min-width: 768px) {
+  :where(.ops-page-operations) .ops-columns {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  :where(.ops-page-operations) .ops-columns > .col {
+    width: 100%;
+    max-width: 100%;
+  }
+}

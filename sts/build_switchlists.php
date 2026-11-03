@@ -6,7 +6,7 @@
     <title>STS - Build Switch Lists</title>
     <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="operations_ui.css?v=2" rel="stylesheet">
+    <link href="operations_ui.css?v=3" rel="stylesheet">
     <script src="operations_table_filters.js"></script>
     <style>
       tr {vertical-align: top;}

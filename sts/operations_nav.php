@@ -3,6 +3,8 @@
 // Defines the ordered step list, the green navbar, and the step bar.
 // Styles live in operations_ui.css.
 
+require_once __DIR__ . '/html_helpers.php';
+
 // Ordered workflow steps: file => [group, label, short label, icon]
 function ops_steps()
 {
@@ -20,7 +22,7 @@ function ops_steps()
 
 function ops_h($text)
 {
-    return htmlspecialchars((string)$text, ENT_QUOTES, 'UTF-8');
+    return sts_h($text);
 }
 
 // Green operations navbar. $extra_html is trusted markup (e.g. a Print button).

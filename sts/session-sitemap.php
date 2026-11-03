@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/open_db.php';
+require_once __DIR__ . '/html_helpers.php';
 $dbc = open_db();
 $trains = [];
 $res = $dbc->query('SELECT name FROM jobs ORDER BY name');
@@ -10,7 +11,7 @@ if ($res) {
 }
 $sample = $trains ? $trains[0] : 'JOB';
 $sampleEnc = rawurlencode($sample);
-function sm_h($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
+function sm_h($v) { return sts_h($v); }
 ?>
 <!DOCTYPE html>
 <html lang="en">
