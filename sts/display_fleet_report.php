@@ -65,7 +65,7 @@ if (isset($_GET['generate_report'])) {
 <?= $intro ?><br /><br />
 <table class="report-table" style="font: normal 10px Verdana, Arial, sans-serif; white-space: nowrap;">
   <thead>
-    <tr><th>Car<br />Code</th><th><u>Station</u><br />Location</th><th>Reporting<br />Marks</th><th>Status</th><th>Remarks</th></tr>
+    <tr style="background-color: #F5F5F5"><th>Car<br />Code</th><th><u>Station</u><br />Location</th><th>Reporting<br />Marks</th><th>Status</th><th>Remarks</th></tr>
   </thead>
   <tbody>
 <?php
