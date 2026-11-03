@@ -3,12 +3,12 @@ name: Plugin boundary
 on:
   push:
     paths:
-      - 'sts/**'
-      - 'bin/**'
+      - "sts/**"
+      - "bin/**"
   pull_request:
     paths:
-      - 'sts/**'
-      - 'bin/**'
+      - "sts/**"
+      - "bin/**"
 
 jobs:
   boundary:

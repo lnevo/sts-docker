@@ -15,16 +15,15 @@ status updates or in-flight work. Newest first.
 
 ## 2026-11-02 — Plugins moved to the sts-plugins repo; core is plugin-agnostic
 
-Addons (track_scale, coke_orders, and the planned HART layout) now live in the
+Addons (track*scale, coke_orders, and the planned HART layout) now live in the
 sibling `sts-plugins` repo and are bind-mounted onto `sts/plugins/`; the image
 ships that directory empty. Why: plugin changes were forcing edits across core
 files, and branches were standing in for a separation that did not exist. Rule:
 core (`sts/` minus `sts/plugins/`) must not name a plugin id, a plugin function,
 or a HART train, industry, location or shipment identifier. Core reaches plugins
-only through `plugins_*` helpers in `sts/plugin_registry.php`, and
-`bin/check_plugin_boundary.sh` enforces this in CI. New hooks land in core in
-their own commit before a plugin uses them. Contract:
-`docs/plans/plugin-hook-contract.md`.
+only through `plugins*\*`helpers in`sts/plugin_registry.php`, and
+`bin/check_plugin_boundary.sh`enforces this in CI. New hooks land in core in
+their own commit before a plugin uses them. Contract:`docs/plans/plugin-hook-contract.md`.
 
 ## 2026-07-16 — HART train blocks remain operationally independent
 

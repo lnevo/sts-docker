@@ -23,15 +23,15 @@ Written 2026-11-02 against `origin/active` (88642c7). Live container
 
 ## Leak inventory (core files referencing a specific plugin)
 
-| Core file | Leak | Fix |
-| --- | --- | --- |
-| `sts/session_helpers.php:579` | hard `require` of `plugins/track_scale/track_scale_helpers.php`, calls `track_scale_reset_cached_weights` | new `session_reset` hook |
-| `sts/warm_start_helpers.php` | 38 `track_scale_*` calls inside HART scenario functions | move with the HART scenario code (Phase 2) |
-| `sts/workflow-shared.js:968,1732` | hard-coded step ids `track_scale`, `calibrate_track_scale`, param `keep_coke` | catalog emits per-step `client_meta` (hidden params, title formatter); JS becomes generic |
-| `sts/track_scale.php`, `sts/track_scale_ajax.php` | root stubs | manifest `pages` key + generic `sts/plugin.php?id=&page=` router (or keep stubs, generated) |
-| `sts/operational_steps_catalog.openapi.generated.yaml` | 20 plugin entries in a committed generated file | generate core and per-plugin yaml separately, or exclude plugin steps |
-| `sts/operational_steps_catalog.php`, `drain_unfilled_orders.php`, `session_simulator_ops.php` | `keep_coke` / coke order params in core commands | move to `coke_orders` plugin via `normalize_params` + a new `order_filter` hook |
-| `sts/RUNTIME.md`, `sts/session-sitemap.html` | docs/links naming plugin pages | manifest-driven |
+| Core file                                                                                     | Leak                                                                                                      | Fix                                                                                         |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `sts/session_helpers.php:579`                                                                 | hard `require` of `plugins/track_scale/track_scale_helpers.php`, calls `track_scale_reset_cached_weights` | new `session_reset` hook                                                                    |
+| `sts/warm_start_helpers.php`                                                                  | 38 `track_scale_*` calls inside HART scenario functions                                                   | move with the HART scenario code (Phase 2)                                                  |
+| `sts/workflow-shared.js:968,1732`                                                             | hard-coded step ids `track_scale`, `calibrate_track_scale`, param `keep_coke`                             | catalog emits per-step `client_meta` (hidden params, title formatter); JS becomes generic   |
+| `sts/track_scale.php`, `sts/track_scale_ajax.php`                                             | root stubs                                                                                                | manifest `pages` key + generic `sts/plugin.php?id=&page=` router (or keep stubs, generated) |
+| `sts/operational_steps_catalog.openapi.generated.yaml`                                        | 20 plugin entries in a committed generated file                                                           | generate core and per-plugin yaml separately, or exclude plugin steps                       |
+| `sts/operational_steps_catalog.php`, `drain_unfilled_orders.php`, `session_simulator_ops.php` | `keep_coke` / coke order params in core commands                                                          | move to `coke_orders` plugin via `normalize_params` + a new `order_filter` hook             |
+| `sts/RUNTIME.md`, `sts/session-sitemap.html`                                                  | docs/links naming plugin pages                                                                            | manifest-driven                                                                             |
 
 ## Decisions (2026-11-02)
 
@@ -60,17 +60,17 @@ Rule after this phase: nothing under `sts/` outside the plugin directory may
 name a plugin id, a `track_scale_*`, `coke_orders_*` function, or a HART train or
 industry. CI enforces it.
 
-| # | Task | Model | Verify |
-| --- | --- | --- | --- |
-| 1.1 | Move registry to `sts/plugin_registry.php`; `sts/plugins/` becomes addon-only; add `STS_PLUGINS_DIR` env (default in-image dir) so plugins can be bind-mounted from another repo | sonnet | `php -l`, operations page renders Track Scale button |
-| 1.2 | Add hooks: `session_reset`, `order_filter`, `client_meta`; replace the session_helpers require and the JS hard-coding | Fable designs contract, sonnet implements | editor renders track_scale step titles identically; session restart still resets weights |
-| 1.3 | Manifest `pages` key + generic plugin page router; delete root stubs | sonnet | `/sts/track_scale.php` redirect or router returns same page |
-| 1.4 | Split generated OpenAPI into core + per-plugin files; regenerate | sonnet | Swagger UI loads both |
-| 1.5 | Move `keep_coke` and coke order filtering out of core catalog/drain/simulator into `coke_orders` | Fable | catalog test matrix round-trip passes; drain step output unchanged on hart_seed |
-| 1.6 | Boundary lint script `bin/check_plugin_boundary.sh` + CI job | haiku | script fails on current tree before 1.1–1.5, passes after |
-| 1.7 | Update `CLAUDE.md`, `AGENTS.md`, `sts/RUNTIME.md`, llm-wiki decisions log | haiku | lint passes |
-| 1.8 | Fix the four missing catalog test-matrix steps (pre-existing failure since 2026-07-15) and make `run_catalog_tests.sh` regenerate core-only | sonnet | `Catalog tests OK` |
-| 1.9 | Seed the workflow runner: `run_catalog_workflow.php` and the session simulator honour `STS_SIM_SEED` (one `mt_srand` at start) so sandbox runs are comparable | sonnet | two same-seed sandbox runs give identical `db.sql` |
+| #   | Task                                                                                                                                                                             | Model                                     | Verify                                                                                   |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 1.1 | Move registry to `sts/plugin_registry.php`; `sts/plugins/` becomes addon-only; add `STS_PLUGINS_DIR` env (default in-image dir) so plugins can be bind-mounted from another repo | sonnet                                    | `php -l`, operations page renders Track Scale button                                     |
+| 1.2 | Add hooks: `session_reset`, `order_filter`, `client_meta`; replace the session_helpers require and the JS hard-coding                                                            | Fable designs contract, sonnet implements | editor renders track_scale step titles identically; session restart still resets weights |
+| 1.3 | Manifest `pages` key + generic plugin page router; delete root stubs                                                                                                             | sonnet                                    | `/sts/track_scale.php` redirect or router returns same page                              |
+| 1.4 | Split generated OpenAPI into core + per-plugin files; regenerate                                                                                                                 | sonnet                                    | Swagger UI loads both                                                                    |
+| 1.5 | Move `keep_coke` and coke order filtering out of core catalog/drain/simulator into `coke_orders`                                                                                 | Fable                                     | catalog test matrix round-trip passes; drain step output unchanged on hart_seed          |
+| 1.6 | Boundary lint script `bin/check_plugin_boundary.sh` + CI job                                                                                                                     | haiku                                     | script fails on current tree before 1.1–1.5, passes after                                |
+| 1.7 | Update `CLAUDE.md`, `AGENTS.md`, `sts/RUNTIME.md`, llm-wiki decisions log                                                                                                        | haiku                                     | lint passes                                                                              |
+| 1.8 | Fix the four missing catalog test-matrix steps (pre-existing failure since 2026-07-15) and make `run_catalog_tests.sh` regenerate core-only                                      | sonnet                                    | `Catalog tests OK`                                                                       |
+| 1.9 | Seed the workflow runner: `run_catalog_workflow.php` and the session simulator honour `STS_SIM_SEED` (one `mt_srand` at start) so sandbox runs are comparable                    | sonnet                                    | two same-seed sandbox runs give identical `db.sql`                                       |
 
 ### Sandbox baseline findings (2026-11-02)
 
@@ -103,11 +103,11 @@ Split `warm_start_helpers.php` into:
   track-scale calls. Registers through `dispatch_handlers`, `stats`,
   `catalog_steps_callback` and new `warm_start_scenario` hook.
 
-| # | Task | Model | Verify |
-| --- | --- | --- | --- |
-| 2.1 | Function-by-function classification list (generic / HART) with callers | sonnet | reviewed by Fable |
+| #   | Task                                                                     | Model  | Verify                                                                                                                    |
+| --- | ------------------------------------------------------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------- |
+| 2.1 | Function-by-function classification list (generic / HART) with callers   | sonnet | reviewed by Fable                                                                                                         |
 | 2.2 | Mechanical move per the list, keep function names (aliases where needed) | sonnet | `php -l`; `sts-helpers/bin/run_session_simulations.sh` stats report byte-identical to a baseline captured before the move |
-| 2.3 | Replace cross-calls with hooks; remove HART names from core | Fable | boundary lint passes; simulation parity holds |
+| 2.3 | Replace cross-calls with hooks; remove HART names from core              | Fable  | boundary lint passes; simulation parity holds                                                                             |
 
 Baseline first: run the session simulation and catalog tests on the current
 image and keep the output under `sts-docker-data/backups/baseline-2026-11/`.
@@ -128,13 +128,13 @@ image and keep the output under `sts-docker-data/backups/baseline-2026-11/`.
   simulator, track scale, warm start, reports) on a throwaway compose stack
   before replacing the live container.
 
-| # | Task | Model |
-| --- | --- | --- |
-| 3.1 | Merge + resolve 8 conflicts | Fable |
-| 3.2 | Build 8.4 image on a second compose project, `php -l` sweep, phpstan | sonnet |
-| 3.3 | Smoke click-through + simulation parity vs Phase 2 baseline | sonnet, Fable signs off |
-| 3.4 | Rebuild live container | Fable |
-| 3.5 | Replace the CDN links our newer pages still carry with the vendored assets upstream added (14 files incl. the track-scale plugin page) | sonnet |
+| #   | Task                                                                                                                                   | Model                   |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| 3.1 | Merge + resolve 8 conflicts                                                                                                            | Fable                   |
+| 3.2 | Build 8.4 image on a second compose project, `php -l` sweep, phpstan                                                                   | sonnet                  |
+| 3.3 | Smoke click-through + simulation parity vs Phase 2 baseline                                                                            | sonnet, Fable signs off |
+| 3.4 | Rebuild live container                                                                                                                 | Fable                   |
+| 3.5 | Replace the CDN links our newer pages still carry with the vendored assets upstream added (14 files incl. the track-scale plugin page) | sonnet                  |
 
 Merge landed on branch `merge-upstream` (b13c7ef, stacked on `hart-layout`).
 All eight conflicts were CDN-to-vendored asset swaps on pages our UI work had
