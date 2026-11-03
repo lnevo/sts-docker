@@ -20,6 +20,7 @@
         })
         .then(function (html) {
           content.innerHTML = html;
+          if (opt.onLoaded) opt.onLoaded(content);
           card.scrollIntoView({ behavior: 'smooth' });
         })
         .catch(function (err) {
