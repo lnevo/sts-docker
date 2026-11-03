@@ -28,17 +28,17 @@ HTML,
       if (isset($_GET['fix_it_btn']))
       {
         // go through the incoming rows and fix the selected cars
-        for ($i=0; $i<$_GET['row_counter']; $i++)
+        for ($i=0; $i<(int) sts_get('row_counter'); $i++)
         {
           if (isset($_GET['load_or_cancel' . $i]))
           {
-            if ($_GET['load_or_cancel' . $i] == 'load')
+            if (sts_get('load_or_cancel' . $i) == 'load')
             {
-              print '<br />Fixing ' . $_GET['car_name' . $i] . '... Setting status to Loaded...';
+              print '<br />Fixing ' . sts_html(sts_get('car_name' . $i)) . '... Setting status to Loaded...';
               // set the car's current status to loaded
-              $sql = 'update cars set status = "Loaded" where id = ' . $_GET['car_id' . $i];
+              $sql = 'update cars set status = "Loaded" where id = ?';
 //print 'SQL: ' . $sql . '<br />';
-              if (!mysqli_query($dbc, $sql))
+              if (!sts_q($dbc, $sql, array(sts_id(sts_get('car_id' . $i)))))
               {
                 print 'Unable to update car current location<br />';
                 print '</div>'; sts_page_end(); die();
@@ -46,11 +46,11 @@ HTML,
             }
             else
             {
-              print '<br />Fixing ' . $_GET['car_name' . $i] . '... Cancelling waybill ' . $_GET['waybill_number' . $i] . '...';
+              print '<br />Fixing ' . sts_html(sts_get('car_name' . $i)) . '... Cancelling waybill ' . sts_html(sts_get('waybill_number' . $i)) . '...';
               // Cancel the waybill associated with this car
-              $sql = 'delete from car_orders where waybill_number = "' . $_GET['waybill_number' . $i] . '"';
+              $sql = 'delete from car_orders where waybill_number = ?';
 //print 'SQL: ' . $sql . '<br />';
-              if (!mysqli_query($dbc, $sql))
+              if (!sts_q($dbc, $sql, array(sts_get('waybill_number' . $i))))
               {
                 print 'Unable to update car current location<br />';
                 print '</div>'; sts_page_end(); die();

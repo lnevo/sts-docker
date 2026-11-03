@@ -31,7 +31,11 @@ sts_page_start([
                                last_spotted int(11)"];
 
       // if the Import button was clicked, process the uploaded file
-      if (isset($_POST['import']))
+      if (isset($_POST['import']) && !isset($col_clause[sts_post('table')]))
+      {
+        print '<div class="alert alert-danger">Unknown import table. Nothing was imported.</div>';
+      }
+      elseif (isset($_POST['import']))
       {
         $target_dir = 'uploads/';
         $import_dir = getcwd() . '/uploads/';
@@ -51,23 +55,23 @@ sts_page_start([
         {
           if (move_uploaded_file($_FILES['import_file']['tmp_name'], $target_file))
           {
-            print basename( $_FILES['import_file']['name']). ' successfully uploaded.<br /><br />';
+            print sts_html(basename( $_FILES['import_file']['name'])). ' successfully uploaded.<br /><br />';
 
             // get a database connection
             $dbc = open_db();
 
             // check to see if this is an append or a replace operation
-            if ($_POST['add_replace'] == 'replace')
+            if (sts_post('add_replace') == 'replace')
             {
               // remove the existing car data
-              $sql = 'truncate table ' . $_POST['table'];
+              $sql = 'truncate table ' . sts_ident(sts_post('table'));
               if (!mysqli_query($dbc, $sql))
               {
-                print 'Truncate error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+                print 'Truncate error: ' . sts_html(mysqli_error($dbc)) . ' SQL: ' . $sql . '<br /><br />';
               }
               else
               {
-                print 'Existing ' . $_POST['table'] . ' data removed...<br /><br />';
+                print 'Existing ' . sts_html(sts_post('table')) . ' data removed...<br /><br />';
               }
             }
             
@@ -76,10 +80,10 @@ sts_page_start([
             $result = mysqli_query($dbc, $sql);
             
 //            $sql = 'create table import_table (' . $col_clause[$_POST['table']] . ', primary key (Id))';
-            $sql = 'create table import_table (' . $col_clause[$_POST['table']] . ')';
+            $sql = 'create table import_table (' . $col_clause[sts_post('table')] . ')';
             if (!mysqli_query($dbc, $sql))
             {
-              print 'Create error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+              print 'Create error: ' . sts_html(mysqli_error($dbc)) . ' SQL: ' . $sql . '<br /><br />';
             }
             else
             {
@@ -95,7 +99,7 @@ sts_page_start([
             
 //            if (!mysqli_query($dbc, $sql))
 //            {
-//              print 'Load Data error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+//              print 'Load Data error: ' . sts_html(mysqli_error($dbc)) . ' SQL: ' . $sql . '<br /><br />';
 //            }
 //            else
 //            {
@@ -118,18 +122,20 @@ sts_page_start([
             {
               // start building the sql insert command
               $sql = 'insert into import_table values (';
+              $import_params = array();
               
               // build the rest of the sql insert command
               for ($i=0; $i<count($import_line); $i++)
               {
                 // deal with cars that don't have current locations before trying to transfer
                 // the data from the import_table to the cars table
-                if (($_POST['table'] == 'cars') && (strlen(trim($import_line[3])) == 0))
+                if ((sts_post('table') == 'cars') && (strlen(trim($import_line[3])) == 0))
                 {
                   $import_line[3] = '1';
                 }
                 // append the value to the insert command
-                $sql .= '"' . $import_line[$i] . '", ';
+                $sql .= '?, ';
+                $import_params[] = $import_line[$i];
               }
               // get rid of the final comma
               $sql = rtrim($sql, ', ');
@@ -138,9 +144,9 @@ sts_page_start([
 //print 'Insert Command: ' . $sql . '<br />';
 
               // insert the record into the temporary table
-              if (!mysqli_query($dbc, $sql))
+              if (!sts_q($dbc, $sql, $import_params))
               {
-                print 'Insert Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+                print 'Insert Error: ' . sts_html(sts_err($dbc)) . ' SQL: ' . $sql . '<br /><br />';
                 die;
               }
             }
@@ -148,13 +154,13 @@ sts_page_start([
 //die;
             // based on which file was imported, try to convert alpha codes to the corresponding numeric codes for
             // some of the columns in the locations, shipments, and cars tables
-            switch ($_POST['table'])
+            switch (sts_post('table'))
             {
               case "locations":
                 $sql = 'update import_table, routing set import_table.station = routing.id where import_table.station = routing.station';
                 if (!mysqli_query($dbc, $sql))
                 {
-                  print 'Update error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+                  print 'Update error: ' . sts_html(mysqli_error($dbc)) . ' SQL: ' . $sql . '<br /><br />';
                 }
                 else
                 {
@@ -168,7 +174,7 @@ sts_page_start([
                 $sql = 'update import_table, commodities set import_table.consignment = commodities.id where import_table.consignment = commodities.code';
                 if (!mysqli_query($dbc, $sql))
                 {
-                  print 'Update error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+                  print 'Update error: ' . sts_html(mysqli_error($dbc)) . ' SQL: ' . $sql . '<br /><br />';
                 }
                 else
                 {
@@ -180,7 +186,7 @@ sts_page_start([
                 $sql = 'update import_table, car_codes set import_table.car_code = car_codes.id where import_table.car_code = car_codes.code';
                 if (!mysqli_query($dbc, $sql))
                 {
-                  print 'Update error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+                  print 'Update error: ' . sts_html(mysqli_error($dbc)) . ' SQL: ' . $sql . '<br /><br />';
                 }
                 else
                 {
@@ -192,7 +198,7 @@ sts_page_start([
                 $sql = 'update import_table, locations set import_table.loading_location = locations.id where import_table.loading_location = locations.code';
                 if (!mysqli_query($dbc, $sql))
                 {
-                  print 'Update error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+                  print 'Update error: ' . sts_html(mysqli_error($dbc)) . ' SQL: ' . $sql . '<br /><br />';
                 }
                 else
                 {
@@ -204,7 +210,7 @@ sts_page_start([
                 $sql = 'update import_table, locations set import_table.unloading_location = locations.id where import_table.unloading_location = locations.code';
                 if (!mysqli_query($dbc, $sql))
                 {
-                  print 'Update error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+                  print 'Update error: ' . sts_html(mysqli_error($dbc)) . ' SQL: ' . $sql . '<br /><br />';
                 }
                 else
                 {
@@ -218,7 +224,7 @@ sts_page_start([
                 $sql = 'update import_table, car_codes set import_table.car_code_id = car_codes.id where import_table.car_code_id = car_codes.code';
                 if (!mysqli_query($dbc, $sql))
                 {
-                  print 'Update error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+                  print 'Update error: ' . sts_html(mysqli_error($dbc)) . ' SQL: ' . $sql . '<br /><br />';
                 }
                 else
                 {
@@ -230,7 +236,7 @@ sts_page_start([
                 $sql = 'update import_table, locations set import_table.current_location_id = locations.id where import_table.current_location_id = locations.code';
                 if (!mysqli_query($dbc, $sql))
                 {
-                  print 'Update error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+                  print 'Update error: ' . sts_html(mysqli_error($dbc)) . ' SQL: ' . $sql . '<br /><br />';
                 }
                 else
                 {
@@ -239,7 +245,7 @@ sts_page_start([
                 $sql = 'update import_table, locations set import_table.home_location = locations.id where import_table.home_location = locations.code';
                 if (!mysqli_query($dbc, $sql))
                 {
-                  print 'Update error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+                  print 'Update error: ' . sts_html(mysqli_error($dbc)) . ' SQL: ' . $sql . '<br /><br />';
                 }
                 else
                 {
@@ -255,7 +261,7 @@ sts_page_start([
             $sql = 'update import_table set id = 0';
             if (!mysqli_query($dbc, $sql))
             {
-              print 'Update import_table error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+              print 'Update import_table error: ' . sts_html(mysqli_error($dbc)) . ' SQL: ' . $sql . '<br /><br />';
             }
             else
             {
@@ -263,10 +269,10 @@ sts_page_start([
             }
 //die;            
             // copy the rows in the import table into the appropriate table
-            $sql = 'insert into ' . $_POST['table'] .  ' select * from import_table';
+            $sql = 'insert into ' . sts_ident(sts_post('table')) .  ' select * from import_table';
             if (!mysqli_query($dbc, $sql))
             {
-              print 'Insert into Select from error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+              print 'Insert into Select from error: ' . sts_html(mysqli_error($dbc)) . ' SQL: ' . $sql . '<br /><br />';
             }
             else
             {
@@ -276,7 +282,7 @@ sts_page_start([
             $sql = 'drop table import_table';
             if (!mysqli_query($dbc, $sql))
             {
-              print 'Drop table error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+              print 'Drop table error: ' . sts_html(mysqli_error($dbc)) . ' SQL: ' . $sql . '<br /><br />';
             }
             else
             {

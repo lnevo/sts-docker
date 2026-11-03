@@ -37,6 +37,25 @@
     }
   }
 
+  // page output has already started by the time a job is removed, so a Location header
+  // would be ignored: send it only if still possible, otherwise redirect from the page itself
+  if (!function_exists('sts_redirect_to_job_list'))
+  {
+    function sts_redirect_to_job_list()
+    {
+      $target = 'db_list.php?tbl_name=jobs';
+      if (!headers_sent())
+      {
+        header('Location: ' . $target);
+        exit();
+      }
+      print '<meta http-equiv="refresh" content="0;url=' . $target . '">';
+      print '<script>window.location.replace("' . $target . '");</script>';
+      print '<p>Job removed. <a href="' . $target . '">Return to the Job Management page</a></p>';
+      exit();
+    }
+  }
+
   $obj_name = sts_get('obj_name');
   $prev_obj_name = sts_get('prev_obj_name', null);
 
@@ -78,8 +97,7 @@
         // only an existing job's step table may be dropped
         if (!$job_known)
         {
-          header('Location: db_list.php?tbl_name=jobs');
-          exit();
+          sts_redirect_to_job_list();
         }
         $sql = 'drop table ' . sts_ident($obj_name);
         if (!mysqli_query($dbc, $sql))
@@ -90,8 +108,7 @@
         else
         {
         // if the drop was successful, return to the list_jobs page
-          header('Location: db_list.php?tbl_name=jobs');
-          exit();
+          sts_redirect_to_job_list();
         }
       }
     }

@@ -18,27 +18,27 @@ sts_page_start([
       if (isset($_POST['submit']))
       {
         // if there is something in the owner's name text box, insert it into the owners table
-        if (isset($_POST['new_name']) and (strlen(trim($_POST['new_name'])) > 0))
+        if (isset($_POST['new_name']) and (strlen(trim(sts_post('new_name'))) > 0))
         {
-          $sql = 'insert into owners (name, remarks) values ("' . $_POST['new_name'] . '", "' . $_POST['new_rmks'] . '")';
-          if (!$rtncd = mysqli_query($dbc, $sql))
+          $sql = 'insert into owners (name, remarks) values (?, ?)';
+          if (!$rtncd = sts_q($dbc, $sql, array(sts_post('new_name'), sts_post('new_rmks'))))
           {
             print 'Unable to insert new record into owners table';
-            print '<br />SQL: ' . $sql;
+            print '<br />SQL: ' . sts_html($sql);
           }
         }
         
         // run through all of the table rows and either delete the row from the database if it's checkbox is checked
         // or update the row with the contents of the two text boxes
-        $row_count = $_POST['row_count'];
+        $row_count = (int) sts_post('row_count');
         for ($i = 0; $i < $row_count; $i++)
         {
           // look to see if the row's delete checkbox is checked
           if (isset($_POST['delete' . $i]))
           {
             // if so, delete the row from the owners table
-            $sql = 'delete from owners where id = ' . $_POST['owner' . $i];
-            if (!$rtncd = mysqli_query($dbc, $sql))
+            $sql = 'delete from owners where id = ?';
+            if (!$rtncd = sts_q($dbc, $sql, array(sts_id(sts_post('owner' . $i)))))
             {
               print 'Unable to delete row ' . $i . ' from owners table';
             }
@@ -46,8 +46,8 @@ sts_page_start([
           else
           {
             // otherwise update the name and remarks fields
-            $sql = 'update owners set name = "' . $_POST['name' . $i] . '", remarks = "' . $_POST['rmks' . $i] . '" where id = ' . $_POST['owner' . $i];
-            if (!$rtncd = mysqli_query($dbc, $sql))
+            $sql = 'update owners set name = ?, remarks = ? where id = ?';
+            if (!$rtncd = sts_q($dbc, $sql, array(sts_post('name' . $i), sts_post('rmks' . $i), sts_id(sts_post('owner' . $i)))))
             {
               print 'Unable to update row ' . $i . ' in owners table';
             }
@@ -102,10 +102,10 @@ sts_page_start([
         {
           print '<tr>
                    <td>
-                     <input type="text" id="name' . $row_count . '" name="name' . $row_count . '" value="' . $row[1] . '" class="form-control form-control-sm">
+                     <input type="text" id="name' . $row_count . '" name="name' . $row_count . '" value="' . sts_html($row[1]) . '" class="form-control form-control-sm">
                    </td>
                    <td>
-                     <input type="text" id="rmks' . $row_count . '" name="rmks' . $row_count . '" value="' . $row[2] . '" size="80" class="form-control form-control-sm">
+                     <input type="text" id="rmks' . $row_count . '" name="rmks' . $row_count . '" value="' . sts_html($row[2]) . '" size="80" class="form-control form-control-sm">
                    </td>
                    <td>
                      <input type="checkbox" id="delete' . $row_count . '"name="delete' . $row_count . '"> Delete

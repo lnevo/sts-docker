@@ -31,9 +31,9 @@ sts_page_start(['title' => 'Car History', 'icon' => 'bi-clock-history', 'section
                from cars
                left join car_codes on cars.car_code_id = car_codes.id
                left join locations on cars.current_location_id = locations.id
-               where cars.id = "' . $_GET["car_id"] . '"';
+               where cars.id = ?';
 //print 'SQL: ' . $sql . '<br /><br />';
-      $rs = mysqli_query($dbc, $sql);
+      $rs = sts_q($dbc, $sql, array(sts_id(sts_get('car_id'))));
       $row = mysqli_fetch_array($rs);
       $reporting_marks = $row['reporting_marks'];
       $car_code = $row['car_code'];
@@ -54,9 +54,9 @@ sts_page_start(['title' => 'Car History', 'icon' => 'bi-clock-history', 'section
                      locations.code as location
                 from history
                 left join locations on history.location = locations.id
-                where history.car_id = "' . $_GET["car_id"] . '"
+                where history.car_id = ?
                 order by history.event_date desc';
-      $rs = mysqli_query($dbc, $sql);
+      $rs = sts_q($dbc, $sql, array(sts_id(sts_get('car_id'))));
       if (mysqli_num_rows($rs))
       {
         // print report header
@@ -75,22 +75,22 @@ sts_page_start(['title' => 'Car History', 'icon' => 'bi-clock-history', 'section
                  <thead>
                    <tr>
                      <td style="text-align: center; border: 0px;" colspan="8">
-                       <h2>' . $rr_name . '</h2>
+                       <h2>' . sts_html($rr_name) . '</h2>
                        <h3>Car History - Newest Events First</h3>
                      </td>
                    </tr>
                    <tr>
                      <td>
-                       Reporting Marks: ' . $reporting_marks . '
+                       Reporting Marks: ' . sts_html($reporting_marks) . '
                      </td>
                      <td>
-                       Car Type: ' . $car_code . '
+                       Car Type: ' . sts_html($car_code) . '
                      </td>
                      <td>
-                       Status: ' . $status . '
+                       Status: ' . sts_html($status) . '
                      </td>
                      <td>
-                       Current Location: ' . $location_code . '
+                       Current Location: ' . sts_html($location_code) . '
                      </td>
                    </tr>
                  </thead>';
@@ -106,10 +106,10 @@ sts_page_start(['title' => 'Car History', 'icon' => 'bi-clock-history', 'section
         while ($row = mysqli_fetch_array($rs))
         {
           print '<tr>
-                   <td style="text-align: center;">' . $row["session_number"] . '</td>
-                   <td style="text-align: center;">' . $row["event_date"] . '</td>
-                   <td style="text-align: center;">' . $row["event"] . '</td>
-                   <td style="text-align: center;">' . $row["location"] . '</td>
+                   <td style="text-align: center;">' . sts_html($row["session_number"]) . '</td>
+                   <td style="text-align: center;">' . sts_html($row["event_date"]) . '</td>
+                   <td style="text-align: center;">' . sts_html($row["event"]) . '</td>
+                   <td style="text-align: center;">' . sts_html($row["location"]) . '</td>
                  </tr>';
         }
 

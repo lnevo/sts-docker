@@ -9,12 +9,12 @@
   require 'set_colors.php';
 
   // get the incoming parameter
-  $job = $_REQUEST['job'];
-  $default_loc = $_REQUEST['default_loc'];
+  $job = isset($_REQUEST['job']) && is_scalar($_REQUEST['job']) ? (string) sts_id($_REQUEST['job']) : '0';
+  $default_loc = isset($_REQUEST['default_loc']) && is_scalar($_REQUEST['default_loc']) ? (string) $_REQUEST['default_loc'] : '';
 
   // get this job's instructions
-  $sql = 'select name, description from jobs where id = "' . $job . '"';
-  $rs = mysqli_query($dbc, $sql);
+  $sql = 'select name, description from jobs where id = ?';
+  $rs = sts_q($dbc, $sql, array($job));
   $row = mysqli_fetch_array($rs);
   $job_name = $row['name'];
 
@@ -49,19 +49,19 @@
                     left join locations pickup_loc on pickup_loc.id = pickup_history.location
                     left join routing pickup_sta on pickup_sta.id = pickup_loc.station
                    where pickup_history.car_id = cars.id
-                     and pickup_history.event = "Picked up by Job ' . $job_name . '"
+                     and pickup_history.event = ?
                    order by pickup_history.event_date desc
                    limit 1) as pickup_station,
                  (select pickup_loc.code
                     from history pickup_history
                     left join locations pickup_loc on pickup_loc.id = pickup_history.location
                    where pickup_history.car_id = cars.id
-                     and pickup_history.event = "Picked up by Job ' . $job_name . '"
+                     and pickup_history.event = ?
                    order by pickup_history.event_date desc
                    limit 1) as pickup_location,
                  car_codes.code as car_code,
                  commodities.code as consignment,
-                 `' . $job_name . '`.step_number as step_number
+                 ' . sts_ident($job_name) . '.step_number as step_number
 
           from cars
 
@@ -75,15 +75,20 @@
           left join routing sta03 on sta03.id = loc03.station
           left join car_codes on car_codes.id = cars.car_code_id
           left join commodities on commodities.id = shipments.consignment
-          left join `' . $job_name . '` on `' . $job_name . '`.station = sta01.id
+          left join ' . sts_ident($job_name) . ' on ' . sts_ident($job_name) . '.station = sta01.id
 
-          where cars.handled_by_job_id = "' . $job . '"
+          where cars.handled_by_job_id = ?
             and cars.current_location_id = 0
 
           group by reporting_marks
           order by pickup_station, pickup_location, position, reporting_marks';
 //print 'SQL: ' . $sql . '<br /><br />';
-  $rs = mysqli_query($dbc, $sql);
+  $rs = sts_q($dbc, $sql, array('Picked up by Job ' . $job_name, 'Picked up by Job ' . $job_name, $job));
+  if (!$rs)
+  {
+    echo 'No such job';
+    exit;
+  }
 
   // build a table and return it as a string
   $row_count = 0;
@@ -130,13 +135,13 @@
       if ($is_non_revenue)
       {
         // Non-revenue final destination is stored directly on the car order shipment field.
-        $sql2 = 'select code from locations where id = "' . $row['shipment'] . '"';
-        $rs2 = mysqli_query($dbc, $sql2);
+        $sql2 = 'select code from locations where id = ?';
+        $rs2 = sts_q($dbc, $sql2, array($row['shipment']));
         $row2 = mysqli_fetch_array($rs2);
         $non_revenue_unloading_location = $row2['code'];
 
-        $sql3 = 'select routing.station from routing, locations where locations.id = "' . $row['shipment'] . '" and routing.id = locations.station';
-        $rs3 = mysqli_query($dbc, $sql3);
+        $sql3 = 'select routing.station from routing, locations where locations.id = ? and routing.id = locations.station';
+        $rs3 = sts_q($dbc, $sql3, array($row['shipment']));
         $row3 = mysqli_fetch_array($rs3);
         $non_revenue_unloading_station = $row3['station'];
         $unloading_filter_station = $non_revenue_unloading_station;
@@ -218,7 +223,7 @@
       $data_table .= '<td>' . get_job_setout_locations($dbc, $job, $row_count, $default_loc) . '</td>';
 
       // column 2 - position of the car in the train
-      $data_table .= '<td>' . $row['position'] . '</td>';
+      $data_table .= '<td>' . sts_html($row['position']) . '</td>';
 
       // column 3 - reporting marks
       if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row['id'] . '.jpg'))
@@ -232,7 +237,7 @@
       $data_table .= '<td onclick="show_image(' . $parm_string . ');">' . $row['reporting_marks'] . '<input name="car' . $row_count . '" value="' . $row['id'] . '" type="hidden"></td>';
 
       // column 4 - car code
-      $data_table .= '<td>' . $row['car_code'] . '</td>';
+      $data_table .= '<td>' . sts_html($row['car_code']) . '</td>';
 
       // column 5 - loading location - if this is a non-revenue move, display N/A, otherwise display the loading location
       if ($is_non_revenue)
@@ -244,7 +249,7 @@
         // if the car status is Ordered, mark the loading location with bold letters
         if ($row['status'] == "Ordered")
         {
-          $data_table .= '<td style="' . set_colors($dbc, $row['loading_location']) . '"><b>' . $row['loading_station'] . '<br />' . $row['loading_location'] . '</b></td>';
+          $data_table .= '<td style="' . set_colors($dbc, $row['loading_location']) . '"><b>' . sts_html($row['loading_station']) . '<br />' . sts_html($row['loading_location']) . '</b></td>';
         }
         else if ($row['status'] == "Empty")
         {
@@ -252,12 +257,12 @@
         }
         else
         {
-          $data_table .= '<td>' . $row['loading_station'] . '<br />' . $row['loading_location'] . '</td>';
+          $data_table .= '<td>' . sts_html($row['loading_station']) . '<br />' . sts_html($row['loading_location']) . '</td>';
         }
       }
 
       // column 6 - status
-      $data_table .= '<td><span class="status-' . strtolower($row['status']) . '">' . $row['status'] . '</span></td>';
+      $data_table .= '<td><span class="status-' . strtolower($row['status']) . '">' . sts_html($row['status']) . '</span></td>';
 
       // column 7 - unloading location - if this is a non-revenue move, display it's final destination which is stored in the car order's shipment column
       if ($is_non_revenue)
@@ -269,7 +274,7 @@
         // if the car status is Loaded, mark the loading location with bold letters
         if ($row['status'] == "Loaded")
         {
-          $data_table .= '<td style="' . set_colors($dbc, $row['unloading_location']) . '"><b>' . $row['unloading_station'] . '<br />' . $row['unloading_location'] . '</b></td>';
+          $data_table .= '<td style="' . set_colors($dbc, $row['unloading_location']) . '"><b>' . sts_html($row['unloading_station']) . '<br />' . sts_html($row['unloading_location']) . '</b></td>';
         }
         else if ($row['status'] == "Empty")
         {
@@ -277,7 +282,7 @@
         }
         else
         {
-          $data_table .= '<td>' . $row['unloading_station'] . '<br />' . $row['unloading_location'] . '</td>';
+          $data_table .= '<td>' . sts_html($row['unloading_station']) . '<br />' . sts_html($row['unloading_location']) . '</td>';
         }
       }
 
@@ -288,7 +293,7 @@
       }
       else
       {
-        $data_table .= '<td>' . $row['consignment'] . '</td>';
+        $data_table .= '<td>' . sts_html($row['consignment']) . '</td>';
       }
 
       $data_table .= '</tr>';
@@ -310,8 +315,8 @@
   function get_job_setout_locations($dbc, $job, $row_count, $default_loc)
   {
     // build a query to get the name linked to this job id
-    $sql = 'select name from jobs where id = "' . $job . '"';
-    $rs = mysqli_query($dbc, $sql);
+    $sql = 'select name from jobs where id = ?';
+    $rs = sts_q($dbc, $sql, array($job));
     $row = mysqli_fetch_array($rs);
     $job_name = $row['name'];
 
@@ -321,10 +326,10 @@
                    routing.sort_seq,
                    routing.station,
                    if (locations.id = routing.station_nbr, "Y", "N") as default_loc
-              from locations, routing, `' . $job_name . '`
-             where locations.station = `' . $job_name .'`.station
+              from locations, routing, ' . sts_ident($job_name) . '
+             where locations.station = ' . sts_ident($job_name) . '.station
                and routing.id = locations.station
-               and `' . $job_name . '`.setout = "T"
+               and ' . sts_ident($job_name) . '.setout = "T"
              order by routing.sort_seq, routing.station, locations.code';
 
     $rs = mysqli_query($dbc, $sql);
@@ -342,12 +347,12 @@
         {
           if ($row['default_loc'] == "Y")
           {
-            $station_list .= '<option value="' . $row['id'] . '">' . $row['station'] . ' - ' . $row['code'] . '</option>';
+            $station_list .= '<option value="' . sts_html($row['id']) . '">' . sts_html($row['station']) . ' - ' . sts_html($row['code']) . '</option>';
           }
         }
         else
         {
-          $station_list .= '<option value="' . $row['id'] . '">' . $row['station'] . ' - ' . $row['code'] . '</option>';
+          $station_list .= '<option value="' . sts_html($row['id']) . '">' . sts_html($row['station']) . ' - ' . sts_html($row['code']) . '</option>';
         }
       }
       if ($default_loc == 'Y')

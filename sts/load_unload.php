@@ -162,7 +162,7 @@
       if (isset($_POST['update_btn']))
       {
         // go through each of the rows from the incoming page and if it's checkbox was checked, update it's status
-        for ($i=0; $i<$_POST['row_count']; $i++)
+        for ($i=0; $i<(int) sts_post('row_count'); $i++)
         {
           $checkbox_name = "check" . $i;
           if (isset($_POST[$checkbox_name]))
@@ -170,39 +170,50 @@
             // determine each car's new status
             $car_name = 'car' . $i;
             $status_name = 'status' . $i;
+            $new_status = '';
 
-            if ($_POST[$status_name] == 'Loading')
+            // id 0 would match every unfilled car order, so a missing or invalid car id is skipped
+            if (sts_id(sts_post($car_name)) < 1)
+            {
+              continue;
+            }
+
+            if (sts_post($status_name) == 'Loading')
             {
               $new_status = 'Loaded';
             }
-            else if ($_POST[$status_name] == 'Unloading')
+            else if (sts_post($status_name) == 'Unloading')
             {
               $new_status = 'Empty';
 
               // for the cars with this new status, delete the car orders linked to them
-              $sql = 'delete from car_orders where car = "' . $_POST[$car_name]. '"';
-              if (!mysqli_query($dbc, $sql))
+              $sql = 'delete from car_orders where car = ?';
+              if (!sts_q($dbc, $sql, array(sts_id(sts_post($car_name)))))
               {
-                print 'Delete Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql;
+                print 'Delete Error: ' . sts_html(sts_err($dbc)) . ' SQL: ' . $sql;
               }
             }
-            else if ($_POST[$status_name] == 'Empty')
+            else if (sts_post($status_name) == 'Empty')
             {
               $new_status = "Empty";
               // this case is for non-revenue moves, ie: repositioning empty cars
               // for the cars with this new status, delete the car orders linked to them
-              $sql = 'delete from car_orders where car = "' . $_POST[$car_name]. '"';
-              if (!mysqli_query($dbc, $sql))
+              $sql = 'delete from car_orders where car = ?';
+              if (!sts_q($dbc, $sql, array(sts_id(sts_post($car_name)))))
               {
-                print 'Delete Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql;
+                print 'Delete Error: ' . sts_html(sts_err($dbc)) . ' SQL: ' . $sql;
               }
             }
 
-            // build an sql query to update each car's status
-            $sql = 'update cars set status = "' . $new_status . '", last_spotted = "0" where id = "' . $_POST[$car_name] . '"';
-            if (!mysqli_query($dbc, $sql))
+            // build an sql query to update each car's status (unrecognised status values are ignored)
+            if ($new_status === '')
             {
-              print 'Update Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql;
+              continue;
+            }
+            $sql = 'update cars set status = ?, last_spotted = "0" where id = ?';
+            if (!sts_q($dbc, $sql, array($new_status, sts_id(sts_post($car_name)))))
+            {
+              print 'Update Error: ' . sts_html(sts_err($dbc)) . ' SQL: ' . $sql;
             }
           }
         }
@@ -320,13 +331,13 @@
           {
             $consignment = 'Non-Revenue';
             $load_loc = 'N/A';
-            $unload_loc = $row['unloading_station'] . '<br />' . $row['unloading_location'];
+            $unload_loc = sts_html($row['unloading_station']) . '<br />' . sts_html($row['unloading_location']);
           }
           else
           {
-            $consignment = $row['consignment'];
-            $load_loc = $row['loading_station'] . '<br />' . $row['loading_location'];
-            $unload_loc = $row['unloading_station'] . '<br />' . $row['unloading_location'];
+            $consignment = sts_html($row['consignment']);
+            $load_loc = sts_html($row['loading_station']) . '<br />' . sts_html($row['loading_location']);
+            $unload_loc = sts_html($row['unloading_station']) . '<br />' . sts_html($row['unloading_location']);
           }
 
           $checkbox_name = 'check' . $row_count;
@@ -357,8 +368,8 @@
 
           // get the min & max load and unload times from the current shipment
           // if older shipments have empty or blank values in the min and max fields, convert them to a value of 1
-          $sql2 = 'select min_load_time, max_load_time, min_unload_time, max_unload_time from shipments where id = "' . $row['shipment'] . '"';
-          $rs2 = mysqli_query($dbc, $sql2);
+          $sql2 = 'select min_load_time, max_load_time, min_unload_time, max_unload_time from shipments where id = ?';
+          $rs2 = sts_q($dbc, $sql2, array($row['shipment']));
           $row2 = mysqli_fetch_array($rs2);
 
           if (strlen(trim($row2[0]))<1)
@@ -424,22 +435,22 @@
 
           print '<tr>
                    <td class="checkbox" style="' . $row_style . '">
-                     <input id="' . $checkbox_name . '" name="' . $checkbox_name . '" value="' . $row['id'] . '" type="checkbox" ' . $chk_box_val . '>
+                     <input id="' . $checkbox_name . '" name="' . $checkbox_name . '" value="' . sts_html($row['id']) . '" type="checkbox" ' . $chk_box_val . '>
                    </td>
                    <td style="' . $row_style . '">' .
-                     $row['current_station'] . '<br />' . $row['current_location'] . '
+                     sts_html($row['current_station']) . '<br />' . sts_html($row['current_location']) . '
                    </td>
                    <td style="' . $row_style . '">' .
-                     $row['position'] . '
+                     sts_html($row['position']) . '
                    </td>
                    <td style="' . $row_style . '" onclick="show_image(' . $parm_string . ');">' .
-                     $row['reporting_marks'] . '<input name="' . $car_name . '" value="' . $row[0] . '" type="hidden">
+                     sts_html($row['reporting_marks']) . '<input name="' . $car_name . '" value="' . $row[0] . '" type="hidden">
                    </td>
                    <td style="' . $row_style . '">' .
-                     $row['car_code'] . '
+                     sts_html($row['car_code']) . '
                    </td>
                    <td style="' . $row_style . '"><span class="status-' . strtolower($row['status']) . '">' .
-                     $row['status'] . '</span><input name="' . $status_name . '" value="' . $row['status'] . '" type="hidden">
+                     sts_html($row['status']) . '</span><input name="' . $status_name . '" value="' . sts_html($row['status']) . '" type="hidden">
                    </td>
                    <td style="' . $row_style . '">' .
                      $consignment . '
