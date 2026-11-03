@@ -64,7 +64,6 @@ sts_page_start(['title' => 'Car History', 'icon' => 'bi-clock-history', 'section
         print '<h3>Car History Report</h3>';
                
         print 'This report shows all car assignments, repositionings, pick-ups, and set-outs.<br /><br />';
-        print '';
         print 'Click <a href="db_list.php?tbl_name=cars">here</a> to return to the Car List<br /><br />';
         print '<hr />
                </div>';

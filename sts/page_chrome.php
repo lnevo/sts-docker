@@ -44,6 +44,7 @@ function sts_h($value)
  *   head_extra  Raw HTML appended inside <head> (page-specific <link>/<style>/<script>).
  *   body_attrs  Raw attributes for <body>, e.g. 'onload="..."'. Caller escapes.
  *   container   'fluid' (default) or 'narrow' (max-width 960px, centred).
+ *   nav         false omits the navbar (popup windows).
  */
 function sts_page_start(array $opts = [])
 {
@@ -65,7 +66,7 @@ function sts_page_start(array $opts = [])
     echo '  <title>STS - ' . sts_h($title) . "</title>\n";
     echo "  <link href=\"vendor/bootstrap/bootstrap.min.css\" rel=\"stylesheet\">\n";
     echo "  <link href=\"vendor/bootstrap-icons/bootstrap-icons.min.css\" rel=\"stylesheet\">\n";
-    echo "  <link href=\"page_chrome.css\" rel=\"stylesheet\">\n";
+    echo "  <link href=\"page_chrome.css?v=2\" rel=\"stylesheet\">\n";
     if (!empty($opts['head_extra'])) {
         echo $opts['head_extra'] . "\n";
     }
@@ -73,6 +74,12 @@ function sts_page_start(array $opts = [])
     echo '<body class="sts-page sts-section-' . sts_h($section_key) . '"'
         . (!empty($opts['body_attrs']) ? ' ' . $opts['body_attrs'] : '') . ">\n";
 
+    if (array_key_exists('nav', $opts) && $opts['nav'] === false) {
+        // Popup windows (image upload/remove) get no navbar: following a link
+        // would navigate the popup away from its opener.
+        echo '<main class="' . $container . " sts-page-body pt-3\">\n";
+        return;
+    }
     echo '<nav class="navbar navbar-dark noprint mb-3 ' . sts_h($section['nav_class']) . "\">\n";
     echo "  <div class=\"container-fluid sts-navbar-inner\">\n";
     echo '    <span class="navbar-brand"><i class="bi ' . sts_h($icon) . '"></i> ' . sts_h($title) . "</span>\n";
@@ -103,8 +110,14 @@ function sts_page_nav_link($href, $label, $icon = '')
 /** Close the content wrapper and the document; loads the vendored JS. */
 function sts_page_end()
 {
-    echo "</main>\n";
-    echo "<script src=\"vendor/bootstrap/bootstrap.bundle.min.js\"></script>\n";
-    echo "<script src=\"vendor/jquery/jquery-3.6.0.min.js\"></script>\n";
-    echo "</body>\n</html>\n";
+    echo sts_page_end_html();
+}
+
+/** The closing markup as a string, for die()/exit paths that print a message. */
+function sts_page_end_html()
+{
+    return "</main>\n"
+        . "<script src=\"vendor/bootstrap/bootstrap.bundle.min.js\"></script>\n"
+        . "<script src=\"vendor/jquery/jquery-3.6.0.min.js\"></script>\n"
+        . "</body>\n</html>\n";
 }

@@ -202,7 +202,7 @@ sts_page_start([
         }
         else
         {
-          print '<div class="alert alert-warning">Car with ID ' . $_GET['scan_code'] . ' not found. Check spelling.</div>';
+          print '<div class="alert alert-warning">Car with ID ' . sts_h($_GET['scan_code']) . ' not found. Check spelling.</div>';
         }
       }
     ?>

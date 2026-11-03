@@ -54,7 +54,7 @@ sts_page_start([
           if (!$rtncd = mysqli_query($dbc, $sql))
           {
             print 'Unable to insert record into temporary table';
-            print $sql; die();
+            print '</div>'; sts_page_end(); die();
           }
         }
 

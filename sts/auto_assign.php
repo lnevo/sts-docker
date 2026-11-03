@@ -1,4 +1,5 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
   <head>
     <title>STS - Auto-Assign Cars to Jobs/Trains</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,8 +13,8 @@
       th {border: 1px solid black; padding: 10px}
       td {border: 1px solid black; padding: 10px}
     </style>
-  </head>';
-  <body>';
+  </head>
+  <body>
     <?php
     require_once 'operations_nav.php';
     echo ops_render_navbar('build_switchlists.php', 'Auto-Assign Cars', 'bi-list-check');

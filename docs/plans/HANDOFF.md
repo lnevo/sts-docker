@@ -73,16 +73,16 @@ Read this first when starting a session on the STS work. Last updated
   - About 45 legacy pages (data editors, club, report forms, maintenance) use
     `page_chrome.php`; hubs share `hub.css`. Conventions are in
     `llm-wiki/ui-conventions.md` 4.10.
-- Still legacy, next candidates: the `printable_*` print layouts and their
-  `display_*` forms (fold into the single-file `?generate_report=1` pattern),
-  the `db_list_*`/`db_edit_*` include bodies (shells are modern, bodies still
-  inject headings with JS), large inline `<style>` blocks on the step pages
-  (`fill_orders.php` 268 lines) that could move into `operations_ui.css`, and
-  `operational_steps_api.php` (no Bootstrap or viewport). Nothing browser-tested
-  on a tablet yet.
-- Orphans to confirm and delete: `assign_car.php`, `fix_win2linux.php`,
-  `manage_cargo.php`, `session-pages.css`; `operations.html` is now only a
-  redirect stub with no inbound links.
+- No Home or hub cards for sessions: Sessions and Session Editor are
+  navbar buttons on the operations hub and every step page.
+- `assign_car.php`, `fix_win2linux.php`, `manage_cargo.php` and
+  `session-pages.css` were removed after a search of all three repos, the
+  stored session output and the access log found no reference.
+- Next: [2026-11-03-roadmap-v2-convergence.md](2026-11-03-roadmap-v2-convergence.md)
+  covers Phase 1 fixes and cleanups (SQL injection in the CRUD family, dead
+  files, duplicate helpers, remaining legacy pages), the behaviour fixes v2
+  already made, additive schema convergence toward v2, a data-access layer,
+  and the port-or-stay decision with Aaron.
 - Pre-existing, untouched: `sts/db_edit.php` requires a missing
   `db_edit_waybills.php`; the QR and barcode libraries live outside `sts/`
   (phpstan cannot see them); a few include fragments and CLI scripts fatal when
