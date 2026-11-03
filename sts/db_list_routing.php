@@ -21,14 +21,12 @@
   if (isset($_POST['update_btn']))
   {
     // yes, so check to see if there is anything in the input text boxes
-    if (strlen($_POST['station_name']) > 0)
+    if (strlen(sts_post('station_name')) > 0)
     {
       // add the new station code to the routing table
       // station_nbr is now used to identify the default set-out location for each particular station
-      $sql = 'insert into routing (station, station_nbr, instructions, sort_seq, color1, color2)
-              values ("' . $_POST['station_name'] . '", 0, "' . $_POST['instructions'] . '", "' . intval($_POST['sort_seq']) . '", 0, 0)';
-
-      $rs = mysqli_query($dbc, $sql);
+      sts_q($dbc, 'insert into routing (station, station_nbr, instructions, sort_seq, color1, color2) values (?, 0, ?, ?, 0, 0)',
+            array(sts_post('station_name'), sts_post('instructions'), intval(sts_post('sort_seq'))));
     }
   }
 
@@ -71,10 +69,10 @@
     while ($row = mysqli_fetch_array($rs))
     {
       print '<tr>
-               <td><a href="db_edit.php?tbl_name=routing&obj_id=' . $row['id'] . '&obj_name=' . $row['station'] . '">' . $row['station'] . '</a></td>
-               <td>' . $row['instructions'] . '</td>
-               <td style="text-align: center;">' . $row['sort_seq'] . '</td>
-               <td>' . $row['code'] . '</td>
+               <td><a href="db_edit.php?tbl_name=routing&obj_id=' . sts_html($row['id']) . '&obj_name=' . urlencode($row['station']) . '">' . sts_html($row['station']) . '</a></td>
+               <td>' . sts_html($row['instructions']) . '</td>
+               <td style="text-align: center;">' . sts_html($row['sort_seq']) . '</td>
+               <td>' . sts_html($row['code']) . '</td>
              </tr>';
     }
   }

@@ -1,4 +1,5 @@
 <?php
+  require_once __DIR__ . '/sql_safe.php';
   // standard routine to open a connection to the sts database
   // the connection to the database is stored in $dbc
 

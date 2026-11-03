@@ -21,7 +21,7 @@ sts_page_start(['title' => 'Edit Database Object', 'icon' => 'bi-pencil-square',
       require 'drop_down_list_functions.php';
 
       // pull in the table to be hooked to this page
-      $tbl_name = $_GET['tbl_name'];
+      $tbl_name = sts_get('tbl_name');
 
       // generate the <form> tag
       print '<form method="get" action="db_edit.php">'; print "\n";
@@ -81,7 +81,15 @@ sts_page_start(['title' => 'Edit Database Object', 'icon' => 'bi-pencil-square',
           require 'db_edit_cars.php';
           break;
         case 'waybills':
-          require 'db_edit_waybills.php';
+          // the waybill editor is not shipped with this install
+          if (is_file(__DIR__ . '/db_edit_waybills.php'))
+          {
+            require 'db_edit_waybills.php';
+          }
+          else
+          {
+            print '<p>Waybill editing is not available.</p>';
+          }
           break;
         case 'jobs':
           require 'db_edit_jobs.php';

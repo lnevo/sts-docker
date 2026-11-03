@@ -84,7 +84,7 @@ sts_page_start([
       // and if it's being taken off the railroad, clean up any car order, location, etc... information
       if (isset($_POST['update']))
       {
-        for ($i = 0; $i < $_POST['row_count']; $i++)
+        for ($i = 0; $i < intval(sts_post('row_count')); $i++)
         {
           // take a look at each checkbox
           if (isset($_POST['check' . $i]))
@@ -92,19 +92,17 @@ sts_page_start([
             // if the checkbox is checked, take a look at the car's on_off_rr flag to see if we need to add it to the railroad
             // -- if the car is off the railroad, mark it as on the railroad and restore it's status from the ownership table
             // -- if the status is anything else, it is still on the railroad so don't do anything
-            if ($_POST['on_off_rr' . $i] != 'on')
+            if (sts_post('on_off_rr' . $i) != 'on')
             {
               // run a query to restore the car's status from what's in the on_off_rr field of the ownership table
               // this removes the "Unavailable" flag in it's status field
-              $sql = 'update cars set status = "' . $_POST['on_off_rr' . $i] . '" where id = ' . $_POST['car_id' . $i];
-              if (!$rtncd = mysqli_query($dbc, $sql))
+              if (!$rtncd = sts_q($dbc, 'update cars set status = ? where id = ?', array(sts_post('on_off_rr' . $i), sts_id(sts_post('car_id' . $i)))))
               {
                 print 'Unable to restore car status';
               }
               
               // update the car's on_off_rr flag to indicate that the car is back on the railroad
-              $sql = 'update ownership set on_off_rr = "on" where car_id = "' . $_POST['car_id' . $i] . '"';
-              if (!$rtncd = mysqli_query($dbc,$sql))
+              if (!$rtncd = sts_q($dbc, 'update ownership set on_off_rr = "on" where car_id = ?', array(sts_id(sts_post('car_id' . $i)))))
               {
                 print 'Unable to move car back onto the railroad';
               }
@@ -116,18 +114,16 @@ sts_page_start([
             // -- if the car's on_off_rr flag isn't "on", that means that the car is off the railroad so don't do anything
             // -- if the car's status is anything else, it needs to be removed from the railroad so save it's current status
             //    in the on_off_rr field of the ownership table
-            if ($_POST['on_off_rr' . $i] == 'on')
+            if (sts_post('on_off_rr' . $i) == 'on')
             {
               // save the car's current status in the on_off_rr field
-              $sql = 'update ownership set on_off_rr = "' . $_POST['status' . $i] . '" where ownership.car_id = "' . $_POST['car_id' . $i] . '"';
-              if (!$rtncd = mysqli_query($dbc, $sql))
+              if (!$rtncd = sts_q($dbc, 'update ownership set on_off_rr = ? where ownership.car_id = ?', array(sts_post('status' . $i), sts_id(sts_post('car_id' . $i)))))
               {
                 print 'Unable to update car on_off_rr status';
               }
               
               // set the car's status to "Unavailable"
-              $sql = 'update cars set status = "Unavailable" where id = ' . $_POST['car_id' . $i];
-              if (!$rtncd = mysqli_query($dbc, $sql))
+              if (!$rtncd = sts_q($dbc, 'update cars set status = "Unavailable" where id = ?', array(sts_id(sts_post('car_id' . $i)))))
               {
                 print 'Unable to move car off the railroad';
               }
@@ -142,7 +138,7 @@ sts_page_start([
       {
         // if the owner selected is "ALL", display all of the cars, otherwise display those
         // owned by the person selected
-        if ($_POST['selected_owner'] == 'ALL')
+        if (sts_post('selected_owner') == 'ALL')
         {
           $sql = 'select distinct cars.id as car_id,
                          cars.reporting_marks as reporting_marks,
@@ -180,7 +176,7 @@ sts_page_start([
                     left join locations loc02 on cars.home_location = loc02.id
                     left join ownership on ownership.car_id = cars.id
                     left join owners on owners.id = ownership.owner_id
-                    where ownership.owner_id = ' . $_POST['selected_owner'] . '
+                    where ownership.owner_id = ' . sts_id(sts_post('selected_owner')) . '
                     order by cars.reporting_marks';
         }
       }
@@ -221,7 +217,7 @@ sts_page_start([
       print '<option value="ALL">ALL</option>';
       for ($i = 0; $i < $owner_count; $i++)
       {
-        print '<option value="' . $owners[$i][0] . '">' . $owners[$i][1] . '</option>';
+        print '<option value="' . sts_html($owners[$i][0]) . '">' . sts_html($owners[$i][1]) . '</option>';
       }
       print '</select>';
       print '&nbsp;';
@@ -262,32 +258,32 @@ sts_page_start([
         }
         
         // generate one row per car
-        if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row['car_id'] . '.jpg'))
+        if (file_exists('./ImageStore/DB_Images/RollingStock/' . sts_html($row['car_id']) . '.jpg'))
         {
-          $parm_string = '\'' . $row['car_id'] . '\', \'' . $row['reporting_marks'] . '\'';
+          $parm_string = '\'' . sts_html(addslashes($row['car_id'])) . '\', \'' . sts_html(addslashes($row['reporting_marks'])) . '\'';
         }
         else
         {
-          $parm_string = '\'\',\'' . $row['reporting_marks'] . '\'';
+          $parm_string = '\'\',\'' . sts_html(addslashes($row['reporting_marks'])) . '\'';
         }
         print '<tr>';
-        print '  <td>' . $row['owners_name'] . '</td>
+        print '  <td>' . sts_html($row['owners_name']) . '</td>
                  <td style="text-align: center;">
                    <input type="checkbox" id="check' . $row_count . '" name="check' . $row_count . '"' . $checked . '>
                  </td>
                  <td onclick="show_image(' . $parm_string . ');">' . 
-                   $row['reporting_marks'] . '
-                   <input type="hidden" id="car_id' . $row_count . '" name="car_id' . $row_count . '" value="' . $row['car_id'] . '"
+                   sts_html($row['reporting_marks']) . '
+                   <input type="hidden" id="car_id' . $row_count . '" name="car_id' . $row_count . '" value="' . sts_html($row['car_id']) . '">
                  </td>
-                 <td style="text-align: center;">' . $row['car_code'] . '</td>
+                 <td style="text-align: center;">' . sts_html($row['car_code']) . '</td>
                  <td>' . 
-                   $row['status'] . '
-                   <input type="hidden" id="status' . $row_count . '" name="status' . $row_count . '" value="' . $row['status'] . '">
-                   <input type="hidden" id="on_off_rr' . $row_count . '" name="on_off_rr' . $row_count . '" value = "' . $row['on_off_rr'] . '">
+                   sts_html($row['status']) . '
+                   <input type="hidden" id="status' . $row_count . '" name="status' . $row_count . '" value="' . sts_html($row['status']) . '">
+                   <input type="hidden" id="on_off_rr' . $row_count . '" name="on_off_rr' . $row_count . '" value = "' . sts_html($row['on_off_rr']) . '">
                  </td>
-                 <td>' . $row['current_location'] . '</td>
-                 <td>' . $row['job_name'] . '</td>
-                 <td>' . $row['home_location'] . '</td>
+                 <td>' . sts_html($row['current_location']) . '</td>
+                 <td>' . sts_html($row['job_name']) . '</td>
+                 <td>' . sts_html($row['home_location']) . '</td>
                </tr>';
         $row_count++;
       }

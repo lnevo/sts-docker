@@ -9,7 +9,9 @@
   require 'set_colors.php';
 
   // get the incoming parameter
-  $station = urldecode($_REQUEST['station']);
+  $station = urldecode(isset($_REQUEST['station']) && is_scalar($_REQUEST['station']) ? $_REQUEST['station'] : '');
+  // the station is either 'all' or a routing id: coerce so it can never carry SQL
+  if ($station !== 'all') { $station = (string) sts_id($station); }
   $all_stations = ($station === 'all');
 
   if ($all_stations)
