@@ -21,12 +21,11 @@
   if (isset($_POST['update_btn']))
   {
     // yes, so check to see if there is anything in the input text boxes
-    if (strlen($_POST['commodity_code']) > 0)
+    if (strlen(sts_post('commodity_code')) > 0)
     {
       // add the new commodity to the commodities table
-      $sql = 'insert into commodities (code, description, remarks)
-              values ("' . $_POST['commodity_code'] . '", "' . $_POST['description'] . '", "' . $_POST['remarks'] . '")';
-      $rs = mysqli_query($dbc, $sql);
+      sts_q($dbc, 'insert into commodities (code, description, remarks) values (?, ?, ?)',
+            array(sts_post('commodity_code'), sts_post('description'), sts_post('remarks')));
     }
   }
 
@@ -62,9 +61,9 @@
     while ($row = mysqli_fetch_array($rs))
     {
       print '<tr>
-               <td><a href="db_edit.php?tbl_name=commodities&obj_id=' . $row['id'] . '&obj_name=' . $row['code'] . '">' . $row['code'] . '</a></td>
-               <td>' . $row['description'] . '</td>
-               <td>' . $row['remarks'] . '</td>
+               <td><a href="db_edit.php?tbl_name=commodities&obj_id=' . sts_html($row['id']) . '&obj_name=' . urlencode($row['code']) . '">' . sts_html($row['code']) . '</a></td>
+               <td>' . sts_html($row['description']) . '</td>
+               <td>' . sts_html($row['remarks']) . '</td>
              </tr>';
     }
   }

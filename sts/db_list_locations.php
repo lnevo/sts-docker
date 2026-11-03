@@ -32,19 +32,12 @@
   if (isset($_POST['update_btn']))
   {
     // yes, so check to see if there is anything in the first input text box
-    if (strlen($_POST['code']) > 0)
+    if (strlen(sts_post('code')) > 0)
     {
       // add the new location to the locations table
-      $sql = 'insert into locations (code, station, track, spot, rpt_station, remarks, color)
-	                        values ("' . $_POST['code'] . '",
-                                  "' . $_POST['station'] . '",
-                                  "' . $_POST['track'] . '",
-                                  "' . $_POST['spot'] . '",
-                                  "' . $_POST['rpt_station'] . '",
-                                  "' . $_POST['remarks'] . '",
-                                  "' . $_POST['color'] . '")';
-//print $sql;
-      $rs = mysqli_query($dbc, $sql);
+      sts_q($dbc, 'insert into locations (code, station, track, spot, rpt_station, remarks, color) values (?, ?, ?, ?, ?, ?, ?)',
+            array(sts_post('code'), sts_post('station'), sts_post('track'), sts_post('spot'),
+                  sts_post('rpt_station'), sts_post('remarks'), sts_post('color')));
     }
   }
 
@@ -105,13 +98,13 @@
     while ($row = mysqli_fetch_array($rs))
     {
       print '<tr>';
-      print '  <td>' . $row['station'] . '</td>';
-      print '  <td><a href="db_edit.php?tbl_name=locations&obj_id=' . $row['id'] . '&obj_name=' . $row['code'] . '">' . $row['code'] . '</a></td>';
-      print '  <td>' . $row['track'] . '</td>';
-      print '  <td>' . $row['spot'] . '</td>';
-      print '  <td>' . $row['rpt_station'] . '</td>';
-      print '  <td>' . $row['remarks'] . '</td>';
-      print '  <td style="background-color: ' . $row['color'] . '"></td>';
+      print '  <td>' . sts_html($row['station']) . '</td>';
+      print '  <td><a href="db_edit.php?tbl_name=locations&obj_id=' . sts_html($row['id']) . '&obj_name=' . urlencode($row['code']) . '">' . sts_html($row['code']) . '</a></td>';
+      print '  <td>' . sts_html($row['track']) . '</td>';
+      print '  <td>' . sts_html($row['spot']) . '</td>';
+      print '  <td>' . sts_html($row['rpt_station']) . '</td>';
+      print '  <td>' . sts_html($row['remarks']) . '</td>';
+      print '  <td style="background-color: ' . sts_html($row['color']) . '"></td>';
       print '</tr>';
     }
   }

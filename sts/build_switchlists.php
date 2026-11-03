@@ -76,7 +76,7 @@
       if ((isset($_POST['build_btn'])) && (isset($_POST['row_count'])))
       {
         // get the number of rows that were on the page
-        $row_count = $_POST['row_count'];
+        $row_count = intval(sts_post('row_count'));
         $num_cars_assigned = 0;
 
         // mark the cars selected for pickup by the user
@@ -87,15 +87,14 @@
           $car_name = 'car' . $i;
 
           // does the drop-down list have a job name in it?
-          if (isset($_POST[$list_name]) && strlen($_POST[$list_name]) > 0)
+          if (isset($_POST[$list_name]) && strlen(sts_post($list_name)) > 0)
           {
             // build a query to update the car's "handled_by" field
-            $sql = 'update cars set handled_by_job_id = "' . $_POST[$list_name];
-            $sql = $sql . '" where id = "' . $_POST[$car_name] . '"';
-
-            if(!mysqli_query($dbc, $sql))
+            $post_job_id = sts_id(sts_post($list_name));
+            $post_car_id = sts_id(sts_post($car_name));
+            if(!sts_q($dbc, 'update cars set handled_by_job_id = ? where id = ?', array($post_job_id, $post_car_id)))
             {
-              print 'Update Error: ' . mysqli_error($dbc) . ' SQL: ' . $sql;
+              print 'Update Error: ' . sts_html(sts_err($dbc));
             }
             else
             {
@@ -108,28 +107,19 @@
             $row = mysqli_fetch_array($rs);
             $session_nbr = $row['setting_value'];
 
-            $sql = 'select current_location_id from cars where id = "' . $_POST[$car_name] . '"';
-            $rs = mysqli_query($dbc, $sql);
+            $rs = sts_q($dbc, 'select current_location_id from cars where id = ?', array($post_car_id));
             $row = mysqli_fetch_array($rs);
             $location = $row['current_location_id'];
 
-            $sql = 'select name from jobs where id = ' . $_POST[$list_name];
-//print 'SQL: ' . $sql . ' $_POST[$list_name]; ' . $_POST[$list_name] . '<br /><br />';
-            $rs = mysqli_query($dbc, $sql);
+            $rs = sts_q($dbc, 'select name from jobs where id = ?', array($post_job_id));
             $row = mysqli_fetch_array($rs);
             $job_name = $row['name'];
 
             // insert a car history record
-            $sql = 'insert into history(car_id, session_nbr, event_date, event, location)
-                    values ("' . $_POST[$car_name] . '",
-                            "' . $session_nbr . '",
-                            "' . date("Y-m-d H:i:s") . '",
-                            "Assigned to Job ' . $job_name . '",
-                            "' . $location . '")';
-
-            if (!mysqli_query($dbc, $sql))
+            if (!sts_q($dbc, 'insert into history(car_id, session_nbr, event_date, event, location) values (?, ?, ?, ?, ?)',
+                       array($post_car_id, $session_nbr, date("Y-m-d H:i:s"), 'Assigned to Job ' . $job_name, $location)))
             {
-              print 'Insert error: ' . mysqli_error($dbc) . ' SQL: ' . $sql . '<br /><br />';
+              print 'Insert error: ' . sts_html(sts_err($dbc)) . '<br /><br />';
             }
           }
         }

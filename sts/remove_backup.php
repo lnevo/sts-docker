@@ -1,5 +1,6 @@
 <?php
 require_once 'page_chrome.php';
+require_once 'sql_safe.php';
 sts_page_start([
     'title' => 'Remove Backup Database',
     'icon' => 'bi-trash',
@@ -34,10 +35,18 @@ HTML,
       if (isset($_GET['remove_btn']))
       {
         // check to see if the user selected a backup file to be removed
-        if (isset($_GET['remove_name']))
+        // the name must be a plain file name that exists in the backups directory
+        $remove_name = sts_get('remove_name');
+        $remove_ok = ($remove_name !== '') && ($remove_name === basename($remove_name))
+                     && (preg_match('/^[A-Za-z0-9][A-Za-z0-9 _.\-]*$/', $remove_name) === 1)
+                     && is_file('./backups/' . $remove_name);
+        if (isset($_GET['remove_name']) && !$remove_ok)
+        {
+          print 'Invalid backup name.<br /><br />';
+        }
+        if (isset($_GET['remove_name']) && $remove_ok)
         {
           // check to see if a subdirectory of photos exists for this backup file
-          $remove_name = $_GET['remove_name'];
           $remove_dir = './backups/' . $remove_name . '_photos';
           if (file_exists($remove_dir))
           {
@@ -56,14 +65,14 @@ HTML,
             }
             // delete the photo backup directory
             rmdir($remove_dir);
-            print 'Photo backup directory ' . $remove_dir . ' removed...<br /><br />';
+            print 'Photo backup directory ' . sts_html($remove_dir) . ' removed...<br /><br />';
           }
           
           // delete the backup file if it exists
           if (file_exists('./backups/' . $remove_name))
           {
             unlink('./backups/' . $remove_name);
-            print $remove_name . ' backup file removed.<br /><br />';
+            print sts_html($remove_name) . ' backup file removed.<br /><br />';
           }
         }
       }
@@ -84,8 +93,8 @@ HTML,
           if (is_file('./backups/' . $name))
           {
             print '<tr>
-                     <td><input name="remove_name" value="' . $name . '" type="radio" onclick="enable_remove_btn();"></td>
-                     <td>' . $name . '</td>
+                     <td><input name="remove_name" value="' . sts_html($name) . '" type="radio" onclick="enable_remove_btn();"></td>
+                     <td>' . sts_html($name) . '</td>
                    </tr>';
           }
         }

@@ -21,12 +21,11 @@
   if (isset($_POST['update_btn']))
   {
     // yes, so check to see if there is anything in the input text boxes
-    if (strlen($_POST['car_code']) > 0)
+    if (strlen(sts_post('car_code')) > 0)
     {
       // add the new car code to the car code table
-      $sql = 'insert into car_codes (code, description, remarks)
-              values ("' . $_POST['car_code'] . '", "' . $_POST['description'] . '", "' . $_POST['remarks'] . '")';
-      $rs = mysqli_query($dbc, $sql);
+      sts_q($dbc, 'insert into car_codes (code, description, remarks) values (?, ?, ?)',
+            array(sts_post('car_code'), sts_post('description'), sts_post('remarks')));
     }
   }
 
@@ -63,9 +62,9 @@
     while ($row = mysqli_fetch_array($rs))
     {
       print '<tr>
-               <td><a href="db_edit.php?tbl_name=car_codes&obj_id=' . $row['id'] . '&obj_name=' . $row['code'] . '">' . $row['code'] . '</a></td>
-               <td>' . $row['description'] . '</td>
-               <td>' . $row['remarks'] . '</td>
+               <td><a href="db_edit.php?tbl_name=car_codes&obj_id=' . sts_html($row['id']) . '&obj_name=' . urlencode($row['code']) . '">' . sts_html($row['code']) . '</a></td>
+               <td>' . sts_html($row['description']) . '</td>
+               <td>' . sts_html($row['remarks']) . '</td>
              </tr>';
     }
   }

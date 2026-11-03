@@ -22,19 +22,32 @@
   if (isset($_POST['update_btn']))
   {
     // yes, so check to see if there is anything in the input text boxes
-    if (strlen($_POST['name']) > 0)
+    if (strlen(sts_post('name')) > 0)
     {
-      // add the new job to the car code table
-      $sql = 'insert into jobs (name, description) values ("' . $_POST['name'] . '", "' . $_POST['description'] . '")';
-      $rs = mysqli_query($dbc, $sql);
+      $job_name = sts_post('name');
 
-      // create the new job step table
-      $sql = 'create table `' . $_POST['name'] . '` ';
-      $sql .='(step_number int primary key, station int, pickup char(1), setout char(1), remarks varchar(256))';
-
-      if (!mysqli_query($dbc, $sql))
+      // the job name also becomes a table name (DDL cannot be parameterised),
+      // so only a conservative character set is accepted
+      if (!preg_match('/^[A-Za-z0-9](?:[A-Za-z0-9 _.\-]{0,62}[A-Za-z0-9_.\-])?$/D', $job_name))
       {
-        $sql_msg = 'SQL error: ' . mysqli_error($dbc) . ' [' . $sql . ']';
+        $sql_msg = '<br />Job names may only contain letters, numbers, spaces, underscores, periods and hyphens (64 characters maximum, starting with a letter or number).';
+      }
+      else
+      {
+        // create the new job step table
+        $sql = 'create table ' . sts_ident($job_name) . ' ';
+        $sql .='(step_number int primary key, station int, pickup char(1), setout char(1), remarks varchar(256))';
+
+        if (!mysqli_query($dbc, $sql))
+        {
+          $sql_msg = 'SQL error: ' . sts_html(mysqli_error($dbc));
+        }
+        else
+        {
+          // add the new job to the jobs table
+          sts_q($dbc, 'insert into jobs (name, description) values (?, ?)',
+                array($job_name, sts_post('description')));
+        }
       }
     }
   }
@@ -66,8 +79,8 @@
     while ($row = mysqli_fetch_array($rs))
     {
       print '<tr>
-               <td><a href="db_edit.php?tbl_name=jobs&obj_id=' . $row['id'] . '&obj_name=' . urlencode($row['name']) . '">' . $row['name'] . '</td>
-               <td>' . nl2br($row['description']) . '</td>
+               <td><a href="db_edit.php?tbl_name=jobs&obj_id=' . sts_html($row['id']) . '&obj_name=' . urlencode($row['name']) . '">' . sts_html($row['name']) . '</td>
+               <td>' . nl2br(sts_html($row['description'])) . '</td>
              </tr>';
     }
   }

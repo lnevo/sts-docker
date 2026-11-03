@@ -1,5 +1,6 @@
 <?php
 require_once 'page_chrome.php';
+require_once 'sql_safe.php';
 sts_page_start(['title' => 'Import Rolling Stock Image', 'icon' => 'bi-image', 'section' => 'data', 'back_href' => '', 'nav' => false,
   'head_extra' => '<script>window.onunload = refreshParent; function refreshParent() { window.opener.location.reload(); }</script>']);
 ?>
@@ -8,14 +9,18 @@ sts_page_start(['title' => 'Import Rolling Stock Image', 'icon' => 'bi-image', '
       // check to see if the upload button was clicked
       if (isset($_POST['upload_btn']))
       {
+        // the image file name is built from the car id: accept a conservative character set only (no path parts)
+        $obj_name_in = basename(sts_post('obj_name'));
+        $name_ok = (preg_match('/^[A-Za-z0-9_\-]{1,64}$/', $obj_name_in) === 1) && ($obj_name_in === sts_post('obj_name'));
+
         // check to see if this is image 1 or image 2
-        if ($_POST['image'] == 1)
+        if (sts_post('image') == 1)
         {
-          $obj_file_name = $_POST['obj_name'];
+          $obj_file_name = $obj_name_in;
         }
         else
         {
-          $obj_file_name = $_POST['obj_name'] . "b";
+          $obj_file_name = $obj_name_in . "b";
         }
         
         // set up the upload parameters
@@ -25,19 +30,25 @@ sts_page_start(['title' => 'Import Rolling Stock Image', 'icon' => 'bi-image', '
         $import_file = str_replace('\\','/',($import_dir . basename($_FILES['import_file']['name'])));
         $file_type = strtolower(pathinfo($target_file,PATHINFO_EXTENSION));
 //print 'target_dir = [' . $target_dir . ']<br />import_dir = [' . $import_dir . ']<br />target_file = [' . $target_file . ']<br />import_file = [' . $import_file . ']<br /><br \>';
-        // check if file already exists
-        if (file_exists($target_file))
+        // only allow files ending in ".jpg" that really are JPEG images, and only for a valid image name
+        $upload_name = isset($_FILES['import_file']['name']) ? (string) $_FILES['import_file']['name'] : '';
+        $upload_ext = strtolower(pathinfo($upload_name, PATHINFO_EXTENSION));
+        $img_info = (isset($_FILES['import_file']['tmp_name']) && is_uploaded_file($_FILES['import_file']['tmp_name'])) ? @getimagesize($_FILES['import_file']['tmp_name']) : false;
+        if (!$name_ok)
         {
-          // delete the old file
-          unlink($target_file);
+          print 'Invalid image name.';
         }
-
-        // only allow files ending in ".jpg"
-        if(($file_type == 'jpg') || ($file_type == 'jpeg'))
+        else if((($upload_ext == 'jpg') || ($upload_ext == 'jpeg')) && $img_info && $img_info['mime'] == 'image/jpeg')
         {
+          // check if file already exists
+          if (file_exists($target_file))
+          {
+            // delete the old file
+            unlink($target_file);
+          }
           if (move_uploaded_file($_FILES['import_file']['tmp_name'], $target_file))
           {
-            print 'Image file for ' . sts_h($_POST['obj_id']) . ' successfully uploaded.<br /><br />';
+            print 'Image file for ' . sts_h(sts_post('obj_id')) . ' successfully uploaded.<br /><br />';
           }
           else
           {
@@ -46,7 +57,7 @@ sts_page_start(['title' => 'Import Rolling Stock Image', 'icon' => 'bi-image', '
         }
         else
         {
-          print $import_file . ' is not the correct type. It must be a jpg file.';
+          print sts_h(basename($upload_name)) . ' is not the correct type. It must be a jpg file.';
         }
 //        print '<br />Click on the CLOSE button to return to the Edit Car screen. <input type="button" value="CLOSE" onclick="window.close();">';
         print '<br />Close this window to return to the Edit Car Screen';
