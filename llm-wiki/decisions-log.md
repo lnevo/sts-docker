@@ -5,7 +5,7 @@ load_when:
   you want the "why" behind a past decision, or you're about to make one worth
   recording
 owner: shared
-last_updated: 02/11/2026
+last_updated: 03/11/2026
 ---
 
 # Decisions Log
@@ -13,26 +13,79 @@ last_updated: 02/11/2026
 Append entries here when a decision lands — durable facts and reasoning only, no
 status updates or in-flight work. Newest first.
 
+## 2026-11-03 — API v1 with token auth and hierarchical roles
+
+Helpers and agents need a stable, authenticated surface, so STS exposes
+`/sts/api/v1` with bearer tokens and four roles (`reader` < `operator` <
+`editor` < `admin`). Why: driving STS through `docker exec` and raw SQL was
+fragile and unauthenticated. Reads and the legacy RFID wagon routes stay open by
+default (`STS_API_READ_OPEN=1`, `STS_API_LEGACY_OPEN=1`), because private
+network scanners and read-only dashboards need no token. Contract and deviations
+from it: [2026-11-03-api-v1.md](../docs/plans/2026-11-03-api-v1.md).
+
+## 2026-11-03 — API tokens live outside the database
+
+Token hashes are stored in `/var/lib/sts/api_tokens.json`, a bind mount of the
+host's `sts-docker-data/config`, never in a table. Why: a seed restore drops
+every table, so tokens kept in the database would vanish on each restore. Only
+SHA-256 hashes are stored, and the bootstrap admin token is written to a file on
+start for the helpers to read.
+
+## 2026-11-03 — Long-running work runs as background tasks
+
+Restore, warm start, session begin and play, workflow runs and the slow catalog
+commands return `202` with a task, and a detached runner records the status and
+log. Why: PHP and Apache request timeouts cannot cover a multi-session run. Only
+one exclusive task runs per stack, and other writes return 409 while it runs,
+because concurrent writes would corrupt a restore or a simulated session.
+
+## 2026-11-03 — Per-step role checks in workflow runs, not static recipe scans
+
+The role a workflow run needs is decided step by step as the run dispatches
+them, not by scanning the recipe up front. Why: the restore step in
+`hart_session` runs only at session 0, so a static scan blocks operators from
+runs that never reach it, and a run past session 0 should not need an admin
+token.
+
+## 2026-11-03 — The agent plugin lives in this repo under agent/
+
+The Claude Code plugin that drives the API (skill, MCP server, agents) is kept
+in `agent/` beside the API it wraps. Why: the API exists only in this fork, and
+the owner chose to keep the client next to it rather than in a separate repo.
+
+## 2026-11-03 — Aaron's v2 is not adopted; reference notes only
+
+STS stays on the v1 line. The notes on `milestone/v2` are kept for reference in
+[2026-11-03-v2-notes.md](../docs/plans/2026-11-03-v2-notes.md). Why: v2 has no
+tests, none of this fork's session, plugin or simulator work, and no extension
+point for plugins, so the roadmap does not converge on it.
+
+## 2026-11-03 — STS keeps its own style, separate from the HART website
+
+The STS UI follows its own conventions in [ui-conventions.md](ui-conventions.md)
+and does not copy the HART website's look. Why: the owner's decision; STS is an
+operating tool and its conventions are the reference for any page work.
+
 ## 2026-11-02 — Plugins moved to the sts-plugins repo; core is plugin-agnostic
 
-Addons (track*scale, coke_orders, and the planned HART layout) now live in the
+Addons (track_scale, coke_orders, and the planned HART layout) now live in the
 sibling `sts-plugins` repo and are bind-mounted onto `sts/plugins/`; the image
 ships that directory empty. Why: plugin changes were forcing edits across core
 files, and branches were standing in for a separation that did not exist. Rule:
 core (`sts/` minus `sts/plugins/`) must not name a plugin id, a plugin function,
 or a HART train, industry, location or shipment identifier. Core reaches plugins
-only through `plugins*\*`helpers in`sts/plugin_registry.php`, and
-`bin/check_plugin_boundary.sh`enforces this in CI. New hooks land in core in
-their own commit before a plugin uses them. Contract:`docs/plans/plugin-hook-contract.md`.
+only through `plugins_*` helpers in `sts/plugin_registry.php`, and
+`bin/check_plugin_boundary.sh` enforces this in CI. New hooks land in core in
+their own commit before a plugin uses them. Contract:
+`docs/plans/plugin-hook-contract.md`.
 
 ## 2026-07-16 — HART train blocks remain operationally independent
 
-The HART session workflow runs D749 Starting/Outbound, then NVL
-Outbound/Return, then CK1. This order is an operating constraint rather than a
-score-tuning variable: D749 and NVL must not wait for CK1, and CK1 may run
-independently later in the shift. Traffic tuning must optimize within this fixed
-sequence even when a simulated throughput score favors the former interleaved
-order.
+The HART session workflow runs D749 Starting/Outbound, then NVL Outbound/Return,
+then CK1. This order is an operating constraint rather than a score-tuning
+variable: D749 and NVL must not wait for CK1, and CK1 may run independently
+later in the shift. Traffic tuning must optimize within this fixed sequence even
+when a simulated throughput score favors the former interleaved order.
 
 ## 2026-07-10 — Vendored all legacy `sts/` frontend assets, dropped CDN links
 
@@ -43,8 +96,8 @@ fonts.googleapis.com). STS is designed for private-network use (see
 internet silently degraded — unstyled Bootstrap, fallback system fonts, no
 error. Downloaded the exact versions already in use into `sts/vendor/`
 (`bootstrap/`, `bootstrap-icons/`, `jquery/`, `fonts/lexend/`) and repointed
-every page at the local paths; the Dockerfile already `COPY`s all of `sts/`
-into the image, so no build/CI change was needed. See
+every page at the local paths; the Dockerfile already `COPY`s all of `sts/` into
+the image, so no build/CI change was needed. See
 [ui-conventions.md](ui-conventions.md) §1 — new pages must vendor any new
 frontend dependency the same way, never link a CDN.
 
