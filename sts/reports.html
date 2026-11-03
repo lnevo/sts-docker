@@ -7,84 +7,17 @@
   <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
   <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <link href="operating_session_line.css" rel="stylesheet">
-  <style>
-    body { background-color: #f8f9fa; }
-    .navbar-reports { background-color: #0000cc; }
-    .page-hero {
-      background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      overflow: hidden;
-    }
-    .hero-images {
-      display: flex;
-      flex-wrap: nowrap;
-      align-items: center;
-    }
-    .hero-images > div {
-      min-width: 0;
-      padding: 1rem;
-    }
-    .hero-sts { flex: 2 1 0; text-align: center; }
-    .hero-main { flex: 5 1 0; text-align: center; }
-    .hero-info { flex: 5 1 0; min-width: 0; }
-    .hero-logo {
-      display: block;
-      width: 100%;
-      max-width: 100%;
-      max-height: 110px;
-      object-fit: contain;
-    }
-    @media (max-width: 576px) {
-      .hero-images > div { padding: 0.5rem; }
-      .hero-logo { max-height: 72px; }
-      .hero-info h4 { font-size: 1rem; }
-      .hero-info p { font-size: 0.85rem; }
-    }
-    .menu-group {
-      border-radius: 6px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      overflow: hidden;
-      background: #fff;
-      height: 100%;
-    }
-    .section-header {
-      background-color: #0000cc;
-      color: white;
-      font-weight: 600;
-      padding: 10px 16px;
-      font-size: 0.95rem;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .menu-btn {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 14px 16px;
-      border-bottom: 1px solid #dee2e6;
-      background: #fff;
-      text-decoration: none;
-      color: #333;
-      transition: background-color 0.15s;
-    }
-    .menu-btn:last-child { border-bottom: none; }
-    .menu-btn:hover { background-color: #f2f4ff; color: #333; text-decoration: none; }
-    .menu-btn i.menu-icon { color: #0000cc; font-size: 1.4rem; width: 26px; flex-shrink: 0; }
-    .menu-btn-title { font-weight: 600; font-size: 0.95rem; line-height: 1.2; }
-    .menu-btn-desc { font-size: 0.8rem; color: #666; margin-top: 2px; }
-  </style>
+  <link href="hub.css" rel="stylesheet">
 </head>
 <body class="has-operating-session-line">
-  <nav class="navbar navbar-dark navbar-reports noprint">
+  <nav class="navbar navbar-dark bg-primary noprint">
     <div class="container-fluid">
       <span class="navbar-brand"><i class="bi bi-file-text"></i> Reports</span>
       <div>
         <a href="index.html" class="btn btn-outline-light btn-sm me-2">
           <i class="bi bi-house"></i> Home
         </a>
-        <a href="operations.html" class="btn btn-outline-light btn-sm me-2">
+        <a href="operations.php" class="btn btn-outline-light btn-sm me-2">
           <i class="bi bi-train-freight-front"></i> Operations
         </a>
         <a href="database.html" class="btn btn-outline-light btn-sm me-2">
@@ -117,25 +50,25 @@
       <div class="col-md-3">
         <div class="menu-group">
           <div class="section-header"><i class="bi bi-train-front"></i> Operations</div>
-          <a href="display_switchlist.php" class="menu-btn">
-            <i class="bi bi-list-check menu-icon"></i>
+          <a href="display_switchlist.php" class="menu-item">
+            <i class="bi bi-list-check menu-item-icon"></i>
             <div>
-              <div class="menu-btn-title">Switch Lists</div>
-              <div class="menu-btn-desc">Display switchlists for operating jobs</div>
+              <div class="menu-item-title">Switch Lists</div>
+              <div class="menu-item-desc">Display switchlists for operating jobs</div>
             </div>
           </a>
-          <a href="display_station_report.php" class="menu-btn">
-            <i class="bi bi-signpost-split menu-icon"></i>
+          <a href="display_station_report.php" class="menu-item">
+            <i class="bi bi-signpost-split menu-item-icon"></i>
             <div>
-              <div class="menu-btn-title">Station Car Report</div>
-              <div class="menu-btn-desc">Review cars currently at each station</div>
+              <div class="menu-item-title">Station Car Report</div>
+              <div class="menu-item-desc">Review cars currently at each station</div>
             </div>
           </a>
-          <a href="wheel_report.php" class="menu-btn">
-            <i class="bi bi-record-circle menu-icon"></i>
+          <a href="wheel_report.php" class="menu-item">
+            <i class="bi bi-record-circle menu-item-icon"></i>
             <div>
-              <div class="menu-btn-title">Wheel Report</div>
-              <div class="menu-btn-desc">Review car cycle and movement status</div>
+              <div class="menu-item-title">Wheel Report</div>
+              <div class="menu-item-desc">Review car cycle and movement status</div>
             </div>
           </a>
         </div>
@@ -144,25 +77,25 @@
       <div class="col-md-3">
         <div class="menu-group">
           <div class="section-header"><i class="bi bi-card-text"></i> Waybills</div>
-          <a href="display_waybill.php" class="menu-btn">
-            <i class="bi bi-file-earmark-text menu-icon"></i>
+          <a href="display_waybill.php" class="menu-item">
+            <i class="bi bi-file-earmark-text menu-item-icon"></i>
             <div>
-              <div class="menu-btn-title">Waybill List</div>
-              <div class="menu-btn-desc">Display waybills and fulfillment status</div>
+              <div class="menu-item-title">Waybill List</div>
+              <div class="menu-item-desc">Display waybills and fulfillment status</div>
             </div>
           </a>
-          <a href="printable_ccwaybill2.php" class="menu-btn">
-            <i class="bi bi-printer menu-icon"></i>
+          <a href="printable_ccwaybill2.php" class="menu-item">
+            <i class="bi bi-printer menu-item-icon"></i>
             <div>
-              <div class="menu-btn-title">Waybill Sheets for Cars</div>
-              <div class="menu-btn-desc">Printable car-card waybill sheets</div>
+              <div class="menu-item-title">Waybill Sheets for Cars</div>
+              <div class="menu-item-desc">Printable car-card waybill sheets</div>
             </div>
           </a>
-          <a href="printable_ccwaybill.php" class="menu-btn">
-            <i class="bi bi-printer-fill menu-icon"></i>
+          <a href="printable_ccwaybill.php" class="menu-item">
+            <i class="bi bi-printer-fill menu-item-icon"></i>
             <div>
-              <div class="menu-btn-title">Waybill Sheets for Shipments</div>
-              <div class="menu-btn-desc">Printable shipment waybill sheets</div>
+              <div class="menu-item-title">Waybill Sheets for Shipments</div>
+              <div class="menu-item-desc">Printable shipment waybill sheets</div>
             </div>
           </a>
         </div>
@@ -171,25 +104,25 @@
       <div class="col-md-3">
         <div class="menu-group">
           <div class="section-header"><i class="bi bi-graph-up"></i> Fleet and Forecasts</div>
-          <a href="display_fleet_report.php" class="menu-btn">
-            <i class="bi bi-boxcar-front menu-icon"></i>
+          <a href="display_fleet_report.php" class="menu-item">
+            <i class="bi bi-boxcar-front menu-item-icon"></i>
             <div>
-              <div class="menu-btn-title">Car Fleet Report</div>
-              <div class="menu-btn-desc">Summarize the active car fleet</div>
+              <div class="menu-item-title">Car Fleet Report</div>
+              <div class="menu-item-desc">Summarize the active car fleet</div>
             </div>
           </a>
-          <a href="shipment_forecast.php" class="menu-btn">
-            <i class="bi bi-calendar-event menu-icon"></i>
+          <a href="shipment_forecast.php" class="menu-item">
+            <i class="bi bi-calendar-event menu-item-icon"></i>
             <div>
-              <div class="menu-btn-title">Shipment Forecast</div>
-              <div class="menu-btn-desc">Forecast upcoming shipment demand</div>
+              <div class="menu-item-title">Shipment Forecast</div>
+              <div class="menu-item-desc">Forecast upcoming shipment demand</div>
             </div>
           </a>
-          <a href="car_forecast.php" class="menu-btn">
-            <i class="bi bi-calendar-check menu-icon"></i>
+          <a href="car_forecast.php" class="menu-item">
+            <i class="bi bi-calendar-check menu-item-icon"></i>
             <div>
-              <div class="menu-btn-title">Car Forecast</div>
-              <div class="menu-btn-desc">Forecast car requirements and availability</div>
+              <div class="menu-item-title">Car Forecast</div>
+              <div class="menu-item-desc">Forecast car requirements and availability</div>
             </div>
           </a>
         </div>
@@ -198,18 +131,18 @@
       <div class="col-md-3">
         <div class="menu-group">
           <div class="section-header"><i class="bi bi-qr-code"></i> QR Codes</div>
-          <a href="display_car_qr_report.php" class="menu-btn">
-            <i class="bi bi-upc-scan menu-icon"></i>
+          <a href="display_car_qr_report.php" class="menu-item">
+            <i class="bi bi-upc-scan menu-item-icon"></i>
             <div>
-              <div class="menu-btn-title">Car QR Codes</div>
-              <div class="menu-btn-desc">Printable QR sheets for cars</div>
+              <div class="menu-item-title">Car QR Codes</div>
+              <div class="menu-item-desc">Printable QR sheets for cars</div>
             </div>
           </a>
-          <a href="display_station_qr_code_report.php" class="menu-btn">
-            <i class="bi bi-geo-alt menu-icon"></i>
+          <a href="display_station_qr_code_report.php" class="menu-item">
+            <i class="bi bi-geo-alt menu-item-icon"></i>
             <div>
-              <div class="menu-btn-title">Location QR Codes</div>
-              <div class="menu-btn-desc">Printable QR sheets for stations and locations</div>
+              <div class="menu-item-title">Location QR Codes</div>
+              <div class="menu-item-desc">Printable QR sheets for stations and locations</div>
             </div>
           </a>
         </div>

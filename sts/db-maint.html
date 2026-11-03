@@ -7,92 +7,17 @@
   <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
   <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <link href="operating_session_line.css" rel="stylesheet">
-  <style>
-    body { background-color: #f8f9fa; }
-    .navbar-maint { background-color: #dc3545; }
-    .page-hero {
-      background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      overflow: hidden;
-    }
-    .hero-images {
-      display: flex;
-      flex-wrap: nowrap;
-      align-items: center;
-    }
-    .hero-images > div {
-      min-width: 0;
-      padding: 1rem;
-    }
-    .hero-sts { flex: 2 1 0; text-align: center; }
-    .hero-main { flex: 5 1 0; text-align: center; }
-    .hero-info { flex: 5 1 0; min-width: 0; }
-    .hero-logo {
-      display: block;
-      width: 100%;
-      max-width: 100%;
-      max-height: 110px;
-      object-fit: contain;
-    }
-    @media (max-width: 576px) {
-      .hero-images > div { padding: 0.5rem; }
-      .hero-logo { max-height: 72px; }
-      .hero-info h4 { font-size: 1rem; }
-      .hero-info p { font-size: 0.85rem; }
-    }
-    .maint-group {
-      border-radius: 6px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      overflow: hidden;
-      background: #fff;
-      height: 100%;
-    }
-    .section-header {
-      color: white;
-      font-weight: 600;
-      padding: 10px 16px;
-      font-size: 0.95rem;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .red { background-color: #dc3545; }
-    .dark-red { background-color: #a71d2a; }
-    .gray { background-color: #6c757d; }
-    .maint-btn {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 16px;
-      border-bottom: 1px solid #dee2e6;
-      background: #fff;
-      text-decoration: none;
-      color: #333;
-      transition: background-color 0.15s;
-    }
-    .maint-btn:last-child { border-bottom: none; }
-    .maint-btn:hover { color: #333; text-decoration: none; }
-    .maint-btn i.maint-icon { font-size: 1.55rem; width: 30px; flex-shrink: 0; }
-    .maint-btn-title { font-weight: 600; line-height: 1.2; }
-    .maint-btn-desc { color: #666; font-size: 0.82rem; margin-top: 2px; }
-    .red-link:hover { background-color: #fff5f5; }
-    .red-link .maint-icon { color: #dc3545; }
-    .danger-link:hover { background-color: #fff0f0; }
-    .danger-link .maint-icon { color: #a71d2a; }
-    .gray-link:hover { background-color: #f8f9fa; }
-    .gray-link .maint-icon { color: #6c757d; }
-  </style>
+  <link href="hub.css" rel="stylesheet">
 </head>
 <body class="has-operating-session-line">
-  <nav class="navbar navbar-dark navbar-maint noprint">
+  <nav class="navbar navbar-dark bg-secondary noprint">
     <div class="container-fluid">
       <span class="navbar-brand"><i class="bi bi-tools"></i> Database Maintenance</span>
       <div>
         <a href="index.html" class="btn btn-outline-light btn-sm me-2">
           <i class="bi bi-house"></i> Home
         </a>
-        <a href="operations.html" class="btn btn-outline-light btn-sm me-2">
+        <a href="operations.php" class="btn btn-outline-light btn-sm me-2">
           <i class="bi bi-train-freight-front"></i> Operations
         </a>
         <a href="database.html" class="btn btn-outline-light btn-sm me-2">
@@ -126,81 +51,81 @@
 
     <div class="row g-4">
       <div class="col-md-4">
-        <div class="maint-group">
+        <div class="menu-group">
           <div class="section-header red"><i class="bi bi-heart-pulse"></i> Maintenance</div>
-          <a href="validate_db.php" class="maint-btn red-link">
-            <i class="bi bi-check2-circle maint-icon"></i>
+          <a href="validate_db.php" class="menu-item red-link">
+            <i class="bi bi-check2-circle menu-item-icon"></i>
             <div>
-              <div class="maint-btn-title">Validate Database</div>
-              <div class="maint-btn-desc">Check the system for broken links and open repair tools.</div>
+              <div class="menu-item-title">Validate Database</div>
+              <div class="menu-item-desc">Check the system for broken links and open repair tools.</div>
             </div>
           </a>
-          <a href="settings.php" class="maint-btn gray-link">
-            <i class="bi bi-sliders maint-icon"></i>
+          <a href="settings.php" class="menu-item gray-link">
+            <i class="bi bi-sliders menu-item-icon"></i>
             <div>
-              <div class="maint-btn-title">System Settings</div>
-              <div class="maint-btn-desc">Manage configurable STS settings.</div>
+              <div class="menu-item-title">System Settings</div>
+              <div class="menu-item-desc">Manage configurable STS settings.</div>
             </div>
           </a>
         </div>
       </div>
 
       <div class="col-md-4">
-        <div class="maint-group">
+        <div class="menu-group">
           <div class="section-header red"><i class="bi bi-hdd"></i> Data Files</div>
-          <a href="backup_db.php" class="maint-btn red-link">
-            <i class="bi bi-download maint-icon"></i>
+          <a href="backup_db.php" class="menu-item red-link">
+            <i class="bi bi-download menu-item-icon"></i>
             <div>
-              <div class="maint-btn-title">Create Backup</div>
-              <div class="maint-btn-desc">Export the current STS database.</div>
+              <div class="menu-item-title">Create Backup</div>
+              <div class="menu-item-desc">Export the current STS database.</div>
             </div>
           </a>
-          <a href="restore_db.php" class="maint-btn red-link">
-            <i class="bi bi-upload maint-icon"></i>
+          <a href="restore_db.php" class="menu-item red-link">
+            <i class="bi bi-upload menu-item-icon"></i>
             <div>
-              <div class="maint-btn-title">Restore Backup</div>
-              <div class="maint-btn-desc">Restore STS data from a backup file.</div>
+              <div class="menu-item-title">Restore Backup</div>
+              <div class="menu-item-desc">Restore STS data from a backup file.</div>
             </div>
           </a>
-          <a href="remove_backup.php" class="maint-btn red-link">
-            <i class="bi bi-trash maint-icon"></i>
+          <a href="remove_backup.php" class="menu-item red-link">
+            <i class="bi bi-trash menu-item-icon"></i>
             <div>
-              <div class="maint-btn-title">Remove Backup</div>
-              <div class="maint-btn-desc">Clean up old backup files.</div>
+              <div class="menu-item-title">Remove Backup</div>
+              <div class="menu-item-desc">Clean up old backup files.</div>
             </div>
           </a>
-          <a href="import_tables.php" class="maint-btn red-link">
-            <i class="bi bi-file-earmark-arrow-up maint-icon"></i>
+          <a href="import_tables.php" class="menu-item red-link">
+            <i class="bi bi-file-earmark-arrow-up menu-item-icon"></i>
             <div>
-              <div class="maint-btn-title">Import Data</div>
-              <div class="maint-btn-desc">Import tables from external files.</div>
+              <div class="menu-item-title">Import Data</div>
+              <div class="menu-item-desc">Import tables from external files.</div>
             </div>
           </a>
         </div>
       </div>
 
       <div class="col-md-4">
-        <div class="maint-group">
+        <div class="menu-group">
           <div class="section-header dark-red"><i class="bi bi-exclamation-triangle"></i> Session Reset Tools</div>
-          <a href="restart.php" class="maint-btn danger-link">
-            <i class="bi bi-arrow-clockwise maint-icon"></i>
+          <a href="restart.php" class="menu-item danger-link">
+            <i class="bi bi-arrow-clockwise menu-item-icon"></i>
             <div>
-              <div class="maint-btn-title">Restart Session</div>
-              <div class="maint-btn-desc">Restart shippers, cancel waybills, and release all cars.</div>
+              <div class="menu-item-title">Restart Session</div>
+              <div class="menu-item-desc">Restart shippers, cancel waybills, and release all cars.</div>
             </div>
           </a>
-          <a href="reset.php" class="maint-btn danger-link">
-            <i class="bi bi-arrow-counterclockwise maint-icon"></i>
+          <a href="reset.php" class="menu-item danger-link">
+            <i class="bi bi-arrow-counterclockwise menu-item-icon"></i>
             <div>
-              <div class="maint-btn-title">Reset Session</div>
-              <div class="maint-btn-desc">Same as restart, and also reset all cars.</div>
+              <div class="menu-item-title">Reset Session</div>
+              <div class="menu-item-desc">Same as restart, and also reset all cars.</div>
             </div>
           </a>
-          <a href="wipe.php" class="maint-btn danger-link">
-            <i class="bi bi-trash3 maint-icon"></i>
+          <a href="wipe.php" class="menu-item danger-link">
+            <i class="bi bi-trash3 menu-item-icon"></i>
             <div>
-              <div class="maint-btn-title">Wipe Database</div>
-              <div class="maint-btn-desc">Remove STS data. Use only when intentionally rebuilding.</div>
+              <div class="menu-item-title">Wipe Database</div>
+              <div class="menu-item-desc">Remove STS data. Use only when intentionally rebuilding.</div>
             </div>
           </a>
         </div>

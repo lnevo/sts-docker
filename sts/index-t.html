@@ -6,8 +6,9 @@
   <title>STS - Site Map</title>
   <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
   <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="hub.css" rel="stylesheet">
   <style>
-    body { background-color: #f8f9fa; font-size: 1.05rem; }
+    body { font-size: 1.05rem; }
     .navbar-sitemap { background-color: #6c757d; }
     .sitemap-banner {
       background: #fff;
@@ -106,7 +107,7 @@
         <a href="index.html" class="btn btn-outline-light btn-sm me-2">
           <i class="bi bi-house"></i> Home
         </a>
-        <a href="operations.html" class="btn btn-outline-light btn-sm me-2">
+        <a href="operations.php" class="btn btn-outline-light btn-sm me-2">
           <i class="bi bi-train-freight-front"></i> Operations
         </a>
         <a href="reports.html" class="btn btn-outline-light btn-sm me-2">
@@ -150,6 +151,13 @@
       <tbody>
         <tr>
           <td>
+            <span class="sitemap-subhead">Operations and Sessions</span>
+            <ul>
+              <li><a href="operations.php">Operations</a></li>
+              <li><a href="session_overview.php">Operating Sessions</a></li>
+              <li><a href="editor.html">Session Editor</a></li>
+              <li><a href="session-sitemap.php">Session Site Map</a></li>
+            </ul>
             <span class="sitemap-subhead">Before Ops</span>
             <ul>
               <li><a href="generate.php">Generate Car Orders</a></li>
