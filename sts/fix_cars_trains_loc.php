@@ -1,13 +1,11 @@
-<html>
-  <head>
-    <title>STS - Fix Cars in Trains with Current Locations</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-    </style>
+<?php
+require_once 'page_chrome.php';
+sts_page_start([
+    'title' => 'Fix Cars in Trains with Current Locations',
+    'icon' => 'bi-geo-alt',
+    'section' => 'maint',
+    'links' => [['href' => 'validate_db.php', 'label' => 'Validate Database', 'icon' => 'bi-check2-square']],
+    'head_extra' => <<<'HTML'
     <script>
       // this javascript function is triggered by the user changing the "All" checkbox
       function checkall()
@@ -31,27 +29,18 @@
         }
       }
     </script>
-  </head>
-  <body>
-<p> <img src="ImageStore/GUI/Menu/maint.jpg" width="715" height="147" border="0" usemap="#Map3">
-  <map name="Map3">
-    <area shape="rect" coords="567,5,710,47" href="index.html">
-    <area shape="rect" coords="568,98,708,142" href="index-t.html">
-    <area shape="rect" coords="567,54,711,92" href="db-maint.html">
-  </map>
-</p>
-<h2><a href="validate_db.php"><img src="ImageStore/GUI/Menu/validate.png" width="166" height="40" border="0"></a></h2>
-<h2>Database Maintenance</h2>
-    <h3 >Fix Cars in Trains with Current Locations</h3>
-    <div id="instructions">
+HTML,
+]);
+?>
+<div class="sts-card">
+<div id="instructions" class="alert alert-warning">
     Cars in trains cannot have current locations. These cars have been found<br />
     to still have a current location in their database records.<br /><br />
     When the FIX LOCATIONS button is clicked, all selected car orders have<br />
     their current location removed.<br />
   <br />
     </div>
-
-    <?php
+<?php
       // pull in the utility files
       require 'open_db.php';
 
@@ -74,7 +63,7 @@
             if (!mysqli_query($dbc, $sql))
             {
               print 'Unable to update car current location<br />';
-              die();
+              print '</div>'; sts_page_end(); die();
             }
           }          
         }
@@ -100,10 +89,10 @@
       if (mysqli_num_rows($rs) > 0)
       {
         print '<form action="fix_cars_trains_loc.php" method="get">';
-        print '<input type="submit" id="fix_it_btn" name="fix_it_btn" value="FIX LOCATIONS">&nbsp;';
+        print '<input type="submit" class="btn btn-danger" id="fix_it_btn" name="fix_it_btn" value="FIX LOCATIONS" onclick="return confirm(\'Fix Locations: this changes the database. Continue?\');">&nbsp;';
     
         print 'Check/Uncheck all cars: <input type="checkbox" id="check_all" name="check_all" onchange="checkall();"><br /><br />';
-        print '<table id="car_table" name="car_table">';
+        print '<table class="table table-sm table-bordered w-auto" id="car_table" name="car_table">';
         print '<th>Fix?</th>
                <th>Reporting Marks</th>';
         $row_counter = 0;
@@ -131,8 +120,5 @@
         print '<br />No Cars were found in trains that still have a Current Location.';
       }
     ?>
-
-</body>
-</html>
-
-
+</div>
+<?php sts_page_end(); ?>

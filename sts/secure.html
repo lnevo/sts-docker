@@ -1,56 +1,86 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<title>STS - Secure</title>
-<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STS - Secure</title>
+  <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+  <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="hub.css" rel="stylesheet">
 </head>
+<body>
+  <nav class="navbar navbar-dark bg-danger noprint">
+    <div class="container-fluid">
+      <span class="navbar-brand"><i class="bi bi-shield-lock"></i> Secure</span>
+      <div>
+        <a href="index.html" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-house"></i> Home
+        </a>
+        <a href="operations.php" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-train-freight-front"></i> Operations
+        </a>
+        <a href="database.html" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-database"></i> Database
+        </a>
+        <a href="reports.html" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-file-text"></i> Reports
+        </a>
+        <a href="index-t.html" class="btn btn-outline-light btn-sm">
+          <i class="bi bi-diagram-3"></i> Site Map
+        </a>
+      </div>
+    </div>
+  </nav>
 
-<body bgcolor="#CCCCCC">
-<table width="30%" border="1" align="center" cellpadding="2" cellspacing="2">
-  <tr> 
-    <td rowspan="4"><img src="ImageStore/STS-logo.jpg" width="170" height="170"></td>
-    <td rowspan="4"><img src="ImageStore/logo.jpg" width="335" height="170"></td>
-    <td rowspan="4"><img src="ImageStore/steam.gif" width="302" height="170"></td>
-    <td bgcolor="#666666"><p align="center"><a href="index.html"><img src="ImageStore/Menu/mm-sm.jpg" width="130" height="35"></a></p></td>
-  </tr>
-  <tr> 
-    <td height="25" bgcolor="#666666"><div align="center"><a href="operations.html"><img src="ImageStore/Menu/OPS-operations-sm.jpg" width="130" height="35" border="0"></a></div></td>
-  </tr>
-  <tr> 
-    <td height="28" bgcolor="#666666"><div align="center"><a href="database.html"><img src="ImageStore/Menu/DB-database-sm.jpg" width="130" height="35" border="0"></a></div></td>
-  </tr>
-  <tr> 
-    <td bgcolor="#666666"><div align="center"><font color="#FFFFFF" size="7" face="Verdana, Arial, Helvetica, sans-serif"><strong><a href="reports.html"><img src="ImageStore/Menu/Reports-reports-sm.jpg" width="130" height="35" border="0"></a></strong></font></div></td>
-  </tr>
-</table>
-<table width="60%" border="1" align="center" cellpadding="2" cellspacing="2" bordercolor="#FFFFFF" bgcolor="#FF0000">
-  <tr bgcolor="333333"> 
-    <td colspan="3"><div align="center"><font color="#FFFFFF" size="7" face="Verdana, Arial, Helvetica, sans-serif"><strong><img src="ImageStore/Menu/Secure-secure.jpg" width="364" height="50"></strong></font></div></td>
-  </tr>
-  <tr> 
-    <td colspan="3" bgcolor="#666666"><div align="center"> 
-        <p><font color="#FFFFFF" size="7" face="Verdana, Arial, Helvetica, sans-serif"><strong><a href="restart.php"><img src="ImageStore/Menu/Secure-restart.jpg" width="364" height="50"></a></strong></font></p>
-        <p><strong><font color="#FFFFFF" size="4" face="Verdana, Arial, Helvetica, sans-serif">Restarts 
-          shippers, cancels waybills. releases all cars</font></strong></p>
-      </div></td>
-  </tr>
-  <tr> 
-    <td height="36" colspan="3" bgcolor="#666666"><div align="left"> 
-        <p align="center"><a href="reset.php"><img src="ImageStore/Menu/Secure-reset.jpg" width="364" height="50"></a></p>
-        <p align="center"><font color="#FFFFFF" size="4" face="Verdana, Arial, Helvetica, sans-serif"><strong>Same 
-          as &quot;Restart&quot; but also resets all cars</strong></font></p>
-      </div></td>
-  </tr>
-  <tr bgcolor="#FF00ff"> 
-    <td bgcolor="#FFFFFF"> <p align="center"><img src="ImageStore/grade-anim.gif" width="100" height="100"></p>
-      </td>
-    <td bgcolor="#666666"><p align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="wipe.php"><img src="ImageStore/Menu/Secure-wipe.jpg" width="364" height="50"></a></font></p>
-      <p align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><img src="ImageStore/WipeW.gif" width="550" height="30"></font></p></td>
-    <td bgcolor="#FFFFFF"><div align="center"><img src="ImageStore/grade-anim.gif" width="100" height="100"></div></td>
-  </tr>
-  <tr bgcolor="666666"> 
-    <td height="80" colspan="3"><div align="center"><font color="#FFFFFF" size="5" face="Verdana, Arial, Helvetica, sans-serif"><a href="settings.php"><img src="ImageStore/Menu/Secure-print-settings.jpg" width="364" height="50"></a></font></div></td>
-  </tr>
-</table>
+  <div class="container mt-4" style="max-width: 880px;">
+    <div class="page-hero mb-4">
+      <div class="hero-images">
+        <div class="hero-sts">
+          <img src="ImageStore/GUI/STS-logo.jpg" class="hero-logo" alt="STS">
+        </div>
+        <div class="hero-main">
+          <img src="ImageStore/GUI/logo.jpg" class="hero-logo" alt="Shipper-driven Traffic Simulator">
+        </div>
+        <div class="hero-info">
+          <h4 class="mb-1">Secure</h4>
+          <p class="mb-0 text-muted">Restart, reset, or wipe the system, and change print settings.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="menu-group">
+      <div class="section-header red"><i class="bi bi-shield-lock"></i> Secure</div>
+      <a href="restart.php" class="menu-item red-link">
+        <i class="bi bi-arrow-clockwise menu-item-icon"></i>
+        <div>
+          <div class="menu-item-title">Restart</div>
+          <div class="menu-item-desc">Restarts shippers, cancels waybills, releases all cars</div>
+        </div>
+      </a>
+      <a href="reset.php" class="menu-item red-link">
+        <i class="bi bi-arrow-counterclockwise menu-item-icon"></i>
+        <div>
+          <div class="menu-item-title">Reset</div>
+          <div class="menu-item-desc">Same as &quot;Restart&quot; but also resets all cars</div>
+        </div>
+      </a>
+      <a href="wipe.php" class="menu-item danger-link">
+        <i class="bi bi-trash3 menu-item-icon"></i>
+        <div>
+          <div class="menu-item-title">Wipe</div>
+          <div class="menu-item-desc">WARNING! This will erase everything!</div>
+        </div>
+      </a>
+      <a href="settings.php" class="menu-item gray-link">
+        <i class="bi bi-sliders menu-item-icon"></i>
+        <div>
+          <div class="menu-item-title">Print Settings</div>
+          <div class="menu-item-desc">Adjust print and report settings</div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
 </body>
 </html>

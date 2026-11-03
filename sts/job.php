@@ -161,6 +161,8 @@ if ($req_wp > 0 && $req_leg > 0) {
 <?php
 session_render_nav_bar([
     ['href' => '/sts/index.html', 'label' => 'STS Main Menu', 'icon' => 'house'],
+    ['href' => '/sts/operations.php', 'label' => 'Operations', 'icon' => 'gear'],
+    ['href' => '/sts/editor.html', 'label' => 'Session Editor', 'icon' => 'pencil-square'],
     ['href' => session_session_index_href($session), 'label' => 'Session ' . (int) $session, 'icon' => 'calendar-event'],
     ['href' => $job_switchlists_print_href, 'label' => 'Train switch lists', 'icon' => 'printer'],
     ['href' => $job_wb_href, 'label' => 'Train waybills', 'icon' => 'file-text'],

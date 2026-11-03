@@ -1,26 +1,16 @@
-<html>
-  <head>
-    <title>STS - Fix Reporting Marks</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-    </style>
-  </head>
-  <body>
-    <p> <img src="ImageStore/GUI/Menu/maint.jpg" width="715" height="147" border="0" usemap="#Map3">
-      <map name="Map3">
-        <area shape="rect" coords="567,5,710,47" href="index.html">
-        <area shape="rect" coords="568,98,708,142" href="index-t.html">
-        <area shape="rect" coords="567,54,711,92" href="db-maint.html">
-      </map>
-    </p>
-    <h2><a href="validate_db.php"><img src="ImageStore/GUI/Menu/validate.png" width="166" height="40" border="0"></a></h2>
-    <h2>Database Maintenance</h2>
-    <h3 >Fix Reporting Marks</h3>
-    <div id="instructions">
+<?php
+require_once 'page_chrome.php';
+sts_page_start([
+    'title' => 'Fix Reporting Marks',
+    'icon' => 'bi-fonts',
+    'section' => 'maint',
+    'links' => [['href' => 'validate_db.php', 'label' => 'Validate Database', 'icon' => 'bi-check2-square']],
+    'head_extra' => <<<'HTML'
+HTML,
+]);
+?>
+<div class="sts-card">
+<div id="instructions" class="alert alert-warning">
     The Association of American Railroads (AAR) controls the issuance of<br />
     reporting marks which are allowed to consist of any alphabetic letter.<br />
     The AAR does not allow ampersands. ( & ) Likewise, STS does not allow<br />
@@ -29,8 +19,7 @@
     Click on the FIX REPORTING MARKS button to remove all ampersands.<br />
   <br />
     </div>
-
-    <?php
+<?php
       // pull in the utility files
       require 'open_db.php';
 
@@ -59,9 +48,9 @@
       if (mysqli_num_rows($rs) > 0)
       {
         print '<form action="fix_reporting_marks.php" method="get">';
-        print '<input type="submit" id="fix_it_btn" name="fix_it_btn" value="FIX REPORTING MARKS"><br /><br />';
+        print '<input type="submit" class="btn btn-danger" id="fix_it_btn" name="fix_it_btn" value="FIX REPORTING MARKS" onclick="return confirm(\'Fix Reporting Marks: this changes the database. Continue?\');"><br /><br />';
     
-        print '<table id="car_table" name="car_table">';
+        print '<table class="table table-sm table-bordered w-auto" id="car_table" name="car_table">';
         print '<thead>';
         print '<tr>';
         print '<th>Reporting Marks</th>';
@@ -80,6 +69,5 @@
         print '<br />No illegal characters found in reporting marks.';
       }
     ?>
-
-</body>
-</html>
+</div>
+<?php sts_page_end(); ?>

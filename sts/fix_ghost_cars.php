@@ -1,13 +1,11 @@
-<html>
-  <head>
-    <title>STS - Fix Ghost Cars</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-    </style>
+<?php
+require_once 'page_chrome.php';
+sts_page_start([
+    'title' => 'Fix Ghost Cars',
+    'icon' => 'bi-ghost',
+    'section' => 'maint',
+    'links' => [['href' => 'validate_db.php', 'label' => 'Validate Database', 'icon' => 'bi-check2-square']],
+    'head_extra' => <<<'HTML'
     <script>
       // this javascript function is triggered by the user changing the "All" checkbox
       function checkall()
@@ -31,25 +29,16 @@
         }
       }
     </script>
-  </head>
-  <body>
-<p> <img src="ImageStore/GUI/Menu/maint.jpg" width="715" height="147" border="0" usemap="#Map3">
-  <map name="Map3">
-    <area shape="rect" coords="567,5,710,47" href="index.html">
-    <area shape="rect" coords="568,98,708,142" href="index-t.html">
-    <area shape="rect" coords="567,54,711,92" href="db-maint.html">
-  </map>
-</p>
-<h2><a href="validate_db.php"><img src="ImageStore/GUI/Menu/validate.png" width="166" height="40" border="0"></a></h2>
-<h2>Database Maintenance</h2>
-    <h3 >Fix Ghost Cars</h3>
-    <div id="instructions">
+HTML,
+]);
+?>
+<div class="sts-card">
+<div id="instructions" class="alert alert-warning">
     The following car orders are linked to cars that do not exist in the database.<br /><br />
     When the FIX GHOSTS button is clicked, all selected car orders will be removed.<br />
   <br />
     </div>
-
-    <?php
+<?php
       // pull in the utility files
       require 'open_db.php';
 
@@ -72,7 +61,7 @@
             if (!mysqli_query($dbc, $sql))
             {
               print 'Unable to remove car order<br />';
-              die();
+              print '</div>'; sts_page_end(); die();
             }
           }          
         }
@@ -88,10 +77,10 @@
       if (mysqli_num_rows($rs) > 0)
       {
         print '<form action="fix_ghost_cars.php" method="get">';
-        print '<input type="submit" id="fix_it_btn" name="fix_it_btn" value="FIX GHOSTS">&nbsp;';
+        print '<input type="submit" class="btn btn-danger" id="fix_it_btn" name="fix_it_btn" value="FIX GHOSTS" onclick="return confirm(\'Fix Ghosts: this changes the database. Continue?\');">&nbsp;';
     
         print 'Check/Uncheck all car orders: <input type="checkbox" id="check_all" name="check_all" onchange="checkall();"><br /><br />';
-        print '<table id="car_order_table" name="car_table">';
+        print '<table class="table table-sm table-bordered w-auto" id="car_order_table" name="car_table">';
         print '<th>Fix?</th>
                <th>Waybill Number</th>';
         $row_counter = 0;
@@ -117,8 +106,5 @@
         print '<br />No Ghost Cars were found.';
       }
     ?>
-
-</body>
-</html>
-
-
+</div>
+<?php sts_page_end(); ?>

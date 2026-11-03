@@ -6,85 +6,17 @@
   <title>About STS</title>
   <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
   <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
-  <style>
-    body { background-color: #f8f9fa; }
-    .navbar-about { background-color: #6c757d; }
-    .page-hero {
-      background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      overflow: hidden;
-    }
-    .hero-images {
-      display: flex;
-      flex-wrap: nowrap;
-      align-items: center;
-    }
-    .hero-images > div {
-      min-width: 0;
-      padding: 1rem;
-    }
-    .hero-sts { flex: 2 1 0; text-align: center; }
-    .hero-main { flex: 5 1 0; text-align: center; }
-    .hero-info { flex: 5 1 0; min-width: 0; }
-    .hero-logo {
-      display: block;
-      width: 100%;
-      max-width: 100%;
-      max-height: 110px;
-      object-fit: contain;
-    }
-    @media (max-width: 576px) {
-      .hero-images > div { padding: 0.5rem; }
-      .hero-logo { max-height: 72px; }
-      .hero-info h4 { font-size: 1rem; }
-      .hero-info p { font-size: 0.85rem; }
-    }
-    .about-group {
-      border-radius: 6px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      overflow: hidden;
-      background: #fff;
-      height: 100%;
-    }
-    .section-header {
-      background-color: #6c757d;
-      color: white;
-      font-weight: 600;
-      padding: 10px 16px;
-      font-size: 0.95rem;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .about-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 14px 16px;
-      border-bottom: 1px solid #dee2e6;
-      color: #333;
-      text-decoration: none;
-      background: #fff;
-      transition: background-color 0.15s;
-    }
-    .about-item:last-child { border-bottom: none; }
-    a.about-item:hover { background-color: #f8f9fa; color: #333; text-decoration: none; }
-    .about-icon { color: #6c757d; font-size: 1.4rem; width: 26px; flex-shrink: 0; text-align: center; }
-    .about-title { font-weight: 600; line-height: 1.2; }
-    .about-desc { color: #666; font-size: 0.82rem; margin-top: 2px; }
-    .person-img { width: 40px; max-height: 40px; object-fit: cover; border-radius: 4px; }
-  </style>
+  <link href="hub.css" rel="stylesheet">
 </head>
 <body>
-  <nav class="navbar navbar-dark navbar-about noprint">
+  <nav class="navbar navbar-dark navbar-hub noprint">
     <div class="container-fluid">
       <span class="navbar-brand"><i class="bi bi-info-circle"></i> About STS</span>
       <div>
         <a href="index.html" class="btn btn-outline-light btn-sm me-2">
           <i class="bi bi-house"></i> Home
         </a>
-        <a href="operations.html" class="btn btn-outline-light btn-sm me-2">
+        <a href="operations.php" class="btn btn-outline-light btn-sm me-2">
           <i class="bi bi-train-freight-front"></i> Operations
         </a>
         <a href="reports.html" class="btn btn-outline-light btn-sm me-2">
@@ -118,68 +50,68 @@
 
     <div class="row g-4">
       <div class="col-md-6">
-        <div class="about-group">
-          <div class="section-header"><i class="bi bi-info-circle"></i> Project</div>
-          <div class="about-item">
-            <i class="bi bi-tag about-icon"></i>
+        <div class="menu-group">
+          <div class="section-header gray"><i class="bi bi-info-circle"></i> Project</div>
+          <div class="menu-item gray-link">
+            <i class="bi bi-tag menu-item-icon"></i>
             <div>
-              <div class="about-title">Version</div>
-              <div class="about-desc">STS version 4</div>
+              <div class="menu-item-title">Version</div>
+              <div class="menu-item-desc">STS version 4</div>
             </div>
           </div>
-          <a href="https://www.facebook.com/groups/541367466453352/" target="_blank" rel="noopener noreferrer" class="about-item">
-            <i class="bi bi-facebook about-icon"></i>
+          <a href="https://www.facebook.com/groups/541367466453352/" target="_blank" rel="noopener noreferrer" class="menu-item gray-link">
+            <i class="bi bi-facebook menu-item-icon"></i>
             <div>
-              <div class="about-title">Social</div>
-              <div class="about-desc">Open the STS Facebook group</div>
+              <div class="menu-item-title">Social</div>
+              <div class="menu-item-desc">Open the STS Facebook group</div>
             </div>
           </a>
-          <a href="https://drive.google.com/drive/folders/1FBQzxxBRhtz0rK5plvw2pim55jO0Njiz?usp=sharing" target="_blank" rel="noopener noreferrer" class="about-item">
-            <i class="bi bi-download about-icon"></i>
+          <a href="https://drive.google.com/drive/folders/1FBQzxxBRhtz0rK5plvw2pim55jO0Njiz?usp=sharing" target="_blank" rel="noopener noreferrer" class="menu-item gray-link">
+            <i class="bi bi-download menu-item-icon"></i>
             <div>
-              <div class="about-title">Download</div>
-              <div class="about-desc">Open the STS download folder</div>
+              <div class="menu-item-title">Download</div>
+              <div class="menu-item-desc">Open the STS download folder</div>
             </div>
           </a>
-          <a href="https://drive.google.com/drive/folders/1FBQzxxBRhtz0rK5plvw2pim55jO0Njiz?usp=sharing" target="_blank" rel="noopener noreferrer" class="about-item">
-            <i class="bi bi-journal-text about-icon"></i>
+          <a href="https://drive.google.com/drive/folders/1FBQzxxBRhtz0rK5plvw2pim55jO0Njiz?usp=sharing" target="_blank" rel="noopener noreferrer" class="menu-item gray-link">
+            <i class="bi bi-journal-text menu-item-icon"></i>
             <div>
-              <div class="about-title">Documentation</div>
-              <div class="about-desc">Open the STS documentation folder</div>
+              <div class="menu-item-title">Documentation</div>
+              <div class="menu-item-desc">Open the STS documentation folder</div>
             </div>
           </a>
         </div>
       </div>
 
       <div class="col-md-6">
-        <div class="about-group">
-          <div class="section-header"><i class="bi bi-person-lines-fill"></i> Credits</div>
-          <div class="about-item">
+        <div class="menu-group">
+          <div class="section-header gray"><i class="bi bi-person-lines-fill"></i> Credits</div>
+          <div class="menu-item gray-link">
             <img src="ImageStore/GUI/TE.jpg" class="person-img" alt="Tom Edwards">
             <div>
-              <div class="about-title">Tom Edwards (USA)</div>
-              <div class="about-desc">Developer</div>
+              <div class="menu-item-title">Tom Edwards (USA)</div>
+              <div class="menu-item-desc">Developer</div>
             </div>
           </div>
-          <a href="mailto:tre.taliesin@gmail.com" class="about-item">
-            <i class="bi bi-envelope about-icon"></i>
+          <a href="mailto:tre.taliesin@gmail.com" class="menu-item gray-link">
+            <i class="bi bi-envelope menu-item-icon"></i>
             <div>
-              <div class="about-title">Contact Developer</div>
-              <div class="about-desc">Email Tom Edwards</div>
+              <div class="menu-item-title">Contact Developer</div>
+              <div class="menu-item-desc">Email Tom Edwards</div>
             </div>
           </a>
-          <div class="about-item">
+          <div class="menu-item gray-link">
             <img src="ImageStore/GUI/B.jpg" class="person-img" alt="Ron Spencer">
             <div>
-              <div class="about-title">Ron Spencer (AUS)</div>
-              <div class="about-desc">Graphics</div>
+              <div class="menu-item-title">Ron Spencer (AUS)</div>
+              <div class="menu-item-desc">Graphics</div>
             </div>
           </div>
-          <a href="mailto:Ron.Spencer@basics.net.au" class="about-item">
-            <i class="bi bi-envelope about-icon"></i>
+          <a href="mailto:Ron.Spencer@basics.net.au" class="menu-item gray-link">
+            <i class="bi bi-envelope menu-item-icon"></i>
             <div>
-              <div class="about-title">Contact Graphics</div>
-              <div class="about-desc">Email Ron Spencer</div>
+              <div class="menu-item-title">Contact Graphics</div>
+              <div class="menu-item-desc">Email Ron Spencer</div>
             </div>
           </a>
         </div>

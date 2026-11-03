@@ -1,25 +1,12 @@
-<html>
-  <head>
-    <title>STS - Club Ops - Owner Management</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top;}
-      th {border: 1px solid black; padding: 10px;}
-      td {border: 1px solid black; padding: 10px;}
-      td.checkbox {text-align: center;}
-    </style>
-  </head>
-  <body>
-<p><img src="ImageStore/GUI/Menu/club_operations.jpg" width="716" height="147" border="0" usemap="#Map4">
-  <map name="Map4">
-    <area shape="rect" coords="570,3,709,49" href="index.html">
-    <area shape="rect" coords="567,94,709,141" href="index-t.html">
-    <area shape="rect" coords="569,53,710,93" href="club_index.html">
-  </map>
-</p>
-<h2>Fleet Management</h2>
-<h3>Rolling Stock Owners</h3>
+<?php
+require_once 'page_chrome.php';
+sts_page_start([
+    'title' => 'Rolling Stock Owners',
+    'icon' => 'bi-person-badge',
+    'section' => 'club',
+]);
+?>
+<div class="sts-card">
 <?php
       // connect to the database using the credentials from sts04
       require 'open_db.php';
@@ -76,11 +63,11 @@
       print '<form name="owners" method="post" action="owners.php">';
         
       // put a submit button on both the top and bottom of the list
-      print '<input type="submit" id="submit01" name="submit" value="UPDATE">';
+      print '<input type="submit" id="submit01" name="submit" value="UPDATE" class="btn btn-primary">';
       print '<br /><br />';
         
       // use the list of owners to built a table with each name and remarks string already in a text box
-      print '<table>
+      print '<table class="table table-sm table-bordered align-middle bg-white">
                <tr>
                  <th>Owner Name</th>
                  <th>Remarks (Contact info, etc...)</th>
@@ -90,10 +77,10 @@
       // the first row will be for adding a new owners
       print '<tr>
                <td>
-                 <input type="text" id="new_name" name="new_name">
+                 <input type="text" id="new_name" name="new_name" class="form-control form-control-sm">
                </td>
                <td>
-                 <input type="text" id="new_rmks" name="new_rmks" size="80">
+                 <input type="text" id="new_rmks" name="new_rmks" size="80" class="form-control form-control-sm">
                </td>
                <td>
                  NEW
@@ -115,10 +102,10 @@
         {
           print '<tr>
                    <td>
-                     <input type="text" id="name' . $row_count . '" name="name' . $row_count . '" value="' . $row[1] . '">
+                     <input type="text" id="name' . $row_count . '" name="name' . $row_count . '" value="' . $row[1] . '" class="form-control form-control-sm">
                    </td>
                    <td>
-                     <input type="text" id="rmks' . $row_count . '" name="rmks' . $row_count . '" value="' . $row[2] . '" size="80">
+                     <input type="text" id="rmks' . $row_count . '" name="rmks' . $row_count . '" value="' . $row[2] . '" size="80" class="form-control form-control-sm">
                    </td>
                    <td>
                      <input type="checkbox" id="delete' . $row_count . '"name="delete' . $row_count . '"> Delete
@@ -134,11 +121,10 @@
         
       // put a submit button on both the top and bottom of the list
       print '<br />';
-      print '<input type="submit" id="submit02" name="submit" value="UPDATE">';
+      print '<input type="submit" id="submit02" name="submit" value="UPDATE" class="btn btn-primary">';
       
       print '</form>';
         
     ?>
-<!-- <a href="index.html"><img src="../sts/ImageStore/Menu/Club-OPS-operations-sm.jpg" width="109" height="30" border="0"></a> -->
-</body>
-</html>
+</div>
+<?php sts_page_end(); ?>

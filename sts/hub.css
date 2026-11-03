@@ -1,0 +1,154 @@
+/* Shared styles for the static hub/menu pages (index, reports, database,
+   db-maint, club_index, about, secure). Load after bootstrap. */
+body { background-color: #f8f9fa; }
+.navbar-hub { background-color: #343a40; }
+
+/* Hero banner */
+.hero, .page-hero {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+.hero-images {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.hero-images > div {
+  min-width: 0;
+  padding: 1rem;
+}
+.hero-sts { flex: 2 1 0; text-align: center; }
+.hero-main { flex: 5 1 0; text-align: center; }
+.hero-animation { flex: 5 1 0; }
+.hero-info { flex: 5 1 0; min-width: 0; }
+.hero-logo {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  max-height: 130px;
+  object-fit: contain;
+}
+.page-hero .hero-logo { max-height: 110px; }
+.hero-steam {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: 170px;
+  object-fit: cover;
+}
+@media (max-width: 576px) {
+  .hero-images > div { padding: 0.5rem; }
+  .hero-logo, .page-hero .hero-logo { max-height: 72px; }
+  .hero-steam { height: 90px; }
+  .hero-info h4 { font-size: 1rem; }
+  .hero-info p { font-size: 0.85rem; }
+}
+.session-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #000;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.session-badge-btn:hover {
+  background: #1f4d2e;
+  color: #fff;
+  text-decoration: none;
+}
+
+/* Link accents: --c is the icon/border colour, --h the hover tint */
+.green-link { --c: #2e7d32; --h: #f0fff4; }
+.blue-link { --c: #0000cc; --h: #f2f4ff; }
+.teal-link { --c: #00897b; --h: #f0faf9; }
+.purple-link { --c: #6f42c1; --h: #f6f2fc; }
+.brown-link { --c: #795548; --h: #fff8f4; }
+.dark-brown-link { --c: #8d6e63; --h: #faf5f2; }
+.tan-link { --c: #8d6e63; --h: #fbf6f2; }
+.red-link { --c: #dc3545; --h: #fff5f5; }
+.danger-link { --c: #a71d2a; --h: #fff0f0; }
+.orange-link { --c: #f39c12; --h: #fff9ed; }
+.gray-link { --c: #6c757d; --h: #f8f9fa; }
+.menu-btn[class*="-link"]:hover { background-color: var(--h); }
+.menu-btn[class*="-link"] .menu-icon,
+.menu-item[class*="-link"] .menu-item-icon { color: var(--c); }
+
+/* Main-menu cards (index, club tiles) */
+.menu-table {
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #dee2e6;
+}
+.menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 112px;
+  padding: 20px;
+  text-decoration: none;
+  color: #333;
+  background: #fff;
+  border: 1px solid #dee2e6;
+  transition: background-color 0.15s;
+  height: 100%;
+}
+.menu-btn:hover { color: #333; text-decoration: none; }
+.menu-btn i.menu-icon { font-size: 2rem; width: 40px; flex-shrink: 0; }
+.menu-btn-title { font-weight: 700; line-height: 1.2; }
+.menu-btn-desc { color: #666; font-size: 0.82rem; margin-top: 2px; }
+.menu-btn[class*="-link"] { border-left: 8px solid var(--c); }
+
+/* Sub-hub grouped lists (reports, database, db-maint, about) */
+.menu-group {
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  overflow: hidden;
+  background: #fff;
+  height: 100%;
+}
+.menu-group-body { padding: 1rem; }
+.section-header {
+  background-color: #0000cc;
+  color: #fff;
+  font-weight: 600;
+  padding: 10px 16px;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #dee2e6;
+  background: #fff;
+  text-decoration: none;
+  color: #333;
+  transition: background-color 0.15s;
+}
+.menu-item:last-child { border-bottom: none; }
+a.menu-item:hover { background-color: #f2f4ff; color: #333; text-decoration: none; }
+a.menu-item[class*="-link"]:hover { background-color: var(--h); }
+.menu-item i.menu-item-icon { color: #0000cc; font-size: 1.4rem; width: 26px; flex-shrink: 0; text-align: center; }
+.menu-item-title { font-weight: 600; font-size: 0.95rem; line-height: 1.2; }
+.menu-item-desc { font-size: 0.8rem; color: #666; margin-top: 2px; }
+.person-img { width: 40px; max-height: 40px; object-fit: cover; border-radius: 4px; }
+
+/* Colour palette (ui-conventions section 2) */
+.green { background-color: #2e7d32; }
+.blue { background-color: #0000cc; }
+.brown { background-color: #795548; }
+.dark-brown, .tan { background-color: #8d6e63; }
+.red { background-color: #dc3545; }
+.dark-red { background-color: #a71d2a; }
+.orange { background-color: #f39c12; }
+.gray { background-color: #6c757d; }

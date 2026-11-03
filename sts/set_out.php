@@ -6,7 +6,7 @@
     <title>STS - Set Out Cars</title>
     <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="operations_ui.css" rel="stylesheet">
+    <link href="operations_ui.css?v=2" rel="stylesheet">
     <script src="operations_table_filters.js"></script>
     <style>
       tr {vertical-align: top;}
@@ -50,25 +50,11 @@
     ?>
   </head>
   <body class="bg-light">
-    <nav class="navbar navbar-dark noprint mb-3" style="background-color: #2e7d32;">
-      <div class="container-fluid">
-        <span class="navbar-brand"><i class="bi bi-arrow-down-circle"></i> Set Out Cars</span>
-        <div>
-          <a href="operations.html" class="btn btn-outline-light btn-sm me-2">
-            <i class="bi bi-arrow-left"></i> Operations
-          </a>
-          <a href="index.html" class="btn btn-outline-light btn-sm me-2">
-            <i class="bi bi-house"></i> Home
-          </a>
-          <button class="btn btn-light btn-sm noprint me-2" onclick="window.print()">
-            <i class="bi bi-printer"></i> Print
-          </button>
-          <a href="index-t.html" class="btn btn-outline-light btn-sm">
-            <i class="bi bi-diagram-3"></i> Site Map
-          </a>
-        </div>
-      </div>
-    </nav>
+    <?php
+    require_once 'operations_nav.php';
+    echo ops_render_navbar('set_out.php', 'Set Out Cars', 'bi-arrow-down-circle', '<button class="btn btn-light btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>');
+    echo ops_render_step_bar('set_out.php', null);
+    ?>
     <div class="px-4 py-3">
     <h5 class="mb-3">Set Out Cars</h5>
     <form action="set_out.php" method="get">

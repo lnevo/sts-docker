@@ -11,6 +11,8 @@ function render_all_filled_message()
 }
 
 $dbc = open_db();
+require_once 'operations_stats.php';
+$ops_session_nbr = operations_get_session_nbr($dbc);
 
 // Pull in all open car orders
 $sql = 'SELECT co.waybill_number as waybill_number,
@@ -105,7 +107,7 @@ sort($car_filter_location_options, SORT_NATURAL | SORT_FLAG_CASE);
     <title>STS - Fill Car Orders</title>
     <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="operations_ui.css" rel="stylesheet">
+    <link href="operations_ui.css?v=2" rel="stylesheet">
     <style>
         .order-card {
             margin-bottom: 1rem;
@@ -371,22 +373,11 @@ sort($car_filter_location_options, SORT_NATURAL | SORT_FLAG_CASE);
     </style>
 </head>
 <body class="bg-light">
-<nav class="navbar navbar-dark noprint mb-3" style="background-color: #2e7d32;">
-  <div class="container-fluid">
-    <span class="navbar-brand"><i class="bi bi-box-seam"></i> Fill Car Orders</span>
-    <div>
-      <a href="operations.html" class="btn btn-outline-light btn-sm me-2">
-        <i class="bi bi-arrow-left"></i> Operations
-      </a>
-      <a href="index.html" class="btn btn-outline-light btn-sm me-2">
-        <i class="bi bi-house"></i> Home
-      </a>
-      <a href="index-t.html" class="btn btn-outline-light btn-sm">
-        <i class="bi bi-diagram-3"></i> Site Map
-      </a>
-    </div>
-  </div>
-</nav>
+    <?php
+    require_once 'operations_nav.php';
+    echo ops_render_navbar('fill_orders.php', 'Fill Car Orders', 'bi-box-seam');
+    echo ops_render_step_bar('fill_orders.php', $ops_session_nbr);
+    ?>
     <div class="container-fluid px-4">
         <h5 class="mb-3">Fill Car Orders</h5>
 

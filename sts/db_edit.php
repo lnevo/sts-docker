@@ -1,29 +1,15 @@
-<html>
-  <head>
-    <title>STS - Edit Database</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-    </style>
-  </head>
-  <body>
-<p><img src="ImageStore/GUI/Menu/manage.jpg" width="718" height="146" border="0" usemap="#Map5">
-  <map name="Map5">
-    <area shape="rect" coords="569,4,708,48" href="index.html">
-    <area shape="rect" coords="569,97,711,140" href="index-t.html">
-    <area shape="rect" coords="569,52,709,91" href="database.html">
-  </map>
-</p>
-<a id="return_link" href=""></a> 
-<h3>Edit Database Object</h3>
+<?php
+require_once 'page_chrome.php';
+sts_page_start(['title' => 'Edit Database Object', 'icon' => 'bi-pencil-square', 'section' => 'data']);
+?>
+<div class="sts-card">
+<a id="return_link" href=""></a>
+    
     <h3 id="table_name"></h3>
     <div id="instructions">
     To update the item, modify the desired fields and click UPDATE.<br />
     To remove the item, click the Remove radio button and then click REMOVE.<br />
-  <img src="ImageStore/GUI/warning.gif" width="110" height="30" align="absmiddle"> 
+  <i class="bi bi-exclamation-triangle-fill text-warning"></i>
   Be careful when removing items as there is no "Undo". </div>
     <?php
       // this program builds the shell for all edit operations
@@ -61,10 +47,10 @@
              <td style="border: none;">';
 
       // generate the submit button
-      print '<input id="update_btn" name="update_btn" value="UPDATE" type="submit">&nbsp;';
+      print '<input id="update_btn" name="update_btn" value="UPDATE" type="submit" class="btn btn-primary btn-sm">&nbsp;';
 
       // generate the reset button
-      print '<input name="reset_btn" value="RESET" type="reset"><br /><br />';
+      print '<input name="reset_btn" value="RESET" type="reset" class="btn btn-secondary btn-sm"><br /><br />';
 
       print '</td>
              </tr>
@@ -105,5 +91,5 @@
       }
       print '</form>';
     ?>
-  </body>
-</html>
+</div>
+<?php sts_page_end(); ?>

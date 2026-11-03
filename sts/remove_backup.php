@@ -1,36 +1,32 @@
-<html>
-  <head>
-    <title>STS - Remove Back-up</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-    </style>
+<?php
+require_once 'page_chrome.php';
+sts_page_start([
+    'title' => 'Remove Backup Database',
+    'icon' => 'bi-trash',
+    'section' => 'maint',
+    'head_extra' => <<<'HTML'
     <script>
       function enable_remove_btn()
       {
         document.getElementById("remove_btn").disabled = false;
       }
     </script>
-  </head>
-  <body>
-  <p><img src="ImageStore/GUI/Menu/manage.jpg" width="718" height="146" border="0" usemap="#Map5">
-    <map name="Map5">
-      <area shape="rect" coords="569,4,708,48" href="index.html">
-      <area shape="rect" coords="569,97,711,140" href="index-t.html">
-      <area shape="rect" coords="569,52,709,91" href="database.html">
-    </map>
-  </p>
-  <h2>Database Management</h2>
-  <h3>Remove Backup Database</h3>
+    <script>
+      function display_msg1()
+      {
+        document.getElementById("msg1").innerHTML = "Processing...";
+      }
+    </script>
+HTML,
+]);
+?>
+<div class="sts-card">
   <form action="remove_backup.php" method="get">
     Click on the radio button for the backup copy that you want to remove and then click the <b>REMOVE</b> button.<br /><br />
-    <img src="ImageStore/GUI/warning.gif" width="110" height="30" align="absmiddle"> 
+    <div class="alert alert-danger">
     After you have clicked on the <b>REMOVE</b> button there is no way to recover 
-    the removed backup database!<br />
-    <br />
+    the removed backup database!
+    </div>
     <div id="msg1"></div>
     <?php
       // has the Remove button been clicked?
@@ -78,10 +74,10 @@
       if (count($backup_names) > 0)
       {
         // since there are backup copies, we can now display the remove button
-        print '<input id="remove_btn" name="remove_btn" value="REMOVE" type="submit" onclick="display_msg1();" disabled><br /><br />';
+        print '<input id="remove_btn" name="remove_btn" value="REMOVE" type="submit" class="btn btn-danger" onclick="if (!confirm(\'Permanently remove the selected backup? This cannot be undone.\')) { return false; } display_msg1();" disabled><br /><br />';
 
         // build a table of backup names with radio buttons
-        print '<table>';
+        print '<table class="table table-sm table-bordered w-auto">';
         foreach($backup_names as $name)
         {
           // if the item in the directory list is a file, add it to the radio button list
@@ -102,10 +98,5 @@
     ?>
     <br />
   </form>
-  <script>
-    function display_msg1()
-    {
-      document.getElementById("msg1").innerHTML = "Processing...";
-    }
-  </script>
-</html>
+</div>
+<?php sts_page_end(); ?>

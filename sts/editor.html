@@ -7,16 +7,16 @@
   <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
   <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <link rel="stylesheet" href="session-nav.css">
-  <link rel="stylesheet" href="workflow-ui.css?v=56">
+  <link rel="stylesheet" href="workflow-ui.css?v=57">
 </head>
 <body>
   <nav class="navbar navbar-dark noprint" style="background-color: #343a40;">
     <div class="container-fluid">
       <div class="d-flex flex-wrap align-items-center gap-2 w-100">
         <a href="/sts/index.html" class="btn btn-outline-light btn-sm"><i class="bi bi-house"></i> STS Main Menu</a>
+        <a href="/sts/operations.php" class="btn btn-outline-light btn-sm"><i class="bi bi-gear"></i> Operations</a>
         <a href="/sts/session_overview.php" class="btn btn-outline-light btn-sm"><i class="bi bi-collection"></i> Sessions</a>
         <a href="session-sitemap.php" class="btn btn-outline-light btn-sm"><i class="bi bi-diagram-3"></i> Session Site Map</a>
-        <a id="workflow-download" href="#" download class="btn btn-outline-light btn-sm"><i class="bi bi-filetype-json"></i> Download JSON</a>
         <span class="navbar-text ms-auto"><span class="badge bg-light text-dark">DB Session <strong id="nav-db-session">—</strong></span></span>
         <span class="navbar-text text-white-50 small">Session Editor</span>
       </div>
@@ -24,14 +24,18 @@
   </nav>
   <div class="page page-wide">
     <h1>Session Editor</h1>
-    <p class="subtitle">
+    <p class="subtitle mb-1">Build the operating recipe step by step, save it, then run it from the Run / Simulator tab.</p>
+    <details class="mb-3 small">
+      <summary>How the editor works</summary>
+      <p class="subtitle">
       Build the operating recipe step by step: <strong>Add step</strong>, pick a command, set parameters, and add remarks.
       <strong>Import JSON</strong> loads steps into the editor only (nothing is written until <strong>Save</strong>).
       Import again to append or combine workflows. <strong>Load</strong> replaces the editor from a file on disk.
-      <strong>Delete</strong> permanently removes the selected workflow file. <strong>Reset</strong> clears the editor without touching disk files.
+      <strong>Delete workflow</strong> permanently removes the selected workflow file. <strong>Reset editor</strong> clears the editor without touching disk files.
       The simulator runs against the live STS database — switch lists are generated at each
       <em>Generate Switch Lists</em> step.
-    </p>
+      </p>
+    </details>
 
     <div class="panel workflow-bar">
       <div class="workflow-bar-inner">
@@ -45,64 +49,34 @@
         </label>
         <div class="wf-actions">
           <button type="button" class="btn btn-outline-dark btn-sm" id="btn-load-workflow">Load</button>
-          <button type="button" class="btn btn-outline-dark btn-sm" id="btn-import">Import JSON…</button>
-          <button type="button" class="btn btn-outline-dark btn-sm" id="btn-save">Save</button>
-          <button type="button" class="btn btn-outline-danger btn-sm" id="btn-delete-workflow">Delete</button>
-          <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-reset">Reset</button>
+          <button type="button" class="btn btn-dark btn-sm" id="btn-save">Save</button>
+          <div class="dropdown d-inline-block">
+            <button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" id="btn-workflow-more">More</button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><button type="button" class="dropdown-item" id="btn-import">Import JSON…</button></li>
+              <li><a class="dropdown-item" id="workflow-download" href="#" download>Download JSON</a></li>
+              <li><button type="button" class="dropdown-item" id="btn-reset">Reset editor</button></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><button type="button" class="dropdown-item text-danger" id="btn-delete-workflow">Delete workflow</button></li>
+            </ul>
+          </div>
         </div>
       </div>
       <input type="file" id="workflow-import-file" accept=".json,application/json,.workflow.json,.recipe.json" hidden>
     </div>
 
-    <div class="panel" id="simulator">
-      <h2>Simulator</h2>
-      <p class="run-instructions">
-        Check one or more <strong>Sections</strong> to preview and run (from section labels in the recipe).
-        <strong>Start / Stop / Skip</strong> use the same recipe step numbers shown in the step list
-        (<code>S</code> marks a section header only — e.g. <code>S8</code> is still step <code>8</code>).
-        Gaps fill <strong>Skip steps</strong> (editable, e.g. <code>1-2,5,8-10</code>); skipping every step in a section unchecks it.
-        Use simulator <strong>Repeat</strong> to run the selection multiple times. Switch-list format is set on each
-        <em>Generate Switch Lists</em> step. DB session: <strong id="run-db-session">—</strong>.
-        View output in <a href="/sts/session_overview.php">Sessions</a> after a run.
-      </p>
-      <div class="run-bar">
-        <div class="run-field run-field-wide">
-          <span class="inline-lbl">Sections</span>
-          <div id="run-section-host"></div>
-          <input type="hidden" id="run-section" value="">
-        </div>
-        <label class="run-field">
-          <span class="inline-lbl">Start step</span>
-          <input type="number" id="run-start" class="field-input" min="1" value="1" title="Recipe step number (matches the list / goto step-N)">
-        </label>
-        <label class="run-field">
-          <span class="inline-lbl">Stop step</span>
-          <input type="number" id="run-stop" class="field-input" min="1" value="1" title="Recipe step number (matches the list / goto step-N)">
-        </label>
-        <label class="run-field run-field-skip" id="run-skip-wrap">
-          <span class="inline-lbl">Skip steps</span>
-          <input type="text" id="run-skip" class="field-input" placeholder="e.g. 1-2,5,8-10" title="Comma-separated recipe step numbers/ranges to skip (same numbers as the list)" value="" autocomplete="off">
-        </label>
-        <button type="button" class="btn btn-outline-dark btn-sm" id="btn-run">Run</button>
-        <div class="run-repeat-group">
-          <label class="run-repeat-check chk">
-            <input type="checkbox" id="run-repeat-enabled">
-            <span>Repeat</span>
-          </label>
-          <label class="run-field run-repeat-count">
-            <span class="inline-lbl" aria-hidden="true">&nbsp;</span>
-            <span class="run-repeat-input-row">
-              <input type="number" id="run-repeat" class="field-input" min="2" max="30" value="2" disabled>
-              <span class="run-repeat-suffix">times</span>
-            </span>
-          </label>
-        </div>
-      </div>
-      <pre class="log" id="log">Run output appears here.</pre>
-      <div id="status" class="status info">Loading…</div>
-      <div id="run-complete-actions" class="run-complete-actions" hidden></div>
-    </div>
+    <div id="status" class="status info">Loading…</div>
 
+    <ul class="nav nav-tabs mb-3" id="editor-tabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-steps" data-bs-toggle="tab" data-bs-target="#tabpane-steps" type="button" role="tab" aria-controls="tabpane-steps" aria-selected="true">Steps</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-run" data-bs-toggle="tab" data-bs-target="#tabpane-run" type="button" role="tab" aria-controls="tabpane-run" aria-selected="false">Run / Simulator</button>
+      </li>
+    </ul>
+    <div class="tab-content">
+    <div class="tab-pane fade show active" id="tabpane-steps" role="tabpanel" aria-labelledby="tab-steps">
     <div class="panel" id="steps-panel">
       <div class="actions-bar">
         <div class="steps-heading">
@@ -156,7 +130,63 @@
       </div>
       <div id="steps-preview" class="steps-preview" hidden></div>
     </div>
+    </div>
+    <div class="tab-pane fade" id="tabpane-run" role="tabpanel" aria-labelledby="tab-run">
+    <div class="panel" id="simulator">
+      <h2>Simulator</h2>
+      <p class="run-instructions mb-1">Pick sections and a step range, then Run. The run saves the workflow and uses the live STS database.</p>
+      <details class="mb-3 small"><summary>How running works</summary>
+      <p class="run-instructions">
+        Check one or more <strong>Sections</strong> to preview and run (from section labels in the recipe).
+        <strong>Start / Stop / Skip</strong> use the same recipe step numbers shown in the step list
+        (<code>S</code> marks a section header only — e.g. <code>S8</code> is still step <code>8</code>).
+        Gaps fill <strong>Skip steps</strong> (editable, e.g. <code>1-2,5,8-10</code>); skipping every step in a section unchecks it.
+        Use simulator <strong>Repeat</strong> to run the selection multiple times. Switch-list format is set on each
+        <em>Generate Switch Lists</em> step. DB session: <strong id="run-db-session">—</strong>.
+        View output in <a href="/sts/session_overview.php">Sessions</a> after a run.
+      </p>
+      </details>
+      <div class="run-bar">
+        <div class="run-field run-field-wide">
+          <span class="inline-lbl">Sections</span>
+          <div id="run-section-host"></div>
+          <input type="hidden" id="run-section" value="">
+        </div>
+        <label class="run-field">
+          <span class="inline-lbl">Start step</span>
+          <input type="number" id="run-start" class="field-input" min="1" value="1" title="Recipe step number (matches the list / goto step-N)">
+        </label>
+        <label class="run-field">
+          <span class="inline-lbl">Stop step</span>
+          <input type="number" id="run-stop" class="field-input" min="1" value="1" title="Recipe step number (matches the list / goto step-N)">
+        </label>
+        <label class="run-field run-field-skip" id="run-skip-wrap">
+          <span class="inline-lbl">Skip steps</span>
+          <input type="text" id="run-skip" class="field-input" placeholder="e.g. 1-2,5,8-10" title="Comma-separated recipe step numbers/ranges to skip (same numbers as the list)" value="" autocomplete="off">
+        </label>
+        <button type="button" class="btn btn-outline-dark btn-sm" id="btn-run">Run</button>
+        <div class="run-repeat-group">
+          <label class="run-repeat-check chk">
+            <input type="checkbox" id="run-repeat-enabled">
+            <span>Repeat</span>
+          </label>
+          <label class="run-field run-repeat-count">
+            <span class="inline-lbl" aria-hidden="true">&nbsp;</span>
+            <span class="run-repeat-input-row">
+              <input type="number" id="run-repeat" class="field-input" min="2" max="30" value="2" disabled>
+              <span class="run-repeat-suffix">times</span>
+            </span>
+          </label>
+        </div>
+      </div>
+      <pre class="log" id="log">Run output appears here.</pre>
+      <div id="run-complete-actions" class="run-complete-actions" hidden></div>
+    </div>
+
+    </div>
+    </div>
   </div>
+  <script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
   <script src="workflow-shared.js?v=95"></script>
   <script>
 (function () {
@@ -225,6 +255,7 @@
     W.applyRunSkipEdit({ normalize: true, syncSections: true });
   });
   W.el('btn-run')?.addEventListener('click', () => {
+    if (!confirm('Save this workflow and run the selected steps against the live STS database?')) return;
     W.runWorkflow({ saveFirst: true }).catch((e) => W.setStatus(e.message, 'err'));
   });
   W.el('run-repeat-enabled')?.addEventListener('change', (e) => {

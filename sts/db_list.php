@@ -5,26 +5,11 @@
     exit;
   }
 ?>
-<html>
-  <head>
-    <title>STS - Database Management</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-    </style>
-  </head>
-  <body>
-<p><img src="ImageStore/GUI/Menu/manage.jpg" width="718" height="146" border="0" usemap="#Map5">
-  <map name="Map5">
-    <area shape="rect" coords="569,4,708,48" href="index.html">
-    <area shape="rect" coords="569,97,711,140" href="index-t.html">
-    <area shape="rect" coords="569,52,709,91" href="database.html">
-  </map>
-</p>
-<h2>Database Management</h2>
+<?php
+require_once 'page_chrome.php';
+sts_page_start(['title' => 'Database Management', 'icon' => 'bi-table', 'section' => 'data']);
+?>
+<div class="sts-card">
     <h3 id="table_name"></h3>
     <div id="instructions">
     To add a new item, fill in the input items and click on the <b>UPDATE</b> button.<br />
@@ -59,7 +44,7 @@
       print '<input name="tbl_name" id="tbl_name" value="" type="hidden">';
 
       // generate the submit button
-      print '<div id="update"><input id="update_btn" name="update_btn" value="UPDATE" type="submit"><br /><br /></div>';
+      print '<div id="update"><input id="update_btn" name="update_btn" value="UPDATE" type="submit" class="btn btn-primary btn-sm"><br /><br /></div>';
 
       // build the appropriate HTML table
       switch($tbl_name)
@@ -91,5 +76,5 @@
       }
       print '</form>';
     ?>
-  </body>
-</html>
+</div>
+<?php sts_page_end(); ?>

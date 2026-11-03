@@ -64,8 +64,25 @@ Read this first when starting a session on the STS work. Last updated
 
 ## Open items
 
-- Phase 4: continue refining the UI, workflow editor and reports on short
-  branches off `active`. No specific item is queued yet.
+- Phase 4 UI and navigation pass landed 2026-11-03 (branch `ui-nav-modernize`,
+  parity capture `phase5-ui-nav` matches `phase4`):
+  - Step pages render `operations_nav.php`: shared green navbar plus a step bar
+    (Prev/Next, jump to any step, session badge).
+  - Session Editor has a home card, Steps / Run tabs, a More menu and a confirm
+    before a live run; session pages link the editor and Operations.
+  - About 45 legacy pages (data editors, club, report forms, maintenance) use
+    `page_chrome.php`; hubs share `hub.css`. Conventions are in
+    `llm-wiki/ui-conventions.md` 4.10.
+- Still legacy, next candidates: the `printable_*` print layouts and their
+  `display_*` forms (fold into the single-file `?generate_report=1` pattern),
+  the `db_list_*`/`db_edit_*` include bodies (shells are modern, bodies still
+  inject headings with JS), large inline `<style>` blocks on the step pages
+  (`fill_orders.php` 268 lines) that could move into `operations_ui.css`, and
+  `operational_steps_api.php` (no Bootstrap or viewport). Nothing browser-tested
+  on a tablet yet.
+- Orphans to confirm and delete: `assign_car.php`, `fix_win2linux.php`,
+  `manage_cargo.php`, `session-pages.css`; `operations.html` is now only a
+  redirect stub with no inbound links.
 - Pre-existing, untouched: `sts/db_edit.php` requires a missing
   `db_edit_waybills.php`; the QR and barcode libraries live outside `sts/`
   (phpstan cannot see them); a few include fragments and CLI scripts fatal when

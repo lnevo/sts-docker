@@ -1,18 +1,10 @@
-<html>
-  <head>
-    <title>STS Club Ops - Rolling Stock Management</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top;}
-      th {border: 1px solid black; padding: 10px;}
-      td {border: 1px solid black; padding: 10px;}
-      td.checkbox {text-align: center;}
-    </style>
-    <?php
-      // bring in the javascript function that shows rollingstock photos
-      require 'show_image.php';
-    ?>
+<?php
+require_once 'page_chrome.php';
+// bring in the javascript function that shows rollingstock photos
+ob_start();
+require 'show_image.php';
+$show_image_js = ob_get_clean();
+$checkall_js = <<<'EOT'
     <script>
       // this javascript function is triggered by the user changing the "All" checkbox
       function checkall()
@@ -36,17 +28,15 @@
         }
       }
     </script>
-  </head>
-  <body>
-<p><img src="ImageStore/GUI/Menu/club_operations.jpg" width="716" height="147" border="0" usemap="#Map4"> 
-  <map name="Map4">
-    <area shape="rect" coords="570,3,709,49" href="index.html">
-    <area shape="rect" coords="567,94,709,141" href="index-t.html">
-    <area shape="rect" coords="569,53,710,93" href="club_index.html">
-  </map>
-</p>
-<h2>Fleet Management</h2>
-<h3>Add and/or Remove Rolling Stock from the Railroad</h3>
+EOT;
+sts_page_start([
+    'title' => 'Add / Remove Rolling Stock',
+    'icon' => 'bi-plus-slash-minus',
+    'section' => 'club',
+    'head_extra' => $show_image_js . $checkall_js,
+]);
+?>
+<div class="sts-card">
   <?php
       // connect to the database using the credentials from sts04
       require 'open_db.php';
@@ -58,7 +48,8 @@
       $row = mysqli_fetch_row($rs);
       if ($row[0] != "owners")
       {
-        print 'You need to set up the car owners prior to adding or removing cars.';
+        print '<div class="alert alert-warning">You need to set up the car owners prior to adding or removing cars.</div></div>';
+        sts_page_end();
         die();
       }
       
@@ -67,7 +58,8 @@
       $row = mysqli_fetch_row($rs);
       if ($row[0] != "ownership")
       {
-        print 'You need to link cars and owners prior to adding or removing cars.';
+        print '<div class="alert alert-warning">You need to link cars and owners prior to adding or removing cars.</div></div>';
+        sts_page_end();
         die();
       }
 
@@ -75,7 +67,8 @@
       $sql = 'select id, name from owners order by name';
       if (!$rs = mysqli_query($dbc, $sql))
       {
-        print 'Unable to query the owners table. You need to set up the car owners.';
+        print '<div class="alert alert-danger">Unable to query the owners table. You need to set up the car owners.</div></div>';
+        sts_page_end();
         die();
       }
       $owners = array();
@@ -224,7 +217,7 @@
       
       // display a drop-down list of all the owners and a Select button
       print 'Select owner and click on the SELECT button:&nbsp;';
-      print '<select id="selected_owner" name="selected_owner">';
+      print '<select id="selected_owner" name="selected_owner" class="form-select form-select-sm d-inline-block w-auto">';
       print '<option value="ALL">ALL</option>';
       for ($i = 0; $i < $owner_count; $i++)
       {
@@ -232,17 +225,17 @@
       }
       print '</select>';
       print '&nbsp;';
-      print '<input type="submit" id="select" name="select" value="SELECT">';
+      print '<input type="submit" id="select" name="select" value="SELECT" class="btn btn-primary btn-sm">';
       
       // add a 'check/uncheck all' checkbox that fires a javascript function
       print '<br /><br />Check/Uncheck all selected cars&nbsp;';
-      print '<input type="checkbox" id="check_all" name="check_all" onchange="checkall();"><br /><br />';
+      print '<input type="checkbox" id="check_all" name="check_all" class="form-check-input" onchange="checkall();"><br /><br />';
       
       // put a Submit button on both the top and bottom of the table
-      print '<input type="submit" id="update" name="update" value="UPDATE"><br /><br />';
+      print '<input type="submit" id="update" name="update" value="UPDATE" class="btn btn-primary"><br /><br />';
       
       // set up the table
-      print '<table id="car_table">
+      print '<table id="car_table" class="table table-sm table-bordered table-hover align-middle bg-white">
                <tr>
                  <th>Owner</th>
                  <th>On Railroad</th>
@@ -305,10 +298,9 @@
       print '<input type="hidden" id="row_count" name="row_count" value="' . $row_count . '">';
 
       // put a Submit button on both the top and bottom of the table
-      print '<br /><input type="submit" id="update" name="update" value="UPDATE">';
+      print '<br /><input type="submit" id="update" name="update" value="UPDATE" class="btn btn-primary">';
       print '</form>';      
     ?>
-  <!-- <a href="index.html"><img src="../sts/ImageStore/Menu/Club-OPS-operations-sm.jpg" width="109" height="30" border="0"></a>  -->
-</h2>
-    </body>
-</html>
+</div>
+<?php sts_page_end(); ?>
+</html>

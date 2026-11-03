@@ -6,6 +6,7 @@
     <title>STS - View/Organize Cars</title>
     <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="operations_ui.css?v=2" rel="stylesheet">
     <style>
       tr {vertical-align: top;}
       th, td { font-size: 0.875rem; padding: 6px 8px; white-space: nowrap; }
@@ -320,22 +321,11 @@
     ?>
   </head>
   <body class="bg-light">
-    <nav class="navbar navbar-dark noprint mb-3" style="background-color: #2e7d32;">
-      <div class="container-fluid">
-        <span class="navbar-brand"><i class="bi bi-sort-numeric-up"></i> Organize Cars</span>
-        <div>
-          <a href="operations.html" class="btn btn-outline-light btn-sm me-2">
-            <i class="bi bi-arrow-left"></i> Operations
-          </a>
-          <a href="index.html" class="btn btn-outline-light btn-sm me-2">
-            <i class="bi bi-house"></i> Home
-          </a>
-          <a href="index-t.html" class="btn btn-outline-light btn-sm">
-            <i class="bi bi-diagram-3"></i> Site Map
-          </a>
-        </div>
-      </div>
-    </nav>
+    <?php
+    require_once 'operations_nav.php';
+    echo ops_render_navbar('organize_cars.php', 'Organize Cars', 'bi-sort-numeric-up');
+    echo ops_render_step_bar('organize_cars.php', null);
+    ?>
     <div class="px-4">
     <h5 class="mb-3">View and/or Organize Cars</h5>
     <!-- <form method="get" action="organize_cars.php"> -->

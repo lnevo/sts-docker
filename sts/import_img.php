@@ -1,25 +1,9 @@
-<html>
-  <head>
-    <title>Import Rolling Stock Image</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      th.vert_bottom {vertical-align: bottom}
-      td {border: 1px solid black; padding: 10px}
-      td.numbers {text-align: center}
-    </style>
-    <script>
-      window.onunload = refreshParent;
-      function refreshParent()
-      {
-        window.opener.location.reload();
-      }
-    </script>
-  </head>
-  <body>
-    <h3>Edit Cars</h3>
+<?php
+require_once 'page_chrome.php';
+sts_page_start(['title' => 'Import Rolling Stock Image', 'icon' => 'bi-image', 'section' => 'data', 'back_href' => '',
+  'head_extra' => '<script>window.onunload = refreshParent; function refreshParent() { window.opener.location.reload(); }</script>']);
+?>
+<div class="sts-card">
     <?php
       // check to see if the upload button was clicked
       if (isset($_POST['upload_btn']))
@@ -86,8 +70,8 @@
                The file must be a valid image file and have a file extension of .jpg<br /><br />
                Your server restricts upload files to a maximum size of ' . $max_file_size . ' bytes.<br /><br />';
                
-        print '<input type="file" name="import_file" id="import_file" accept=".jpg">&nbsp;
-               <input type="submit" name="upload_btn" id="upload_btn" value="UPLOAD">&nbsp;';
+        print '<input type="file" name="import_file" id="import_file" accept=".jpg" class="form-control form-control-sm d-inline-block w-auto">&nbsp;
+               <input type="submit" name="upload_btn" id="upload_btn" value="UPLOAD" class="btn btn-primary btn-sm">&nbsp;';
 //               <input type="submit" name="close_win" id="close_win" value="CANCEL" onclick="window.close();">';
         print '<br /><br />Close this window to return to the Edit Car Screen';
                
@@ -98,5 +82,5 @@
         print '</form>';
       }
     ?>
-  </body>
-</html>
+</div>
+<?php sts_page_end(); ?>

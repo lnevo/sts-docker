@@ -195,7 +195,7 @@ $dbc = open_db();
         <a href="index.html" class="btn btn-outline-light btn-sm me-2">
           <i class="bi bi-house"></i> Home
         </a>
-        <a href="operations.html" class="btn btn-outline-light btn-sm me-2">
+        <a href="operations.php" class="btn btn-outline-light btn-sm me-2">
           <i class="bi bi-train-freight-front"></i> Operations
         </a>
         <a href="index-t.html" class="btn btn-outline-light btn-sm">

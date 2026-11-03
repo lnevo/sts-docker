@@ -6,7 +6,7 @@
     <title>STS - Build Switch Lists</title>
     <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="operations_ui.css" rel="stylesheet">
+    <link href="operations_ui.css?v=2" rel="stylesheet">
     <script src="operations_table_filters.js"></script>
     <style>
       tr {vertical-align: top;}
@@ -37,22 +37,11 @@
     ?>
   </head>
   <body class="bg-light">
-    <nav class="navbar navbar-dark noprint mb-3" style="background-color: #2e7d32;">
-      <div class="container-fluid">
-        <span class="navbar-brand"><i class="bi bi-list-check"></i> Build Switch Lists</span>
-        <div>
-          <a href="operations.html" class="btn btn-outline-light btn-sm me-2">
-            <i class="bi bi-arrow-left"></i> Operations
-          </a>
-          <a href="index.html" class="btn btn-outline-light btn-sm me-2">
-            <i class="bi bi-house"></i> Home
-          </a>
-          <a href="index-t.html" class="btn btn-outline-light btn-sm">
-            <i class="bi bi-diagram-3"></i> Site Map
-          </a>
-        </div>
-      </div>
-    </nav>
+    <?php
+    require_once 'operations_nav.php';
+    echo ops_render_navbar('build_switchlists.php', 'Build Switch Lists', 'bi-list-check');
+    echo ops_render_step_bar('build_switchlists.php', null);
+    ?>
     <div class="px-4 py-3">
   <h5 class="mb-3">Build Switch Lists</h5>
   <div class="row g-3 mb-4">

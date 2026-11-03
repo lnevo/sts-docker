@@ -133,6 +133,12 @@ mysqli_close($dbc);
     <div class="container-fluid">
       <span class="navbar-brand"><i class="bi bi-train-freight-front"></i> Operations</span>
       <div>
+        <a href="session_overview.php" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-calendar-check"></i> Sessions
+        </a>
+        <a href="editor.html" class="btn btn-outline-light btn-sm me-2">
+          <i class="bi bi-pencil-square"></i> Session Editor
+        </a>
         <a href="index.html" class="btn btn-outline-light btn-sm me-2">
           <i class="bi bi-house"></i> Home
         </a>

@@ -6,7 +6,7 @@ load_when:
   touching any page/template in sts/ — CSS, layout, print styles, status badges,
   drag-and-drop, mobile/tablet behaviour
 owner: shared
-last_updated: 09/07/2026
+last_updated: 11/03/2026
 ---
 
 # STS UI Conventions
@@ -409,6 +409,25 @@ Plus the full status badge block (see §4.5).
 Operations pages use a **green** navbar to visually distinguish them from
 data-entry and report pages.
 
+Don't hand-write it on workflow step pages: `operations_nav.php` renders it.
+`ops_render_navbar($current, $title, $icon, $extra_html)` emits the navbar
+(Operations, Sessions, Session Editor, Reports, Home, Site Map), and
+`ops_render_step_bar($current, $session_nbr)` emits the step bar under it:
+Prev / Next plus every step grouped Before / During / After, and a session
+badge that fetches `get_session_nbr.php` when `$session_nbr` is null. The step
+order lives in `ops_steps()`; add a step there, not in each page. Link to
+`operations.php`, never the `operations.html` redirect stub (it breaks Back).
+
+For every other full page (data editors, maintenance, club, report forms), use
+`page_chrome.php`: `sts_page_start(['title' => …, 'icon' => 'bi-…', 'section'
+=> 'data'|'maint'|'club'|'report'|'ops'|'session'])` … `sts_page_end()`. It
+emits the doctype, viewport, vendored Bootstrap/Icons, `page_chrome.css`, the
+section-coloured navbar with a back link, and the content wrapper. Classless
+legacy tables pick up the data-table look from `page_chrome.css`. Hubs share
+`hub.css`.
+
+The example below shows what the generated markup looks like:
+
 ```html
 <nav
   class="navbar navbar-dark px-3 py-2 d-flex justify-content-between align-items-center"
@@ -416,7 +435,7 @@ data-entry and report pages.
 >
   <span class="navbar-brand mb-0 h5">Page Title</span>
   <div class="d-flex gap-2">
-    <a href="operations.html" class="btn btn-sm btn-outline-light">
+    <a href="operations.php" class="btn btn-sm btn-outline-light">
       <i class="bi bi-arrow-left"></i> Operations
     </a>
     <a href="index.html" class="btn btn-sm btn-outline-light">

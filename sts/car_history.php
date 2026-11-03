@@ -1,29 +1,8 @@
-<html>
-  <head>
-    <title>STS - Car History Report</title>
-    <style>
-      body {font: normal 20px Verdana, Arial, sans-serif;}
-      table {border-collapse: collapse;}
-      tr {vertical-align: top}
-      th {border: 1px solid black; padding: 10px}
-      td {border: 1px solid black; padding: 10px}
-      @media print
-      {
-        .noprint {display:none;}
-      }
-    </style>
-
-  </head>
-  <body>
-    <div class="noprint"> 
-      <p><img src="ImageStore/GUI/Menu/manage.jpg" width="718" height="146" border="0" usemap="#Map5">
-        <map name="Map5">
-          <area shape="rect" coords="569,4,708,48" href="index.html">
-          <area shape="rect" coords="569,97,711,140" href="index-t.html">
-          <area shape="rect" coords="569,52,709,91" href="database.html">
-        </map>
-      </p>
-    </div>
+<?php
+require_once 'page_chrome.php';
+sts_page_start(['title' => 'Car History', 'icon' => 'bi-clock-history', 'section' => 'data', 'print' => true]);
+?>
+<div class="sts-card">
     <?php
       // bring in the utility files
       require 'open_db.php';
@@ -85,7 +64,7 @@
         print '<h3>Car History Report</h3>';
                
         print 'This report shows all car assignments, repositionings, pick-ups, and set-outs.<br /><br />';
-        print '<button onclick="window.print()">PRINT</button>&nbsp;&nbsp;';
+        print '';
         print 'Click <a href="db_list.php?tbl_name=cars">here</a> to return to the Car List<br /><br />';
         print '<hr />
                </div>';
@@ -144,5 +123,5 @@
         print 'No history found for this car</td></tr>';
       }
     ?>
-  </body>
-</html>
+</div>
+<?php sts_page_end(); ?>
