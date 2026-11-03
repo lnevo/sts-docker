@@ -24,5 +24,10 @@ chown www-data:www-data /var/lib/sts 2>/dev/null || true
 runuser -u www-data -- php /var/www/html/sts/api/bin/tokens.php bootstrap \
     || echo "API token bootstrap failed (continuing)"
 
+# No task process survives a container restart: clear queued/running tasks so
+# the maintenance lock does not stay held by a ghost.
+runuser -u www-data -- php /var/www/html/sts/api/bin/fail_tasks.php \
+    || echo "API stale task cleanup failed (continuing)"
+
 # Start Apache
 exec apache2-foreground

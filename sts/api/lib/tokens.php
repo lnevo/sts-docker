@@ -48,35 +48,48 @@ function api_tokens_read()
 /**
  * Read-modify-write under an exclusive flock. $fn receives the token list and
  * returns [newList, result]; the file is replaced atomically (tmp + rename).
+ * Files are created with umask 0027 (mode 0640) and, when run as root from
+ * `docker exec`, handed to www-data.
  */
 function api_tokens_mutate(callable $fn)
 {
     $path = api_tokens_path();
     $dir = dirname($path);
-    if (!is_dir($dir) && !@mkdir($dir, 0750, true)) {
-        throw new RuntimeException("Token directory $dir is not writable");
-    }
-    $lock = fopen($path . '.lock', 'c');
-    if (!$lock || !flock($lock, LOCK_EX)) {
-        throw new RuntimeException('Cannot lock token store');
-    }
+    $old = umask(0027);
     try {
-        [$tokens, $result] = $fn(api_tokens_read());
-        $tmp = $path . '.tmp.' . getmypid();
-        $json = json_encode(['version' => 1, 'tokens' => array_values($tokens)], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
-        if (file_put_contents($tmp, $json) === false) {
-            throw new RuntimeException('Cannot write token store');
+        if (!is_dir($dir) && !@mkdir($dir, 0750, true)) {
+            throw new RuntimeException("Token directory $dir is not writable");
         }
-        @chmod($tmp, 0640);
-        api_tokens_chown_www($tmp);
-        if (!rename($tmp, $path)) {
-            @unlink($tmp);
-            throw new RuntimeException('Cannot replace token store');
+        api_tokens_chown_www($dir);
+        $lock = @fopen($path . '.lock', 'c');
+        if (!$lock) {
+            throw new RuntimeException("Cannot open token lock {$path}.lock (run as www-data: docker exec -u www-data ...)");
         }
-        return $result;
+        api_tokens_chown_www($path . '.lock');
+        if (!flock($lock, LOCK_EX)) {
+            fclose($lock);
+            throw new RuntimeException('Cannot lock token store');
+        }
+        try {
+            [$tokens, $result] = $fn(api_tokens_read());
+            $tmp = $path . '.tmp.' . getmypid();
+            $json = json_encode(['version' => 1, 'tokens' => array_values($tokens)], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+            if (@file_put_contents($tmp, $json) === false) {
+                throw new RuntimeException('Cannot write token store');
+            }
+            @chmod($tmp, 0640);
+            api_tokens_chown_www($tmp);
+            if (!@rename($tmp, $path)) {
+                @unlink($tmp);
+                throw new RuntimeException('Cannot replace token store');
+            }
+            return $result;
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
     } finally {
-        flock($lock, LOCK_UN);
-        fclose($lock);
+        umask($old);
     }
 }
 
@@ -97,8 +110,8 @@ function api_tokens_active(array $tokens = null, $role = null)
     }));
 }
 
-/** Create a token. Returns the public record plus the one-time 'token'. */
-function api_token_create($name, $role)
+/** Build a token record without storing it. Returns [record with sha256, plaintext token]. */
+function api_token_make($name, $role)
 {
     $name = trim((string) $name);
     if ($name === '' || strlen($name) > 100) {
@@ -117,6 +130,13 @@ function api_token_create($name, $role)
         'last_used_at' => null,
         'revoked_at' => null,
     ];
+    return [$record, $token];
+}
+
+/** Create a token. Returns the public record plus the one-time 'token'. */
+function api_token_create($name, $role)
+{
+    [$record, $token] = api_token_make($name, $role);
     api_tokens_mutate(static function ($tokens) use ($record) {
         $tokens[] = $record;
         return [$tokens, null];
@@ -204,26 +224,40 @@ function api_bootstrap_token_path()
 /**
  * Ensure an admin token exists. Creates the "bootstrap" token and writes it to
  * bootstrap_admin.token (mode 640) only when there is no active admin token, or
- * when the only active admin is "bootstrap" and its file was lost.
+ * when the only active admin is "bootstrap" and its file was lost. Runs under
+ * the token-store lock; the file is written via temp file + chmod + rename.
  * Returns ['created' => bool, 'path' => string].
  */
 function api_tokens_bootstrap()
 {
     $path = api_bootstrap_token_path();
-    $admins = api_tokens_active(null, 'admin');
-    $need = count($admins) === 0;
-    if (!$need && count($admins) === 1 && $admins[0]['name'] === 'bootstrap' && !is_file($path)) {
-        api_token_revoke($admins[0]['id']);
-        $need = true;
-    }
-    if (!$need) {
-        return ['created' => false, 'path' => $path];
-    }
-    $rec = api_token_create('bootstrap', 'admin');
-    if (file_put_contents($path, $rec['token'] . "\n") === false) {
-        throw new RuntimeException("Cannot write $path");
-    }
-    @chmod($path, 0640);
-    api_tokens_chown_www($path);
-    return ['created' => true, 'path' => $path];
+    return api_tokens_mutate(static function ($tokens) use ($path) {
+        $admins = api_tokens_active($tokens, 'admin');
+        $need = count($admins) === 0;
+        if (!$need && count($admins) === 1 && $admins[0]['name'] === 'bootstrap' && !is_file($path)) {
+            foreach ($tokens as &$t) {
+                if (($t['id'] ?? '') === $admins[0]['id']) {
+                    $t['revoked_at'] = gmdate('c');
+                }
+            }
+            unset($t);
+            $need = true;
+        }
+        if (!$need) {
+            return [$tokens, ['created' => false, 'path' => $path]];
+        }
+        [$record, $token] = api_token_make('bootstrap', 'admin');
+        $tmp = $path . '.tmp.' . getmypid();
+        if (@file_put_contents($tmp, $token . "\n") === false) {
+            throw new RuntimeException("Cannot write $tmp");
+        }
+        @chmod($tmp, 0640);
+        api_tokens_chown_www($tmp);
+        if (!@rename($tmp, $path)) {
+            @unlink($tmp);
+            throw new RuntimeException("Cannot write $path");
+        }
+        $tokens[] = $record;
+        return [$tokens, ['created' => true, 'path' => $path]];
+    });
 }

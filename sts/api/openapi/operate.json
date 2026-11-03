@@ -3,7 +3,7 @@
     "/commands/{command}": {
       "post": {
         "summary": "Run one catalog command",
-        "description": "Role: operator. Runs a catalog command through operational_steps_dispatch_step. Unknown id: 404. The destructive ids (restore_database, wipe, reset, backup_database) need role admin. Flow-control and non-runnable ids are 422. Slow commands (generate_switchlists, render_switchlists, save_switchlist_cache, generate_waybills, generate_station_report, generate_wheel_report, rebuild_switchlists_index) and any request with async=true answer 202 with a task; poll GET /tasks/{id}.",
+        "description": "Role: operator. Runs a catalog command through operational_steps_dispatch_step. Unknown id: 404. The destructive ids (restore_database, backup_database, wipe_database, reset_session, restart_session, plus wipe and reset) need role admin and always run as an exclusive task (202). Flow-control and non-runnable ids are 422. Slow commands (generate_switchlists, render_switchlists, save_switchlist_cache, generate_waybills, generate_station_report, generate_wheel_report, rebuild_switchlists_index) and any request with async=true answer 202 with a task; poll GET /tasks/{id}. Any other command is a write and answers 409 while a maintenance task is queued or running.",
         "x-sts-role": "operator",
         "security": [
           {
@@ -57,7 +57,7 @@
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "description": "Another exclusive task is running (async destructive commands).",
+            "description": "Another exclusive task is running (async destructive commands); also a maintenance task (queued or running exclusive task) blocks writes.",
             "content": {
               "application/json": {
                 "schema": {
@@ -131,7 +131,7 @@
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "description": "Car is not in Loading status.",
+            "description": "Car is not in Loading status; also a maintenance task (queued or running exclusive task) blocks writes.",
             "content": {
               "application/json": {
                 "schema": {
@@ -193,7 +193,7 @@
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "description": "Car is not in Unloading status.",
+            "description": "Car is not in Unloading status; also a maintenance task (queued or running exclusive task) blocks writes.",
             "content": {
               "application/json": {
                 "schema": {
@@ -255,7 +255,7 @@
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "description": "Car is not Empty or already has orders.",
+            "description": "Car is not Empty or already has orders; also a maintenance task (queued or running exclusive task) blocks writes.",
             "content": {
               "application/json": {
                 "schema": {
@@ -325,6 +325,9 @@
           },
           "403": {
             "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Maintenance"
           }
         }
       }

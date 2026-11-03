@@ -142,7 +142,7 @@
     "/admin/backups": {
       "post": {
         "summary": "Back up the database",
-        "description": "Writes backups/<name> with backup_tables(); fast, so synchronous. 409 when the name exists (unless overwrite) or an exclusive task is active. Role: admin.",
+        "description": "Writes backups/<name> with backup_tables(); fast, so synchronous. 409 when the name exists (unless overwrite) or an exclusive task is active. Role: admin. The dump holds the maintenance gate: an exclusive task cannot start until it is done, and 409 is returned while one is queued or running.",
         "x-sts-role": "admin",
         "security": [
           {
@@ -188,7 +188,7 @@
             "$ref": "#/components/responses/Invalid"
           },
           "409": {
-            "description": "Another exclusive task is queued or running",
+            "description": "Another exclusive task is queued or running; also a maintenance task (queued or running exclusive task) blocks writes.",
             "content": {
               "application/json": {
                 "schema": {
@@ -252,7 +252,7 @@
             "$ref": "#/components/responses/Invalid"
           },
           "409": {
-            "description": "Another exclusive task is queued or running",
+            "description": "Another exclusive task is queued or running; also a maintenance task (queued or running exclusive task) blocks writes.",
             "content": {
               "application/json": {
                 "schema": {
@@ -313,7 +313,7 @@
             "$ref": "#/components/responses/Invalid"
           },
           "409": {
-            "description": "Another exclusive task is queued or running",
+            "description": "Another exclusive task is queued or running; also a maintenance task (queued or running exclusive task) blocks writes.",
             "content": {
               "application/json": {
                 "schema": {
@@ -374,7 +374,7 @@
             "$ref": "#/components/responses/Invalid"
           },
           "409": {
-            "description": "Another exclusive task is queued or running",
+            "description": "Another exclusive task is queued or running; also a maintenance task (queued or running exclusive task) blocks writes.",
             "content": {
               "application/json": {
                 "schema": {
@@ -435,7 +435,7 @@
             "$ref": "#/components/responses/Invalid"
           },
           "409": {
-            "description": "Another exclusive task is queued or running",
+            "description": "Another exclusive task is queued or running; also a maintenance task (queued or running exclusive task) blocks writes.",
             "content": {
               "application/json": {
                 "schema": {
@@ -443,6 +443,87 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/admin/tasks/{id}/fail": {
+      "post": {
+        "summary": "Mark a stuck task failed",
+        "description": "Role: admin. Clears a queued or running task that will not finish, which releases the maintenance lock. A running task whose process is still alive is refused with 409 unless the body says `force: true` (the process is not killed). Terminal tasks are 409. Not blocked by the maintenance lock.",
+        "x-sts-role": "admin",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Task marked failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Task"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "Task already finished, or its process is still alive and force was not given.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
           }
         }
       }

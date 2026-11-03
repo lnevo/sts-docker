@@ -2,10 +2,13 @@
 /**
  * API token CLI.
  *
- *   php sts/api/bin/tokens.php list
- *   php sts/api/bin/tokens.php create <name> <role>     (prints the token once)
- *   php sts/api/bin/tokens.php revoke <id>
- *   php sts/api/bin/tokens.php bootstrap                (used by start.sh)
+ *   docker exec -u www-data <container> php /var/www/html/sts/api/bin/tokens.php list
+ *   ... tokens.php create <name> <role>     (prints the token once)
+ *   ... tokens.php revoke <id>
+ *   ... tokens.php bootstrap                (used by start.sh)
+ *
+ * Run it as www-data (docker exec -u www-data). As root it still works: files it
+ * creates are chowned to www-data so Apache can read and lock them.
  *
  * Output is JSON. Exit code 0 on success, 1 on usage errors, 2 on failures.
  */

@@ -42,7 +42,12 @@ function operate_command(array $req)
     }
     api_operate_validate($command, $params);
 
-    $async = !empty($body['async']) || in_array($command, OPERATE_SLOW_COMMANDS, true);
+    // Destructive commands always run as an exclusive (maintenance) task. Any
+    // other command waits behind the maintenance gate for the rest of the request.
+    if (!$destructive) {
+        api_maintenance_enter();
+    }
+    $async = $destructive || !empty($body['async']) || in_array($command, OPERATE_SLOW_COMMANDS, true);
     if ($async) {
         require_once dirname(__DIR__) . '/lib/tasks.php';
         $task = api_task_create('command', [
@@ -80,10 +85,21 @@ function operate_load_unload($mode)
         $new = $mode === 'load' ? 'Loaded' : 'Empty';
         $dbc = api_db();
         $dbc->begin_transaction();
+        // Re-read the status under a row lock: load_unload.php acts on whatever the car is then.
+        $cur = api_db_value('SELECT status FROM cars WHERE Id = ? FOR UPDATE', 'i', [$car['id']]);
+        if ($cur !== $need) {
+            $dbc->rollback();
+            api_error(409, "Car is '" . ($cur ?? 'gone') . "'; $mode needs status '$need'");
+        }
         if ($mode === 'unload') {
+            // Same as load_unload.php: the orders of an unloaded car are deleted. They may already be gone.
             api_db_exec('DELETE FROM car_orders WHERE car = ?', 'i', [$car['id']]);
         }
-        api_db_exec('UPDATE cars SET status = ?, last_spotted = 0 WHERE Id = ? AND status = ?', 'sis', [$new, $car['id'], $need]);
+        $changed = api_db_exec('UPDATE cars SET status = ?, last_spotted = 0 WHERE Id = ? AND status = ?', 'sis', [$new, $car['id'], $need]);
+        if ($changed !== 1) {
+            $dbc->rollback();
+            api_error(409, "Car changed state while $mode was running");
+        }
         $dbc->commit();
         return read_find_car((string) $car['id']);
     };
@@ -123,10 +139,14 @@ function operate_reposition(array $req)
         api_error(409, 'Car must be Empty with no orders to be repositioned');
     }
     $session = api_session_nbr();
-    $like = str_pad((string) $session, 3, '0', STR_PAD_LEFT) . '-E__';
-    $last = api_db_value('SELECT waybill_number FROM car_orders WHERE waybill_number LIKE ? ORDER BY waybill_number DESC LIMIT 1 FOR UPDATE', 's', [$like]);
-    $counter = $last === null ? 1 : ((int) substr($last, -2)) + 1;
-    $waybill = str_pad((string) $session, 3, '0', STR_PAD_LEFT) . '-E' . str_pad((string) $counter, 2, '0', STR_PAD_LEFT);
+    $prefix = str_pad((string) $session, 3, '0', STR_PAD_LEFT) . '-E';
+    // Highest numeric suffix of NNN-E<digits>; two digits below 100, more after.
+    $max = api_db_value(
+        "SELECT MAX(CAST(SUBSTRING(waybill_number, ?) AS UNSIGNED)) FROM car_orders WHERE waybill_number LIKE ? AND SUBSTRING(waybill_number, ?) REGEXP '^[0-9]+\$' FOR UPDATE",
+        'isi', [strlen($prefix) + 1, $prefix . '%', strlen($prefix) + 1]
+    );
+    $counter = $max === null ? 1 : ((int) $max) + 1;
+    $waybill = $prefix . str_pad((string) $counter, 2, '0', STR_PAD_LEFT);
     // For E waybills car_orders.shipment holds the destination location id.
     api_db_exec('INSERT INTO car_orders (waybill_number, shipment, car) VALUES (?, ?, ?)', 'sii', [$waybill, (int) $dest['id'], $car['id']]);
     api_db_exec("UPDATE cars SET status = 'Ordered' WHERE Id = ?", 'i', [$car['id']]);
@@ -156,7 +176,7 @@ function operate_session_advance(array $req)
     return ['session_nbr_before' => $r['session_nbr_before'], 'session_nbr' => $r['session_nbr_after']];
 }
 
-api_route('POST', '/commands/{command}', 'operate_command', 'operator');
+api_route('POST', '/commands/{command}', 'operate_command', 'operator', ['maint' => 'self']);
 api_route('POST', '/cars/{car}/load', operate_load_unload('load'), 'operator');
 api_route('POST', '/cars/{car}/unload', operate_load_unload('unload'), 'operator');
 api_route('POST', '/cars/{car}/reposition', 'operate_reposition', 'operator');

@@ -87,7 +87,7 @@
     "/settings": {
       "get": {
         "summary": "List settings",
-        "description": "Role: reader.",
+        "description": "Role: reader. Readable without a token while STS_API_READ_OPEN=1 (the default).",
         "x-sts-role": "reader",
         "responses": {
           "200": {
@@ -1247,7 +1247,7 @@
     "/sessions": {
       "get": {
         "summary": "Session output directories",
-        "description": "Role: reader.",
+        "description": "Role: reader. Readable without a token while STS_API_READ_OPEN=1 (the default).",
         "x-sts-role": "reader",
         "responses": {
           "200": {
@@ -1336,7 +1336,7 @@
     "/backups": {
       "get": {
         "summary": "Backup files",
-        "description": "Role: reader.",
+        "description": "Role: reader. Readable without a token while STS_API_READ_OPEN=1 (the default).",
         "x-sts-role": "reader",
         "responses": {
           "200": {

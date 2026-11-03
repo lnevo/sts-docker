@@ -29,6 +29,11 @@ function api_pagination(array $query)
 {
     $limit = 100;
     $offset = 0;
+    foreach (['limit', 'offset'] as $k) {
+        if (isset($query[$k]) && !is_string($query[$k])) {
+            api_error(422, "$k must be a single value", 'invalid');
+        }
+    }
     if (isset($query['limit'])) {
         if (!ctype_digit((string) $query['limit']) || (int) $query['limit'] < 1) {
             api_error(422, 'limit must be a positive integer', 'invalid');
@@ -48,7 +53,10 @@ function api_pagination(array $query)
 function api_query_str(array $query, $key)
 {
     $v = $query[$key] ?? '';
-    return is_string($v) ? trim($v) : '';
+    if (!is_string($v)) {
+        api_error(422, "$key must be a single value", 'invalid');
+    }
+    return trim($v);
 }
 
 /** Query filter that must be one of $allowed (or absent -> $default). */

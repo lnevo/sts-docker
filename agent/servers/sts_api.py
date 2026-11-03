@@ -105,7 +105,11 @@ def call(method, path, query=None, body=None, role="reader"):
 
 
 def seg(value: object) -> str:
-    return urllib.parse.quote(str(value), safe="")
+    """One URL path segment, percent-encoded. '.' and '..' would climb the path, so they are refused."""
+    text = str(value)
+    if text in (".", ".."):
+        raise ApiError(f"Invalid path segment {text!r}: '.' and '..' are not allowed in ids or names")
+    return urllib.parse.quote(text, safe="")
 
 
 def need(args: dict, *keys: str) -> None:
@@ -143,14 +147,15 @@ def t_list(args):
     query = dict(args.get("filters") or {})
     query["limit"] = args.get("limit")
     query["offset"] = args.get("offset")
-    return call("GET", LIST_PATHS[entity], query)
+    return call("GET", LIST_PATHS[entity], query, role="operator" if entity == "tasks" else "reader")
 
 
 def t_get(args):
     need(args, "entity", "id")
     if args["entity"] not in GET_ENTITIES:
         raise ApiError(f"Unknown entity {args['entity']}. Use one of: {', '.join(GET_ENTITIES)}")
-    return call("GET", f"/{args['entity']}/{seg(args['id'])}")
+    return call("GET", f"/{args['entity']}/{seg(args['id'])}",
+                role="operator" if args["entity"] == "tasks" else "reader")
 
 
 def t_car_history(args):
@@ -177,7 +182,7 @@ def t_task(args):
     deadline = time.time() + wait
     poll = float(os.environ.get("STS_API_POLL", "2"))
     while True:
-        task = call("GET", f"/tasks/{seg(args['id'])}", {"log": log})
+        task = call("GET", f"/tasks/{seg(args['id'])}", {"log": log}, role="operator")
         status = task.get("status") if isinstance(task, dict) else None
         if status in DONE or time.time() >= deadline:
             if isinstance(task, dict) and status not in DONE and wait:
@@ -324,7 +329,7 @@ TOOLS = [
     Tool("sts_catalog", "Role: reader. The operational steps catalog: command ids, parameters and "
          "dynamic options (jobs, locations, backups). Pass command for one command's params only.",
          obj({"command": S}), t_catalog),
-    Tool("sts_task", "Role: reader. Status and log tail of a background task (from a 202 response). "
+    Tool("sts_task", "Role: operator (tasks are never readable anonymously). Status and log tail of a background task (from a 202 response). "
          "wait_seconds polls until it succeeds or fails, or the wait runs out.",
          obj({"id": S, "wait_seconds": {"type": "number", "description": "Max 600."},
               "log_lines": {"type": "integer"}}, ["id"]), t_task),
@@ -339,16 +344,16 @@ TOOLS = [
          "reposition needs a location (id or code).",
          obj({"car": {"type": ["string", "integer"]}, "action": {"type": "string", "enum": ["load", "unload", "reposition"]},
               "location": {"type": ["string", "integer"]}}, ["car", "action"]), t_car_action,
-         read_only=False, destructive=False),
+         read_only=False, destructive=True),
     Tool("sts_advance_session", "Role: operator. Increment the session number (end of an operating "
          "session). Not reversible except by restoring a backup.",
-         obj({}), t_advance, read_only=False, destructive=False),
+         obj({}), t_advance, read_only=False, destructive=True),
     Tool("sts_update", "Role: editor. Edit one record: PATCH cars, jobs, shipments; PUT ownership, "
          "settings. Writable columns are whitelisted server-side; fields use snake_case.",
          obj({"entity": {"type": "string", "enum": list(UPDATE_ROUTES)}, "id": {"type": ["string", "integer"]},
               "fields": O}, ["entity", "id", "fields"]), t_update, read_only=False, destructive=True),
     Tool("sts_create_car", "Role: editor. Create a car (POST /cars). Fields e.g. reporting_marks, "
-         "car_code_id, current_location_id, status.",
+         "car_code_id, location_id, status; optional id (409 if taken).",
          obj({"fields": O}, ["fields"]), t_create_car, read_only=False, destructive=False),
     Tool("sts_workflow_save", "Role: editor. Create or overwrite a named workflow recipe (JSON).",
          obj({"name": S, "recipe": O}, ["name", "recipe"]), t_wf_save, read_only=False, destructive=True),

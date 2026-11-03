@@ -3,8 +3,8 @@
     "/tasks": {
       "get": {
         "summary": "List tasks",
-        "description": "Newest first. Role: reader.",
-        "x-sts-role": "reader",
+        "description": "Newest first. Role: operator (task records are never opened by STS_API_READ_OPEN).",
+        "x-sts-role": "operator",
         "security": [
           {
             "bearerAuth": []
@@ -16,7 +16,8 @@
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Single value; an array-valued query parameter is a 422."
           },
           {
             "name": "status",
@@ -89,6 +90,9 @@
           },
           "422": {
             "$ref": "#/components/responses/Invalid"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           }
         }
       }
@@ -96,8 +100,8 @@
     "/tasks/{id}": {
       "get": {
         "summary": "One task",
-        "description": "Status, result and error; with log=N also the last N log lines. A running task whose process died is reported as failed. Role: reader.",
-        "x-sts-role": "reader",
+        "description": "Status, result and error; with log=N also the last N log lines. A running task whose process died is reported as failed. Role: operator (task records are never opened by STS_API_READ_OPEN). A running task whose pid is gone or was reused by another process (start time differs) is reported as failed.",
+        "x-sts-role": "operator",
         "security": [
           {
             "bearerAuth": []
@@ -149,6 +153,9 @@
           },
           "422": {
             "$ref": "#/components/responses/Invalid"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           }
         }
       }
@@ -156,7 +163,7 @@
     "/workflows/{name}/run": {
       "post": {
         "summary": "Run a saved workflow",
-        "description": "Runs the recipe through session_run_recipe(), as the run_catalog_workflow.php CLI does; the same seed gives the same database. render is accepted but the engine always renders. Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: operator.",
+        "description": "Runs the recipe through session_run_recipe(), as the run_catalog_workflow.php CLI does; the same seed gives the same database. render is accepted but the engine always renders. Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). A recipe holding destructive commands (restore_database, backup_database, wipe_database, reset_session, restart_session; ids are checked after normalization, disabled steps included) needs role admin: 403 naming the step numbers, checked when the request arrives and again when the task starts (the file may have changed). A malformed workflow name is 422. Role: operator (admin for destructive recipes).",
         "x-sts-role": "operator",
         "security": [
           {
@@ -206,7 +213,14 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "Role too low; or the recipe has destructive commands and the caller is not admin (message lists the step numbers).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -215,7 +229,7 @@
             "$ref": "#/components/responses/Invalid"
           },
           "409": {
-            "description": "Another exclusive task is queued or running",
+            "description": "Another exclusive task is queued or running, or a maintenance task blocks writes.",
             "content": {
               "application/json": {
                 "schema": {
@@ -287,6 +301,13 @@
               "string",
               "null"
             ]
+          },
+          "pid_start": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Process start time (clock ticks since boot, /proc/<pid>/stat field 22) recorded with pid; a different value means the pid was reused."
           }
         }
       },

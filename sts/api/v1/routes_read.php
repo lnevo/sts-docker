@@ -444,7 +444,11 @@ function read_workflow_name_file($name)
 {
     read_load_catalog();
     $dir = operational_steps_editor_dir();
-    $file = operational_steps_resolve_workflow_filename($dir, $name);
+    try {
+        $file = operational_steps_resolve_workflow_filename($dir, $name);
+    } catch (InvalidArgumentException $e) {
+        api_error(422, 'Invalid workflow name', 'invalid');
+    }
     if ($file === '') {
         read_not_found('Workflow');
     }

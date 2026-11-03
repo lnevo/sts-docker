@@ -21,7 +21,7 @@ api_route('POST', '/admin/tokens', static function ($req) {
         api_internal_error($e->getMessage());
     }
     api_ok($rec, null, 201);
-}, 'admin', ['summary' => 'Create an API token (returned once)']);
+}, 'admin', ['summary' => 'Create an API token (returned once)', 'maint' => 'none']);
 
 api_route('DELETE', '/admin/tokens/{id}', static function ($req) {
     try {
@@ -33,4 +33,4 @@ api_route('DELETE', '/admin/tokens/{id}', static function ($req) {
         api_error(404, 'No such token');
     }
     return $rec;
-}, 'admin', ['summary' => 'Revoke an API token']);
+}, 'admin', ['summary' => 'Revoke an API token', 'maint' => 'none']);

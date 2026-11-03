@@ -8,6 +8,9 @@
  * rest of the path). Roles: open, reader, operator, editor, admin.
  * A handler receives $req = [method, params, query, path, user, legacy] and either
  * returns the `data` value (wrapped in the envelope) or calls api_ok()/api_error().
+ * Write routes take part in the maintenance lock (409 while an exclusive task is
+ * queued or running) unless opts['maint'] is 'none' (never blocked) or 'self'
+ * (the handler checks, atomically, when it creates the exclusive task).
  * Legacy routes (opts['legacy'] => true) use an absolute pattern such as
  * '/wagon/{rest*}' and keep the old response shapes.
  */
@@ -56,11 +59,68 @@ function api_request_path()
     return '/' . trim($path, '/');
 }
 
+/** host:port of an Origin header value, or null when it is not a usable origin. */
+function api_origin_hostport($origin)
+{
+    $p = parse_url((string) $origin);
+    if (!is_array($p) || empty($p['host']) || empty($p['scheme'])) {
+        return null;
+    }
+    $scheme = strtolower($p['scheme']);
+    $port = $p['port'] ?? ($scheme === 'https' ? 443 : 80);
+    return strtolower($p['host']) . ':' . (int) $port;
+}
+
+/** host:port of the request's Host header, defaulting the port from the origin's scheme. */
+function api_host_hostport($host, $origin)
+{
+    $scheme = strtolower((string) parse_url((string) $origin, PHP_URL_SCHEME));
+    $p = parse_url('//' . trim((string) $host));
+    if (!is_array($p) || empty($p['host'])) {
+        return null;
+    }
+    $port = $p['port'] ?? ($scheme === 'https' ? 443 : 80);
+    return strtolower($p['host']) . ':' . (int) $port;
+}
+
+/**
+ * Cross-site guard. Returns null when no Origin header was sent (devices, curl,
+ * helpers), true when the Origin's host:port equals the request Host, else false.
+ */
+function api_origin_same_host()
+{
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    if ($origin === '') {
+        return null;
+    }
+    $o = api_origin_hostport($origin);
+    $h = api_host_hostport($_SERVER['HTTP_HOST'] ?? '', $origin);
+    return $o !== null && $h !== null && $o === $h;
+}
+
+function api_method_is_safe($method)
+{
+    return in_array($method, ['GET', 'HEAD', 'OPTIONS'], true);
+}
+
+/**
+ * CORS: `*` for GET/HEAD. Writes (and preflights asking for a write method) get
+ * Access-Control-Allow-Origin only when the Origin is the same host.
+ */
 function api_cors_headers()
 {
-    header('Access-Control-Allow-Origin: *');
+    $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+    header('Vary: Origin');
     header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
     header('Access-Control-Allow-Headers: Authorization, Content-Type');
+    $wanted = $method === 'OPTIONS'
+        ? strtoupper($_SERVER['HTTP_ACCESS_CONTROL_REQUEST_METHOD'] ?? 'GET')
+        : $method;
+    if (in_array($wanted, ['GET', 'HEAD'], true)) {
+        header('Access-Control-Allow-Origin: *');
+    } elseif (api_origin_same_host() === true) {
+        header('Access-Control-Allow-Origin: ' . $_SERVER['HTTP_ORIGIN']);
+    }
 }
 
 function api_dispatch()
@@ -69,6 +129,13 @@ function api_dispatch()
     $path = api_request_path();
 
     $is_v1 = ($path === '/v1' || strpos($path, '/v1/') === 0);
+    if (!api_method_is_safe($method) && api_origin_same_host() === false) {
+        $msg = 'Cross-site write rejected: Origin does not match Host';
+        if ($is_v1) {
+            api_error(403, $msg);
+        }
+        api_legacy_error(403, $msg);
+    }
     $rel = $is_v1 ? (substr($path, 3) ?: '/') : $path;
 
     $allowed = [];
@@ -91,6 +158,9 @@ function api_dispatch()
             }
         }
         $user = api_require_role($r['role'], $r['legacy']);
+        if (!api_method_is_safe($method) && ($r['opts']['maint'] ?? 'guard') === 'guard') {
+            api_maintenance_enter($r['legacy']);
+        }
         $req = [
             'method' => $method, 'params' => $params, 'query' => $_GET,
             'path' => $rel, 'user' => $user, 'legacy' => $r['legacy'],

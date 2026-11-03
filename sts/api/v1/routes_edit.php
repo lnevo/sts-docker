@@ -220,8 +220,21 @@ function edit_car_patch(array $req)
 function edit_car_create(array $req)
 {
     $body = api_body();
-    $extra = ['owner_id' => 1, 'owner' => 1, 'on_off_rr' => 1, 'pools' => 1];
+    $extra = ['owner_id' => 1, 'owner' => 1, 'on_off_rr' => 1, 'pools' => 1, 'id' => 1];
     $car_body = array_diff_key($body, $extra);
+    $new_id = null;
+    if (array_key_exists('id', $body)) {
+        if (!is_int($body['id']) && !(is_string($body['id']) && ctype_digit($body['id']))) {
+            api_error(422, 'id must be a positive integer');
+        }
+        $new_id = (int) $body['id'];
+        if ($new_id < 1 || $new_id > 2147483647) {
+            api_error(422, 'id must be a positive integer');
+        }
+        if (api_db_value('SELECT Id FROM cars WHERE Id = ?', 'i', [$new_id]) !== null) {
+            api_error(409, 'A car with that id already exists');
+        }
+    }
     foreach (['reporting_marks'] as $need) {
         if (!isset($car_body[$need])) {
             api_error(422, "$need is required");
@@ -275,13 +288,24 @@ function edit_car_create(array $req)
     $names = [];
     $types = '';
     $params = [];
+    if ($new_id !== null) {
+        $cols = ['Id' => ['i', $new_id]] + $cols;
+    }
     foreach ($cols as $c => [$t, $v]) {
         $names[] = "`$c`";
         $types .= $t;
         $params[] = $v;
     }
-    api_db_exec('INSERT INTO cars (' . implode(', ', $names) . ') VALUES (' . implode(', ', array_fill(0, count($names), '?')) . ')', $types, $params);
-    $id = (int) $dbc->insert_id;
+    try {
+        api_db_exec('INSERT INTO cars (' . implode(', ', $names) . ') VALUES (' . implode(', ', array_fill(0, count($names), '?')) . ')', $types, $params);
+    } catch (mysqli_sql_exception $e) {
+        $dbc->rollback();
+        if ((int) $e->getCode() === 1062) {
+            api_error(409, 'A car with that id or reporting marks already exists');
+        }
+        throw $e;
+    }
+    $id = $new_id ?? (int) $dbc->insert_id;
     if ($owner !== null) {
         api_db_exec('INSERT INTO ownership (car_id, owner_id, on_off_rr) VALUES (?, ?, ?)', 'iis', [$id, $owner, $onoff]);
     }
@@ -420,18 +444,28 @@ function edit_workflow_put(array $req)
     try {
         $file = operational_steps_sanitize_workflow_filename($req['params']['name']);
     } catch (InvalidArgumentException $e) {
-        api_error(422, 'Invalid workflow name');
+        api_error(422, 'Invalid workflow name', 'invalid');
     }
     $dir = operational_steps_editor_dir();
     $path = operational_steps_workflow_path($dir, $file);
     $created = !is_file($path);
     $recipe = operational_steps_normalize_recipe($recipe);
+    require_once dirname(__DIR__) . '/lib/operate_command.php';
+    api_recipe_require_admin_for_destructive($recipe, $req['user']);
     if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
         api_internal_error("mkdir failed: $dir");
     }
     // Saved without touching the active-workflow state (unlike the web editor).
-    if (@file_put_contents($path, operational_steps_encode_recipe_json($recipe)) === false) {
-        api_internal_error("workflow write failed: $path");
+    // Temp file + rename, so a reader (or a running workflow) never sees half a file.
+    $tmp = $path . '.' . getmypid() . '.tmp';
+    if (@file_put_contents($tmp, operational_steps_encode_recipe_json($recipe)) === false) {
+        @unlink($tmp);
+        api_internal_error("workflow write failed: $tmp");
+    }
+    @chmod($tmp, is_file($path) ? (fileperms($path) & 0777) : 0644);
+    if (!@rename($tmp, $path)) {
+        @unlink($tmp);
+        api_internal_error("workflow rename failed: $path");
     }
     api_ok([
         'name' => $file,

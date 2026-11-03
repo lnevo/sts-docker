@@ -461,10 +461,12 @@ function handleWagonReposition() {
     }
 
     // Get next E-series waybill number
-    $waybillLike = str_pad($sessionNumber, 3, '0', STR_PAD_LEFT) . '-E__';
-    $waybillQuery = "SELECT waybill_number FROM car_orders
+    $waybillPrefix = str_pad($sessionNumber, 3, '0', STR_PAD_LEFT) . '-E';
+    $waybillLike = $waybillPrefix . '%';
+    $waybillQuery = "SELECT MAX(CAST(SUBSTRING(waybill_number, " . (strlen($waybillPrefix) + 1) . ") AS UNSIGNED)) AS n
+                     FROM car_orders
                      WHERE waybill_number LIKE ?
-                     ORDER BY waybill_number DESC LIMIT 1";
+                     AND SUBSTRING(waybill_number, " . (strlen($waybillPrefix) + 1) . ") REGEXP '^[0-9]+$'";
     $waybillStmt = $connection->prepare($waybillQuery);
     if (!$waybillStmt) {
         return jsonError('Database error: ' . $connection->error, 500);
@@ -477,7 +479,7 @@ function handleWagonReposition() {
     $waybillCounter = 1;
     if ($waybillResult->num_rows > 0) {
         $row = $waybillResult->fetch_assoc();
-        $waybillCounter = intval(substr($row['waybill_number'], -2, 2)) + 1;
+        $waybillCounter = intval($row['n']) + 1;
     }
 
     $waybillNumber = str_pad($sessionNumber, 3, '0', STR_PAD_LEFT) . '-E' . str_pad($waybillCounter, 2, '0', STR_PAD_LEFT);

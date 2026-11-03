@@ -10,6 +10,7 @@ if (!defined('STS_API_BOOT')) {
 }
 
 require_once dirname(__DIR__) . '/lib/tasks.php';
+require_once dirname(__DIR__) . '/lib/operate_command.php';
 
 /** Backup names: letters, digits, underscore, hyphen (the CLI's rule), max 64. */
 function admin_backup_name($value, $field)
@@ -86,7 +87,6 @@ api_route('POST', '/admin/backups', static function ($req) {
     $body = api_body();
     $name = admin_backup_name($body['name'] ?? null, 'name');
     $overwrite = admin_opt_bool($body, 'overwrite') ?? false;
-    api_task_require_idle();
     $dir = admin_backups_dir();
     if (is_file($dir . '/' . $name) && !$overwrite) {
         api_error(409, 'A backup with that name exists; pass overwrite true to replace it');
@@ -120,7 +120,7 @@ api_route('POST', '/admin/restore', static function ($req) {
     $full = admin_opt_bool($body, 'full') ?? true;
     $rec = api_task_create('restore', ['backup' => $backup, 'photos' => $photos, 'full' => $full], $req['user'], ['exclusive' => true]);
     api_task_accepted($rec);
-}, 'admin', ['summary' => 'Restore a backup (task)']);
+}, 'admin', ['summary' => 'Restore a backup (task)', 'maint' => 'self']);
 
 api_route('POST', '/admin/warm-start', static function ($req) {
     $body = api_body();
@@ -142,7 +142,7 @@ api_route('POST', '/admin/warm-start', static function ($req) {
     }
     $rec = api_task_create('warm_start', $spec, $req['user'], ['exclusive' => true]);
     api_task_accepted($rec);
-}, 'admin', ['summary' => 'Simulate sessions to a warm-start state (task)']);
+}, 'admin', ['summary' => 'Simulate sessions to a warm-start state (task)', 'maint' => 'self']);
 
 api_route('POST', '/admin/sessions/begin', static function ($req) {
     $body = api_body();
@@ -162,7 +162,7 @@ api_route('POST', '/admin/sessions/begin', static function ($req) {
     ]);
     $rec = api_task_create('begin_session', $spec, $req['user'], ['exclusive' => true]);
     api_task_accepted($rec);
-}, 'admin', ['summary' => 'Begin an operating session (task)']);
+}, 'admin', ['summary' => 'Begin an operating session (task)', 'maint' => 'self']);
 
 api_route('POST', '/admin/sessions/play', static function ($req) {
     $body = api_body();
@@ -173,12 +173,13 @@ api_route('POST', '/admin/sessions/play', static function ($req) {
     ]);
     $rec = api_task_create('play_session', $spec, $req['user'], ['exclusive' => true]);
     api_task_accepted($rec);
-}, 'admin', ['summary' => 'Play the current operating session (task)']);
+}, 'admin', ['summary' => 'Play the current operating session (task)', 'maint' => 'self']);
 
 api_route('POST', '/workflows/{name}/run', static function ($req) {
     $body = api_body();
     [$dir, $file] = read_workflow_name_file($req['params']['name']);
     $recipe = operational_steps_load_recipe_from_json_file(operational_steps_workflow_path($dir, $file));
+    api_recipe_require_admin_for_destructive($recipe, $req['user']);
     $total = count($recipe['steps'] ?? []);
     $start = admin_opt_int($body, 'start_step', 1, max(1, $total));
     $stop = admin_opt_int($body, 'stop_step', 1, max(1, $total));
@@ -218,6 +219,7 @@ api_route('POST', '/workflows/{name}/run', static function ($req) {
     $render = admin_opt_bool($body, 'render');
     $spec = admin_compact([
         'workflow' => $file,
+        'allow_destructive' => api_role_rank($req['user']['role'] ?? '') >= api_role_rank('admin') ? true : null,
         'seed' => admin_opt_int($body, 'seed', 0, 2147483647),
         'start_step' => $start,
         'stop_step' => $stop,
@@ -227,4 +229,4 @@ api_route('POST', '/workflows/{name}/run', static function ($req) {
     ]);
     $rec = api_task_create('workflow_run', $spec, $req['user'], ['exclusive' => true]);
     api_task_accepted($rec);
-}, 'operator', ['summary' => 'Run a saved workflow (task)']);
+}, 'operator', ['summary' => 'Run a saved workflow (task)', 'maint' => 'self']);

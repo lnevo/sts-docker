@@ -39,7 +39,7 @@ Counts to watch: `open_orders`, `unfilled_orders`, `unassigned`, `pending_pickup
 
 ## Tasks
 
-Slow commands, workflows and all admin actions return 202 with a `task_id`. Follow with `sts_task` (`wait_seconds` up to 600, `log_lines`). Statuses: queued, running, succeeded, failed. Only one admin task runs at a time (409 `conflict` otherwise). Do not start the next step until the task has succeeded.
+Slow commands, workflows and all admin actions return 202 with a `task_id`. Follow with `sts_task` (`wait_seconds` up to 600, `log_lines`). Statuses: queued, running, succeeded, failed. Only one admin task runs at a time (409 `conflict` otherwise). Do not start the next step until the task has succeeded. While a restore, warm start, begin, play, workflow run or destructive command is queued or running, every other write returns 409 `maintenance task <id> running`; wait for the task. `sts_task` needs the operator role. Recipes with destructive commands (restore, backup, wipe, reset) can only be saved or run by an admin.
 
 ## Safety
 

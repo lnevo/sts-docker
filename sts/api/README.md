@@ -22,7 +22,21 @@ Apache hands any `/sts/api/` path that is not a real file to `index.php`
   409 `conflict`, 422 `invalid`, 500 `internal` (never SQL or exception text).
 - All v1 field names are **snake_case** (`reporting_marks`, `location_id`,
   `car_code`); a foreign key `<thing>_id` sits beside its resolved value.
-- CORS is open (`*`); `OPTIONS` returns 204.
+- CORS: `Access-Control-Allow-Origin: *` on GET/HEAD; `OPTIONS` returns 204.
+- **Cross-site writes are rejected.** For every POST/PUT/PATCH/DELETE (v1 and
+  legacy wagon routes), if an `Origin` header is present and its host:port
+  differs from the request `Host`, the answer is 403 (legacy shape on legacy
+  routes) and `Access-Control-Allow-Origin` is only echoed for a same-host
+  origin. Requests without `Origin` (RFID devices, curl, helpers) are unaffected.
+- **Maintenance lock.** While an exclusive task (restore, warm start, begin,
+  play, workflow run, or a destructive command) is queued or running, every
+  other write route (commands, car actions, session advance, edits, workflow
+  save/delete, backups, and the legacy wagon writes) answers 409 `conflict`
+  `maintenance task <id> running`. Reads, token management and
+  `POST /admin/tasks/{id}/fail` are not blocked. Exclusive tasks wait for
+  writes in flight and check-and-create under one lock. Destructive commands
+  always run as an exclusive task (202).
+- Malformed query values (arrays such as `status[]=x`) are 422.
 
 ```bash
 curl http://localhost:8980/sts/api/v1/health
@@ -39,13 +53,26 @@ curl 'http://localhost:8980/sts/api/v1/cars?status=Empty&limit=20'
 | Role | Allowed |
 | --- | --- |
 | reader | every GET |
-| operator | operating moves (load/unload/reposition, advance session, run workflows, non-destructive commands) |
-| editor | data edits, saving/deleting workflows |
-| admin | backup/restore, warm start, begin/play session, destructive commands, token management |
+| operator | operating moves (load/unload/reposition, advance session, run workflows, non-destructive commands), reading tasks |
+| editor | data edits, saving/deleting workflows, creating cars (optional explicit `id`) |
+| admin | backup/restore, warm start, begin/play session, destructive commands, token management, `POST /admin/tasks/{id}/fail` |
 
 Environment (web service):
 
 - `STS_API_READ_OPEN=1` (default): GETs need no token. `0` requires `reader`.
+  This includes `/settings`, `/backups` and `/sessions`, which are readable
+  anonymously. `GET /tasks` and `GET /tasks/{id}` always need `operator`.
+- Workflows that contain destructive commands (`restore_database`,
+  `backup_database`, `wipe_database`, `reset_session`, `restart_session`) can
+  only be saved (`PUT /workflows/{name}`) or run (`POST /workflows/{name}/run`)
+  by an admin: 403 naming the step numbers. The check uses the normalized
+  recipe, counts disabled steps, and runs again when the task starts.
+- A task whose process vanished is marked failed on read (the pid and its
+  `/proc` start time are recorded, so a reused pid is not mistaken for it);
+  `start.sh` marks tasks left over from before a container restart failed
+  ("container restarted"); `POST /admin/tasks/{id}/fail` (body `{"force":true}`
+  if the process is still alive) clears a stuck one by hand. Only the newest
+  200 task records and logs are kept.
 - `STS_API_LEGACY_OPEN=1` (default): legacy wagon routes need no token. `0`
   requires `operator`.
 - `STS_API_ADMIN_TOKEN`: accepted as an admin token, not stored (CI use).
@@ -67,10 +94,14 @@ active admin token it creates one named `bootstrap` and writes it to
 ### Token CLI
 
 ```bash
-docker exec sts-docker-web-1 php /var/www/html/sts/api/bin/tokens.php list
-docker exec sts-docker-web-1 php /var/www/html/sts/api/bin/tokens.php create ci-bot operator
-docker exec sts-docker-web-1 php /var/www/html/sts/api/bin/tokens.php revoke tok_1a2b3c4d
+docker exec -u www-data sts-docker-web-1 php /var/www/html/sts/api/bin/tokens.php list
+docker exec -u www-data sts-docker-web-1 php /var/www/html/sts/api/bin/tokens.php create ci-bot operator
+docker exec -u www-data sts-docker-web-1 php /var/www/html/sts/api/bin/tokens.php revoke tok_1a2b3c4d
 ```
+
+Run it as `www-data` (`-u www-data`) so the store, its lock file and the task
+files stay owned by the web user. Run as root it still works but chowns every
+file it creates to `www-data`. Files are created with umask 0027 (mode 0640).
 
 The same operations over HTTP (admin): `GET/POST /v1/admin/tokens`,
 `DELETE /v1/admin/tokens/{id}`.

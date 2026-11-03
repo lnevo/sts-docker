@@ -39,7 +39,7 @@
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "description": "Conflict (duplicate reporting marks).",
+            "description": "Conflict (duplicate reporting marks); also a maintenance task (queued or running exclusive task) blocks writes.",
             "content": {
               "application/json": {
                 "schema": {
@@ -111,7 +111,7 @@
             "$ref": "#/components/responses/Forbidden"
           },
           "409": {
-            "description": "Conflict (duplicate reporting marks).",
+            "description": "Duplicate reporting marks or id; or a maintenance task blocks writes.",
             "content": {
               "application/json": {
                 "schema": {
@@ -176,6 +176,9 @@
           },
           "422": {
             "$ref": "#/components/responses/Invalid"
+          },
+          "409": {
+            "$ref": "#/components/responses/Maintenance"
           }
         },
         "parameters": [
@@ -241,6 +244,9 @@
           },
           "422": {
             "$ref": "#/components/responses/Invalid"
+          },
+          "409": {
+            "$ref": "#/components/responses/Maintenance"
           }
         },
         "parameters": [
@@ -306,6 +312,9 @@
           },
           "422": {
             "$ref": "#/components/responses/Invalid"
+          },
+          "409": {
+            "$ref": "#/components/responses/Maintenance"
           }
         },
         "parameters": [
@@ -368,6 +377,9 @@
           },
           "422": {
             "$ref": "#/components/responses/Invalid"
+          },
+          "409": {
+            "$ref": "#/components/responses/Maintenance"
           }
         },
         "parameters": [
@@ -396,7 +408,7 @@
     "/workflows/{name}": {
       "put": {
         "summary": "Save a workflow",
-        "description": "Role: editor. Writes the recipe JSON to the workflow directory (created if new). Does not change the active workflow.",
+        "description": "Role: editor. Writes the recipe JSON to the workflow directory (created if new). Does not change the active workflow. Recipes with destructive commands (restore_database, backup_database, wipe_database, reset_session, restart_session) need role admin: 403 naming the step numbers. A malformed name is 422. The file is replaced atomically.",
         "x-sts-role": "editor",
         "security": [
           {
@@ -448,6 +460,9 @@
           },
           "422": {
             "$ref": "#/components/responses/Invalid"
+          },
+          "409": {
+            "$ref": "#/components/responses/Maintenance"
           }
         },
         "parameters": [
@@ -508,6 +523,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Maintenance"
           }
         },
         "parameters": [
@@ -753,6 +771,11 @@
             "items": {
               "type": "integer"
             }
+          },
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Optional explicit car id (for migrations). 409 when the id is taken."
           }
         }
       },

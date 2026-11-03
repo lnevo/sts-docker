@@ -28,13 +28,59 @@ class ApiTaskFailure extends RuntimeException
     }
 }
 
+/** Newest task records (and logs) kept per stack. */
+const STS_API_TASKS_KEEP = 200;
+
+/** When running as root (docker exec), hand a file to www-data so Apache keeps access. */
+function api_tasks_chown_www($path)
+{
+    if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+        @chown($path, 'www-data');
+        @chgrp($path, 'www-data');
+    }
+}
+
 function api_tasks_dir()
 {
     $dir = rtrim(getenv('STS_API_DATA_DIR') ?: '/var/lib/sts', '/') . '/tasks';
     if (!is_dir($dir)) {
-        @mkdir($dir, 0775, true);
+        $old = umask(0027);
+        @mkdir($dir, 0750, true);
+        umask($old);
+        api_tasks_chown_www($dir);
     }
     return $dir;
+}
+
+/** Failure of the task store: an API 500 on the web, a RuntimeException in the CLI. */
+function api_tasks_fail($detail)
+{
+    if (function_exists('api_internal_error')) {
+        api_internal_error($detail);
+    }
+    throw new RuntimeException($detail);
+}
+
+/**
+ * Open (creating if needed) and exclusively lock a lock file in the tasks dir.
+ * $name '.lock' guards the records; '.maint.lock' orders writes against
+ * exclusive tasks. Returns the open handle.
+ */
+function api_tasks_lock_open($name, $op = LOCK_EX)
+{
+    $path = api_tasks_dir() . '/' . $name;
+    $old = umask(0027);
+    $fh = @fopen($path, 'c');
+    umask($old);
+    if (!$fh) {
+        api_tasks_fail("Cannot open task lock $path");
+    }
+    api_tasks_chown_www($path);
+    if (!flock($fh, $op)) {
+        fclose($fh);
+        api_tasks_fail("Cannot lock $path");
+    }
+    return $fh;
 }
 
 function api_task_id_valid($id)
@@ -74,11 +120,18 @@ function api_task_write(array $rec)
     $path = api_task_path($rec['id']);
     $tmp = $path . '.' . getmypid() . '.tmp';
     $json = json_encode($rec, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PRETTY_PRINT);
-    if ($json === false || file_put_contents($tmp, $json) === false || !rename($tmp, $path)) {
+    $old = umask(0027);
+    $ok = $json !== false && file_put_contents($tmp, $json) !== false;
+    umask($old);
+    if (!$ok) {
         @unlink($tmp);
         throw new RuntimeException('Cannot write task record ' . $rec['id']);
     }
-    @chmod($path, 0664);
+    api_tasks_chown_www($tmp);
+    if (!rename($tmp, $path)) {
+        @unlink($tmp);
+        throw new RuntimeException('Cannot write task record ' . $rec['id']);
+    }
 }
 
 /** Read-modify-write under the tasks lock. $fn(array $rec): array. */
@@ -93,8 +146,7 @@ function api_task_update($id, callable $fn)
         api_task_write($rec);
         return $rec;
     }
-    $lock = fopen(api_tasks_dir() . '/.lock', 'c');
-    flock($lock, LOCK_EX);
+    $lock = api_tasks_lock_open('.lock');
     $GLOBALS['api_task_lock_held'] = true;
     try {
         $rec = api_task_read($id);
@@ -111,7 +163,27 @@ function api_task_update($id, callable $fn)
     }
 }
 
-function api_task_pid_alive($pid)
+/** Process start time (clock ticks since boot, /proc/<pid>/stat field 22), or null. */
+function api_task_proc_start($pid)
+{
+    $stat = @file_get_contents('/proc/' . (int) $pid . '/stat');
+    if ($stat === false) {
+        return null;
+    }
+    $close = strrpos($stat, ')');
+    if ($close === false) {
+        return null;
+    }
+    // After "pid (comm) " the fields run from field 3 (state); starttime is field 22.
+    $f = explode(' ', substr($stat, $close + 2));
+    return isset($f[19]) && ctype_digit($f[19]) ? $f[19] : null;
+}
+
+/**
+ * Is the process alive and still the one that was recorded? $start is the
+ * recorded start time: a reused pid has a different one.
+ */
+function api_task_pid_alive($pid, $start = null)
 {
     $pid = (int) $pid;
     if ($pid <= 0) {
@@ -122,12 +194,24 @@ function api_task_pid_alive($pid)
         // "pid (comm) S ..." - state Z is a zombie, i.e. finished.
         $close = strrpos($stat, ')');
         $state = $close === false ? '' : substr($stat, $close + 2, 1);
-        return $state !== 'Z' && $state !== 'X';
+        if ($state === 'Z' || $state === 'X') {
+            return false;
+        }
+        if ($start !== null && $start !== '' && api_task_proc_start($pid) !== (string) $start) {
+            return false;
+        }
+        return true;
     }
     if (is_dir('/proc/self')) {
         return false; // procfs is mounted and has no such pid
     }
     return function_exists('posix_kill') ? @posix_kill($pid, 0) : false;
+}
+
+/** Is the process of a task record alive (pid plus recorded start time)? */
+function api_task_alive(array $rec)
+{
+    return api_task_pid_alive($rec['pid'] ?? 0, $rec['pid_start'] ?? null);
 }
 
 /** Turn a queued/running task whose process is gone into 'failed'. Returns the (possibly updated) record. */
@@ -141,7 +225,7 @@ function api_task_reconcile(array $rec)
     $dead = false;
     $why = '';
     if ($status === 'running') {
-        $dead = !api_task_pid_alive($pid);
+        $dead = !api_task_alive($rec);
         $why = 'Task process ' . $pid . ' is gone without finishing';
     } else {
         $age = time() - (int) strtotime($rec['created_at'] ?? 'now');
@@ -270,8 +354,55 @@ function api_task_spawn($id)
 }
 
 /**
+ * Maintenance gate for write routes. Takes a shared lock on .maint.lock for the
+ * rest of the request (exclusive task creation takes it exclusively, so it
+ * waits for writes in flight), then answers 409 when an exclusive task is
+ * queued or running. Idempotent within a request.
+ */
+function api_maintenance_enter($legacy = false)
+{
+    if (!empty($GLOBALS['api_maint_fh'])) {
+        return;
+    }
+    $GLOBALS['api_maint_fh'] = api_tasks_lock_open('.maint.lock', LOCK_SH);
+    $busy = api_task_exclusive_busy();
+    if ($busy !== null) {
+        $msg = 'maintenance task ' . $busy['id'] . ' ' . $busy['status'];
+        if ($legacy) {
+            api_legacy_error(409, $msg);
+        }
+        api_error(409, $msg, 'conflict');
+    }
+}
+
+/** Delete all but the newest STS_API_TASKS_KEEP finished task records and their logs. */
+function api_task_prune()
+{
+    $ids = [];
+    foreach (glob(api_tasks_dir() . '/*.json') ?: [] as $file) {
+        $id = basename($file, '.json');
+        if (api_task_id_valid($id)) {
+            $ids[] = $id;
+        }
+    }
+    if (count($ids) <= STS_API_TASKS_KEEP) {
+        return;
+    }
+    rsort($ids);
+    foreach (array_slice($ids, STS_API_TASKS_KEEP) as $id) {
+        $rec = api_task_read($id);
+        if ($rec !== null && in_array($rec['status'] ?? '', ['queued', 'running'], true)) {
+            continue; // never drop a live task
+        }
+        @unlink(api_task_path($id));
+        @unlink(api_task_path($id, 'log'));
+    }
+}
+
+/**
  * Create and start a task.
- * @param array $opts exclusive (bool): 409 when another exclusive task is queued/running
+ * @param array $opts exclusive (bool): 409 when another exclusive task is queued/running;
+ *                    the check and the create happen under one lock, after in-flight writes drain.
  * @return array the queued record
  */
 function api_task_create($kind, array $spec, ?array $user, array $opts = [])
@@ -280,8 +411,8 @@ function api_task_create($kind, array $spec, ?array $user, array $opts = [])
         throw new InvalidArgumentException('Unknown task kind');
     }
     $exclusive = !empty($opts['exclusive']);
-    $lock = fopen(api_tasks_dir() . '/.lock', 'c');
-    flock($lock, LOCK_EX);
+    $maint = $exclusive ? api_tasks_lock_open('.maint.lock', LOCK_EX) : null;
+    $lock = api_tasks_lock_open('.lock');
     $GLOBALS['api_task_lock_held'] = true;
     try {
         if ($exclusive) {
@@ -297,18 +428,26 @@ function api_task_create($kind, array $spec, ?array $user, array $opts = [])
             'exclusive' => $exclusive,
             'spec' => $spec,
             'pid' => null,
+            'pid_start' => null,
             'started_at' => null,
             'finished_at' => null,
             'result' => null,
             'error' => null,
         ];
         api_task_write($rec);
+        $old = umask(0027);
         @touch(api_task_path($id, 'log'));
-        @chmod(api_task_path($id, 'log'), 0664);
+        umask($old);
+        api_tasks_chown_www(api_task_path($id, 'log'));
+        api_task_prune();
     } finally {
         $GLOBALS['api_task_lock_held'] = false;
         flock($lock, LOCK_UN);
         fclose($lock);
+        if ($maint) {
+            flock($maint, LOCK_UN);
+            fclose($maint);
+        }
     }
     api_task_spawn($id);
     return $rec;

@@ -103,8 +103,26 @@ class ServerTests(unittest.TestCase):
         for name in ("sts_command", "sts_restore", "sts_warm_start", "sts_tokens", "sts_update"):
             self.assertFalse(tools[name]["annotations"]["readOnlyHint"], name)
             self.assertTrue(tools[name]["annotations"]["destructiveHint"], name)
-        self.assertFalse(tools["sts_advance_session"]["annotations"]["destructiveHint"])
+        for name in ("sts_car_action", "sts_advance_session"):
+            self.assertFalse(tools[name]["annotations"]["readOnlyHint"], name)
+            self.assertTrue(tools[name]["annotations"]["destructiveHint"], name)
+        self.assertFalse(tools["sts_create_car"]["annotations"]["destructiveHint"])
         self.assertEqual(len(tools), 21)
+
+    def test_seg_encodes_and_rejects_dot_segments(self):
+        sys.path.insert(0, str(ROOT / "servers"))
+        import sts_api
+        self.assertEqual(sts_api.seg("a b/c"), "a%20b%2Fc")
+        self.assertEqual(sts_api.seg(42), "42")
+        for bad in (".", ".."):
+            with self.assertRaises(sts_api.ApiError):
+                sts_api.seg(bad)
+
+    def test_dot_segment_is_refused_before_any_request(self):
+        out = run_server(self.env, INIT, call("sts_get", {"entity": "cars", "id": ".."}))
+        self.assertTrue(out[1]["result"]["isError"])
+        self.assertIn("not allowed", self.text(out))
+        self.assertEqual(Stub.seen, [])
 
     def test_list_unwraps_data_keeps_meta_sends_bearer(self):
         out = run_server(self.env, INIT, call("sts_list", {"entity": "cars", "filters": {"status": "Empty"}, "limit": 5}))

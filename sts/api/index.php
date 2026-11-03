@@ -24,6 +24,7 @@ require_once __DIR__ . '/lib/input.php';
 require_once __DIR__ . '/lib/auth.php';
 require_once __DIR__ . '/lib/router.php';
 require_once __DIR__ . '/lib/db.php';
+require_once __DIR__ . '/lib/tasks.php';
 
 // Last line of defence: any fatal or unanswered request becomes a JSON 500.
 register_shutdown_function(static function () {

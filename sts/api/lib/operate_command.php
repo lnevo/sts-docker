@@ -27,6 +27,47 @@ const OPERATE_SLOW_COMMANDS = [
 
 require_once __DIR__ . '/openapi.php';
 
+/**
+ * Destructive steps of a recipe, as the runner would see it: the recipe is
+ * normalized first (function ids are guessed from instruction text, if_then and
+ * goto steps are merged), so step numbers match a run. Every step counts, also
+ * disabled ones: they can be switched on by editing the file.
+ * @return array<int,array{step:int,command:string}>
+ */
+function api_recipe_destructive_steps(array $recipe)
+{
+    api_operate_load();
+    $catalog = operational_steps_catalog_by_id();
+    $found = [];
+    $norm = operational_steps_normalize_recipe($recipe);
+    foreach ($norm['steps'] ?? [] as $i => $step) {
+        if (!is_array($step)) {
+            continue;
+        }
+        $fid = (string) ($step['function'] ?? '');
+        $dispatch = (string) ($catalog[$fid]['dispatch'] ?? $fid);
+        foreach (array_unique([$fid, $dispatch]) as $id) {
+            if (in_array($id, OPERATE_DESTRUCTIVE_COMMANDS, true)) {
+                $found[] = ['step' => $i + 1, 'command' => $fid];
+                break;
+            }
+        }
+    }
+    return $found;
+}
+
+/** 403 unless admin when the recipe holds destructive steps; names the step numbers. */
+function api_recipe_require_admin_for_destructive(array $recipe, ?array $user)
+{
+    $found = api_recipe_destructive_steps($recipe);
+    if ($found && api_role_rank($user['role'] ?? '') < api_role_rank('admin')) {
+        $list = implode(', ', array_map(static function ($f) {
+            return $f['step'] . ' (' . $f['command'] . ')';
+        }, $found));
+        api_error(403, "Recipe has destructive commands at step(s) $list; role 'admin' is required");
+    }
+}
+
 function api_operate_load()
 {
     require_once dirname(__DIR__, 2) . '/operational_steps_catalog.php';

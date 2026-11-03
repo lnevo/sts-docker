@@ -5,6 +5,10 @@
  * (range text), session_count, render.
  * With a seed the global STS_SIM_SEED_ACTIVE flag is set, as the CLI does.
  */
+if (!defined('STS_API_BOOT')) {
+    define('STS_API_BOOT', true);
+}
+
 function api_task_kind_workflow_run(array $spec, callable $log)
 {
     $sts = dirname(__DIR__, 2);
@@ -18,12 +22,24 @@ function api_task_kind_workflow_run(array $spec, callable $log)
         $GLOBALS['STS_SIM_SEED_ACTIVE'] = true;
     }
     $editor = operational_steps_editor_dir();
-    $file = operational_steps_resolve_workflow_filename($editor, (string) ($spec['workflow'] ?? ''));
+    try {
+        $file = operational_steps_resolve_workflow_filename($editor, (string) ($spec['workflow'] ?? ''));
+    } catch (InvalidArgumentException $e) {
+        throw new ApiTaskFailure('Invalid workflow name');
+    }
     if ($file === '') {
         throw new ApiTaskFailure('Workflow not found');
     }
     $recipe = operational_steps_load_recipe_from_json_file(operational_steps_workflow_path($editor, $file));
     $recipe['source_workflow'] = basename($file);
+
+    // The file may have changed since the request was accepted: re-check.
+    require_once __DIR__ . '/../lib/operate_command.php';
+    $bad = empty($spec['allow_destructive']) ? api_recipe_destructive_steps($recipe) : [];
+    if ($bad) {
+        throw new ApiTaskFailure('Workflow now holds destructive commands (step '
+            . implode(', ', array_column($bad, 'step')) . ') and the task was not started by an admin');
+    }
 
     $options = ['format' => 'all'];
     if (!empty($spec['start_step'])) {

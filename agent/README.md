@@ -33,7 +33,7 @@ The bootstrap admin token is at `sts-docker-data/config/bootstrap_admin.token` o
 
 ## Tools
 
-Read (reader role; open by default): `sts_health`, `sts_session`, `sts_list`, `sts_get`, `sts_car_history`, `sts_catalog`, `sts_task`.
+Read (reader role; open by default): `sts_health`, `sts_session`, `sts_list`, `sts_get`, `sts_car_history`, `sts_catalog`. `sts_task` needs the operator role (task records are never open); so does `sts_list`/`sts_get` on `tasks`.
 Operator: `sts_command` (admin for the destructive commands), `sts_car_action`, `sts_advance_session`, `sts_workflow_run`.
 Editor: `sts_update`, `sts_create_car`, `sts_workflow_save`, `sts_workflow_delete`.
 Admin: `sts_backup`, `sts_restore`, `sts_warm_start`, `sts_session_begin`, `sts_session_play`, `sts_tokens`.

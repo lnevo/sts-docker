@@ -62,6 +62,7 @@ function run_task_finish($id, $status, $result, $error)
 $started = api_task_update($id, static function ($r) {
     $r['status'] = 'running';
     $r['pid'] = getmypid();
+    $r['pid_start'] = api_task_proc_start(getmypid());
     $r['started_at'] = api_task_now();
     return $r;
 });
