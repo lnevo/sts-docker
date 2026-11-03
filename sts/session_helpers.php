@@ -178,8 +178,8 @@ function session_ensure_output_root($root = null)
  * under sts/backups/session_state/sessions (see session_web_root(); writable by
  * www-data), but are served to the browser through so.php, so the storage path
  * never appears in a URL. Example:
- *   session_output_url('session_3/phase_01/CK1/phase_01_mobile.html')
- *   => 'so.php?f=session_3/phase_01/CK1/phase_01_mobile.html'
+ *   session_output_url('session_3/phase_01/JOB1/phase_01_mobile.html')
+ *   => 'so.php?f=session_3/phase_01/JOB1/phase_01_mobile.html'
  */
 function session_output_url($relative_path = '')
 {
@@ -2049,7 +2049,7 @@ function session_sibling_rel_href($to_session, $suffix_under_session)
  * Full session picker for so.php pages: skip-start, prev, select, next, skip-end
  * (same controls as session_overview / station report). Stays on the same view
  * via $suffix_under_session (path after session_N/, e.g. print_all.html,
- * train_D749.print_all.html, waybills/print_all.html).
+ * train_JOB1.print_all.html, waybills/print_all.html).
  *
  * Optional $suffix_by_session overrides the suffix per target session (used when
  * a train's job key differs across sessions). Empty override disables that target.
@@ -2892,7 +2892,7 @@ function session_reset_output($session_nbr, $root = null)
 /**
  * Slot key identifying a logical switch-list phase independent of the volatile
  * recipe step number: the trains it covers plus the operator-facing title/info.
- * Two generations of e.g. the "CK1 Inbound" phase share this key even when the
+ * Two generations of e.g. the "JOB1 Inbound" phase share this key even when the
  * recipe step index shifted between runs, so they collapse to one slot.
  */
 function session_phase_slot_key(array $phase)
@@ -2927,7 +2927,7 @@ function session_compact_session_output(array &$manifest, $session_nbr, $root = 
 
     // Keep the LAST occurrence of each slot (most recently generated wins).
     // Preserve manifest array order (not phase_NN folder numbers) so a
-    // reconstructed earlier leg (e.g. NVL Outbound as phase_06 listed before
+    // reconstructed earlier leg (e.g. JOB2 Outbound as phase_06 listed before
     // Return as phase_04) stays in authorial / operational sequence.
     $latest = [];
     $order = [];
@@ -4801,7 +4801,7 @@ function session_job_display_name($session_nbr, $job, $manifest = null, $root = 
 /**
  * Groups of job keys that share the same operator-facing train name, in manifest
  * order: [ display_name => [job_key, ...], ... ]. Jobs whose overwritten titles
- * collapse to the same name (e.g. STG-DEMMLER + D749 both "D749") are grouped so
+ * collapse to the same name (e.g. STG-JOB + JOB1 both "JOB1") are grouped so
  * the UI can present a single consolidated train.
  */
 function session_job_group_map($session_nbr, $manifest = null, $root = null)
@@ -5189,7 +5189,7 @@ function session_build_switchlist_print_all($dbc, $session_nbr, $root = null)
  * runs, in phase order, concatenated into one printable document — the switch
  * list analogue of the per-train waybill bundle (job_<job>.print_all.html). The
  * train is the consolidated group of member jobs sharing the given job's display
- * name, so multi-key trains (e.g. STG-DEMMLER + D749) print as one train.
+ * name, so multi-key trains (e.g. STG-JOB + JOB1) print as one train.
  * Returns the relative output path, or null when the train has no switch lists.
  */
 function session_build_switchlist_train_print_all($dbc, $session_nbr, $job, $root = null)
@@ -5679,17 +5679,15 @@ function session_manifest_has_switchlists(array $manifest, $session_nbr, $root =
 
 /**
  * Featured station names pinned to the top of a session station report (display
- * order). Layouts may override via warm_start_station_report_featured().
+ * order). A registered warm-start scenario supplies them ('featured_stations').
  *
  * @return list<string>
  */
 function session_station_report_featured_stations()
 {
-    if (function_exists('warm_start_station_report_featured')) {
-        return warm_start_station_report_featured();
-    }
+    $featured = plugins_scenario_call('featured_stations', [], []);
 
-    return [];
+    return is_array($featured) ? $featured : [];
 }
 
 /** Bump when station-report columns/filters change so cached HTML rebuilds. */
@@ -7249,40 +7247,6 @@ function session_wheel_report_finish_by_job(array &$by_job)
 }
 
 /**
- * Demmler Yard online staging pickup label (for STG-DEMMLER → D749 inbound rows).
- *
- * @return array{0:string,1:string}
- */
-function session_wheel_report_demmler_pickup($dbc)
-{
-    static $cache = null;
-    if ($cache !== null) {
-        return $cache;
-    }
-    $station = 'Demmler Yard';
-    $code = 'DEMMLER-YARD';
-    $rs = mysqli_query(
-        $dbc,
-        'SELECT r.station, l.code
-         FROM locations l
-         LEFT JOIN routing r ON r.id = l.station
-         WHERE l.code = "DEMMLER-YARD"
-         LIMIT 1'
-    );
-    if ($rs && ($row = mysqli_fetch_assoc($rs))) {
-        if (!empty($row['station'])) {
-            $station = (string) $row['station'];
-        }
-        if (!empty($row['code'])) {
-            $code = (string) $row['code'];
-        }
-    }
-    $cache = [$station, $code];
-
-    return $cache;
-}
-
-/**
  * Destination cell for an Ordered car (mirrors wheel_report.php shipment logic).
  *
  * @return array{0:string,1:string}
@@ -7443,41 +7407,6 @@ function session_wheel_report_data_live($dbc)
 }
 
 /**
- * STG-DEMMLER "D749 · Inbound" archive rows → D749 cars at Demmler after staging.
- *
- * @return list<array>
- */
-function session_wheel_report_stg_d749_inbound_rows($dbc, $session_nbr, $root = null)
-{
-    $root = $root ?? session_web_root();
-    $session_nbr = (int) $session_nbr;
-    list($dem_station, $dem_loc) = session_wheel_report_demmler_pickup($dbc);
-    $rows = [];
-    $seen = [];
-    foreach (glob(session_dir_for($session_nbr, $root) . '/phase_*/*STG-DEMMLER*_master.json') ?: [] as $f) {
-        $d = json_decode((string) file_get_contents($f), true);
-        if (!is_array($d) || ($d['job'] ?? '') !== 'STG-DEMMLER') {
-            continue;
-        }
-        if ((string) ($d['title'] ?? '') !== 'D749' || (string) ($d['info'] ?? '') !== 'Inbound') {
-            continue;
-        }
-        foreach (($d['sections'] ?? []) as $sec) {
-            foreach (($sec['cars'] ?? []) as $car) {
-                $marks = (string) ($car['reporting_marks'] ?? ($car[0] ?? ''));
-                if ($marks === '' || isset($seen[$marks])) {
-                    continue;
-                }
-                $seen[$marks] = true;
-                $rows[] = session_wheel_report_row_from_master_car($car, $dem_station, $dem_loc);
-            }
-        }
-    }
-
-    return $rows;
-}
-
-/**
  * Reconstruct end-of-session wheel report from switch-list archives.
  *
  * @return array{by_job: array<string,list<array>>, job_order: list<string>, total: int, live: bool}
@@ -7489,6 +7418,7 @@ function session_wheel_report_data_archived($dbc, $session_nbr, $root = null)
     $dir = session_dir_for($session_nbr, $root);
     $by_job = [];
     $seen = [];
+    $staging_jobs = session_staging_job_names($dbc, session_merge_runtime_config());
 
     foreach (glob($dir . '/phase_*/*_master.json') ?: [] as $f) {
         $d = json_decode((string) file_get_contents($f), true);
@@ -7496,7 +7426,7 @@ function session_wheel_report_data_archived($dbc, $session_nbr, $root = null)
             continue;
         }
         $job = trim((string) ($d['job'] ?? ''));
-        if ($job === '' || $job === 'STG-DEMMLER' || $job === 'STG-SCULLY') {
+        if ($job === '' || in_array($job, $staging_jobs, true)) {
             continue;
         }
         foreach ($d['sections'] as $sec) {
@@ -7516,13 +7446,15 @@ function session_wheel_report_data_archived($dbc, $session_nbr, $root = null)
         }
     }
 
-    foreach (session_wheel_report_stg_d749_inbound_rows($dbc, $session_nbr, $root) as $row) {
-        $marks = (string) $row['marks'];
-        if ($marks === '' || isset($seen['D749'][$marks])) {
-            continue;
+    foreach (plugins_wheel_report_extra_rows($dbc, $session_nbr, $root) as $job => $rows) {
+        foreach ($rows as $row) {
+            $marks = (string) $row['marks'];
+            if ($marks === '' || isset($seen[$job][$marks])) {
+                continue;
+            }
+            $seen[$job][$marks] = true;
+            $by_job[$job][] = $row;
         }
-        $seen['D749'][$marks] = true;
-        $by_job['D749'][] = $row;
     }
 
     session_wheel_report_finish_by_job($by_job);

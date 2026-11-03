@@ -1190,7 +1190,7 @@ components:
                 type: text
                 default: ""
                 required: false
-                placeholder: "Optional phase label (e.g. Starting, After D749, End of session)."
+                placeholder: "Optional phase label (e.g. Starting, After JOB1, End of session)."
                 visible_label: true
           -
             id: generate_wheel_report
@@ -1209,7 +1209,7 @@ components:
                 type: text
                 default: ""
                 required: false
-                placeholder: "Optional phase label (e.g. Starting, After CK1, End of session)."
+                placeholder: "Optional phase label (e.g. Starting, After JOB1, End of session)."
                 visible_label: true
           -
             id: render_switchlists
@@ -2183,7 +2183,7 @@ components:
                 type: text
                 default: ""
                 required: false
-                placeholder: "Optional phase label (e.g. Starting, After D749, End of session)."
+                placeholder: "Optional phase label (e.g. Starting, After JOB1, End of session)."
                 visible_label: true
           -
             id: generate_wheel_report
@@ -2202,7 +2202,7 @@ components:
                 type: text
                 default: ""
                 required: false
-                placeholder: "Optional phase label (e.g. Starting, After CK1, End of session)."
+                placeholder: "Optional phase label (e.g. Starting, After JOB1, End of session)."
                 visible_label: true
           -
             id: restore_database
@@ -4213,7 +4213,7 @@ components:
                   type: text
                   default: ""
                   required: false
-                  placeholder: "Optional phase label (e.g. Starting, After D749, End of session)."
+                  placeholder: "Optional phase label (e.g. Starting, After JOB1, End of session)."
                   visible_label: true
         generate_wheel_report:
           type: object
@@ -4251,7 +4251,7 @@ components:
                   type: text
                   default: ""
                   required: false
-                  placeholder: "Optional phase label (e.g. Starting, After CK1, End of session)."
+                  placeholder: "Optional phase label (e.g. Starting, After JOB1, End of session)."
                   visible_label: true
         render_switchlists:
           type: object

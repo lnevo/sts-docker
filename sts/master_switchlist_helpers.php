@@ -37,7 +37,7 @@ function master_sw_switchlist_info(array $options = [])
 
 /**
  * Train name shown on switch-list headers and printouts. Uses the Override Train
- * value (title) when set; otherwise the job's table_name (e.g. D749, NVL). The
+ * value (title) when set; otherwise the job's table_name (e.g. JOB1, JOB2). The
  * optional per-leg "info" note is appended for display only (it does not affect
  * train consolidation, which keys on the Override Train value alone).
  */
@@ -387,37 +387,36 @@ function master_sw_enrich_rows_for_render($dbc, array $rows)
 function master_sw_section_destination($dbc, array $row, array $section)
 {
     $is_empty = ($row['status'] === 'Empty') || ($row['status'] === 'Ordered');
-    if (!empty($section['show_island_destination'])) {
-        $unload_station = (string) ($row['unloading_station'] ?? '');
-        $unload_location = (string) ($row['unloading_location'] ?? '');
-        if (stripos($unload_station, 'Neville') !== false
-            || stripos($unload_station, 'Shenango') !== false
-            || strncmp($unload_location, 'NIL-', 4) === 0) {
+    $section = plugins_normalize_switchlist_section($section);
+    $override = $section['destination_override'] ?? null;
+    if (is_array($override)) {
+        // Section config: show the unloading (or loading) end when it matches the
+        // configured station names / location-code prefixes, else the opposite end.
+        $side = (($override['side'] ?? 'unloading') === 'loading') ? 'loading' : 'unloading';
+        $other = $side === 'loading' ? 'unloading' : 'loading';
+        $station = (string) ($row[$side . '_station'] ?? '');
+        $location = (string) ($row[$side . '_location'] ?? '');
+        $matches = false;
+        foreach ((array) ($override['station_match'] ?? []) as $needle) {
+            if ((string) $needle !== '' && stripos($station, (string) $needle) !== false) {
+                $matches = true;
+            }
+        }
+        foreach ((array) ($override['location_prefix'] ?? []) as $prefix) {
+            if ((string) $prefix !== '' && strncmp($location, (string) $prefix, strlen((string) $prefix)) === 0) {
+                $matches = true;
+            }
+        }
+        if ($matches) {
             return [
-                $unload_station,
-                $unload_location,
-                master_sw_row_destination_style($dbc, array_merge($row, ['unloading_location' => $unload_location])),
+                $station,
+                $location,
+                master_sw_row_destination_style($dbc, array_merge($row, [$side . '_location' => $location])),
             ];
         }
         return [
-            (string) ($row['loading_station'] ?? ''),
-            (string) ($row['loading_location'] ?? ''),
-            master_sw_row_destination_style($dbc, $row),
-        ];
-    }
-    if (!empty($section['show_scully_destination'])) {
-        $load_station = (string) ($row['loading_station'] ?? '');
-        $load_location = (string) ($row['loading_location'] ?? '');
-        if (stripos($load_station, 'Scully') !== false || strncmp($load_location, 'SCL-', 4) === 0) {
-            return [
-                $load_station,
-                $load_location,
-                master_sw_row_destination_style($dbc, array_merge($row, ['loading_location' => $load_location])),
-            ];
-        }
-        return [
-            (string) ($row['unloading_station'] ?? ''),
-            (string) ($row['unloading_location'] ?? ''),
+            (string) ($row[$other . '_station'] ?? ''),
+            (string) ($row[$other . '_location'] ?? ''),
             master_sw_row_destination_style($dbc, $row),
         ];
     }

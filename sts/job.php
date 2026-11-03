@@ -32,7 +32,7 @@ $train_groups = session_job_group_map($session, $manifest, $root);
 $job_display = $train_display[$job] ?? $job;
 
 // A "train" here is the consolidated group of jobs that share the same display
-// name (e.g. STG-DEMMLER + D749 both shown as "D749"). Merge every member's
+// name (e.g. STG-JOB + JOB1 both shown as "JOB1"). Merge every member's
 // switch-list legs into one phase-ordered sequence so the viewer shows the whole
 // train, and remember each leg's source job for its waybill links.
 $train_members = session_train_group_members($session, $job, $manifest, $root);

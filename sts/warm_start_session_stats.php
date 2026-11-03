@@ -1,39 +1,17 @@
 <?php
 /**
- * Per-session move statistics for NVL, D749, and CK1.
+ * Per-session move statistics. The counters themselves are scenario-defined: a
+ * registered warm-start scenario supplies the blank structure ('stats_blank'),
+ * records pickups/setouts ('stats_record_pickup' / 'stats_record_setout'), adds
+ * row columns from the named-stats deltas ('stats_row_extra') and describes how to
+ * print them ('stats_labels'). Without a scenario nothing is counted or printed.
  */
 
 function warm_start_session_stats_blank()
 {
-    return [
-        'NVL' => [
-            'pu_scully' => 0,
-            'so_south_1' => 0,
-            'pu_south_1' => 0,
-            'deliver_island' => 0,
-            'pu_island' => 0,
-            'so_south_2' => 0,
-            'pu_south_2' => 0,
-            'so_scully' => 0,
-            '_seen_island' => false,
-        ],
-        'D749' => [
-            'pu_demmler' => 0,
-            'pu_south' => 0,
-            'so_demmler' => 0,
-        ],
-        'CK1' => [
-            'pu_south' => 0,
-            'so_shenango' => 0,
-            'pu_shenango' => 0,
-            'weighed' => 0,
-            'reloads' => 0,
-            'outbound' => 0,
-            'so_south' => 0,
-        ],
-        'coke_deliveries' => 0,
-        'coke_reload_weigh' => 0,
-    ];
+    $blank = plugins_scenario_call('stats_blank', [], []);
+
+    return is_array($blank) ? $blank : [];
 }
 
 function &warm_start_session_stats_current()
@@ -65,105 +43,38 @@ function warm_start_reset_session_stats_log()
 
 function warm_start_record_job_pickup($dbc, $job_name, $location_id)
 {
-    if (!in_array($job_name, ['NVL', 'D749', 'CK1'], true)) {
-        return;
-    }
-
-    $station = warm_start_location_station($dbc, $location_id);
-    $s = &warm_start_session_stats_current();
-
-    if ($job_name === 'NVL') {
-        if ($station === 9) {
-            $s['NVL']['pu_scully']++;
-        } elseif ($station === 8) {
-            if (!$s['NVL']['_seen_island']) {
-                $s['NVL']['pu_south_1']++;
-            } else {
-                $s['NVL']['pu_south_2']++;
-            }
-        } elseif ($station === 3) {
-            $s['NVL']['pu_island']++;
-            $s['NVL']['_seen_island'] = true;
-        } elseif ($station === 12) {
-            $s['NVL']['_seen_island'] = true;
-        }
-        return;
-    }
-
-    if ($job_name === 'D749') {
-        if ($station === 10) {
-            $s['D749']['pu_demmler']++;
-        } elseif ($station === 8) {
-            $s['D749']['pu_south']++;
-        }
-        return;
-    }
-
-    if ($job_name === 'CK1') {
-        if ($station === 8) {
-            $s['CK1']['pu_south']++;
-        } elseif ($station === 12) {
-            $s['CK1']['pu_shenango']++;
-        }
-    }
+    plugins_scenario_call('stats_record_pickup', [$dbc, $job_name, $location_id], null);
 }
 
 function warm_start_record_job_setout($dbc, $job_name, $location_id)
 {
-    if (!in_array($job_name, ['NVL', 'D749', 'CK1'], true)) {
-        return;
-    }
-
-    $station = warm_start_location_station($dbc, $location_id);
-    $s = &warm_start_session_stats_current();
-
-    if ($job_name === 'NVL') {
-        if ($station === 9) {
-            $s['NVL']['so_scully']++;
-        } elseif ($station === 8) {
-            if (!$s['NVL']['_seen_island']) {
-                $s['NVL']['so_south_1']++;
-            } else {
-                $s['NVL']['so_south_2']++;
-            }
-        } elseif ($station === 3 || $station === 12) {
-            $s['NVL']['deliver_island']++;
-            $s['NVL']['_seen_island'] = true;
-        }
-        return;
-    }
-
-    if ($job_name === 'D749' && $station === 10) {
-        $s['D749']['so_demmler']++;
-        return;
-    }
-
-    if ($job_name === 'CK1') {
-        if ($station === 12) {
-            $s['CK1']['so_shenango']++;
-        } elseif ($station === 8) {
-            $s['CK1']['so_south']++;
-        }
-    }
+    plugins_scenario_call('stats_record_setout', [$dbc, $job_name, $location_id], null);
 }
 
-function warm_start_session_stats_commit($session, $label, array $coke_before = null)
+/**
+ * Snapshot the current session's counters (every bucket the scenario defines) plus
+ * scenario columns derived from the named-stats deltas, append it to the log, and reset.
+ */
+function warm_start_session_stats_commit($session, $label, array $stats_before = null)
 {
     $s = warm_start_session_stats_current();
-    $coke_after = warm_start_coke_stats_copy();
-    $delta = $coke_before === null
-        ? ['deliveries' => 0, 'reloads' => 0]
-        : warm_start_coke_stats_delta($coke_before, $coke_after);
+    $delta = $stats_before === null
+        ? []
+        : warm_start_stats_delta_all($stats_before, warm_start_stats_copy_all());
 
     $row = [
         'session' => (int) $session,
         'label' => $label,
-        'NVL' => $s['NVL'],
-        'D749' => $s['D749'],
-        'CK1' => $s['CK1'],
-        'coke_deliveries' => (int) $delta['deliveries'],
-        'coke_reload_weigh' => (int) $delta['reloads'],
     ];
+    foreach ($s as $key => $value) {
+        $row[$key] = $value;
+    }
+    $extra = plugins_scenario_call('stats_row_extra', [$delta], []);
+    if (is_array($extra)) {
+        foreach ($extra as $key => $value) {
+            $row[$key] = $value;
+        }
+    }
 
     $log = &warm_start_session_stats_log();
     $log[] = $row;
@@ -172,132 +83,68 @@ function warm_start_session_stats_commit($session, $label, array $coke_before = 
     return $row;
 }
 
+/**
+ * Report sections from the scenario's 'stats_labels' callable. Each section:
+ * title, row_key (key of the per-session array holding the columns, or null for
+ * top-level row keys), columns [[key, label, width], ...], rule (width of the
+ * dashed line), note (optional legend line).
+ *
+ * @return list<array>
+ */
+function warm_start_session_stats_labels()
+{
+    $sections = plugins_scenario_call('stats_labels', [], []);
+
+    return is_array($sections) ? $sections : [];
+}
+
 function warm_start_format_session_stats_report()
 {
     $log = warm_start_session_stats_log();
-    if (count($log) === 0) {
+    $sections = warm_start_session_stats_labels();
+    if (count($log) === 0 || count($sections) === 0) {
         return '';
     }
 
     $lines = [];
-    $lines[] = '=== NVL moves by session ===';
-    $lines[] = sprintf(
-        '%-7s %3s %3s %3s %3s %3s %3s %3s %3s',
-        'Sess',
-        'PuS',
-        'SoY',
-        'PuY',
-        'Del',
-        'PuI',
-        'SoY2',
-        'PuY2',
-        'SoS'
-    );
-    $lines[] = str_repeat('-', 52);
-    $nvl_totals = array_fill_keys(['pu_scully', 'so_south_1', 'pu_south_1', 'deliver_island', 'pu_island', 'so_south_2', 'pu_south_2', 'so_scully'], 0);
+    foreach ($sections as $n => $section) {
+        if ($n > 0) {
+            $lines[] = '';
+        }
+        $columns = $section['columns'] ?? [];
+        $row_key = $section['row_key'] ?? null;
+        $head_fmt = '%-7s';
+        $row_fmt = '%-7d';
+        $head = ['Sess'];
+        foreach ($columns as $col) {
+            $width = (int) ($col['width'] ?? 3);
+            $head_fmt .= ' %' . $width . 's';
+            $row_fmt .= ' %' . $width . 'd';
+            $head[] = (string) $col['label'];
+        }
+        $total_fmt = str_replace('%-7d', '%-7s', $row_fmt);
 
-    foreach ($log as $row) {
-        $n = $row['NVL'];
-        $lines[] = sprintf(
-            '%-7d %3d %3d %3d %3d %3d %3d %3d %3d',
-            $row['session'],
-            $n['pu_scully'],
-            $n['so_south_1'],
-            $n['pu_south_1'],
-            $n['deliver_island'],
-            $n['pu_island'],
-            $n['so_south_2'],
-            $n['pu_south_2'],
-            $n['so_scully']
-        );
-        foreach ($nvl_totals as $key => $_) {
-            if ($key[0] === '_') {
-                continue;
+        $lines[] = '=== ' . $section['title'] . ' ===';
+        $lines[] = vsprintf($head_fmt, $head);
+        $lines[] = str_repeat('-', (int) ($section['rule'] ?? 40));
+        $totals = [];
+        foreach ($columns as $col) {
+            $totals[$col['key']] = 0;
+        }
+        foreach ($log as $row) {
+            $source = $row_key === null ? $row : ($row[$row_key] ?? []);
+            $values = [$row['session']];
+            foreach ($columns as $col) {
+                $values[] = (int) ($source[$col['key']] ?? 0);
+                $totals[$col['key']] += (int) ($source[$col['key']] ?? 0);
             }
-            $nvl_totals[$key] += (int) ($n[$key] ?? 0);
+            $lines[] = vsprintf($row_fmt, $values);
+        }
+        $lines[] = vsprintf($total_fmt, array_merge(['Total'], array_values($totals)));
+        if (!empty($section['note'])) {
+            $lines[] = $section['note'];
         }
     }
-    $lines[] = sprintf(
-        '%-7s %3d %3d %3d %3d %3d %3d %3d %3d',
-        'Total',
-        $nvl_totals['pu_scully'],
-        $nvl_totals['so_south_1'],
-        $nvl_totals['pu_south_1'],
-        $nvl_totals['deliver_island'],
-        $nvl_totals['pu_island'],
-        $nvl_totals['so_south_2'],
-        $nvl_totals['pu_south_2'],
-        $nvl_totals['so_scully']
-    );
-    $lines[] = '  PuS=pickup Scully  SoY/PuY=South visit 1  Del=Island/Shen setout  PuI=pickup Island  SoY2/PuY2=South visit 2  SoS=setout Scully';
-
-    $lines[] = '';
-    $lines[] = '=== D749 moves by session ===';
-    $lines[] = sprintf('%-7s %5s %5s %5s', 'Sess', 'PuDEM', 'PuSth', 'SoDEM');
-    $lines[] = str_repeat('-', 28);
-    $d749_totals = ['pu_demmler' => 0, 'pu_south' => 0, 'so_demmler' => 0];
-    foreach ($log as $row) {
-        $d = $row['D749'];
-        $lines[] = sprintf(
-            '%-7d %5d %5d %5d',
-            $row['session'],
-            $d['pu_demmler'],
-            $d['pu_south'],
-            $d['so_demmler']
-        );
-        foreach ($d749_totals as $key => $_) {
-            $d749_totals[$key] += (int) ($d[$key] ?? 0);
-        }
-    }
-    $lines[] = sprintf('%-7s %5d %5d %5d', 'Total', $d749_totals['pu_demmler'], $d749_totals['pu_south'], $d749_totals['so_demmler']);
-
-    $lines[] = '';
-    $lines[] = '=== CK1 coke cycle by session ===';
-    $lines[] = sprintf('%-7s %4s %4s %4s %4s %4s %4s %4s', 'Sess', 'PuS', 'SoSh', 'PuSh', 'Wgh', 'Rld', 'Ob', 'SoS');
-    $lines[] = str_repeat('-', 44);
-    $ck1_totals = ['pu_south' => 0, 'so_shenango' => 0, 'pu_shenango' => 0, 'weighed' => 0, 'reloads' => 0, 'outbound' => 0, 'so_south' => 0];
-    foreach ($log as $row) {
-        $c = $row['CK1'];
-        $lines[] = sprintf(
-            '%-7d %4d %4d %4d %4d %4d %4d %4d',
-            $row['session'],
-            $c['pu_south'],
-            $c['so_shenango'],
-            $c['pu_shenango'],
-            $c['weighed'],
-            $c['reloads'],
-            $c['outbound'],
-            $c['so_south']
-        );
-        foreach ($ck1_totals as $key => $_) {
-            $ck1_totals[$key] += (int) ($c[$key] ?? 0);
-        }
-    }
-    $lines[] = sprintf(
-        '%-7s %4d %4d %4d %4d %4d %4d %4d',
-        'Total',
-        $ck1_totals['pu_south'],
-        $ck1_totals['so_shenango'],
-        $ck1_totals['pu_shenango'],
-        $ck1_totals['weighed'],
-        $ck1_totals['reloads'],
-        $ck1_totals['outbound'],
-        $ck1_totals['so_south']
-    );
-    $lines[] = '  PuS/SoS=South pickup/setout  SoSh/PuSh=Shenango reload drop / loaded pickup  Wgh/Rld/Ob=weigh stats';
-
-    $lines[] = '';
-    $lines[] = '=== Coke customer deliveries (unload) by session ===';
-    $lines[] = sprintf('%-7s %4s %4s', 'Sess', 'Del', 'Rld');
-    $lines[] = str_repeat('-', 18);
-    $del_total = 0;
-    $rld_total = 0;
-    foreach ($log as $row) {
-        $lines[] = sprintf('%-7d %4d %4d', $row['session'], $row['coke_deliveries'], $row['coke_reload_weigh']);
-        $del_total += (int) $row['coke_deliveries'];
-        $rld_total += (int) $row['coke_reload_weigh'];
-    }
-    $lines[] = sprintf('%-7s %4d %4d', 'Total', $del_total, $rld_total);
 
     return implode(PHP_EOL, $lines);
 }

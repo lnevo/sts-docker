@@ -59,16 +59,6 @@ if [[ -z "${SKIP_CATTESTS:-}" ]]; then
 fi
 
 if [[ -z "${SKIP_SIM:-}" ]]; then
-  step "cli-prepend"
-  # Baseline CLI sim scripts never load plugins (coke_orders_* undefined -> empty SQL IN () -> fatal in
-  # warm_start_summarize). Preload the plugin registry for CLI only; same shim is used for every label.
-  docker exec "$WEB" sh -c 'cat > /usr/local/etc/php/sandbox_prepend.php <<"PHP"
-<?php
-if (PHP_SAPI === "cli") { foreach (["plugins/plugins.php", "plugin_registry.php"] as $f) { $p = "/var/www/html/sts/" . $f; if (is_readable($p)) { require_once $p; if (function_exists("plugins_bootstrap_all")) { plugins_bootstrap_all(); } break; } } }
-PHP
-echo "auto_prepend_file=/usr/local/etc/php/sandbox_prepend.php" > /usr/local/etc/php/conf.d/zz-sandbox-prepend.ini'
-  trap 'docker exec "$WEB" rm -f /usr/local/etc/php/conf.d/zz-sandbox-prepend.ini' EXIT
-  done_step
   # Sandbox-only: stale session output from earlier labels would be appended to (manifest.json) / mixed in.
   [[ -d "$STS_BACKUPS_DIR/session_state" ]] && find "$STS_BACKUPS_DIR/session_state" -mindepth 1 -delete
   # Sandbox-only: plugin state outside the DB (track scale seed/settings/log) persists in backups/ across labels.
@@ -80,7 +70,6 @@ echo "auto_prepend_file=/usr/local/etc/php/sandbox_prepend.php" > /usr/local/etc
   docker exec "$DB" mariadb-dump --skip-comments --skip-dump-date -u sts_user -psts_password sts_db3 > "$OUT/db_after_warm_start.sql"
   step "sessions"
   STS_SIM_SEED="$SEED" "$H/bin/run_session_simulations.sh" --no-restore --no-warm-start --sessions "$SESSIONS" 2>&1 | tee "$OUT/sessions.log"
-  docker exec "$WEB" rm -f /usr/local/etc/php/conf.d/zz-sandbox-prepend.ini
   done_step
 fi
 
@@ -118,7 +107,7 @@ Commit: $COMMIT (STS_DOCKER=$STS_DOCKER), seed=$SEED, sessions=$SESSIONS, genera
 2. STS_DOCKER=\$STS_DOCKER STS_SANDBOX_DATA=$STS_SANDBOX_DATA SEED=$SEED SESSIONS=$SESSIONS bin/sandbox_baseline.sh <label>
 3. Compare: diff -r <baseline-dir> <new-dir> (ignore timings.txt, manifest.txt, README.md).
 Functions bootstrap: open_db.php, session_runtime.php (+session_runtime_bootstrap()), operational_steps_catalog.php, session_helpers.php.
-Sim steps (preceded by a CLI-only auto_prepend shim that loads the plugin registry, removed afterwards): apply_warm_start.sh --seed $SEED --sessions 3 --max-sessions 3; run_session_simulations.sh --no-restore --no-warm-start --sessions $SESSIONS.
+Sim steps (no CLI shim: warm_start_helpers.php bootstraps the plugin registry itself): apply_warm_start.sh --seed $SEED --sessions 3 --max-sessions 3; run_session_simulations.sh --no-restore --no-warm-start --sessions $SESSIONS.
 Note: the sim step restores nothing itself; backups/hart_seed is restored by apply_warm_start.sh.
 
 ## Timings (seconds)
