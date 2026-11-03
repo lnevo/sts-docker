@@ -93,16 +93,9 @@ try {
     switch ($action) {
         case 'catalog':
             $dbc = open_db();
-            $dynamic = operational_steps_fetch_dynamic_options($dbc);
+            $catalog = operational_steps_catalog_payload($dbc);
             mysqli_close($dbc);
-            operational_steps_api_json([
-                'ok' => true,
-                'categories' => operational_steps_catalog_categories(),
-                'adder_categories' => operational_steps_catalog_adder_categories(),
-                'dynamic_options' => $dynamic,
-                'functions' => operational_steps_catalog_definitions(),
-                'adder_functions' => operational_steps_catalog_adder_definitions(),
-            ]);
+            operational_steps_api_json(['ok' => true] + $catalog);
 
         case 'run_options':
             $workflow_file = operational_steps_api_workflow_file($_GET, $session_dir);
