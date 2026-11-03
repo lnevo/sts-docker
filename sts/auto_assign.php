@@ -1,6 +1,10 @@
 <html>
   <head>
     <title>STS - Auto-Assign Cars to Jobs/Trains</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="operations_ui.css?v=2" rel="stylesheet">
     <style>
       body {font: normal 20px Verdana, Arial, sans-serif;}
       table {border-collapse: collapse;}
@@ -10,14 +14,11 @@
     </style>
   </head>';
   <body>';
-    <p>
-      <img src="ImageStore/GUI/Menu/operations.jpg" width="716" height="145" border="0" usemap="#Map2">
-      <map name="Map2">
-      <area shape="rect" coords="568,5,712,46" href="index.html">
-      <area shape="rect" coords="570,97,710,138" href="index-t.html">
-      <area shape="rect" coords="568,52,717,93" href="operations.html">
-    </map>
-    </p>
+    <?php
+    require_once 'operations_nav.php';
+    echo ops_render_navbar('build_switchlists.php', 'Auto-Assign Cars', 'bi-list-check');
+    echo ops_render_step_bar('build_switchlists.php', null);
+    ?>
   <h2>Simulation Operations</h2>
   
   <script>
