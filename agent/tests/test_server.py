@@ -65,6 +65,32 @@ class Stub(BaseHTTPRequestHandler):
             return self.reply(200, {"data": {"id": "t1", "status": status, "log": []}})
         if path == "/v1/catalog":
             return self.reply(200, {"data": {"functions": [{"id": "fill_orders", "params": [{"key": "percent"}]}]}})
+        if path == "/v1/workflows/hart_session/run":
+            return self.reply(202, {"data": {"task_id": "t9", "status": "queued", "caller_role": "operator",
+                                             "role_warnings": [{"step": 3, "command": "restore_database",
+                                                                "needs": "admin", "conditional": True}]}})
+        if path == "/v1/workflows/hart_session/download":
+            return self.reply(200, {"name": "hart_session", "steps": []})
+        if path == "/v1/workflows/hart_session/run-options":
+            return self.reply(200, {"data": {"caller_role": "operator", "role_warnings": []}})
+        if path == "/v1/workflows/denied/run-options":
+            return self.reply(403, {"error": {"code": "forbidden", "message": "no"}})
+        if path == "/v1/workflows/active" and method == "GET":
+            return self.reply(200, {"data": {"active_workflow": "a.json", "files": ["a.json"]}})
+        if path == "/v1/workflows/active":
+            return self.reply(200, {"data": {"active_workflow": (body or {}).get("workflow_file")}})
+        if path in ("/v1/workflows/compile", "/v1/workflows/normalize", "/v1/workflows/import"):
+            return self.reply(200, {"data": {"rows": [], "echo": body}})
+        if path in ("/v1/sessions/7/rerender", "/v1/sessions/7/print-all"):
+            return self.reply(200, {"data": {"session": 7, "echo": body}})
+        if path == "/v1/sessions/output":
+            return self.reply(200, {"data": {"removed": ["7"], "count": 1}})
+        if path == "/v1/simulator/status":
+            return self.reply(200, {"data": {"runtime_available": True}})
+        if path == "/v1/admin/tasks/t1/fail":
+            return self.reply(200, {"data": {"id": "t1", "status": "failed"}})
+        if path == "/v1/locations/SCL":
+            return self.reply(200, {"data": {"code": "SCL", "cars": []}})
         if path == "/v1/cars/RF1/reposition":
             return self.reply(200, {"data": {"ok": True}})
         self.reply(404, {"error": {"code": "not_found", "message": "stub"}})
@@ -77,6 +103,9 @@ class Stub(BaseHTTPRequestHandler):
 
     def do_POST(self):
         self.handle_any("POST")
+
+    def do_DELETE(self):
+        self.handle_any("DELETE")
 
     def log_message(self, *args):
         pass
@@ -114,7 +143,7 @@ class ServerTests(unittest.TestCase):
             self.assertFalse(tools[name]["annotations"]["readOnlyHint"], name)
             self.assertTrue(tools[name]["annotations"]["destructiveHint"], name)
         self.assertFalse(tools["sts_create_car"]["annotations"]["destructiveHint"])
-        self.assertEqual(len(tools), 22)
+        self.assertEqual(len(tools), 33)
         self.assertTrue(tools["sts_policy"]["annotations"]["destructiveHint"])
 
     def test_policy_tool_get_and_put(self):
@@ -131,7 +160,7 @@ class ServerTests(unittest.TestCase):
     def test_command_role_comes_from_policy_with_fallback(self):
         sys.path.insert(0, str(ROOT / "servers"))
         import sts_api
-        self.assertEqual(sts_api.ADMIN_COMMANDS, {"restore_database", "wipe_database", "reset_session"})
+        self.assertEqual(sts_api.DEFAULT_ADMIN_COMMANDS, {"restore_database", "wipe_database", "reset_session"})
         old = {k: os.environ.get(k) for k in ("STS_API_URL", "STS_API_TOKEN")}
         os.environ.update(self.env)
         try:
@@ -239,6 +268,116 @@ class ServerTests(unittest.TestCase):
         out = run_server(self.env, INIT, call("sts_car_action", {"car": "RF1", "action": "reposition"}))
         self.assertTrue(out[1]["result"]["isError"])
         self.assertEqual(Stub.seen, [])
+
+
+class Phase2Tests(unittest.TestCase):
+    """Phase 2 tools against the same stub."""
+    setUpClass = classmethod(ServerTests.setUpClass.__func__)
+    tearDownClass = classmethod(ServerTests.tearDownClass.__func__)
+    setUp = ServerTests.setUp
+    text = ServerTests.text
+
+    def one(self, name, args):
+        out = run_server(self.env, INIT, call(name, args), LIST)
+        tools = {t["name"]: t for t in out[2]["result"]["tools"]}
+        return out[1], tools[name]["annotations"], Stub.seen[0]
+
+    def test_reads_are_read_only(self):
+        for name in ("sts_workflow_compile", "sts_workflow_normalize", "sts_workflow_run_options",
+                     "sts_workflow_download", "sts_simulator_status"):
+            out = run_server(self.env, INIT, LIST)
+            ann = {t["name"]: t["annotations"] for t in out[1]["result"]["tools"]}[name]
+            self.assertTrue(ann["readOnlyHint"], name)
+            self.assertFalse(ann["destructiveHint"], name)
+
+    def test_compile_and_normalize(self):
+        res, _, seen = self.one("sts_workflow_compile", {"recipe": {"steps": [1]}})
+        self.assertEqual(seen[:2], ("POST", "/v1/workflows/compile"))
+        self.assertEqual(seen[3], {"recipe": {"steps": [1]}})
+        Stub.seen.clear()
+        res, _, seen = self.one("sts_workflow_normalize", {"use_file": True, "workflow_file": "a.json"})
+        self.assertEqual(seen[:2], ("POST", "/v1/workflows/normalize"))
+        self.assertEqual(seen[3], {"use_file": True, "workflow_file": "a.json"})
+
+    def test_import_is_editor_write(self):
+        res, ann, seen = self.one("sts_workflow_import", {"workflow": "{\"steps\":[]}", "workflow_file": "b.json"})
+        self.assertEqual(seen[:2], ("POST", "/v1/workflows/import"))
+        self.assertEqual(seen[3], {"workflow": "{\"steps\":[]}", "workflow_file": "b.json"})
+        self.assertFalse(ann["readOnlyHint"])
+        out = run_server(self.env, INIT, call("sts_workflow_import", {}))
+        self.assertTrue(out[1]["result"]["isError"])
+
+    def test_active_get_and_set(self):
+        out = run_server(self.env, INIT, call("sts_workflow_active", {}),
+                         call("sts_workflow_active", {"action": "set", "workflow_file": "b.json"}, 3),
+                         call("sts_workflow_active", {"action": "set"}, 4))
+        self.assertEqual(json.loads(self.text(out))["active_workflow"], "a.json")
+        self.assertEqual(Stub.seen[0][:2], ("GET", "/v1/workflows/active"))
+        self.assertEqual(Stub.seen[1][:2], ("PUT", "/v1/workflows/active"))
+        self.assertEqual(Stub.seen[1][3], {"workflow_file": "b.json"})
+        self.assertTrue(out[3]["result"]["isError"])
+        self.assertEqual(len(Stub.seen), 2)
+
+    def test_run_options_and_403_role(self):
+        out = run_server(self.env, INIT, call("sts_workflow_run_options", {"name": "hart_session"}),
+                         call("sts_workflow_run_options", {"name": "denied"}, 3))
+        self.assertEqual(json.loads(self.text(out))["caller_role"], "operator")
+        self.assertEqual(Stub.seen[0][:2], ("GET", "/v1/workflows/hart_session/run-options"))
+        self.assertTrue(out[2]["result"]["isError"])
+        self.assertIn("403 forbidden", out[2]["result"]["content"][0]["text"])
+
+    def test_download_returns_raw_file(self):
+        out = run_server(self.env, INIT, call("sts_workflow_download", {"name": "hart_session"}))
+        self.assertEqual(json.loads(self.text(out)), {"name": "hart_session", "steps": []})
+
+    def test_workflow_run_surfaces_role_warnings(self):
+        out = run_server(self.env, INIT, call("sts_workflow_run", {"name": "hart_session", "timeout_seconds": 60}))
+        body = json.loads(self.text(out))
+        self.assertTrue(body["accepted"])
+        self.assertEqual(body["caller_role"], "operator")
+        self.assertEqual(body["role_warnings"][0]["command"], "restore_database")
+        self.assertEqual(Stub.seen[0][3], {"timeout_seconds": 60})
+
+    def test_rerender_and_print_all(self):
+        res, ann, seen = self.one("sts_session_rerender", {"session": 7, "style": "mobile", "force": True})
+        self.assertEqual(seen[:2], ("POST", "/v1/sessions/7/rerender"))
+        self.assertEqual(seen[3], {"style": "mobile", "force": True})
+        self.assertFalse(ann["readOnlyHint"])
+        Stub.seen.clear()
+        res, ann, seen = self.one("sts_session_print_all", {"session": 7, "job": "J1"})
+        self.assertEqual(seen[:2], ("POST", "/v1/sessions/7/print-all"))
+        self.assertEqual(seen[3], {"job": "J1"})
+        self.assertFalse(ann["readOnlyHint"])
+
+    def test_simulator_status(self):
+        out = run_server(self.env, INIT, call("sts_simulator_status", {}))
+        self.assertTrue(json.loads(self.text(out))["runtime_available"])
+        self.assertEqual(Stub.seen[0][:2], ("GET", "/v1/simulator/status"))
+
+    def test_clear_session_output_is_destructive_delete(self):
+        res, ann, seen = self.one("sts_clear_session_output", {})
+        self.assertEqual(seen[:2], ("DELETE", "/v1/sessions/output"))
+        self.assertEqual(json.loads(res["result"]["content"][0]["text"])["count"], 1)
+        self.assertFalse(ann["readOnlyHint"])
+        self.assertTrue(ann["destructiveHint"])
+
+    def test_task_fail(self):
+        res, ann, seen = self.one("sts_task_fail", {"id": "t1", "force": True})
+        self.assertEqual(seen[:2], ("POST", "/v1/admin/tasks/t1/fail"))
+        self.assertEqual(seen[3], {"force": True})
+        self.assertTrue(ann["destructiveHint"])
+        Stub.seen.clear()
+        self.one("sts_task_fail", {"id": "t1"})
+        self.assertEqual(Stub.seen[0][3], {})
+
+    def test_task_fail_403_names_admin(self):
+        out = run_server(self.env, INIT, call("sts_task_fail", {"id": "nope"}))
+        self.assertTrue(out[1]["result"]["isError"])
+
+    def test_locations_alias(self):
+        out = run_server(self.env, INIT, call("sts_get", {"entity": "locations", "id": "SCL"}))
+        self.assertEqual(json.loads(self.text(out))["code"], "SCL")
+        self.assertEqual(Stub.seen[0][:2], ("GET", "/v1/locations/SCL"))
 
 
 class PortableTests(unittest.TestCase):

@@ -40,13 +40,26 @@ on the docker host (sandbox: `sts-docker-data/sandbox/config/`).
 ## Tools
 
 Read (reader role; open by default): `sts_health`, `sts_session`, `sts_list`,
-`sts_get`, `sts_car_history`, `sts_catalog`. `sts_task` needs the operator role
-(task records are never open); so does `sts_list`/`sts_get` on `tasks`.
-Operator: `sts_command` (admin for the destructive commands), `sts_car_action`,
-`sts_advance_session`, `sts_workflow_run`. Editor: `sts_update`,
-`sts_create_car`, `sts_workflow_save`, `sts_workflow_delete`. Admin:
-`sts_backup`, `sts_restore`, `sts_warm_start`, `sts_session_begin`,
-`sts_session_play`, `sts_tokens`.
+`sts_get` (locations also by plugin alias), `sts_car_history`, `sts_catalog`,
+`sts_workflow_compile`, `sts_workflow_normalize`, `sts_workflow_run_options`
+(includes `caller_role`, `role_warnings`), `sts_workflow_download`,
+`sts_workflow_active` (get), `sts_simulator_status`. `sts_task` needs the
+operator role (task records are never open); so does `sts_list`/`sts_get` on
+`tasks`.
+Operator: `sts_command` (the policy sets the role per command; defaults make
+`restore_database`, `wipe_database`, `reset_session` admin), `sts_car_action`,
+`sts_advance_session`, `sts_workflow_run` (check `sts_workflow_run_options`
+first; the 202 repeats `role_warnings`), `sts_session_rerender`,
+`sts_session_print_all`, `sts_clear_session_output` (destructive). Editor:
+`sts_update`, `sts_create_car`, `sts_workflow_save`, `sts_workflow_delete`,
+`sts_workflow_import`, `sts_workflow_active` (set). Admin: `sts_backup`,
+`sts_restore`, `sts_warm_start`, `sts_session_begin`, `sts_session_play`,
+`sts_tokens`, `sts_policy`, `sts_task_fail`.
+
+Agents use a bearer token (`STS_API_TOKEN`); the browser sign-in cookie is for
+people. The server decides roles: with an admin token the plugin reads
+`GET /admin/policy`, otherwise it assumes the published defaults, and the
+server's 403 is final.
 
 ## Develop
 
