@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Capture a behavioural baseline from the sandbox stack (project sts-sandbox, port 8981).
+# Capture a behavioural baseline from the sandbox stack (default project sts-sandbox, port 8981).
+# Overrides: SANDBOX_WEB, SANDBOX_DB, SANDBOX_PORT, COMPOSE_PROJECT_NAME (defaults: sts-sandbox-web-1, sts-sandbox-db-1, 8981, sts-sandbox).
 # Usage: [STS_DOCKER=..] [STS_SANDBOX_DATA=..] [SEED=42] [SESSIONS=2] bin/sandbox_baseline.sh <label>
 # Skip a step with SKIP_<LINT|FUNCS|CATALOG|CATTESTS|SIM|DUMP|OUTPUT>=1.
 set -euo pipefail
@@ -8,11 +9,12 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export STS_DOCKER="${STS_DOCKER:-$REPO}"
 export STS_SANDBOX_DATA="${STS_SANDBOX_DATA:-$REPO/../sts-docker-data/sandbox}"
 STS_SANDBOX_DATA="$(cd "$STS_SANDBOX_DATA" && pwd)"
-export COMPOSE_PROJECT_NAME=sts-sandbox
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-sts-sandbox}"
+PORT="${SANDBOX_PORT:-8981}"
 export STS_BACKUPS_DIR="$STS_SANDBOX_DATA/backups"
 SEED="${SEED:-42}"; SESSIONS="${SESSIONS:-2}"
 H="${STS_HELPERS:-$REPO/../sts-helpers}"; H="$(cd "$H" && pwd)"
-WEB=sts-sandbox-web-1; DB=sts-sandbox-db-1
+WEB="${SANDBOX_WEB:-sts-sandbox-web-1}"; DB="${SANDBOX_DB:-sts-sandbox-db-1}"
 OUT="$STS_SANDBOX_DATA/$LABEL"; mkdir -p "$OUT"; : > "$OUT/timings.txt"
 step() { echo; echo "=== [$(date +%T)] $1"; STEP_NAME="$1"; STEP_T0=$SECONDS; }
 done_step() { echo "$STEP_NAME: $((SECONDS - STEP_T0))s" | tee -a "$OUT/timings.txt"; }
@@ -33,7 +35,7 @@ fi
 
 if [[ -z "${SKIP_CATALOG:-}" ]]; then
   step "catalog.json"
-  curl -sf 'http://localhost:8981/sts/operational_steps_api.php?action=catalog' | python3 -m json.tool --sort-keys > "$OUT/catalog.json"
+  curl -sf "http://localhost:$PORT/sts/operational_steps_api.php?action=catalog" | python3 -m json.tool --sort-keys > "$OUT/catalog.json"
   done_step
 fi
 

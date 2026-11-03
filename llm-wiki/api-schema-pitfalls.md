@@ -249,3 +249,15 @@ equivalent legacy page:
 
 _Migrated from `.github/instructions/api-schema.instructions.md` into the shared
 wiki on 06/07/2026 — see [decisions-log.md](decisions-log.md)._
+
+## Query failure logging
+
+`mysqli_report` is OFF and `error_reporting(E_ERROR)` for display, so a failed
+query is silent in the page. `open_db.php` therefore logs to stderr (Apache
+error log, `docker logs <web>`): all PHP errors except deprecations, via a
+handler that never prints, plus `sts_query($dbc, $sql)`, a drop-in for
+`mysqli_query` that returns the same result and logs file:line, errno, error
+and the first 300 chars of the SQL on failure. `sts_db_log_error($dbc, $sql)`
+does the logging alone for existing `if (!mysqli_query(...))` paths. Only the
+`open_db.php` migrations use them so far; prefer `sts_query` in new code. Never
+print from `open_db.php`: it corrupts JSON responses.
