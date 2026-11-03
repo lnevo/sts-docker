@@ -1580,6 +1580,21 @@ function operational_steps_fetch_dynamic_options($dbc)
     ];
 }
 
+/**
+ * The catalog as served by operational_steps_api.php?action=catalog (minus 'ok'),
+ * shared with the REST API v1 GET /catalog.
+ */
+function operational_steps_catalog_payload($dbc)
+{
+    return [
+        'categories' => operational_steps_catalog_categories(),
+        'adder_categories' => operational_steps_catalog_adder_categories(),
+        'dynamic_options' => operational_steps_fetch_dynamic_options($dbc),
+        'functions' => operational_steps_catalog_definitions(),
+        'adder_functions' => operational_steps_catalog_adder_definitions(),
+    ];
+}
+
 function operational_steps_catalog_definitions()
 {
     $definitions = [

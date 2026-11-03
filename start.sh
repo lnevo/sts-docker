@@ -16,5 +16,18 @@ if [ "$PROVISION_DATABASE" = "1" ]; then
     fi
 fi
 
+# API admin token bootstrap: writes /var/lib/sts/bootstrap_admin.token when no
+# active admin token exists. Runs as www-data so the token store stays readable
+# by Apache. Never blocks startup.
+mkdir -p /var/lib/sts
+chown www-data:www-data /var/lib/sts 2>/dev/null || true
+runuser -u www-data -- php /var/www/html/sts/api/bin/tokens.php bootstrap \
+    || echo "API token bootstrap failed (continuing)"
+
+# No task process survives a container restart: clear queued/running tasks so
+# the maintenance lock does not stay held by a ghost.
+runuser -u www-data -- php /var/www/html/sts/api/bin/fail_tasks.php \
+    || echo "API stale task cleanup failed (continuing)"
+
 # Start Apache
 exec apache2-foreground

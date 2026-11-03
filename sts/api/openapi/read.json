@@ -1,0 +1,2307 @@
+{
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "description": "Always open.",
+        "x-sts-role": "open",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Health"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "summary": "This specification",
+        "description": "Always open.",
+        "x-sts-role": "open",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/session": {
+      "get": {
+        "summary": "Current session number and operations counts",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SessionInfo"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/settings": {
+      "get": {
+        "summary": "List settings",
+        "description": "Role: reader. Readable without a token while STS_API_READ_OPEN=1 (the default).",
+        "x-sts-role": "reader",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Setting"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ListMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/settings/{name}": {
+      "get": {
+        "summary": "One setting",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Setting name, e.g. session_nbr"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Setting"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/cars": {
+      "get": {
+        "summary": "List cars",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Exact status, e.g. Empty, Loaded"
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Location id or code"
+          },
+          {
+            "name": "job",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Job id or name"
+          },
+          {
+            "name": "car_code",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Car code id or code"
+          },
+          {
+            "name": "marks",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Reporting marks prefix"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Car"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ListMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/cars/{car}": {
+      "get": {
+        "summary": "One car with its orders",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "name": "car",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Car id, reporting marks, or RFID code"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CarDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/cars/{car}/history": {
+      "get": {
+        "summary": "Car history, newest first",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "name": "car",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Car id, reporting marks, or RFID code"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/HistoryEvent"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ListMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/locations": {
+      "get": {
+        "summary": "List locations",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          },
+          {
+            "name": "station",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Station id or name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Location"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ListMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/locations/{location}": {
+      "get": {
+        "summary": "One location with the cars there",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "name": "location",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Location id or code"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/LocationDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/stations": {
+      "get": {
+        "summary": "List stations (routing table)",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Station"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ListMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/stations/{id}": {
+      "get": {
+        "summary": "One station with its locations",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Station id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StationDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/jobs": {
+      "get": {
+        "summary": "List jobs",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Job"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ListMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/jobs/{job}": {
+      "get": {
+        "summary": "One job with steps, pickup criteria and assigned cars",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "name": "job",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Job id or name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/JobDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/shipments": {
+      "get": {
+        "summary": "List shipments",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Shipment"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ListMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/shipments/{id}": {
+      "get": {
+        "summary": "One shipment",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Shipment id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Shipment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/commodities": {
+      "get": {
+        "summary": "List commodities",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Commodity"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ListMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/car-codes": {
+      "get": {
+        "summary": "List car codes",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CarCode"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ListMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/owners": {
+      "get": {
+        "summary": "List owners",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Owner"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ListMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/ownership": {
+      "get": {
+        "summary": "List car ownership",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Ownership"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ListMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/car-orders": {
+      "get": {
+        "summary": "List car orders (waybills)",
+        "description": "E-waybills (is_empty_move) carry a destination location instead of a shipment. Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "unfilled",
+                "filled",
+                "all"
+              ],
+              "default": "all"
+            },
+            "description": "unfilled, filled or all"
+          },
+          {
+            "name": "shipment",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Shipment code"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CarOrder"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ListMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/car-orders/{waybill}": {
+      "get": {
+        "summary": "One car order",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "name": "waybill",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Waybill number"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CarOrder"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog": {
+      "get": {
+        "summary": "Operational steps catalog",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Catalog"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/workflows": {
+      "get": {
+        "summary": "List saved workflows",
+        "description": "Read-only; same directory as operational_steps_api.php. Role: reader.",
+        "x-sts-role": "reader",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowList"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/workflows/{name}": {
+      "get": {
+        "summary": "One workflow recipe",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Workflow file name (suffix optional)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Workflow"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/sessions": {
+      "get": {
+        "summary": "Session output directories",
+        "description": "Role: reader. Readable without a token while STS_API_READ_OPEN=1 (the default).",
+        "x-sts-role": "reader",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SessionSummary"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ListMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/sessions/{n}": {
+      "get": {
+        "summary": "One session manifest with switch list and waybill URLs",
+        "description": "Role: reader.",
+        "x-sts-role": "reader",
+        "parameters": [
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Session number"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SessionDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/backups": {
+      "get": {
+        "summary": "Backup files",
+        "description": "Role: reader. Readable without a token while STS_API_READ_OPEN=1 (the default).",
+        "x-sts-role": "reader",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BackupFile"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ListMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Car": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "reporting_marks": {
+            "type": "string"
+          },
+          "car_code_id": {
+            "type": "integer"
+          },
+          "car_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "location_id": {
+            "type": "integer"
+          },
+          "location": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "station": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "position": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "job": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remarks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "load_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "home_location_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "home_location": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rfid_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "block_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "last_spotted": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        }
+      },
+      "CarOrder": {
+        "type": "object",
+        "properties": {
+          "waybill_number": {
+            "type": "string"
+          },
+          "car_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "car": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "filled": {
+            "type": "boolean"
+          },
+          "is_empty_move": {
+            "type": "boolean",
+            "description": "True for E-waybills (NNN-E##); car_orders.shipment then holds the destination location id."
+          },
+          "shipment_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "shipment": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "commodity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "car_code_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "car_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "loading_location_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "loading_location": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unloading_location_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "unloading_location": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "CarDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Car"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "orders": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CarOrder"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "HistoryEvent": {
+        "type": "object",
+        "properties": {
+          "session_nbr": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "event_date": {
+            "type": "string"
+          },
+          "event": {
+            "type": "string"
+          },
+          "location_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "location": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Location": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string"
+          },
+          "station_id": {
+            "type": "integer"
+          },
+          "station": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "track": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "spot": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rpt_station": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remarks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "LocationDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Location"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "cars": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Car"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Station": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "station_nbr": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "instructions": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sort_seq": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "color1": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "color2": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        }
+      },
+      "StationDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Station"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "locations": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Location"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Job": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "car_count": {
+            "type": "integer"
+          }
+        }
+      },
+      "JobStep": {
+        "type": "object",
+        "properties": {
+          "step_number": {
+            "type": "integer"
+          },
+          "station_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "station": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pickup": {
+            "type": "boolean"
+          },
+          "setout": {
+            "type": "boolean"
+          },
+          "remarks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "PickupCriterion": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "step_number": {
+            "type": "integer"
+          },
+          "car_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "commodity_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "commodity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "car_code_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "car_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dest_station_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "dest_station": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "JobDetail": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/JobStep"
+                }
+              },
+              "pickup_criteria": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PickupCriterion"
+                }
+              },
+              "cars": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Car"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Shipment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "commodity_id": {
+            "type": "integer"
+          },
+          "commodity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "car_code_id": {
+            "type": "integer"
+          },
+          "car_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "loading_location_id": {
+            "type": "integer"
+          },
+          "loading_location": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unloading_location_id": {
+            "type": "integer"
+          },
+          "unloading_location": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_ship_date": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "min_interval": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "max_interval": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "min_amount": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "max_amount": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "min_load_time": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "max_load_time": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "min_unload_time": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "max_unload_time": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "special_instructions": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remarks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Commodity": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remarks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "CarCode": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remarks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Owner": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remarks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Ownership": {
+        "type": "object",
+        "properties": {
+          "car_id": {
+            "type": "integer"
+          },
+          "reporting_marks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "owner_id": {
+            "type": "integer"
+          },
+          "owner": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "on_off_rr": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Setting": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "degraded"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "stack": {
+            "type": "string"
+          },
+          "session_nbr": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "db": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "error"
+            ]
+          }
+        }
+      },
+      "SessionInfo": {
+        "type": "object",
+        "properties": {
+          "session_nbr": {
+            "type": "integer"
+          },
+          "stats": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Operations hub counts (open_orders, unfilled_orders, unassigned, pending_pickup, ...)."
+          }
+        }
+      },
+      "Catalog": {
+        "type": "object",
+        "description": "Same data as operational_steps_api.php?action=catalog, without the ok flag.",
+        "properties": {
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "adder_categories": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "dynamic_options": {
+            "type": "object"
+          },
+          "functions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "$ref": "#/components/schemas/CommandId"
+                }
+              }
+            }
+          },
+          "adder_functions": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "WorkflowFile": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "mtime": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkflowList": {
+        "type": "object",
+        "properties": {
+          "workflows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowFile"
+            }
+          },
+          "active": {
+            "type": "string"
+          }
+        }
+      },
+      "Workflow": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "recipe": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "SessionSummary": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "integer"
+          },
+          "current": {
+            "type": "boolean"
+          },
+          "has_manifest": {
+            "type": "boolean"
+          },
+          "updated": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "overview_url": {
+            "type": "string"
+          }
+        }
+      },
+      "SessionFile": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "waybill",
+              "switchlist",
+              "other"
+            ]
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "SessionDetail": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "integer"
+          },
+          "current": {
+            "type": "boolean"
+          },
+          "overview_url": {
+            "type": "string"
+          },
+          "manifest": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionFile"
+            }
+          }
+        }
+      },
+      "BackupFile": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "mtime": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

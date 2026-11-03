@@ -57,6 +57,12 @@ RUN mkdir -p /var/www/html/sts/temp \
     /var/www/html/sts/ImageStore \
     /var/www/html/sts/cargo_list.txt
 
+# API token store / task spool (bind-mounted from sts-docker-data/config in compose)
+RUN mkdir -p /var/lib/sts && chown www-data:www-data /var/lib/sts && chmod 750 /var/lib/sts
+
+# Route /sts/api/* to the API router (FallbackResource)
+COPY docker/apache-sts-api.conf /etc/apache2/conf-enabled/apache-sts-api.conf
+
 # Copy start script
 COPY start.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/start.sh

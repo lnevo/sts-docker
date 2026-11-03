@@ -1,0 +1,410 @@
+{
+  "paths": {
+    "/tasks": {
+      "get": {
+        "summary": "List tasks",
+        "description": "Newest first. Role: operator (task records are never opened by STS_API_READ_OPEN).",
+        "x-sts-role": "operator",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Single value; an array-valued query parameter is a 422."
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "queued",
+                "running",
+                "succeeded",
+                "failed"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Task"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        },
+                        "offset": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/tasks/{id}": {
+      "get": {
+        "summary": "One task",
+        "description": "Status, result and error; with log=N also the last N log lines. A running task whose process died is reported as failed. Role: operator (task records are never opened by STS_API_READ_OPEN). A running task whose pid is gone or was reused by another process (start time differs) is reported as failed.",
+        "x-sts-role": "operator",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "log",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TaskDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/workflows/{name}/run": {
+      "post": {
+        "summary": "Run a saved workflow",
+        "description": "Runs the recipe through session_run_recipe(), as the run_catalog_workflow.php CLI does; the same seed gives the same database. render is accepted but the engine always renders. Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). A recipe holding destructive commands (restore_database, backup_database, wipe_database, reset_session, restart_session; ids are checked after normalization, disabled steps included) needs role admin: 403 naming the step numbers, checked when the request arrives and again when the task starts (the file may have changed). A malformed workflow name is 422. Role: operator (admin for destructive recipes).",
+        "x-sts-role": "operator",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Task accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TaskAccepted"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "Role too low; or the recipe has destructive commands and the caller is not admin (message lists the step numbers).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "409": {
+            "description": "Another exclusive task is queued or running, or a maintenance task blocks writes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Task": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "exclusive": {
+            "type": "boolean"
+          },
+          "spec": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "pid": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pid_start": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Process start time (clock ticks since boot, /proc/<pid>/stat field 22) recorded with pid; a different value means the pid was reused."
+          }
+        }
+      },
+      "TaskDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Task"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "result": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "session_before": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "session_after": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "output": {
+                    "description": "Kind-specific result."
+                  }
+                },
+                "additionalProperties": true
+              },
+              "log": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Only with ?log=N."
+              }
+            }
+          }
+        ]
+      },
+      "WorkflowRunRequest": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "start_step": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "stop_step": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "skip": {
+            "oneOf": [
+              {
+                "type": "string",
+                "examples": [
+                  "1-2,5"
+                ]
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              }
+            ],
+            "description": "Step numbers and ranges to skip."
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Run only these sections (label or step-N id)."
+          },
+          "session_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 1
+          },
+          "render": {
+            "type": "boolean",
+            "description": "Accepted; not used (the engine always renders)."
+          }
+        }
+      }
+    }
+  }
+}

@@ -15,7 +15,9 @@ services:
       - ${STS_SANDBOX_DATA:?set STS_SANDBOX_DATA}/backups:/var/www/html/sts/backups
       - ${STS_SANDBOX_DATA:?set STS_SANDBOX_DATA}/photos:/var/www/html/sts/ImageStore/DB_Images/RollingStock/
       - ${STS_PLUGINS_DIR:-../sts-plugins/plugins}:/var/www/html/sts/plugins
+      - ${STS_SANDBOX_DATA:?set STS_SANDBOX_DATA}/config:/var/lib/sts
     environment:
       - PROVISION_DATABASE=1
+      - STS_STACK_NAME=sandbox
   db:
     volumes: !reset []

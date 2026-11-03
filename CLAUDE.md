@@ -88,11 +88,19 @@ publishes the image via `publish-docker.yaml`.
   minus `sts/plugins/`) must not name a plugin or HART identifier and reaches
   plugins only via `plugins_*` helpers; `bin/check_plugin_boundary.sh` enforces
   this. Contract: `docs/plans/plugin-hook-contract.md`.
-- **REST API:** `sts/api/` (router in `index.php`, endpoints in
-  `endpoints/wagon.php`) provides JSON endpoints mirroring `scan_car.php`,
-  `scan_location.php`, `load_unload.php`, and `reposition.php`. No
-  authentication by design (private-network use). Documented in
-  `sts/api/README.md`.
+- **REST API v1:** `/sts/api/v1/` (router `sts/api/index.php`, routes in
+  `sts/api/v1/routes_*.php`, shared code in `sts/api/lib/`, long jobs as tasks
+  in `sts/api/tasks/`). Swagger UI at `/sts/api/docs/`, merged OpenAPI 3.1 at
+  `/sts/api/v1/openapi.json` (fragments in `sts/api/openapi/*.json`; add a route
+  and its fragment together). Bearer tokens with roles reader < operator <
+  editor < admin; tokens live in `/var/lib/sts` (host `../sts-docker-data/config`),
+  bootstrap admin token in `bootstrap_admin.token` there. Legacy
+  `/sts/api/wagon/*` URLs keep their old shapes. Contract:
+  `docs/plans/2026-11-03-api-v1.md`; usage: `sts/api/README.md`.
+- **Agent plugin:** `agent/` (MCP server `servers/sts_api.py`, skill
+  `skills/sts-api`, agents `sts-inspector` / `sts-operator`); marketplace entry
+  at `.claude-plugin/marketplace.json`. Tests: `python3 -m unittest discover -s
+agent/tests`.
 - **Operational Steps API:** `sts/operational_steps_api.php` — session workflow
   editor, recipe compile/save, simulator. OpenAPI + Swagger UI:
   `sts/operational_steps_api.openapi.yaml`, `sts/operational_steps_api-docs.html`.

@@ -42,7 +42,9 @@ Read this first when starting a session on the STS work. Last updated
   `docker compose --profile build up -d --build web`.
 - Gate before merging (all must pass):
   1. `bin/check_plugin_boundary.sh` exits 0.
-  2. `cd ../sts-helpers && RUN_WORKFLOW=0 bin/run_catalog_tests.sh` prints
+  2. `cd ../sts-helpers && RUN_WORKFLOW=0 bin/run_catalog_tests.sh` (export
+     the sandbox env first to run it there; the helpers now talk to the API of
+     whichever stack `COMPOSE_PROJECT_NAME` selects) prints
      `Catalog tests OK` (then `git checkout -- docs/WORKFLOW_TEST_ALL_TYPES.recipe.json`
      there and `git checkout -- sts/operational_steps_catalog.openapi.generated.yaml`
      here if they changed).
@@ -78,11 +80,30 @@ Read this first when starting a session on the STS work. Last updated
 - `assign_car.php`, `fix_win2linux.php`, `manage_cargo.php` and
   `session-pages.css` were removed after a search of all three repos, the
   stored session output and the access log found no reference.
-- Next: [2026-11-03-roadmap-v2-convergence.md](2026-11-03-roadmap-v2-convergence.md)
-  covers Phase 1 fixes and cleanups (SQL injection in the CRUD family, dead
-  files, duplicate helpers, remaining legacy pages), the behaviour fixes v2
-  already made, additive schema convergence toward v2, a data-access layer,
-  and the port-or-stay decision with Aaron.
+- API v1 landed 2026-11-03 ([2026-11-03-api-v1.md](2026-11-03-api-v1.md),
+  "As built" lists the deviations): `/sts/api/v1/` with Swagger UI at
+  `/sts/api/docs/`, token auth with roles, background tasks for restore, warm
+  start, sessions and workflow runs. `sts-helpers` (branch merged to `main`)
+  drives the core pipeline through it via `lib/sts_api.sh` / `lib/sts_api.py`;
+  sweeps, waves and diagnostics stay on docker by design. The agent plugin is
+  under `agent/`. Parity capture `phase6-api-final` matches `phase5-ui-nav`
+  (masked dumps identical; logs differ only by the API target line).
+- API follow-ups: no wall-clock timeout on tasks; no API for the legacy
+  location aliases, for clearing the container `switchlists/` dir, or for the
+  `--ck1-test` warm start (those helper paths still use docker); the stock
+  `hart_session` / `start_session` workflows contain restore and backup steps,
+  so running them needs an admin token.
+- Cleanups from the 2026-11-03 review, not scheduled:
+  - SQL injection in the CRUD family (`db_list_jobs.php:32` runs
+    `create table` on a raw POST value; the `db_edit_*` pages delete by GET).
+  - `remove_img.php` unlinks a path built from a POST value.
+  - `get_table_guts.php:14` calls `$mysql_error(...)`.
+  - `open_db.php` hides query errors.
+  - Duplicate escape helpers and navbar builders.
+  - Large inline `<style>` blocks on the step pages.
+  - `printable_*` and the `db_list_*`/`db_edit_*` bodies are still legacy.
+- Aaron's v2 is reference only ([2026-11-03-v2-notes.md](2026-11-03-v2-notes.md));
+  the roadmap does not converge on it.
 - Pre-existing, untouched: `sts/db_edit.php` requires a missing
   `db_edit_waybills.php`; the QR and barcode libraries live outside `sts/`
   (phpstan cannot see them); a few include fragments and CLI scripts fatal when
