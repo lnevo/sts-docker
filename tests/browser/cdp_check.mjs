@@ -274,9 +274,15 @@ try {
     results.push(r);
   }
 } finally {
+  // Let Chrome exit before deleting its profile; it may still be writing to it.
+  const exited = new Promise((r) => proc.once('exit', r));
   proc.kill();
-  await sleep(200);
-  rmSync(dir, { recursive: true, force: true });
+  await Promise.race([exited, sleep(5000)]);
+  try {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  } catch (e) {
+    console.error('cdp_check: could not remove ' + dir + ': ' + e.message);
+  }
 }
 console.log(JSON.stringify(results.length === 1 ? results[0] : results, null, 1));
 process.exit(bad ? 1 : 0);
