@@ -168,6 +168,11 @@ file it creates to `www-data`. Files are created with umask 0027 (mode 0640).
 The same operations over HTTP (admin): `GET/POST /v1/admin/tokens`,
 `DELETE /v1/admin/tokens/{id}`.
 
+Backups are not served by the web server directly. `GET /v1/admin/backups/{name}/download`
+(admin; bearer token or the sign-in cookie) returns the raw file as an attachment
+(422 for a bad name, 404 when missing). `GET /v1/backups` lists the names. The
+maintenance pages link to it and ask you to sign in on API Access when needed.
+
 ### Editor endpoints and the legacy lock
 
 The workflow editor's remaining actions, on v1 (envelope responses; the legacy
