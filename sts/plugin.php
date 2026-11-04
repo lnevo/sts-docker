@@ -38,5 +38,12 @@ if ($plugin_router_dir === false || $plugin_router_file === false
     plugin_router_not_found();
 }
 
+// A plugin's 'settings' page changes configuration: it is a Maintenance page and needs
+// the same admin sign-in as Maintenance → Plugin Settings (maint_open reopens both).
+if ($plugin_router_slug === 'settings') {
+    require_once __DIR__ . '/maint_lock.php';
+    sts_maint_require('admin');
+}
+
 chdir(__DIR__);
 require $plugin_router_file;

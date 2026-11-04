@@ -150,6 +150,10 @@ Read this first when starting a session on the STS work. Last updated
   its own data (a committed fixture, or `STS_BROWSER_BACKUP=hart_seed`) and runs
   in CI (`browser-tests.yml`); the agent plugin has `sts_backup_download`. The
   tablet checks run under Chrome touch emulation, not on a real tablet.
+- Plugin pages: a plugin's `settings` page needs an admin sign-in (checked in
+  `sts/plugin.php`; `maint_open` reopens it, like Maintenance → Plugin
+  Settings), and plugin PHP files under `/sts/plugins/` are never served
+  directly. They run only through the router; static plugin assets still load.
 - Known: list parameters of catalog commands (e.g. `auto_assign_locals.jobs`)
   take a comma-separated string; a JSON array arrives as "Array" and assigns
   nothing. On the HART seed the tablet file's Pick Up and Organize checks find
