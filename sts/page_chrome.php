@@ -64,6 +64,7 @@ function sts_page_start(array $opts = [])
     echo "  <link href=\"vendor/bootstrap/bootstrap.min.css\" rel=\"stylesheet\">\n";
     echo "  <link href=\"vendor/bootstrap-icons/bootstrap-icons.min.css\" rel=\"stylesheet\">\n";
     echo "  <link href=\"page_chrome.css?v=2\" rel=\"stylesheet\">\n";
+    echo "  <link href=\"touch.css\" rel=\"stylesheet\">\n";
     // Delegated handlers for data-sts-* attributes (strict CSP: no inline scripts).
     echo "  <script src=\"/sts/js/sts-actions.js?v=1\"></script>\n";
     if (!empty($opts['head_extra'])) {

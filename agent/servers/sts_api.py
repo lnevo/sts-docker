@@ -48,7 +48,7 @@ def token() -> str:
 
 
 def request(method: str, path: str, query: dict | None = None, body: object = None,
-            role: str = "reader", bare: bool = False) -> tuple[int, dict]:
+            role: str = "reader", bare: bool = False, binary: bool = False) -> tuple[int, dict]:
     """Call the API; return (status, parsed envelope). Raise ApiError on failure."""
     url = base_url() + path
     pairs = {k: v for k, v in (query or {}).items() if v is not None and v != ""}
@@ -72,6 +72,8 @@ def request(method: str, path: str, query: dict | None = None, body: object = No
         reason = getattr(exc, "reason", exc)
         raise ApiError(f"Cannot reach STS at {base_url()}: {reason}. Is the stack up, and is "
                        "STS_API_URL right (live 8980, sandbox 8981)?") from None
+    if binary and status < 400:  # A file download: hand back the bytes untouched.
+        return status, {"bytes": raw}
     try:
         payload = json.loads(raw.decode() or "null")
     except ValueError:
@@ -225,6 +227,8 @@ def t_command(args):
         body["async"] = True
     if args.get("seed") is not None:
         body["seed"] = args["seed"]
+    if args.get("timeout_seconds") is not None:
+        body["timeout_seconds"] = args["timeout_seconds"]
     try:
         return call("POST", f"/commands/{seg(command)}", body=body, role="operator")
     except ApiError as exc:
@@ -287,6 +291,28 @@ def t_backup(args):
     return call("POST", "/admin/backups", body={"name": args["name"]}, role="admin")
 
 
+def t_backup_download(args):
+    need(args, "name")
+    name = str(args["name"])
+    if "/" in name or "\\" in name or ".." in name or name.startswith("."):
+        raise ApiError(f"Invalid backup name {name!r}: a plain file name, no '/' or '..'")
+    dest = os.path.expanduser(str(args.get("path") or "."))
+    if os.path.isdir(dest):
+        dest = os.path.join(dest, name)
+    dest = os.path.abspath(dest)
+    if os.path.exists(dest) and not args.get("overwrite"):
+        raise ApiError(f"{dest} exists; pass overwrite=true to replace it")
+    _, payload = request("GET", f"/admin/backups/{seg(name)}/download", role="admin", binary=True)
+    tmp = dest + ".part"
+    try:
+        with open(tmp, "wb") as handle:
+            handle.write(payload["bytes"])
+        os.replace(tmp, dest)
+    except OSError as exc:
+        raise ApiError(f"Cannot write {dest}: {exc.strerror}") from None
+    return {"path": dest, "bytes": len(payload["bytes"])}
+
+
 def t_restore(args):
     need(args, "backup")
     body = {"backup": args["backup"]}
@@ -321,15 +347,18 @@ def t_tokens(args):
     raise ApiError("action must be list, create or revoke")
 
 
+POLICY_FIELDS = ("command_roles", "protected_backups", "read_open", "legacy_open", "editor_open", "maint_open")
+
+
 def t_policy(args):
     global _POLICY_ROLES
     action = args.get("action", "get")
     if action == "get":
         return call("GET", "/admin/policy", role="admin")
     if action == "put":
-        body = {k: args[k] for k in ("command_roles", "read_open", "legacy_open", "editor_open") if k in args}
+        body = {k: args[k] for k in POLICY_FIELDS if k in args}
         if not body:
-            raise ApiError("put needs command_roles and/or read_open, legacy_open, editor_open")
+            raise ApiError("put needs at least one of: " + ", ".join(POLICY_FIELDS))
         _POLICY_ROLES = None
         return call("PUT", "/admin/policy", body=body, role="admin")
     raise ApiError("action must be get or put")
@@ -433,15 +462,17 @@ TOOLS = [
          "dynamic options (jobs, locations, backups). Pass command for one command's params only.",
          obj({"command": S}), t_catalog),
     Tool("sts_task", "Role: operator (tasks are never readable anonymously). Status and log tail of a background task (from a 202 response). "
-         "wait_seconds polls until it succeeds or fails, or the wait runs out.",
+         "wait_seconds polls until it succeeds or fails, or the wait runs out. A task is killed and marked failed "
+         "after its timeout_seconds, by default STS_API_TASK_DEFAULT_TIMEOUT (6 hours; 0 = no limit).",
          obj({"id": S, "wait_seconds": {"type": "number", "description": "Max 600."},
               "log_lines": {"type": "integer"}}, ["id"]), t_task),
 
     Tool("sts_command", "Role: operator by default; admin for restore_database, wipe_database, "
          "reset_session (the policy can change this, see sts_policy). Runs one catalog command (generate_orders, fill_orders, reposition_empties, "
          "pick_up_cars, set_out_cars, load_unload, ...). Some commands change many rows; a few replace "
-         "the whole database. async=true (or a slow command) returns a task to follow with sts_task.",
-         obj({"command": S, **PARAMS, "async": B, "seed": I}, ["command"]), t_command,
+         "the whole database. async=true (or a slow command) returns a task to follow with sts_task; "
+         "timeout_seconds (1-86400, default 6 hours) caps a task.",
+         obj({"command": S, **PARAMS, "async": B, "seed": I, "timeout_seconds": I}, ["command"]), t_command,
          read_only=False, destructive=True),
     Tool("sts_car_action", "Role: operator. Load, unload or reposition one car (id, marks or RFID). "
          "reposition needs a location (id or code).",
@@ -467,7 +498,8 @@ TOOLS = [
          "as it runs and the task fails at the first step that needs more (e.g. restore_database needs admin). "
          "Steps skipped by conditions or ranges are not checked. The 202 result repeats caller_role and "
          "role_warnings at the top level. Optional seed, start_step, stop_step, skip (step numbers/ranges), "
-         "sections, session_count, timeout_seconds (kills the task, marked failed), render. The recipe may "
+         "sections, session_count, timeout_seconds (60-86400, admins from 1; kills the task, marked failed; "
+         "default STS_API_TASK_DEFAULT_TIMEOUT, 6 hours), render. The recipe may "
          "contain any command, so read it first with sts_get workflows.",
          obj({"name": S, "seed": I, "start_step": I, "stop_step": I,
               "skip": {"type": ["string", "array"], "description": "e.g. \"1-2,5\" or [1,2,5]"},
@@ -517,25 +549,37 @@ TOOLS = [
 
     Tool("sts_backup", "Role: admin. Write a database backup named name into the backups directory.",
          obj({"name": S}, ["name"]), t_backup, read_only=False, destructive=False),
+    Tool("sts_backup_download", "Role: admin. Download a backup file (GET /admin/backups/{name}/download; "
+         "backups are not web-served) to a local file. name is a plain file name from sts_list backups. path: "
+         "target file or directory (default: current directory, file named after the backup). Refuses to "
+         "overwrite an existing file unless overwrite=true. Returns {path, bytes}. Writes a local file only; "
+         "the server is untouched.",
+         obj({"name": S, "path": S, "overwrite": B}, ["name"]), t_backup_download,
+         read_only=False, destructive=False),
     Tool("sts_restore", "Role: admin. REPLACES THE WHOLE DATABASE with a backup (task). Confirm with the "
          "user, back up first, prefer the sandbox. photos=true also copies the backup's photos.",
          obj({"backup": S, "photos": B}, ["backup"]), t_restore, read_only=False, destructive=True),
     Tool("sts_warm_start", "Role: admin. Run a warm start (task) that rebuilds the railroad state by "
-         "simulating sessions: sessions, max_sessions, seed, backup, continue, tracked. REPLACES THE "
+         "simulating sessions: sessions, max_sessions, seed, backup, continue, tracked, timeout_seconds (1-86400, "
+         "default STS_API_TASK_DEFAULT_TIMEOUT = 6 hours). REPLACES THE "
          "DATABASE contents; sandbox only unless the user explicitly approves.",
-         obj({"sessions": I, "max_sessions": I, "seed": I, "backup": S, "continue": B, "tracked": B},
+         obj({"sessions": I, "max_sessions": I, "seed": I, "backup": S, "continue": B, "tracked": B, "timeout_seconds": I},
              ["sessions", "max_sessions", "seed"]), t_warm_start, read_only=False, destructive=True),
     Tool("sts_session_begin", "Role: admin. Begin an operating session via the warm-start machinery (task). "
-         "params go in the request body.", obj(PARAMS), t_session_begin, read_only=False, destructive=True),
+         "params go in the request body (timeout_seconds optional, default 6 hours).", obj(PARAMS), t_session_begin, read_only=False, destructive=True),
     Tool("sts_session_play", "Role: admin. Play an operating session via the warm-start machinery (task). "
-         "params go in the request body.", obj(PARAMS), t_session_play, read_only=False, destructive=True),
-    Tool("sts_policy", "Role: admin. action get shows the effective policy: the minimum role per catalog "
-         "command and the read_open, legacy_open and editor_open flags. action put changes it at once: "
-         "command_roles {id: operator|editor|admin} (replaces the stored map) and the flags (null = default). "
-         "Lowering a command's role lets lesser tokens run it; confirm with the user first.",
+         "params go in the request body (timeout_seconds optional, default 6 hours).", obj(PARAMS), t_session_play, read_only=False, destructive=True),
+    Tool("sts_policy", "Role: admin. action get shows the effective policy: command_roles (minimum role per "
+         "catalog command), protected_backups (globs, default *seed* and *_locked*: non-admins may not overwrite "
+         "a matching backup), and the flags read_open, legacy_open, editor_open and maint_open (true leaves the "
+         "Database Maintenance pages open without sign-in; default false), plus flag_sources and defaults. "
+         "action put changes any subset at once: command_roles {id: operator|editor|admin} (replaces the stored "
+         "map), protected_backups (list of globs), and the flags; null resets a field to its default. "
+         "Lowering a role or opening a flag lets lesser callers in; confirm with the user first.",
          obj({"action": {"type": "string", "enum": ["get", "put"]}, "command_roles": O,
+              "protected_backups": {"type": ["array", "null"], "items": S},
               "read_open": {"type": ["boolean", "null"]}, "legacy_open": {"type": ["boolean", "null"]},
-              "editor_open": {"type": ["boolean", "null"]}}),
+              "editor_open": {"type": ["boolean", "null"]}, "maint_open": {"type": ["boolean", "null"]}}),
          t_policy, read_only=False, destructive=True),
     Tool("sts_tokens", "Role: admin. action list (hashes only), create (name, role reader|operator|editor|admin; "
          "the token is shown once) or revoke (id).",

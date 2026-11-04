@@ -1,0 +1,93 @@
+{
+ "version": 1,
+ "name": "browser_ci_session",
+ "description": "Tiny session for the browser checks",
+ "steps": [
+  {
+   "function": "increment_session",
+   "params": {}
+  },
+  {
+   "function": "generate_station_report",
+   "params": {
+    "info": "Pre"
+   }
+  },
+  {
+   "function": "generate_wheel_report",
+   "params": {
+    "info": "Pre"
+   }
+  },
+  {
+   "function": "generate_orders",
+   "params": {
+    "increment_session": ""
+   }
+  },
+  {
+   "function": "fill_orders",
+   "params": {
+    "percent": "100"
+   }
+  },
+  {
+   "function": "generate_waybills",
+   "params": {}
+  },
+  {
+   "function": "auto_assign_locals",
+   "params": {
+    "jobs": "LOC"
+   }
+  },
+  {
+   "function": "generate_switchlists",
+   "params": {
+    "jobs": "LOC",
+    "format": "all",
+    "title": "LOC",
+    "info": "Outbound"
+   }
+  },
+  {
+   "function": "pick_up_cars",
+   "params": {
+    "job": "LOC"
+   }
+  },
+  {
+   "function": "auto_assign_locals",
+   "params": {
+    "jobs": "TURN"
+   }
+  },
+  {
+   "function": "generate_switchlists",
+   "params": {
+    "jobs": "TURN",
+    "format": "all",
+    "title": "TURN",
+    "info": "Outbound"
+   }
+  },
+  {
+   "function": "pick_up_cars",
+   "params": {
+    "job": "TURN"
+   }
+  },
+  {
+   "function": "generate_station_report",
+   "params": {
+    "info": "Post"
+   }
+  },
+  {
+   "function": "generate_wheel_report",
+   "params": {
+    "info": "Post"
+   }
+  }
+ ]
+}

@@ -520,7 +520,12 @@ are blocked by the browser. Inline `style` attributes are still allowed.
 - `onload` code moves to `STS.ready(fn)`.
 - Check a page with `node tests/browser/cdp_check.mjs <url>` or
   `--steps file.json`. It reports CSP violations, console errors and failed
-  steps.
+  steps. The full regression set runs with `tests/browser/run.sh` against a
+  sandbox (it restores a synthetic fixture, makes sessions and tokens through
+  the API, fills the `${...}` placeholders and prints a pass/fail table); CI
+  runs it in `.github/workflows/browser-tests.yml`. Add checks to
+  `tests/browser/steps/*.json` with placeholders instead of hard-coded ids; see
+  `tests/browser/README.md`.
 - Exceptions:
   - `/sts/api/docs/` gets `'unsafe-eval'` for Swagger UI.
   - No carve-out remains for generated session output. Generators emit
