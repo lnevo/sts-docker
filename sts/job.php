@@ -181,7 +181,7 @@ session_render_nav_bar([
       <?php endif; ?>
       <label class="job-session-select-label">
         <span class="visually-hidden">Session</span>
-        <select class="form-select form-select-sm job-session-select" onchange="if (this.value) window.location.href = this.value;">
+        <select class="form-select form-select-sm job-session-select">
           <?php foreach ($browser_sessions as $s): ?>
             <option value="<?php echo htmlspecialchars(session_train_browse_href($s, $job_display, $selected_style, $root)); ?>"<?php echo $s === $session ? ' selected' : ''; ?>>Session <?php echo (int) $s; ?></option>
           <?php endforeach; ?>
@@ -194,7 +194,7 @@ session_render_nav_bar([
       <?php endif; ?>
       <label class="job-train-select-label">
         <span>Train</span>
-        <select class="form-select form-select-sm job-train-select" onchange="if (this.value) window.location.href = this.value;">
+        <select class="form-select form-select-sm job-train-select">
           <?php foreach ($train_groups as $group_name => $members): ?>
             <?php $group_primary = $members[0]; $group_current = in_array($job, $members, true); ?>
             <option value="job.php?session=<?php echo (int) $session; ?>&amp;job=<?php echo urlencode($group_primary); ?>&amp;style=<?php echo urlencode($selected_style); ?>"<?php echo $group_current ? ' selected' : ''; ?>><?php echo htmlspecialchars($group_name); ?></option>
@@ -206,7 +206,7 @@ session_render_nav_bar([
     <?php if (count($legs)): ?>
       <div class="card">
         <div class="job-switchlist-controls">
-          <form class="session-style-form" id="switchlist-style-form" onsubmit="return false;">
+          <form class="session-style-form" id="switchlist-style-form">
             <label>
               <span>Switch list style</span>
               <select id="switchlist-style" name="style">
@@ -300,131 +300,7 @@ session_render_nav_bar([
     <?php endif; ?>
   </main>
 
-  <script>
-    (function () {
-      const legs = Array.from(document.querySelectorAll('.switchlist-leg'));
-      const styleSelect = document.getElementById('switchlist-style');
-      const styleStatus = document.getElementById('switchlist-style-status');
-      const phaseLabel = document.getElementById('phase-label');
-      const prevBtn = document.getElementById('phase-prev');
-      const nextBtn = document.getElementById('phase-next');
-      const reloadBtn = document.getElementById('switchlist-reload');
-      const sessionId = <?php echo (int) $session; ?>;
-      const storageKey = 'session_switchlist_style';
-      let current = <?php echo (int) $initial_leg; ?>;
-
-      // Reload one iframe (cache-busted) so a freshly (re)rendered style file is
-      // fetched instead of a stale response.
-      function reloadFrame(frame) {
-        const src = frame.getAttribute('src');
-        if (!src) return;
-        const bust = (src.indexOf('&_=') === -1 && src.indexOf('?_=') === -1)
-          ? src + '&_=' + Date.now()
-          : src.replace(/([?&])_=\d+/, '$1_=' + Date.now());
-        frame.setAttribute('src', bust);
-      }
-
-      // When an inline switch-list frame comes back as the "Not found" placeholder
-      // (style file not yet written), regenerate the style once and reload it so
-      // the operator never has to hand-refresh.
-      function guardFrame(frame) {
-        if (frame.dataset.recovered === '1') return;
-        try {
-          const doc = frame.contentDocument;
-          if (!doc) return;
-          const text = (doc.body ? doc.body.textContent : '').trim();
-          if (text === 'Not found' || text === 'Bad path') {
-            frame.dataset.recovered = '1';
-            const style = styleSelect ? styleSelect.value : '<?php echo htmlspecialchars($selected_style, ENT_QUOTES); ?>';
-            fetch('operational_steps_api.php?action=rerender_session_style', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ session: sessionId, style: style }),
-            }).then(function () { reloadFrame(frame); });
-          }
-        } catch (e) { /* cross-origin or blank: ignore */ }
-      }
-
-      const savedStyle = localStorage.getItem(storageKey);
-      if (savedStyle && styleSelect && !window.location.search.includes('style=')) {
-        styleSelect.value = savedStyle;
-      }
-
-      function showLeg(idx) {
-        if (!legs.length) return;
-        current = Math.max(0, Math.min(idx, legs.length - 1));
-        legs.forEach(function (leg, i) {
-          leg.style.display = i === current ? '' : 'none';
-        });
-        if (phaseLabel) {
-          const info = (legs[current] && legs[current].dataset.info) ? legs[current].dataset.info.trim() : '';
-          phaseLabel.textContent = info !== ''
-            ? info
-            : ('Phase ' + (current + 1) + ' of ' + legs.length);
-        }
-        if (prevBtn) prevBtn.disabled = current === 0;
-        if (nextBtn) nextBtn.disabled = current === legs.length - 1;
-      }
-
-      function applyStyle(style) {
-        document.querySelectorAll('[data-base]').forEach(function (el) {
-          const base = el.getAttribute('data-base');
-          if (!base) return;
-          const url = base + '_' + style + '.html';
-          if (el.tagName === 'IFRAME') {
-            el.setAttribute('src', url + '&embed=1');
-          } else if (el.tagName === 'A') {
-            el.setAttribute('href', url);
-          }
-        });
-        localStorage.setItem(storageKey, style);
-        const params = new URL(window.location.href);
-        params.searchParams.set('style', style);
-        window.history.replaceState({}, '', params);
-      }
-
-      prevBtn?.addEventListener('click', function () { showLeg(current - 1); });
-      nextBtn?.addEventListener('click', function () { showLeg(current + 1); });
-
-      document.querySelectorAll('.switchlist-frame').forEach(function (frame) {
-        frame.addEventListener('load', function () { guardFrame(frame); });
-      });
-
-      reloadBtn?.addEventListener('click', async function () {
-        const style = styleSelect ? styleSelect.value : '<?php echo htmlspecialchars($selected_style, ENT_QUOTES); ?>';
-        if (styleStatus) styleStatus.textContent = 'Reloading…';
-        try {
-          await fetch('operational_steps_api.php?action=rerender_session_style', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session: sessionId, style: style, force: true }),
-          });
-        } catch (e) { /* reload anyway */ }
-        document.querySelectorAll('.switchlist-frame').forEach(reloadFrame);
-        if (styleStatus) styleStatus.textContent = 'Reloaded';
-      });
-
-      styleSelect?.addEventListener('change', async function () {
-        const style = styleSelect.value;
-        if (styleStatus) styleStatus.textContent = 'Generating…';
-        try {
-          const resp = await fetch('operational_steps_api.php?action=rerender_session_style', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session: sessionId, style: style }),
-          });
-          const data = await resp.json();
-          if (!data.ok) throw new Error(data.error || 'Generation failed');
-          applyStyle(style);
-          if (styleStatus) styleStatus.textContent = data.skipped ? 'Ready (cached)' : 'Generated';
-        } catch (err) {
-          if (styleStatus) styleStatus.textContent = String(err.message || err);
-        }
-      });
-
-      showLeg(current);
-      if (styleSelect) applyStyle(styleSelect.value);
-    })();
-  </script>
+  <script type="application/json" id="sts-data-job"><?php echo json_encode(['session' => (int) $session, 'style' => (string) $selected_style, 'initialLeg' => (int) $initial_leg], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
+  <script src="/sts/js/session_job.js?v=1"></script>
 </body>
 </html>

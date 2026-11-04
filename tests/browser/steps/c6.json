@@ -1,0 +1,245 @@
+[
+ {
+  "url": "${STS_BASE}/session_overview.php",
+  "actions": [
+   {
+    "expect": "document.querySelectorAll('a').length > 5"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/session.php?session=4",
+  "actions": [
+   {
+    "expect": "!!document.getElementById('session-select')"
+   },
+   {
+    "eval": "var s=document.getElementById('session-select'); window.__sel=s.value"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/backups/session_state/sessions/session_4/index.php",
+  "actions": [
+   {
+    "expect": "!!document.getElementById('session-select')"
+   },
+   {
+    "expect": "typeof STS._handlers.sessArchivedToggle === 'function'"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/job.php?session=4&job=CK1",
+  "actions": [
+   {
+    "expect": "document.querySelectorAll('.switchlist-leg').length >= 1"
+   },
+   {
+    "expect": "document.querySelector('.job-session-select') !== null"
+   },
+   {
+    "select": [
+     "#switchlist-style",
+     "full"
+    ]
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "expect": "document.getElementById('switchlist-style-status').textContent !== ''"
+   },
+   {
+    "expect": "document.getElementById('switchlist-style-form').dispatchEvent(new Event('submit',{cancelable:true})) === false"
+   }
+  ],
+  "allowConsole": [
+   "401"
+  ]
+ },
+ {
+  "url": "${STS_BASE}/session-sitemap.php",
+  "actions": [
+   {
+    "expect": "document.querySelectorAll('a[href]').length > 5"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/so.php?f=session_4/phase_02/CK1/phase_01_mobile.html",
+  "actions": [
+   {
+    "expect": "typeof window.stsSafePrint === 'function'"
+   },
+   {
+    "expect": "document.querySelector('[data-sts-click=sessPrint]') !== null"
+   },
+   {
+    "expect": "document.querySelectorAll('script:not([src]):not([type=\"application/json\"])').length === 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/so.php?f=session_4/phase_02/CK1/phase_01_half.html&embed=1",
+  "actions": []
+ },
+ {
+  "url": "${STS_BASE}/so.php?f=session_4/phase_02/CK1/print_all.html",
+  "actions": [
+   {
+    "expect": "document.querySelector('[data-sts-click=sessPrint]') !== null"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/so.php?f=session_4/phase_02/CK1/index.html",
+  "actions": [
+   {
+    "expect": "document.querySelectorAll('.phase-list a, a').length > 1"
+   },
+   {
+    "eval": "var l=document.querySelector('[data-style-link]'); if(l){l.click();}"
+   },
+   {
+    "expect": "true"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/so.php?f=session_4/station_report.html",
+  "actions": [
+   {
+    "waitFor": "#srp-search"
+   },
+   {
+    "type": [
+     "#srp-search",
+     "zzzznomatch"
+    ]
+   },
+   {
+    "expect": "document.querySelectorAll('.station-card.srp-hidden').length === document.querySelectorAll('.station-card').length"
+   },
+   {
+    "expect": "document.getElementById('srp-summary').textContent.indexOf('Showing 0') === 0"
+   },
+   {
+    "click": "#srp-clear"
+   },
+   {
+    "expect": "document.querySelectorAll('.station-card.srp-hidden').length === 0"
+   },
+   {
+    "expect": "document.querySelector('[data-sts-click=sessPrint]') !== null"
+   },
+   {
+    "expect": "typeof STS._handlers.sessPrint === 'function' && typeof STS._handlers.sessGoSo === 'function'"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/so.php?f=session_4/wheel_report.html",
+  "actions": [
+   {
+    "waitFor": "#wrp-search"
+   },
+   {
+    "type": [
+     "#wrp-search",
+     "zzzznomatch"
+    ]
+   },
+   {
+    "expect": "document.getElementById('wrp-summary').textContent.indexOf('Showing 0') === 0"
+   },
+   {
+    "click": "#wrp-clear"
+   },
+   {
+    "expect": "document.getElementById('wrp-summary').textContent === ''"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/so.php?f=session_4/waybills/index.html",
+  "actions": [
+   {
+    "expect": "document.querySelectorAll('.wb-pick').length > 0"
+   },
+   {
+    "click": "#wb-select-all"
+   },
+   {
+    "expect": "!document.getElementById('wb-print-selected').disabled"
+   },
+   {
+    "click": "#wb-clear"
+   },
+   {
+    "expect": "document.getElementById('wb-print-selected').disabled"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/so.php?f=session_4/waybills/print_all.html",
+  "actions": [
+   {
+    "expect": "document.querySelectorAll('.waybill-sheet').length > 0"
+   },
+   {
+    "click": "#wb-hide-memos"
+   },
+   {
+    "expect": "document.querySelector('.waybill-print').classList.contains('hide-memos')"
+   },
+   {
+    "select": [
+     "#wb-phase-select",
+     "2"
+    ]
+   },
+   {
+    "expect": "document.querySelector('[data-sts-click=sessPrint]') !== null"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/so.php?f=session_4/waybills/print_all.html&wb=001-002",
+  "actions": [
+   {
+    "expect": "document.body.textContent.indexOf('selected waybill') >= 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/so.php?f=session_4/waybills/001-002.html",
+  "actions": [
+   {
+    "expect": "document.querySelector('[data-sts-click=sessPrint]') !== null"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/backups/session_state/sessions/session_4/waybills/001-002.html",
+  "actions": [
+   {
+    "expect": "typeof window.stsSafePrint === 'function'"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/backups/session_state/sessions/session_4/station_report.html",
+  "actions": [
+   {
+    "type": [
+     "#srp-search",
+     "zzzz"
+    ]
+   },
+   {
+    "expect": "document.getElementById('srp-summary').textContent.indexOf('Showing 0') === 0"
+   }
+  ]
+ }
+]

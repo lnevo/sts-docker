@@ -1231,15 +1231,12 @@ function master_sw_render_phase_nav_bar($table_name, $session_nbr, array $nav)
         $cluster .= '<a href="' . htmlspecialchars($nav['next'], ENT_QUOTES) . '" class="btn btn-outline-light btn-sm">Next phase <i class="bi bi-chevron-right"></i></a>';
     }
     $cluster .= '<label for="sw-style-select" class="text-white-50 small mb-0">Style</label>'
-        . '<select id="sw-style-select" class="form-select form-select-sm" style="width:auto;">'
+        . '<select id="sw-style-select" class="form-select form-select-sm" style="width:auto;" data-sts-change="sessSwStyleUrl">'
         . $options . '</select></div>';
 
     $nav_html = session_nav_bar_html($links, '');
     $nav_html = str_replace('</div></div></nav>', $cluster . '</div></div></nav>', $nav_html);
     echo $nav_html;
-    echo '<script>(function(){var el=document.getElementById("sw-style-select");if(!el)return;'
-        . 'el.addEventListener("change",function(){var re=/_(mobile|half|full|dmp|wo|x2010)\.html/;'
-        . 'window.location.href=window.location.href.replace(re,"_"+this.value+".html");});})();</script>';
 }
 
 function master_sw_render_job_index($dbc, $job_name, array $sections, $job_dir, $session_nbr, $preferred_style = 'mobile', ?array $available_styles = null, array $index_options = [])
@@ -1318,37 +1315,11 @@ function master_sw_render_job_index($dbc, $job_name, array $sections, $job_dir, 
       <h2>Switch lists</h2>
       <p>Style: ' . $style_links . '</p>
       <p>Open each leg in order. Switch style on the switch list page nav bar.</p>
-      <ul class="phase-list">' . $phase_items . '</ul>
+      <ul class="phase-list" data-preferred-style="' . htmlspecialchars($preferred_style, ENT_QUOTES) . '">' . $phase_items . '</ul>
       ' . $print_all_link . '
     </div>
     ' . master_sw_waybills_card_html($waybills_href) . '
   </div>
-  <script>
-    (function () {
-      const suffixRe = /_(mobile|half|full|dmp|wo|x2010)\\.html$/;
-      function applyStyle(style) {
-        document.querySelectorAll(".phase-list a").forEach(function (anchor) {
-          const href = anchor.getAttribute("href") || "";
-          if (href.indexOf("job.php") !== -1) {
-            anchor.href = href.replace(/([?&]style=)[^&]*/, "$1" + style);
-          } else if (suffixRe.test(href)) {
-            anchor.href = anchor.href.replace(suffixRe, "_" + style + ".html");
-          }
-        });
-        document.querySelectorAll("[data-style-link]").forEach(function (a) {
-          a.classList.toggle("active", a.getAttribute("data-style-link") === style);
-        });
-      }
-      const params = new URLSearchParams(window.location.search);
-      applyStyle(params.get("style") || "' . htmlspecialchars($preferred_style, ENT_QUOTES) . '");
-      document.querySelectorAll("[data-style-link]").forEach(function (a) {
-        a.addEventListener("click", function (e) {
-          e.preventDefault();
-          applyStyle(this.getAttribute("data-style-link"));
-        });
-      });
-    })();
-  </script>
 </body>
 </html>';
 
@@ -1716,7 +1687,7 @@ function master_sw_render_print_all($dbc, $job_name, array $sections, $job_dir, 
   ' . $session_nav . '
   <div class="page">
     <div class="noprint" style="margin-bottom:12px;">
-      <button onclick="window.print()">PRINT ALL PHASES</button>
+      <button data-sts-click="sessPrint">PRINT ALL PHASES</button>
       <p style="margin:8px 0 0; color:#555; font-size:14px;">Each phase starts on a new printed page.</p>
     </div>
     ' . $phases_html . '
@@ -1767,7 +1738,7 @@ function master_sw_render_session_print_all($dbc, array $job_sections, $output_d
     ]), 'Print all · ' . count($job_sections) . ' trains · ' . (int) $phase_count . ' phases') . '
   <div class="page">
     <div class="noprint" style="margin-bottom:12px;">
-      <button onclick="window.print()">PRINT ALL SWITCH LISTS</button>
+      <button data-sts-click="sessPrint">PRINT ALL SWITCH LISTS</button>
       <p style="margin:8px 0 0; color:#555; font-size:14px;">Each phase starts on a new printed page.</p>
     </div>
     ' . $phases_html . '
@@ -1828,21 +1799,16 @@ function master_sw_render_mobile($dbc, $job_name, array $sections, $output_path,
       * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     }
   </style>
-  <script>
-    function toggle_mobile_instructions() {
-      var box = document.getElementById("mobile_instructions_checkbox");
-      document.getElementById("mobile_job_instructions").style.display = box.checked ? "block" : "none";
-    }
-  </script>
+  ' . session_safe_print_script() . '
 </head>
 <body>
 <pre>';
     }
 ?>
 <div class="noprint">
-  <button onclick="window.print()">PRINT</button>&nbsp;&nbsp;
+  <button data-sts-click="sessPrint">PRINT</button>&nbsp;&nbsp;
 <?php if (!$single_phase) { ?>
-  <input type="checkbox" checked id="mobile_instructions_checkbox" onchange="toggle_mobile_instructions();">Show Job Instructions
+  <input type="checkbox" checked id="mobile_instructions_checkbox" data-sts-change="sessMobileInstr">Show Job Instructions
 <?php } ?>
 </div><br />
 <?= str_pad($rr_name, $page_width, ' ', STR_PAD_BOTH) . '<br />' ?>
@@ -2046,7 +2012,7 @@ function master_sw_render_full($dbc, $job_name, array $sections, $output_path, a
         $car_rows .= master_sw_render_table_section_rows($dbc, $section, $loads, $empties, $special_instructions);
     }
     ?>
-<div class="noprint"><button onclick="window.print()">PRINT</button></div>
+<div class="noprint"><button data-sts-click="sessPrint">PRINT</button></div>
 <table id="consist" style="width:100%; border-collapse:collapse;">
   <tr><td colspan="8"><h2 style="text-align:center;"><?= htmlspecialchars($rr_initials) ?></h2><h3 style="text-align:center;">Switchlist</h3></td></tr>
   <tr>
@@ -2076,7 +2042,7 @@ function master_sw_render_dmp($dbc, $job_name, array $sections, $output_path, ar
     $shell = master_sw_render_phase_shell_start($dbc, $job_name, 'dmp', $options);
     echo '<pre>';
     ?>
-<div class="noprint"><button onclick="window.print()">PRINT</button></div><br />
+<div class="noprint"><button data-sts-click="sessPrint">PRINT</button></div><br />
 <?= str_pad($rr_name, $page_width, ' ', STR_PAD_BOTH) . '<br /><br />' ?>
 <?= str_pad('Switchlist', $page_width, ' ', STR_PAD_BOTH) . '<br /><br />' ?>
 <?= str_pad('Train: ' . substr($shell['table_name'], 0, 22), (int) ($page_width / 3)) ?>
@@ -2113,7 +2079,7 @@ function master_sw_render_wo($dbc, $job_name, array $sections, $output_path, arr
     $shell = master_sw_render_phase_shell_start($dbc, $job_name, 'wo', $options);
     echo '<pre>';
     ?>
-<div class="noprint"><button onclick="window.print()">PRINT</button></div><br />
+<div class="noprint"><button data-sts-click="sessPrint">PRINT</button></div><br />
 <?= str_pad($rr_name, $page_width, ' ', STR_PAD_BOTH) . '<br /><br />' ?>
 <?= str_pad('Work Order', $page_width, ' ', STR_PAD_BOTH) . '<br /><br />' ?>
 <?= str_pad('Train: ' . substr($shell['table_name'], 0, 22), (int) ($page_width / 3)) ?>
@@ -2226,7 +2192,7 @@ function master_sw_x2010_page_header($logo_src, $train_no, $serial_number, $page
 {
     print '<table class="detail-table">';
     print '<tr>';
-    print '<td style="width:30%; padding:4px;"><img class="logo-img" src="' . htmlspecialchars($logo_src) . '" alt="Operator Logo" style="height:52px; width:auto;" onerror="this.style.display=\'none\'"></td>';
+    print '<td style="width:30%; padding:4px;"><img class="logo-img" src="' . htmlspecialchars($logo_src) . '" alt="Operator Logo" style="height:52px; width:auto;" data-sts-hide-on-error></td>';
     print '<td style="width:45%; text-align:center; padding:4px; vertical-align:middle;"><h2 class="form-title" style="margin:0;">Train Consist Form x 2010</h2></td>';
     print '<td style="width:25%; padding:4px; position:relative;">';
     print '<div style="position:absolute; bottom:4px; left:4px;" class="page-info">PAGE ' . (int) $page_num . ' OF ' . (int) $page_count . '</div>';
@@ -2364,7 +2330,7 @@ function master_sw_render_x2010($dbc, $job_name, array $sections, $output_path, 
     .x2010-form .data-table th, .x2010-form .data-table td { font-size:8pt !important; padding:2px 4px !important; line-height:1.3 !important; }
   }
 </style>
-<div class="noprint"><button onclick="window.print()">PRINT</button></div>
+<div class="noprint"><button data-sts-click="sessPrint">PRINT</button></div>
 <div class="x2010-form">
 <?php
     if (count($cars) === 0) {
@@ -2535,6 +2501,7 @@ function master_sw_render_halfsheet($dbc, $job_name, array $sections, $output_pa
 <head>
   <meta charset="UTF-8">
   <title><?= htmlspecialchars($display_train) ?> Master Switchlist — Session <?= htmlspecialchars($session_nbr) ?></title>
+  <?= session_safe_print_script() ?>
   <style>
     body { font: normal 20px Verdana, Arial, sans-serif; }
     table { border-collapse: collapse; table-layout: fixed; }
@@ -2551,7 +2518,7 @@ function master_sw_render_halfsheet($dbc, $job_name, array $sections, $output_pa
 <body>
 <?php } ?>
 <div class="noprint">
-  <button onclick="window.print()">PRINT</button>
+  <button data-sts-click="sessPrint">PRINT</button>
 </div>
 <table>
 <tr><td style="vertical-align: top;">
