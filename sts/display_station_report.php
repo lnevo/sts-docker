@@ -1036,7 +1036,8 @@ if (isset($_GET['generate_report'])) {
   <script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
   <script src="vendor/jquery/jquery-3.6.0.min.js"></script>
 
-  <script src="/sts/js/report-common.js?v=1"></script>
+  <script src="/sts/js/show_image.js?v=1"></script>
+  <script src="/sts/js/report-common.js?v=2"></script>
   <script src="/sts/js/report-station.js?v=1"></script>
 </body>
 </html>

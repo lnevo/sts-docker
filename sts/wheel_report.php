@@ -81,7 +81,7 @@
       .status-loaded { background-color: #a8e6cf; padding: 2px 6px; border-radius: 3px; }
     </style>
     <script src="/sts/js/sts-actions.js?v=1"></script>
-    <script src="/sts/js/report-common.js?v=1"></script>
+    <script src="/sts/js/show_image.js?v=1"></script>
   </head>
   <body>
     <!-- Navigation Bar -->
