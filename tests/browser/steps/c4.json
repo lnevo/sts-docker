@@ -1,79 +1,251 @@
 [
-  {"url": "${STS_BASE}/backup_db.php", "actions": [
-    {"expect": "!!document.getElementById('backup_name')"},
-    {"type": ["#backup_name", "c4probe"]},
-    {"click": "#backup_btn"},
-    {"expect": "document.body.innerText.indexOf('Backup complete') >= 0"}
-  ]},
-  {"url": "${STS_BASE}/restore_db.php", "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}", "actions": [
-    {"expect": "!!document.querySelector('a.download-link[href$=\"/admin/backups/c4probe/download\"]')"},
-    {"expect": "fetch('/sts/api/v1/admin/backups/c4probe/download', {credentials: 'same-origin'}).then(function (r) { return r.status === 200 && /attachment/.test(r.headers.get('Content-Disposition')); })"},
-    {"click": "a.download-link[href$=\"/admin/backups/c4probe/download\"]"},
-    {"wait": 800},
-    {"expect": "document.getElementById('download-msg').classList.contains('d-none')"},
-    {"expect": "document.getElementById('restore_btn').disabled"},
-    {"click": "input[name=restore_name][value=c4probe]"},
-    {"expect": "!document.getElementById('restore_btn').disabled"},
-    {"click": "#restore_btn"},
-    {"waitFor": ".alert-success"},
-    {"expect": "document.body.innerText.indexOf('c4probe restored successfully') >= 0"}
-  ]},
-  {"url": "${STS_BASE}/restore_db.php", "cookie": "sts_api_sandbox=signedout", "actions": [
-    {"click": "a.download-link[href$=\"/admin/backups/c4probe/download\"]"},
-    {"wait": 800},
-    {"expect": "document.getElementById('download-msg').textContent.indexOf('Sign in on API Access (Database Maintenance) to download') >= 0"}
-  ]},
-  {"url": "${STS_BASE}/remove_backup.php", "actions": [
-    {"expect": "document.getElementById('remove_btn').disabled"},
-    {"click": "input[name=remove_name][value=c4probe]"},
-    {"expect": "!document.getElementById('remove_btn').disabled"},
-    {"click": "#remove_btn"},
-    {"wait": 800},
-    {"expect": "!document.querySelector('input[name=remove_name][value=c4probe]')"}
-  ]},
-  {"url": "${STS_BASE}/validate_db.php", "actions": [
-    {"expect": "document.body.innerText.length > 100"}
-  ]},
-  {"url": "${STS_BASE}/fix_reporting_marks.php", "actions": [
-    {"expect": "!!document.getElementById('fix_it_btn')"},
-    {"click": "#fix_it_btn"},
-    {"wait": 800},
-    {"expect": "!document.getElementById('fix_it_btn')"}
-  ]},
-  {"url": "${STS_BASE}/fix_cars_trains_loc.php", "actions": []},
-  {"url": "${STS_BASE}/fix_empty_commodity.php", "actions": []},
-  {"url": "${STS_BASE}/fix_ghost_cars.php", "actions": []},
-  {"url": "${STS_BASE}/fix_ghost_locations.php", "actions": []},
-  {"url": "${STS_BASE}/fix_ghost_steps.php", "actions": []},
-  {"url": "${STS_BASE}/fix_ghost_trains.php", "actions": []},
-  {"url": "${STS_BASE}/fix_orphans.php", "actions": []},
-  {"url": "${STS_BASE}/fix_waybills.php", "actions": []},
-  {"url": "${STS_BASE}/fix_win2linux.php", "actions": []},
-  {"url": "${STS_BASE}/reset.php", "actions": [
-    {"expect": "document.getElementById('restart_btn').disabled"},
-    {"click": "#reset_check_box"},
-    {"expect": "!document.getElementById('restart_btn').disabled"},
-    {"click": "#reset_check_box"},
-    {"expect": "document.getElementById('restart_btn').disabled"},
-    {"click": "#reset_check_box"},
-    {"click": "#restart_btn"}
-  ]},
-  {"url": "${STS_BASE}/restart.php", "actions": [
-    {"expect": "document.getElementById('restart_btn').disabled"},
-    {"click": "#reset_check_box"},
-    {"expect": "!document.getElementById('restart_btn').disabled"},
-    {"click": "#restart_btn"}
-  ]},
-  {"url": "${STS_BASE}/wipe.php", "actions": [
-    {"expect": "document.getElementById('wipe_check_box2').disabled && document.getElementById('wipe_btn').disabled"},
-    {"click": "#wipe_check_box1"},
-    {"expect": "!document.getElementById('wipe_check_box2').disabled && document.getElementById('wipe_btn').disabled"},
-    {"click": "#wipe_check_box2"},
-    {"expect": "!document.getElementById('wipe_btn').disabled"},
-    {"click": "#wipe_check_box1"},
-    {"expect": "document.getElementById('wipe_check_box2').disabled && !document.getElementById('wipe_check_box2').checked && document.getElementById('wipe_btn').disabled"},
-    {"click": "#wipe_check_box1"},
-    {"click": "#wipe_check_box2"},
-    {"click": "#wipe_btn"}
-  ]}
+ {
+  "url": "${STS_BASE}/backup_db.php",
+  "actions": [
+   {
+    "expect": "!!document.getElementById('backup_name')"
+   },
+   {
+    "type": [
+     "#backup_name",
+     "c4probe"
+    ]
+   },
+   {
+    "click": "#backup_btn"
+   },
+   {
+    "expect": "document.body.innerText.indexOf('Backup complete') >= 0"
+   }
+  ],
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+ },
+ {
+  "url": "${STS_BASE}/restore_db.php",
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}",
+  "actions": [
+   {
+    "expect": "!!document.querySelector('a.download-link[href$=\"/admin/backups/c4probe/download\"]')"
+   },
+   {
+    "expect": "fetch('/sts/api/v1/admin/backups/c4probe/download', {credentials: 'same-origin'}).then(function (r) { return r.status === 200 && /attachment/.test(r.headers.get('Content-Disposition')); })"
+   },
+   {
+    "click": "a.download-link[href$=\"/admin/backups/c4probe/download\"]"
+   },
+   {
+    "wait": 800
+   },
+   {
+    "expect": "document.getElementById('download-msg').classList.contains('d-none')"
+   },
+   {
+    "expect": "document.getElementById('restore_btn').disabled"
+   },
+   {
+    "click": "input[name=restore_name][value=c4probe]"
+   },
+   {
+    "expect": "!document.getElementById('restore_btn').disabled"
+   },
+   {
+    "click": "#restore_btn"
+   },
+   {
+    "waitFor": ".alert-success"
+   },
+   {
+    "expect": "document.body.innerText.indexOf('c4probe restored successfully') >= 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/restore_db.php",
+  "cookie": "sts_api_sandbox=signedout",
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice')"
+   }
+  ],
+  "allowConsole": [
+   "Failed to load resource"
+  ]
+ },
+ {
+  "url": "${STS_BASE}/remove_backup.php",
+  "actions": [
+   {
+    "expect": "document.getElementById('remove_btn').disabled"
+   },
+   {
+    "click": "input[name=remove_name][value=c4probe]"
+   },
+   {
+    "expect": "!document.getElementById('remove_btn').disabled"
+   },
+   {
+    "click": "#remove_btn"
+   },
+   {
+    "wait": 800
+   },
+   {
+    "expect": "!document.querySelector('input[name=remove_name][value=c4probe]')"
+   }
+  ],
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+ },
+ {
+  "url": "${STS_BASE}/validate_db.php",
+  "actions": [
+   {
+    "expect": "document.body.innerText.length > 100"
+   }
+  ],
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+ },
+ {
+  "url": "${STS_BASE}/fix_reporting_marks.php",
+  "actions": [
+   {
+    "expect": "!!document.getElementById('fix_it_btn')"
+   },
+   {
+    "click": "#fix_it_btn"
+   },
+   {
+    "wait": 800
+   },
+   {
+    "expect": "!document.getElementById('fix_it_btn')"
+   }
+  ],
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+ },
+ {
+  "url": "${STS_BASE}/fix_cars_trains_loc.php",
+  "actions": [],
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+ },
+ {
+  "url": "${STS_BASE}/fix_empty_commodity.php",
+  "actions": [],
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+ },
+ {
+  "url": "${STS_BASE}/fix_ghost_cars.php",
+  "actions": [],
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+ },
+ {
+  "url": "${STS_BASE}/fix_ghost_locations.php",
+  "actions": [],
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+ },
+ {
+  "url": "${STS_BASE}/fix_ghost_steps.php",
+  "actions": [],
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+ },
+ {
+  "url": "${STS_BASE}/fix_ghost_trains.php",
+  "actions": [],
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+ },
+ {
+  "url": "${STS_BASE}/fix_orphans.php",
+  "actions": [],
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+ },
+ {
+  "url": "${STS_BASE}/fix_waybills.php",
+  "actions": [],
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+ },
+ {
+  "url": "${STS_BASE}/fix_win2linux.php",
+  "actions": [],
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+ },
+ {
+  "url": "${STS_BASE}/reset.php",
+  "actions": [
+   {
+    "expect": "document.getElementById('restart_btn').disabled"
+   },
+   {
+    "click": "#reset_check_box"
+   },
+   {
+    "expect": "!document.getElementById('restart_btn').disabled"
+   },
+   {
+    "click": "#reset_check_box"
+   },
+   {
+    "expect": "document.getElementById('restart_btn').disabled"
+   },
+   {
+    "click": "#reset_check_box"
+   },
+   {
+    "click": "#restart_btn"
+   }
+  ],
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+ },
+ {
+  "url": "${STS_BASE}/restart.php",
+  "actions": [
+   {
+    "expect": "document.getElementById('restart_btn').disabled"
+   },
+   {
+    "click": "#reset_check_box"
+   },
+   {
+    "expect": "!document.getElementById('restart_btn').disabled"
+   },
+   {
+    "click": "#restart_btn"
+   }
+  ],
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+ },
+ {
+  "url": "${STS_BASE}/wipe.php",
+  "actions": [
+   {
+    "expect": "document.getElementById('wipe_check_box2').disabled && document.getElementById('wipe_btn').disabled"
+   },
+   {
+    "click": "#wipe_check_box1"
+   },
+   {
+    "expect": "!document.getElementById('wipe_check_box2').disabled && document.getElementById('wipe_btn').disabled"
+   },
+   {
+    "click": "#wipe_check_box2"
+   },
+   {
+    "expect": "!document.getElementById('wipe_btn').disabled"
+   },
+   {
+    "click": "#wipe_check_box1"
+   },
+   {
+    "expect": "document.getElementById('wipe_check_box2').disabled && !document.getElementById('wipe_check_box2').checked && document.getElementById('wipe_btn').disabled"
+   },
+   {
+    "click": "#wipe_check_box1"
+   },
+   {
+    "click": "#wipe_check_box2"
+   },
+   {
+    "click": "#wipe_btn"
+   }
+  ],
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+ }
 ]

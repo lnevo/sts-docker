@@ -1,0 +1,575 @@
+[
+ {
+  "url": "${STS_BASE}/backup_db.php?backup_btn=1&backup_name=c4signedout",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/validate_db.php",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/restore_db.php",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/remove_backup.php?remove_btn=1&remove_name=hart_seed",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/reset.php?restart_btn=1",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/restart.php?restart_btn=1",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/wipe.php?wipe_btn=1",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/import_tables.php",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/settings.php",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_cars_trains_loc.php?fix_it_btn=1",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_empty_commodity.php?fix_it_btn=1",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_ghost_cars.php?fix_it_btn=1",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_ghost_locations.php?fix_ghosts_btn=1",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_ghost_steps.php?fix_ghosts_btn=1",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_ghost_trains.php?fix_ghosts_btn=1",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_orphans.php?fix_it_btn=1",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_reporting_marks.php?fix_it_btn=1",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_waybills.php?fix_it_btn=1",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_win2linux.php",
+  "cookie": "sts_api_sandbox=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('form input[type=submit]')"
+   },
+   {
+    "expect": "document.getElementById('maint-lock-notice').textContent.indexOf('role') > 0"
+   },
+   {
+    "expect": "!!document.querySelector('a[href=\"/sts/api_admin.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/backup_db.php",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "actions": [
+   {
+    "type": [
+     "#backup_name",
+     "c4lockprobe"
+    ]
+   },
+   {
+    "click": "#backup_btn"
+   },
+   {
+    "expect": "document.body.innerText.indexOf('Backup complete') >= 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/validate_db.php",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "actions": [
+   {
+    "expect": "!document.getElementById('maint-lock-notice') && document.body.innerText.length > 100"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/restore_db.php",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && document.getElementById('maint-lock-notice').textContent.indexOf('admin') > 0 && document.getElementById('maint-lock-notice').textContent.indexOf('operator') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/remove_backup.php?remove_btn=1&remove_name=hart_seed",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && document.getElementById('maint-lock-notice').textContent.indexOf('admin') > 0 && document.getElementById('maint-lock-notice').textContent.indexOf('operator') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/reset.php?restart_btn=1",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && document.getElementById('maint-lock-notice').textContent.indexOf('admin') > 0 && document.getElementById('maint-lock-notice').textContent.indexOf('operator') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/restart.php?restart_btn=1",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && document.getElementById('maint-lock-notice').textContent.indexOf('admin') > 0 && document.getElementById('maint-lock-notice').textContent.indexOf('operator') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/wipe.php?wipe_btn=1",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && document.getElementById('maint-lock-notice').textContent.indexOf('admin') > 0 && document.getElementById('maint-lock-notice').textContent.indexOf('operator') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/import_tables.php",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && document.getElementById('maint-lock-notice').textContent.indexOf('admin') > 0 && document.getElementById('maint-lock-notice').textContent.indexOf('operator') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/settings.php",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && document.getElementById('maint-lock-notice').textContent.indexOf('admin') > 0 && document.getElementById('maint-lock-notice').textContent.indexOf('operator') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_cars_trains_loc.php?fix_it_btn=1",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && document.getElementById('maint-lock-notice').textContent.indexOf('admin') > 0 && document.getElementById('maint-lock-notice').textContent.indexOf('operator') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_empty_commodity.php?fix_it_btn=1",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && document.getElementById('maint-lock-notice').textContent.indexOf('admin') > 0 && document.getElementById('maint-lock-notice').textContent.indexOf('operator') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_ghost_cars.php?fix_it_btn=1",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && document.getElementById('maint-lock-notice').textContent.indexOf('admin') > 0 && document.getElementById('maint-lock-notice').textContent.indexOf('operator') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_ghost_locations.php?fix_ghosts_btn=1",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && document.getElementById('maint-lock-notice').textContent.indexOf('admin') > 0 && document.getElementById('maint-lock-notice').textContent.indexOf('operator') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_ghost_steps.php?fix_ghosts_btn=1",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && document.getElementById('maint-lock-notice').textContent.indexOf('admin') > 0 && document.getElementById('maint-lock-notice').textContent.indexOf('operator') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_ghost_trains.php?fix_ghosts_btn=1",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && document.getElementById('maint-lock-notice').textContent.indexOf('admin') > 0 && document.getElementById('maint-lock-notice').textContent.indexOf('operator') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_orphans.php?fix_it_btn=1",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && document.getElementById('maint-lock-notice').textContent.indexOf('admin') > 0 && document.getElementById('maint-lock-notice').textContent.indexOf('operator') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_reporting_marks.php?fix_it_btn=1",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && document.getElementById('maint-lock-notice').textContent.indexOf('admin') > 0 && document.getElementById('maint-lock-notice').textContent.indexOf('operator') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_waybills.php?fix_it_btn=1",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && document.getElementById('maint-lock-notice').textContent.indexOf('admin') > 0 && document.getElementById('maint-lock-notice').textContent.indexOf('operator') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fix_win2linux.php",
+  "cookie": "sts_api_sandbox=${STS_OP_COOKIE}",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && document.getElementById('maint-lock-notice').textContent.indexOf('admin') > 0 && document.getElementById('maint-lock-notice').textContent.indexOf('operator') > 0"
+   }
+  ]
+ }
+]
