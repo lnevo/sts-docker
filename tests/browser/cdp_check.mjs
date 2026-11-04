@@ -59,7 +59,11 @@ async function launch() {
     ...(process.env.CDP_NO_SANDBOX ? ['--no-sandbox'] : []), '--remote-debugging-port=0', `--user-data-dir=${dir}`, 'about:blank',
   ], { stdio: 'ignore' });
   const portFile = join(dir, 'DevToolsActivePort');
-  for (let i = 0; i < 100 && !existsSync(portFile); i++) await sleep(100);
+  // A cold Chrome on a CI runner can take well over 10s to write its port file.
+  for (let i = 0; i < 600 && !existsSync(portFile); i++) await sleep(100);
+  if (!existsSync(portFile)) {
+    throw new Error('Chrome did not start within 60s (no DevToolsActivePort); is CHROME set, and does it need CDP_NO_SANDBOX=1?');
+  }
   const port = readFileSync(portFile, 'utf8').split('\n')[0].trim();
   return { proc, dir, port };
 }
@@ -154,6 +158,11 @@ async function checkPage(port, page) {
     tablet: { width: 1024, height: 768, deviceScaleFactor: 2, mobile: true },
     phone: { width: 390, height: 844, deviceScaleFactor: 3, mobile: true },
   };
+  if (!page.device) {
+    // A fixed desktop viewport, so coordinate-based checks (drag and drop) behave
+    // the same on a CI runner as on a workstation.
+    await s.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+  }
   if (page.device && DEVICES[page.device]) {
     await s.send('Emulation.setDeviceMetricsOverride', DEVICES[page.device]);
     await s.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
