@@ -8,12 +8,16 @@
 // dialogs (accepted automatically) and failed step assertions, as JSON on stdout.
 // Exit status is 1 when any page had a violation, error or failed step.
 //
-// steps.json: [{"url": "...", "cookie": "name=value"?, "actions": [
+// steps.json: [{"url": "...", "cookie": "name=value"?, "allowConsole": ["regex"]?, "actions": [
 //   {"click": "css selector"}, {"type": ["css selector", "text"]},
 //   {"select": ["css selector", "value"]}, {"wait": 500},
 //   {"waitFor": "css selector"}, {"expect": "js expression that must be truthy"},
 //   {"eval": "js expression"}
 // ]}]
+// Strings in steps.json may use ${ENV_VAR} placeholders (e.g. "${STS_TEST_TOKEN}",
+// "${STS_BASE}"); they are filled from the environment so no token is committed.
+// allowConsole: console errors matching any regex are expected (e.g. a signed-out
+// 401 from /auth/me) and don't fail the page.
 // Env: CHROME (path to the Chrome binary), CDP_TIMEOUT_MS (default 15000).
 
 import { spawn } from 'node:child_process';
@@ -29,7 +33,11 @@ function parseArgs(argv) {
   const pages = [];
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--steps') {
-      pages.push(...JSON.parse(readFileSync(argv[++i], 'utf8')));
+      const raw = readFileSync(argv[++i], 'utf8').replace(/\$\{([A-Z0-9_]+)\}/g, (m, k) => {
+        if (process.env[k] === undefined) throw new Error('steps file needs env ' + k);
+        return process.env[k];
+      });
+      pages.push(...JSON.parse(raw));
     } else {
       pages.push({ url: argv[i], actions: [] });
     }
@@ -185,6 +193,10 @@ async function checkPage(port, page) {
     out.csp.push(...((await evaluate(s, 'window.__sts_csp || []')) || []));
   } catch (e) { /* page gone */ }
   out.csp = [...new Set(out.csp)];
+  if (page.allowConsole && page.allowConsole.length) {
+    const allow = page.allowConsole.map((r) => new RegExp(r));
+    out.console_errors = out.console_errors.filter((t) => !allow.some((re) => re.test(t)));
+  }
   s.close();
   await fetch(`http://127.0.0.1:${port}/json/close/${target.id}`).catch(() => {});
   out.ok = !out.csp.length && !out.console_errors.length && !out.exceptions.length && !out.failed.length;
