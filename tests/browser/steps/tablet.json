@@ -1,0 +1,394 @@
+[
+ {
+  "url": "${STS_BASE}/operations.php",
+  "device": "tablet",
+  "actions": [
+   {
+    "wait": 600
+   },
+   {
+    "expect": "document.documentElement.scrollWidth<=innerWidth+1"
+   },
+   {
+    "tap": "a[href=\"fill_orders.php\"]"
+   },
+   {
+    "expect": "location.pathname.endsWith('fill_orders.php')"
+   },
+   {
+    "expect": "(function(){var bad=[].slice.call(document.querySelectorAll(\".ops-step,.ops-step-nav\")).filter(function(e){var b=e.getBoundingClientRect();return b.height>0&&b.height<40}).map(function(e){return (e.id||e.className)+':'+Math.round(e.getBoundingClientRect().height)});if(bad.length)throw new Error('small targets '+bad.join(' '));return true})()"
+   },
+   {
+    "tap": ".ops-stepbar-inner > a.ops-step-nav:not(:first-child)"
+   },
+   {
+    "expect": "!location.pathname.endsWith('fill_orders.php')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/pick_up.php",
+  "device": "phone",
+  "actions": [
+   {
+    "waitFor": ".ops-stepbar-inner"
+   },
+   {
+    "expect": "(function(){var i=document.querySelector('.ops-stepbar-inner');return i.scrollWidth>i.clientWidth||i.parentNode.scrollWidth>i.parentNode.clientWidth})()"
+   },
+   {
+    "expect": "document.documentElement.scrollWidth<=innerWidth+1"
+   },
+   {
+    "touchDrag": [
+     ".ops-step[href=\"organize_cars.php\"]",
+     ".ops-step[href=\"generate.php\"]"
+    ]
+   },
+   {
+    "expect": "document.querySelector('.ops-stepbar-inner > a.ops-step-nav:not(:first-child)').getBoundingClientRect().width>=40"
+   },
+   {
+    "tap": ".ops-stepbar-inner > a.ops-step-nav:not(:first-child)"
+   },
+   {
+    "expect": "!location.pathname.endsWith('pick_up.php')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/generate.php",
+  "device": "tablet",
+  "actions": [
+   {
+    "wait": 500
+   },
+   {
+    "expect": "document.documentElement.scrollWidth<=innerWidth+1"
+   },
+   {
+    "expect": "(function(){var bad=[].slice.call(document.querySelectorAll(\".btn\")).filter(function(e){var b=e.getBoundingClientRect();return b.height>0&&b.height<40}).map(function(e){return (e.id||e.className)+':'+Math.round(e.getBoundingClientRect().height)});if(bad.length)throw new Error('small targets '+bad.join(' '));return true})()"
+   },
+   {
+    "tap": "[data-sts-click=\"showAuto\"]"
+   },
+   {
+    "expect": "getComputedStyle(document.getElementById('automatic')).display!=='none'"
+   },
+   {
+    "tap": "[data-sts-click=\"showManual\"]"
+   },
+   {
+    "expect": "getComputedStyle(document.getElementById('manual')).display!=='none'"
+   },
+   {
+    "tap": "#ship_tbl .shipment-select"
+   },
+   {
+    "expect": "document.querySelector('#ship_tbl .shipment-select').checked"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fill_orders.php",
+  "device": "tablet",
+  "actions": [
+   {
+    "wait": 600
+   },
+   {
+    "expect": "document.documentElement.scrollWidth<=innerWidth+1"
+   },
+   {
+    "tap": ".order-card .order-header"
+   },
+   {
+    "waitFor": ".order-card .order-details[style*=\"block\"], .order-card.expanded .order-details"
+   },
+   {
+    "wait": 1200
+   },
+   {
+    "expect": "!!document.querySelector('.order-details .cars-container *:not(.spinner-container)')"
+   },
+   {
+    "tap": ".order-card .order-row-check"
+   },
+   {
+    "expect": "document.querySelector('.order-row-check').checked"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/build_switchlists.php",
+  "device": "tablet",
+  "actions": [
+   {
+    "wait": 600
+   },
+   {
+    "expect": "document.documentElement.scrollWidth<=innerWidth+1"
+   },
+   {
+    "eval": "(function(){var s=document.querySelector(\"#station_list\");var o=[].slice.call(s.options).filter(function(o){return o.value!==''});var t=o.filter(function(x){return /./.test(x.text)})[0]||o[0];s.value=t.value;s.dispatchEvent(new Event('change',{bubbles:true}));s.dispatchEvent(new Event('input',{bubbles:true}))})()"
+   },
+   {
+    "wait": 1200
+   },
+   {
+    "expect": "(function(){var bad=[].slice.call(document.querySelectorAll(\"#station_list,#auto_assign_job,.btn\")).filter(function(e){var b=e.getBoundingClientRect();return b.height>0&&b.height<40}).map(function(e){return (e.id||e.className)+':'+Math.round(e.getBoundingClientRect().height)});if(bad.length)throw new Error('small targets '+bad.join(' '));return true})()"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/pick_up.php",
+  "device": "tablet",
+  "actions": [
+   {
+    "wait": 600
+   },
+   {
+    "expect": "document.documentElement.scrollWidth<=innerWidth+1"
+   },
+   {
+    "eval": "(function(){var s=document.querySelector(\"#job_list\");var o=[].slice.call(s.options).filter(function(o){return o.value!==''});var t=o.filter(function(x){return /D749/.test(x.text)})[0]||o[0];s.value=t.value;s.dispatchEvent(new Event('change',{bubbles:true}));s.dispatchEvent(new Event('input',{bubbles:true}))})()"
+   },
+   {
+    "waitFor": "#job_table_div table input[type=checkbox]"
+   },
+   {
+    "tap": "#job_table_div table tbody input[type=checkbox]"
+   },
+   {
+    "wait": 300
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/organize_cars.php",
+  "device": "tablet",
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}",
+  "actions": [
+   {
+    "wait": 600
+   },
+   {
+    "expect": "document.documentElement.scrollWidth<=innerWidth+1"
+   },
+   {
+    "eval": "(function(){var s=document.querySelector(\"#job_list\");var o=[].slice.call(s.options).filter(function(o){return o.value!==''});var t=o.filter(function(x){return /D749/.test(x.text)})[0]||o[0];s.value=t.value;s.dispatchEvent(new Event('change',{bubbles:true}));s.dispatchEvent(new Event('input',{bubbles:true}))})()"
+   },
+   {
+    "tap": "#org_job"
+   },
+   {
+    "waitFor": "#car_table_body tr"
+   },
+   {
+    "wait": 400
+   },
+   {
+    "eval": "window.__marks=function(){return [].slice.call(document.querySelectorAll('#car_table_body tr')).map(function(r){return r.cells[2].innerText.trim()}).join(',')};window.__before=window.__marks()"
+   },
+   {
+    "touchDrag": [
+     "#car_table_body tr:first-child .drag-handle",
+     "#car_table_body tr:last-child .drag-handle"
+    ]
+   },
+   {
+    "expect": "window.__marks()!==window.__before"
+   },
+   {
+    "eval": "window.__after=window.__marks()"
+   },
+   {
+    "tap": "#update_pos"
+   },
+   {
+    "wait": 1200
+   },
+   {
+    "expect": "fetch('${STS_BASE}/api/v1/cars?job='+encodeURIComponent(document.getElementById('job_list').selectedOptions[0].text.replace(/ \\(.*$/,'')),{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(function(r){return r.json()}).then(function(j){var order=j.data.slice().sort(function(a,b){return a.position-b.position}).map(function(c){return c.reporting_marks}).join(',');return order===window.__after})"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/set_out.php",
+  "device": "tablet",
+  "actions": [
+   {
+    "wait": 600
+   },
+   {
+    "expect": "document.documentElement.scrollWidth<=innerWidth+1"
+   },
+   {
+    "eval": "(function(){var s=document.querySelector(\"#job_list\");var o=[].slice.call(s.options).filter(function(o){return o.value!==''});var t=o.filter(function(x){return /./.test(x.text)})[0]||o[0];s.value=t.value;s.dispatchEvent(new Event('change',{bubbles:true}));s.dispatchEvent(new Event('input',{bubbles:true}))})()"
+   },
+   {
+    "wait": 1200
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/load_unload.php",
+  "device": "tablet",
+  "actions": [
+   {
+    "wait": 600
+   },
+   {
+    "expect": "document.documentElement.scrollWidth<=innerWidth+1"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/scan_car.php",
+  "device": "tablet",
+  "actions": [
+   {
+    "expect": "document.activeElement.id==='scan_code'"
+   },
+   {
+    "expect": "(function(){var bad=[].slice.call(document.querySelectorAll(\"#scan_code,.btn\")).filter(function(e){var b=e.getBoundingClientRect();return b.height>0&&b.height<40}).map(function(e){return (e.id||e.className)+':'+Math.round(e.getBoundingClientRect().height)});if(bad.length)throw new Error('small targets '+bad.join(' '));return true})()"
+   },
+   {
+    "expect": "document.documentElement.scrollWidth<=innerWidth+1"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/scan_location.php",
+  "device": "tablet",
+  "actions": [
+   {
+    "expect": "document.activeElement.id==='location'"
+   },
+   {
+    "expect": "(function(){var bad=[].slice.call(document.querySelectorAll(\"#location,.btn\")).filter(function(e){var b=e.getBoundingClientRect();return b.height>0&&b.height<40}).map(function(e){return (e.id||e.className)+':'+Math.round(e.getBoundingClientRect().height)});if(bad.length)throw new Error('small targets '+bad.join(' '));return true})()"
+   },
+   {
+    "expect": "document.documentElement.scrollWidth<=innerWidth+1"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/editor.html",
+  "device": "tablet",
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}",
+  "actions": [
+   {
+    "waitFor": "#tab-run"
+   },
+   {
+    "wait": 800
+   },
+   {
+    "expect": "document.documentElement.scrollWidth<=innerWidth+1"
+   },
+   {
+    "expect": "(function(){var bad=[].slice.call(document.querySelectorAll(\"#tab-steps,#tab-run,#btn-save,#btn-workflow-more,#btn-load-workflow\")).filter(function(e){var b=e.getBoundingClientRect();return b.height>0&&b.height<40}).map(function(e){return (e.id||e.className)+':'+Math.round(e.getBoundingClientRect().height)});if(bad.length)throw new Error('small targets '+bad.join(' '));return true})()"
+   },
+   {
+    "tap": "#tab-run"
+   },
+   {
+    "expect": "document.getElementById('tab-run').classList.contains('active')"
+   },
+   {
+    "tap": "#tab-steps"
+   },
+   {
+    "expect": "document.getElementById('tab-steps').classList.contains('active')"
+   },
+   {
+    "tap": "#btn-workflow-more"
+   },
+   {
+    "wait": 300
+   },
+   {
+    "expect": "!!document.querySelector('.dropdown-menu.show')"
+   },
+   {
+    "tap": "#btn-workflow-more"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/api_admin.php",
+  "device": "tablet",
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}",
+  "actions": [
+   {
+    "wait": 500
+   },
+   {
+    "expect": "document.documentElement.scrollWidth<=innerWidth+1"
+   },
+   {
+    "eval": "document.cookie='sts_api_sandbox=; Max-Age=0; path=/sts/'"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/display_switchlist.php",
+  "device": "tablet",
+  "actions": [
+   {
+    "wait": 600
+   },
+   {
+    "expect": "document.documentElement.scrollWidth<=innerWidth+1"
+   },
+   {
+    "expect": "(function(){var bad=[].slice.call(document.querySelectorAll(\"#display_btn,.btn\")).filter(function(e){var b=e.getBoundingClientRect();return b.height>0&&b.height<40}).map(function(e){return (e.id||e.className)+':'+Math.round(e.getBoundingClientRect().height)});if(bad.length)throw new Error('small targets '+bad.join(' '));return true})()"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/display_station_report.php",
+  "device": "tablet",
+  "actions": [
+   {
+    "wait": 600
+   },
+   {
+    "expect": "document.documentElement.scrollWidth<=innerWidth+1"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/session_overview.php",
+  "device": "tablet",
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}",
+  "actions": [
+   {
+    "wait": 600
+   },
+   {
+    "expect": "document.documentElement.scrollWidth<=innerWidth+1"
+   },
+   {
+    "expect": "(function(){var bad=[].slice.call(document.querySelectorAll(\".btn\")).filter(function(e){var b=e.getBoundingClientRect();return b.height>0&&b.height<40}).map(function(e){return (e.id||e.className)+':'+Math.round(e.getBoundingClientRect().height)});if(bad.length)throw new Error('small targets '+bad.join(' '));return true})()"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/job.php",
+  "device": "tablet",
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}",
+  "actions": [
+   {
+    "wait": 600
+   },
+   {
+    "expect": "document.documentElement.scrollWidth<=innerWidth+1"
+   },
+   {
+    "expect": "(function(){var bad=[].slice.call(document.querySelectorAll(\".btn\")).filter(function(e){var b=e.getBoundingClientRect();return b.height>0&&b.height<40}).map(function(e){return (e.id||e.className)+':'+Math.round(e.getBoundingClientRect().height)});if(bad.length)throw new Error('small targets '+bad.join(' '));return true})()"
+   }
+  ]
+ }
+]

@@ -189,4 +189,17 @@
       el.focus();
     }
   });
+
+  // Touch-sized controls: load touch.css (next to js/) once, on every page that
+  // runs this script, unless the page chrome already linked it.
+  (function () {
+    var cs = document.currentScript;
+    if (!cs || !cs.src || document.querySelector('link[href*="touch.css"]')) {
+      return;
+    }
+    var link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = cs.src.replace(/js\/sts-actions\.js.*$/, 'touch.css');
+    document.head.appendChild(link);
+  })();
 })();

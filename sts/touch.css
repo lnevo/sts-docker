@@ -1,0 +1,15 @@
+/* Touch targets (tablet/phone): bring controls up to ~44px. Linked by
+   page_chrome.php and injected by js/sts-actions.js on pages that load it. */
+@media (pointer: coarse) {
+  .btn { min-height: 44px; padding-top: 0.55rem; padding-bottom: 0.55rem; }
+  .btn.btn-sm { padding-top: 0.6rem; padding-bottom: 0.6rem; }
+  .form-select, .form-control, select { min-height: 44px; }
+  table select { min-height: 40px; }
+  .nav-tabs .nav-link { padding-top: 0.7rem; padding-bottom: 0.7rem; }
+  summary { padding: 0.6rem 0; }
+  input[type="checkbox"], input[type="radio"] { width: 1.4rem; height: 1.4rem; }
+  .form-check { padding-left: 1.9em; }
+  .form-check .form-check-input { margin-left: -1.9em; }
+  .form-switch .form-check-input { width: 2.75em; height: 1.5em; margin-left: -2.75em; }
+  .form-switch { padding-left: 3.2em; }
+}

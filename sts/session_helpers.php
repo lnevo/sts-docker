@@ -1834,6 +1834,7 @@ function session_static_head_assets($css_href = null)
 {
     return session_bootstrap_head_links()
         . session_nav_stylesheet_link($css_href)
+        . '<link rel="stylesheet" href="/sts/touch.css">'
         . session_safe_print_script();
 }
 
