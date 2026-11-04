@@ -67,6 +67,11 @@ Read this first when starting a session on the STS work. Last updated
   5. Upstream super-linter only runs on `master`, so run prettier,
      markdownlint (config in `.github/linters/`) and shellcheck locally on
      touched docs and scripts.
+- Syncing `master` with Aaron's fork without running its push workflows
+  (Docker publish, super-linter): `gh workflow disable "Publish Multi-Platform
+Docker Container"` and `gh workflow disable "Lint Code Base"`, then
+  `git fetch aaron && git switch master && git merge --ff-only aaron/master && git push origin master`,
+  then `gh workflow enable` both. Re-enabling starts no run.
 - Merging: the owner does not review these PRs; run the gate, merge into
   `active`, push, rebuild live, then bump the submodule pins in the hart hub
   (`tools/ops/init_external_submodules.sh` and the submodule pointers).
