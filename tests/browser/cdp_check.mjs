@@ -12,8 +12,14 @@
 //   {"click": "css selector"}, {"type": ["css selector", "text"]},
 //   {"select": ["css selector", "value"]}, {"wait": 500},
 //   {"waitFor": "css selector"}, {"expect": "js expression that must be truthy"},
-//   {"eval": "js expression"}
+//   {"eval": "js expression"},
+//   {"tap": "css selector"}            touch tap (touchstart/touchend) at the element centre
+//   {"touchDrag": ["from css", "to css"]}  touch drag between two element centres
+//   {"screenshot": "/abs/path.png"}    save a PNG of the viewport
 // ]}]
+// "device": "tablet" (1024x768, touch, mobile viewport) or "phone" (390x844) emulates a
+// touch device; without it the page runs as desktop Chrome. This is Chrome's
+// emulation, not a real tablet.
 // Strings in steps.json may use ${ENV_VAR} placeholders (e.g. "${STS_TEST_TOKEN}",
 // "${STS_BASE}"); they are filled from the environment so no token is committed.
 // allowConsole: console errors matching any regex are expected (e.g. a signed-out
@@ -21,7 +27,7 @@
 // Env: CHROME (path to the Chrome binary), CDP_TIMEOUT_MS (default 15000).
 
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -143,6 +149,15 @@ async function checkPage(port, page) {
   await s.send('Runtime.enable');
   await s.send('Log.enable');
   await s.send('Page.addScriptToEvaluateOnNewDocument', { source: PROBE });
+  const DEVICES = {
+    tablet: { width: 1024, height: 768, deviceScaleFactor: 2, mobile: true },
+    phone: { width: 390, height: 844, deviceScaleFactor: 3, mobile: true },
+  };
+  if (page.device && DEVICES[page.device]) {
+    await s.send('Emulation.setDeviceMetricsOverride', DEVICES[page.device]);
+    await s.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+    await s.send('Emulation.setEmitTouchEventsForMouse', { enabled: true, configuration: 'mobile' }).catch(() => {});
+  }
   if (page.cookie) {
     const [name, ...rest] = page.cookie.split('=');
     const u = new URL(page.url);
@@ -185,6 +200,37 @@ async function checkPage(port, page) {
         if (!v) throw new Error('expect failed: ' + a.expect);
       }
       if (a.eval) await evaluate(s, a.eval);
+      if (a.tap || a.touchDrag) {
+        const centre = async (sel) => {
+          const r = await evaluate(s, `(function(){var e=document.querySelector(${JSON.stringify(sel)});if(!e)return null;e.scrollIntoView({block:'center'});var b=e.getBoundingClientRect();return {x:b.left+b.width/2,y:b.top+b.height/2};})()`);
+          if (!r) throw new Error('no element for touch: ' + sel);
+          return r;
+        };
+        if (a.tap) {
+          loaded.v = false;
+          const p = await centre(a.tap);
+          await s.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: p.x, y: p.y }] });
+          await s.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+          await sleep(500);
+          if (loaded.v) await waitLoad(s, loaded);
+        } else {
+          const [from, to] = a.touchDrag;
+          const p0 = await centre(from);
+          const p1 = await evaluate(s, `(function(){var e=document.querySelector(${JSON.stringify(to)});if(!e)return null;var b=e.getBoundingClientRect();return {x:b.left+b.width/2,y:b.top+b.height/2};})()`);
+          if (!p1) throw new Error('no element for touch: ' + to);
+          await s.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: p0.x, y: p0.y }] });
+          for (let i = 1; i <= 10; i++) {
+            await s.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: p0.x + (p1.x - p0.x) * i / 10, y: p0.y + (p1.y - p0.y) * i / 10 }] });
+            await sleep(30);
+          }
+          await s.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+          await sleep(400);
+        }
+      }
+      if (a.screenshot) {
+        const shot = await s.send('Page.captureScreenshot', { format: 'png' });
+        writeFileSync(a.screenshot, Buffer.from(shot.data, 'base64'));
+      }
     } catch (e) {
       out.failed.push(String(e.message || e));
     }
