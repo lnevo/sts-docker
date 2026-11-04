@@ -101,8 +101,8 @@ Environment (web service):
 server-side session. The browser gets the cookie `sts_api_<stack>` (named by `STS_STACK_NAME`, else the published port, e.g. `sts_api_8981`, so two stacks on one host do not share it; a random 64-hex
 session id; `HttpOnly; SameSite=Strict; Path=/sts/`, plus `Secure` over HTTPS).
 The token is never kept in the page. Sessions are files under
-`/var/lib/sts/sessions/` (named by the SHA-256 of the id) and expire after 12
-hours idle and 7 days after login, whatever the activity. Logging in again replaces that
+`/var/lib/sts/sessions/` (named by the SHA-256 of the id) and expire after 7
+days idle and 30 days after login, whatever the activity. Logging in again replaces that
 browser's session id and leaves other sessions alone. Every request rechecks the session's token, so revoking it ends its
 sessions at once. `GET /v1/auth/me` returns `{name, role, source, expires_at}`
 (or 401); `POST /v1/auth/logout` ends the session. Failed logins are limited to

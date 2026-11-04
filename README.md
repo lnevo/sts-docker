@@ -322,7 +322,7 @@ docker exec <web container> cat /var/lib/sts/bootstrap_admin.token
 
 (`docker compose ps` shows the container name, e.g. `sts-docker-web-1`.)
 
-**Sign in in the browser.** Go to **Database Maintenance → API Access** (`/sts/api_admin.php`), paste the token and sign in. The sign-in lasts until you have been idle for 12 hours, and never more than 7 days.
+**Sign in in the browser.** Go to **Database Maintenance → API Access** (`/sts/api_admin.php`), paste the token and sign in. The sign-in lasts until you have been idle for a week, and never more than 30 days.
 
 **Make more tokens.** Signed in as admin, use API Access to create a token for each person or tool, with the lowest role it needs. The token is shown once, so copy it then. Revoke tokens there too. From a terminal:
 

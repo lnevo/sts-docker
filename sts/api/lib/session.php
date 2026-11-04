@@ -8,7 +8,7 @@
  * by the SHA-256 of the id so a directory listing never reveals a usable id.
  * The file records which token the session came from; every request rechecks
  * that token (see api_session_user()), so revoking it ends its sessions.
- * Sessions expire after 12 hours without use.
+ * Sessions expire after 7 days without use, and 30 days after login.
  */
 
 if (!defined('STS_API_BOOT')) {
@@ -20,9 +20,9 @@ require_once __DIR__ . '/tokens.php';
 
 /** Fallback cookie name; the real one is per stack, see api_session_cookie_name(). */
 const STS_API_SESSION_COOKIE = 'sts_api';
-const STS_API_SESSION_MAX_AGE = 604800; // 7 days absolute, whatever the activity
+const STS_API_SESSION_MAX_AGE = 2592000; // 30 days absolute, whatever the activity
 const STS_API_RL_MAX_FILES = 2000;
-const STS_API_SESSION_IDLE = 43200; // 12 hours
+const STS_API_SESSION_IDLE = 604800; // 7 days
 const STS_API_LOGIN_MAX_FAILS = 10;
 const STS_API_LOGIN_WINDOW = 60;
 
