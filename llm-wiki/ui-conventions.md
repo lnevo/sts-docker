@@ -1,6 +1,7 @@
 ---
 title: STS UI Conventions (legacy PHP app)
-purpose: Canonical UI/CSS/JS conventions for sts/ pages — visual and behavioural
+purpose:
+  Canonical UI/CSS/JS conventions for sts/ pages — visual and behavioural
   consistency.
 load_when:
   touching any page/template in sts/ — CSS, layout, print styles, status badges,
@@ -110,9 +111,8 @@ internet.
 ### Screen
 
 ```css
-font-family:
-  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
-  Arial, sans-serif;
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+  "Helvetica Neue", Arial, sans-serif;
 ```
 
 - **Body text:** `14px` (inherited from Bootstrap)
@@ -412,19 +412,19 @@ data-entry and report pages.
 Don't hand-write it on workflow step pages: `operations_nav.php` renders it.
 `ops_render_navbar($current, $title, $icon, $extra_html)` emits the navbar
 (Operations, Sessions, Session Editor, Reports, Home, Site Map), and
-`ops_render_step_bar($current, $session_nbr)` emits the step bar under it:
-Prev / Next plus every step grouped Before / During / After, and a session
-badge that fetches `get_session_nbr.php` when `$session_nbr` is null. The step
-order lives in `ops_steps()`; add a step there, not in each page. Link to
-`operations.php`, never the `operations.html` redirect stub (it breaks Back).
+`ops_render_step_bar($current, $session_nbr)` emits the step bar under it: Prev
+/ Next plus every step grouped Before / During / After, and a session badge that
+fetches `get_session_nbr.php` when `$session_nbr` is null. The step order lives
+in `ops_steps()`; add a step there, not in each page. Link to `operations.php`,
+never the `operations.html` redirect stub (it breaks Back).
 
 For every other full page (data editors, maintenance, club, report forms), use
-`page_chrome.php`: `sts_page_start(['title' => …, 'icon' => 'bi-…', 'section'
-=> 'data'|'maint'|'club'|'report'|'ops'|'session'])` … `sts_page_end()`. It
-emits the doctype, viewport, vendored Bootstrap/Icons, `page_chrome.css`, the
-section-coloured navbar with a back link, and the content wrapper. Classless
-legacy tables pick up the data-table look from `page_chrome.css`. Hubs share
-`hub.css`.
+`page_chrome.php`:
+`sts_page_start(['title' => …, 'icon' => 'bi-…', 'section' => 'data'|'maint'|'club'|'report'|'ops'|'session'])`
+… `sts_page_end()`. It emits the doctype, viewport, vendored Bootstrap/Icons,
+`page_chrome.css`, the section-coloured navbar with a back link, and the content
+wrapper. Classless legacy tables pick up the data-table look from
+`page_chrome.css`. Hubs share `hub.css`.
 
 The example below shows what the generated markup looks like:
 
@@ -488,6 +488,43 @@ files return a raw HTML `<table>` fragment — not a full page.
   `table table-sm table-bordered table-hover`.
 
 ---
+
+## Scripts and CSP
+
+Every `/sts/` page is served with `script-src 'self'`. Inline `<script>` code,
+`on*=` attributes (`onclick`, `onchange`, `onload`, …) and `javascript:` URLs
+are blocked by the browser. Inline `style` attributes are still allowed.
+
+- Page code goes in `sts/js/<page>.js`, loaded with
+  `<script src="/sts/js/<page>.js?v=N"></script>` (bump `v` on change). Shared
+  code goes in an existing shared file.
+- `sts/js/sts-actions.js` replaces inline handlers. `page_chrome.php` loads it;
+  other pages add it. Markup declares behaviour, and the page script registers
+  the named handler: `<button data-sts-click="saveRow" data-row="12">` with
+  `STS.action('saveRow', (event, el) => …)`. Returning `false` cancels the
+  event. The attributes are `data-sts-click`, `-change`, `-input`, `-submit`,
+  `-keyup`, `-keydown`, `-dblclick`, `-focus`, `-blur`, `-mouseover` and
+  `-mouseout`. These generic ones need no page code:
+  - `data-sts-confirm="…"` asks for confirmation;
+  - `data-sts-print` prints;
+  - `data-sts-nav="url"`, `data-sts-back` and `data-sts-close` navigate;
+  - `data-sts-autofocus` focuses the element on load;
+  - `data-sts-autosubmit` submits the form on change.
+- Values PHP hands to scripts go in a data block:
+  `<script type="application/json" id="sts-data-x"><?= json_encode($v, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>`,
+  read with `STS.data('sts-data-x')`. Data blocks don't execute, so CSP allows
+  them.
+- Delegation also covers markup that AJAX fragments (`get_*.php`) insert later.
+  Fragments carry `data-sts-*` attributes; the parent page's script registers
+  the handlers.
+- `onload` code moves to `STS.ready(fn)`.
+- Check a page with `node tests/browser/cdp_check.mjs <url>` or
+  `--steps file.json`. It reports CSP violations, console errors and failed
+  steps.
+- Exceptions:
+  - `/sts/api/docs/` gets `'unsafe-eval'` for Swagger UI.
+  - Session output stored before 2026-11-04 (`backups/session_state/sessions/`,
+    `so.php`) keeps `'unsafe-inline'` until it is re-rendered.
 
 ## 5. Touch & Mobile Guidelines
 
