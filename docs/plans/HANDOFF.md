@@ -121,6 +121,16 @@ Read this first when starting a session on the STS work. Last updated
 - Open: `get_car_data_ajax.php` and the `fill_order_*` parsers still use
   `real_escape_string`; no wall-clock limit on tasks without
   `timeout_seconds`; a stricter CSP would need the inline scripts moved out.
+- Strict CSP, part C6 (branch `csp-c6`): session pages, `so.php` and all
+  generated session output run with no inline code; the `'unsafe-inline'`
+  carve-out for `so.php` and `backups/session_state/sessions/` is gone. Stored
+  output written before this change still has inline scripts and is blocked
+  until it is rerendered once. After deploying, run (token needs operator):
+  `for n in $(ls backups/session_state/sessions | sed -n 's/^session_//p'); do
+  curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'
+  -d '{"style":"mobile"}' http://localhost:8980/sts/api/v1/sessions/$n/rerender; done`.
+  The rerender call also upgrades the stored waybill, report and index pages in
+  place (`session_output_upgrade_session()`); it is idempotent.
 - Cleanups from the 2026-11-03 review, not scheduled:
   - SQL injection in the CRUD family (`db_list_jobs.php:32` runs
     `create table` on a raw POST value; the `db_edit_*` pages delete by GET).

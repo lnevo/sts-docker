@@ -18,6 +18,20 @@
  */
 
 require_once __DIR__ . '/session_helpers.php';
+require_once __DIR__ . '/session_output_js.php';
+
+/**
+ * Data block plus (once per page) the script tags for a serve-time filter in
+ * js/session_output.js.
+ */
+function so_js_block($html, $name, $data = [])
+{
+    $out = session_output_data_block($name, $data);
+    if (strpos($html, 'session_output.js') === false) {
+        $out .= session_output_script_tags();
+    }
+    return $out;
+}
 
 $f = isset($_GET['f']) ? (string) $_GET['f'] : '';
 $f = str_replace('\\', '/', $f);
@@ -141,20 +155,10 @@ if ($ext === 'html' || $ext === 'htm') {
             $html = preg_replace('#<body([^>]*)>#', '<body$1>' . $banner, $html, 1);
         }
     }
-    // Cursor / Electron Simple Browser crashes on window.print(). Rewrite legacy
-    // PRINT buttons to stsSafePrint() (injected via session_static_head_assets /
-    // a serve-time script fallback below).
-    if (strpos($html, 'window.print()') !== false || strpos($html, 'stsSafePrint') !== false) {
-        $html = str_replace('onclick="window.print()"', 'onclick="stsSafePrint()"', $html);
-        $html = str_replace("onclick='window.print()'", "onclick='stsSafePrint()'", $html);
-        if (strpos($html, 'function(){if(window.stsSafePrint)') === false
-            && strpos($html, 'window.stsSafePrint=') === false) {
-            $html = str_replace('</head>', session_safe_print_script() . '</head>', $html);
-            if (strpos($html, 'window.stsSafePrint=') === false) {
-                $html = str_replace('</body>', session_safe_print_script() . '</body>', $html);
-            }
-        }
-    }
+    // Print buttons in generated output use data-sts-click="sessPrint"
+    // (session_output.js), which steers Cursor / Electron previews away from
+    // window.print(). Pages stored before that carry inline handlers and need
+    // one rerender (POST /sts/api/v1/sessions/{n}/rerender).
     echo so_rewrite_html($html, $dir);
 } else {
     readfile($fs);
@@ -424,25 +428,7 @@ function so_inject_waybill_memo_filter($html, $rel)
         . '.waybill-print.hide-memos .waybill-break-before{page-break-before:auto!important;break-before:auto!important;margin-top:0!important}'
         . '</style>';
 
-    $script = '<script>(function(){'
-        . 'var wrap=document.querySelector(".waybill-print");'
-        . 'var cb=document.getElementById("wb-hide-memos");'
-        . 'if(!wrap||!cb){return;}'
-        . 'wrap.querySelectorAll(".waybill-sheet").forEach(function(sheet){'
-        . 'var memoTable=null,hasFreight=false;'
-        . 'sheet.querySelectorAll("h3").forEach(function(h){'
-        . 'var t=(h.textContent||"").trim().toUpperCase();'
-        . 'if(t==="COMPANY MEMO"){var p=h.closest("table");'
-        . 'while(p&&p.parentElement){var up=p.parentElement.closest("table");if(!up||!sheet.contains(up)){break;}p=up;}'
-        . 'memoTable=p;}else if(t==="FREIGHT WAYBILL"){hasFreight=true;}});'
-        . 'if(memoTable){memoTable.classList.add("wb-memo-block");'
-        . 'sheet.classList.add(hasFreight?"wb-has-memo":"wb-memo-only");}});'
-        . 'var KEY="wbHideMemos";'
-        . 'try{cb.checked=localStorage.getItem(KEY)==="1";}catch(e){}'
-        . 'function apply(){wrap.classList.toggle("hide-memos",cb.checked);'
-        . 'try{localStorage.setItem(KEY,cb.checked?"1":"0");}catch(e){}}'
-        . 'cb.addEventListener("change",apply);apply();'
-        . '})();</script>';
+    $script = so_js_block($html, 'memo');
 
     return str_replace('</body>', $style . $script . '</body>', $html);
 }
@@ -485,40 +471,7 @@ function so_inject_waybill_prior_session_filter($html, $rel)
         . '.waybill-print.hide-prior-sessions .waybill-sheet.wb-prior-session{display:none!important}'
         . '</style>';
 
-    $script = '<script>(function(){'
-        . 'var wrap=document.querySelector(".waybill-print");'
-        . 'var cb=document.getElementById("wb-this-session-only");'
-        . 'if(!wrap||!cb){return;}'
-        . 'var pageSession=' . $session_nbr . ';'
-        . 'function originSession(sheet){'
-        . 'var t=sheet.textContent||"";'
-        . 'var m=t.match(/WAYBILL No\\.\\s*([0-9A-Za-z\\-]+)/);'
-        . 'if(m){var p=m[1].match(/^(\\d{1,3})(?=-|$)/);if(p){return parseInt(p[1],10);}}'
-        . 'm=t.match(/OPERATING SESSION(?: No\\.)?\\s*:?\\s*(\\d+)/i);'
-        . 'return m?parseInt(m[1],10):null;}'
-        . 'var sheets=[].slice.call(wrap.querySelectorAll(".waybill-sheet"));'
-        . 'var priorCount=0;'
-        . 'sheets.forEach(function(s){var o=originSession(s);'
-        . 'if(o!==null&&o<pageSession){s.classList.add("wb-prior-session");priorCount++;}});'
-        . 'if(priorCount===0){var lab=cb.closest("label");if(lab)lab.style.display="none";return;}'
-        . 'var KEY="wbThisSessionOnly";'
-        . 'try{var stored=localStorage.getItem(KEY);cb.checked=(stored===null||stored==="1");}catch(e){cb.checked=true;}'
-        . 'var muted=document.querySelector("main .muted");'
-        . 'var mutedDefault=muted?(muted.textContent||""):"";'
-        . 'function visibleCount(){var n=0;sheets.forEach(function(s){'
-        . 'if(s.style.display==="none")return;'
-        . 'if(wrap.classList.contains("hide-prior-sessions")&&s.classList.contains("wb-prior-session"))return;'
-        . 'if(wrap.classList.contains("hide-memos")&&s.classList.contains("wb-memo-only"))return;'
-        . 'n++;});return n;}'
-        . 'function apply(){wrap.classList.toggle("hide-prior-sessions",cb.checked);'
-        . 'try{localStorage.setItem(KEY,cb.checked?"1":"0");}catch(e){}'
-        . 'if(muted){if(!cb.checked){muted.textContent=mutedDefault;}'
-        . 'else{var n=visibleCount();'
-        . 'muted.textContent=n+" waybill"+(n===1?"":"s")+" this session"'
-        . '+(priorCount?(" \\u00b7 "+priorCount+" prior hidden"):"")'
-        . '+" \\u00b7 each prints on its own page.";}}}'
-        . 'cb.addEventListener("change",apply);apply();'
-        . '})();</script>';
+    $script = so_js_block($html, 'prior', ['session' => $session_nbr]);
 
     return str_replace('</body>', $style . $script . '</body>', $html);
 }
@@ -613,33 +566,7 @@ function so_inject_waybill_phase_filter($html, $rel)
     }
 
     $map_json = json_encode($wb_to_phase, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
-    $script = '<script>(function(){'
-        . 'var sel=document.getElementById("wb-phase-select");'
-        . 'if(!sel)return;'
-        . 'var map=' . $map_json . ';'
-        . 'var sheets=[].slice.call(document.querySelectorAll(".waybill-print .waybill-sheet"));'
-        . 'var wbRaw=new URLSearchParams(location.search).get("wb");'
-        . 'var wbSet=null;'
-        . 'if(wbRaw){wbSet={};wbRaw.split(",").forEach(function(x){x=x.trim();if(x)wbSet[x]=1;});}'
-        . 'var muted=document.querySelector("main .muted");'
-        . 'var mutedDefault=muted?(muted.textContent||""):"";'
-        . 'function wbNum(s){var m=(s.textContent||"").match(/WAYBILL No\\.\\s*([0-9A-Za-z\\-]+)/);return m?m[1]:"";}'
-        . 'sheets.forEach(function(s){var n=wbNum(s);if(n&&map[n]!=null)s.setAttribute("data-wb-phase",String(map[n]));});'
-        . 'function apply(){var v=sel.value;var vis=[];'
-        . 'sheets.forEach(function(s){'
-        . 'var n=wbNum(s);'
-        . 'var phaseOk=(v===""||s.getAttribute("data-wb-phase")===v);'
-        . 'var wbOk=!wbSet||!n||wbSet[n];'
-        . 'var show=phaseOk&&wbOk;'
-        . 's.style.display=show?"":"none";'
-        . 'if(show)vis.push(s);});'
-        . 'vis.forEach(function(s,i){var last=(i===vis.length-1);'
-        . 's.style.pageBreakAfter=last?"auto":"always";s.style.breakAfter=last?"auto":"page";});'
-        . 'if(muted){if(v===""){muted.textContent=mutedDefault;}'
-        . 'else{muted.textContent=vis.length+" waybill"+(vis.length===1?"":"s")'
-        . '+" \\u00b7 each prints on its own page.";}}}'
-        . 'sel.addEventListener("change",apply);'
-        . '})();</script>';
+    $script = so_js_block($html, 'phase', ['map' => $wb_to_phase]);
 
     return str_replace('</body>', $script . '</body>', $html);
 }
@@ -793,46 +720,7 @@ function so_inject_waybill_selection_index($html, $rel)
         . '@media print{.wb-select-controls,.wb-pick{display:none!important}}'
         . '</style>';
 
-    $script = '<script>(function(){'
-        . 'var picks=[].slice.call(document.querySelectorAll(".wb-pick"));'
-        . 'if(!picks.length)return;'
-        . 'var printAll=null;'
-        . '[].slice.call(document.querySelectorAll("a")).forEach(function(a){'
-        . 'if(!printAll&&/print all waybills/i.test(a.textContent||""))printAll=a;});'
-        . 'var btn=document.getElementById("wb-print-selected");'
-        . 'var selAll=document.getElementById("wb-select-all");'
-        . 'var clr=document.getElementById("wb-clear");'
-        . 'var phaseSel=document.getElementById("wb-phase-select");'
-        . 'var priorCb=document.getElementById("wb-this-session-only");'
-        . 'var KEY="wbThisSessionOnly";'
-        . 'if(priorCb){try{var st=localStorage.getItem(KEY);priorCb.checked=(st===null||st==="1");}catch(e){priorCb.checked=true;}}'
-        . 'function rowOf(c){return c.closest?c.closest("li"):c.parentNode.parentNode;}'
-        . 'function visible(c){var r=rowOf(c);return !r||r.style.display!=="none";}'
-        . 'function sel(){return picks.filter(function(c){return c.checked&&visible(c);}).map(function(c){return c.value;});}'
-        . 'function upd(){var n=sel().length;if(btn){btn.disabled=n===0;'
-        . 'btn.innerHTML=\'<i class="bi bi-printer"></i> Print selected (\'+n+\')\';}}'
-        . 'function applyFilters(){'
-        . 'var phaseV=phaseSel?phaseSel.value:"";'
-        . 'var hidePrior=!!(priorCb&&priorCb.checked);'
-        . 'picks.forEach(function(c){var r=rowOf(c);if(!r)return;'
-        . 'var ph=(r.getAttribute("data-wb-phase")||"").split(/\\s+/);'
-        . 'var phaseOk=(phaseV===""||ph.indexOf(phaseV)>=0);'
-        . 'var priorOk=!hidePrior||r.getAttribute("data-wb-prior")!=="1";'
-        . 'var show=phaseOk&&priorOk;'
-        . 'r.style.display=show?"":"none";if(!show&&c.checked)c.checked=false;});'
-        . 'if(priorCb){try{localStorage.setItem(KEY,priorCb.checked?"1":"0");}catch(e){}}'
-        . 'upd();}'
-        . 'picks.forEach(function(c){c.addEventListener("change",upd);});'
-        . 'if(selAll)selAll.addEventListener("click",function(e){e.preventDefault();picks.forEach(function(c){if(visible(c))c.checked=true;});upd();});'
-        . 'if(clr)clr.addEventListener("click",function(e){e.preventDefault();picks.forEach(function(c){c.checked=false;});upd();});'
-        . 'if(phaseSel)phaseSel.addEventListener("change",applyFilters);'
-        . 'if(priorCb)priorCb.addEventListener("change",applyFilters);'
-        . 'if(btn)btn.addEventListener("click",function(e){e.preventDefault();var s=sel();if(!s.length||!printAll)return;'
-        . 'var base=printAll.getAttribute("href");'
-        . 'var url=base+(base.indexOf("?")>=0?"&":"?")+"wb="+encodeURIComponent(s.join(","));'
-        . 'window.location.href=url;});'
-        . 'applyFilters();'
-        . '})();</script>';
+    $script = so_js_block($html, 'select');
 
     return str_replace('</body>', $style . $script . '</body>', $html);
 }
@@ -853,31 +741,7 @@ function so_inject_waybill_selection_print($html, $rel)
         return $html;
     }
 
-    $script = '<script id="wb-selection-filter">(function(){'
-        . 'var params=new URLSearchParams(location.search);'
-        . 'var raw=params.get("wb");'
-        . 'if(!raw)return;'
-        . 'var wrap=document.querySelector(".waybill-print");'
-        . 'if(!wrap)return;'
-        . 'var set={};raw.split(",").forEach(function(x){x=x.trim();if(x)set[x]=1;});'
-        . 'var sheets=[].slice.call(wrap.querySelectorAll(".waybill-sheet"));'
-        . 'var shown={},vis=[];'
-        . 'sheets.forEach(function(s){var m=(s.textContent||"").match(/WAYBILL No\\.\\s*([0-9A-Za-z\\-]+)/);'
-        . 'var n=m?m[1]:null;if(n&&set[n]){s.style.display="";shown[n]=1;vis.push(s);}else{s.style.display="none";}});'
-        . 'vis.forEach(function(s,i){var last=(i===vis.length-1);'
-        . 's.style.pageBreakAfter=last?"auto":"always";s.style.breakAfter=last?"auto":"page";});'
-        . 'var nsel=Object.keys(shown).length;'
-        . 'params.delete("wb");var showAll=location.pathname+(params.toString()?("?"+params.toString()):"");'
-        . 'var banner=document.createElement("div");banner.className="noprint";'
-        . 'banner.style.cssText="margin:.5rem 0;padding:.5rem .75rem;background:#fff3cd;border:1px solid #ffe69c;border-radius:6px;font:14px system-ui,-apple-system,sans-serif;";'
-        . 'banner.innerHTML="Showing "+nsel+" selected waybill"+(nsel===1?"":"s")+" &middot; <a href=\\""+showAll+"\\">Show all</a>";'
-        . 'wrap.parentNode.insertBefore(banner,wrap);'
-        . 'var pb=document.querySelector(".waybill-print-controls button");'
-        . 'if(pb)pb.innerHTML=\'<i class="bi bi-printer"></i> Print selected\';'
-        . 'var cnt=document.querySelector("main .muted");'
-        . 'if(cnt)cnt.textContent=nsel+" selected waybill"+(nsel===1?"":"s")'
-        . '+" \\u00b7 each prints on its own page.";'
-        . '})();</script>';
+    $script = so_js_block($html, 'selection') . '<!-- wb-selection-filter -->';
 
     return str_replace('</body>', $script . '</body>', $html);
 }
@@ -965,23 +829,7 @@ function so_inject_switchlist_phase_filter($html, $rel)
         return $html;
     }
 
-    $script = '<script>(function(){'
-        . 'var sel=document.getElementById("sw-phase-select");'
-        . 'var lab=document.querySelector("label[for=\\"sw-phase-select\\"]");'
-        . 'if(!sel)return;'
-        . 'var secs=Array.prototype.slice.call(document.querySelectorAll(".page .print-all-phase"));'
-        . 'if(secs.length<1){sel.style.display="none";if(lab)lab.style.display="none";return;}'
-        . 'secs.forEach(function(s,i){'
-        . 'var h=s.querySelector("h2");'
-        . 'var t=h?(h.textContent||"").trim():("Phase "+(i+1));'
-        // Drop redundant " — Phase N of M" when Train Info already names the leg.
-        . 't=t.replace(/\\s*[\\u2014\\-]\\s*Phase\\s+\\d+\\s+of\\s+\\d+\\s*$/i,"").trim()||t;'
-        . 's.setAttribute("data-sw-phase",String(i));'
-        . 'var o=document.createElement("option");o.value=String(i);o.textContent=t;sel.appendChild(o);});'
-        . 'function apply(){var v=sel.value;secs.forEach(function(s){'
-        . 's.style.display=(v===""||s.getAttribute("data-sw-phase")===v)?"":"none";});}'
-        . 'sel.addEventListener("change",apply);apply();'
-        . '})();</script>';
+    $script = so_js_block($html, 'swphase');
 
     return str_replace('</body>', $script . '</body>', $html);
 }

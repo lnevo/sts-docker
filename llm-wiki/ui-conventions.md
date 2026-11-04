@@ -523,8 +523,13 @@ are blocked by the browser. Inline `style` attributes are still allowed.
   steps.
 - Exceptions:
   - `/sts/api/docs/` gets `'unsafe-eval'` for Swagger UI.
-  - Session output stored before 2026-11-04 (`backups/session_state/sessions/`,
-    `so.php`) keeps `'unsafe-inline'` until it is re-rendered.
+  - No carve-out remains for generated session output. Generators emit
+    `data-sts-*` attributes plus `/sts/js/sts-actions.js` and
+    `/sts/js/session_output.js` (from `session_output_js.php`); serve-time
+    filters in `so.php` are switched on by `sts-so-*` data blocks. Output stored
+    before 2026-11-04 still carries inline code and is blocked until one
+    `POST /sts/api/v1/sessions/{n}/rerender` per stored session upgrades it
+    (loop in `docs/plans/HANDOFF.md`).
 
 ## 5. Touch & Mobile Guidelines
 

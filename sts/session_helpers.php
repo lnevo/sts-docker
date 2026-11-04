@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/session_runtime.php';
 require_once __DIR__ . '/page_chrome.php';
+require_once __DIR__ . '/session_output_js.php';
 session_runtime_bootstrap();
 
 function session_merge_runtime_config(array $config = [])
@@ -1009,17 +1010,10 @@ function session_browse_archived_controls_html()
 
     return '<div class="session-browse-archived-controls noprint">'
         . '<label class="session-browse-archived-label">'
-        . '<input type="checkbox" id="sts-browse-archived"' . ($checked ? ' checked' : '') . '> '
+        . '<input type="checkbox" id="sts-browse-archived" data-sts-change="sessArchivedToggle"' . ($checked ? ' checked' : '') . '> '
         . 'Show archived sessions</label>'
         . '<span class="text-muted small"> (rewind archive: ' . htmlspecialchars($list) . ')</span>'
-        . '</div>'
-        . '<script>(function(){'
-        . 'var cb=document.getElementById("sts-browse-archived");'
-        . 'if(!cb)return;'
-        . 'cb.addEventListener("change",function(){'
-        . 'if(cb.checked){document.cookie="sts_browse_archived=1;path=/sts;max-age=31536000";}'
-        . 'else{document.cookie="sts_browse_archived=0;path=/sts;max-age=0";}'
-        . 'location.reload();});})();</script>';
+        . '</div>';
 }
 
 /**
@@ -1826,23 +1820,14 @@ function session_nav_stylesheet_link($href = null)
 }
 
 /**
- * Safe print helper for generated pages. Cursor / VS Code Simple Browser
- * (Electron) often crashes the whole window on window.print(); steer those
+ * Script tags for generated pages (js/sts-actions.js + js/session_output.js).
+ * The latter holds the safe print helper: Cursor / VS Code Simple Browser
+ * (Electron) often crashes the whole window on window.print(); it steers those
  * clients to an external browser instead of calling print().
  */
 function session_safe_print_script()
 {
-    return '<script>(function(){if(window.stsSafePrint)return;'
-        . 'window.stsSafePrint=function(){try{'
-        . 'var ua=navigator.userAgent||"";'
-        . 'if(/Electron|Cursor|VSCode|Code\\/\\d|Simple Browser/i.test(ua)'
-        . '||typeof window.acquireVsCodeApi==="function"){'
-        . 'alert("Printing from Cursor\u2019s preview can close the window. '
-        . 'Copy this page\u2019s URL into Chrome or Safari, then Print.");'
-        . 'return;}'
-        . 'window.print();'
-        . '}catch(e){alert("Print failed \u2014 open this page in an external browser.");}};'
-        . '})();</script>';
+    return session_output_script_tags();
 }
 
 function session_static_head_assets($css_href = null)
@@ -2117,7 +2102,7 @@ function session_nav_row_picker_html(
     $html .= session_nav_chevron_btn_html('prev', $prev !== null ? $rel_for($prev) : null, $prev, $btn_class);
     $html .= '<select class="form-select form-select-sm session-nav-select" style="width:auto;display:inline-block;"'
         . ' title="Jump to same view in another session"'
-        . ' onchange="if(this.value){window.location.href=this.value;}">'
+        . ' data-sts-change="sessGoValue">'
         . $options . '</select>';
     $html .= session_nav_chevron_btn_html('next', $next !== null ? $rel_for($next) : null, $next, $btn_class);
     $html .= $skip_btn($skip_last, 'skip-end-fill');
@@ -3297,8 +3282,8 @@ function session_waybill_render_single_page($session_nbr, $waybill_number, $body
     return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
         . '<meta name="viewport" content="width=device-width, initial-scale=1">'
         . '<title>' . htmlspecialchars($title) . '</title><style>'
-        . waybill_print_page_styles() . '</style></head><body>'
-        . '<div class="noprint"><button type="button" onclick="window.print()">Print</button>'
+        . waybill_print_page_styles() . '</style>' . session_safe_print_script() . '</head><body>'
+        . '<div class="noprint"><button type="button" data-sts-click="sessPrint">Print</button>'
         . ' &nbsp; <a href="index.html">Waybill list</a><br /><br /></div>'
         . waybill_print_wrap_sheets($body) . '</body></html>';
 }
@@ -3392,16 +3377,11 @@ function session_waybill_render_print_all_page($session_nbr, $title, array $numb
         }
         $wb_cluster = '<div class="d-flex align-items-center gap-2 ms-auto">'
             . '<label for="wb-train-select" class="text-white-50 small mb-0">Train</label>'
-            . '<select id="wb-train-select" class="form-select form-select-sm" style="width:auto;">'
+            . '<select id="wb-train-select" class="form-select form-select-sm" style="width:auto;"'
+            . ' data-session="' . (int) $session_nbr . '" data-sts-change="sessWbTrainGo">'
             . $wb_train_options . '</select></div>';
         $nav_html = str_replace('</div></div></nav>', $wb_cluster . '</div></div></nav>', $nav_html);
-        $wb_script = '<script>(function(){'
-            . 'var el=document.getElementById("wb-train-select");if(!el)return;'
-            . 'var sid=' . $session_nbr . ';'
-            . 'el.addEventListener("change",function(){var job=el.value;'
-            . 'var f=job===""?("session_"+sid+"/waybills/print_all.html"):("session_"+sid+"/waybills/job_"+encodeURIComponent(job)+".print_all.html");'
-            . 'window.location.href="/sts/so.php?f="+encodeURIComponent(f).replace(/%2F/g,"/");});'
-            . '})();</script>';
+        $wb_script = '';
     } else {
         $wb_script = '';
     }
@@ -3415,7 +3395,7 @@ function session_waybill_render_print_all_page($session_nbr, $title, array $numb
     );
 
     $controls = '<div class="noprint waybill-print-controls">'
-        . '<button type="button" class="btn btn-dark" onclick="window.print()"><i class="bi bi-printer"></i> Print all waybills</button>'
+        . '<button type="button" class="btn btn-dark" data-sts-click="sessPrint"><i class="bi bi-printer"></i> Print all waybills</button>'
         . ' <a class="btn btn-outline-dark" href="' . htmlspecialchars($index_file) . '"><i class="bi bi-list-ul"></i> Waybill list</a>'
         . '</div>';
 
@@ -4584,6 +4564,10 @@ function session_rerender_session_style($dbc, $session_nbr, $style, $root = null
     $manifest['preferred_switchlist_style'] = $style;
     session_save_manifest($session_nbr, $manifest, $root);
 
+    // Pages stored before output went script-free (waybills, station and wheel
+    // reports, indexes) are snapshots; upgrade their markup in place.
+    session_output_upgrade_session($session_nbr, $root);
+
     return $results;
 }
 
@@ -5162,7 +5146,7 @@ function session_build_switchlist_print_all($dbc, $session_nbr, $root = null)
         . $session_nav
         . '<div class="page">'
         . '<div class="noprint" style="margin-bottom:12px;">'
-        . '<button type="button" onclick="stsSafePrint()">PRINT ALL SWITCH LISTS</button>'
+        . '<button type="button" data-sts-click="sessPrint">PRINT ALL SWITCH LISTS</button>'
         . '<p style="margin:8px 0 0; color:#555; font-size:14px;">Combined view. Pick a style above to print every switch list in that layout — each starts on a new page. Use an external browser (Chrome/Safari) if Cursor\'s preview crashes on print.</p>'
         . '</div>'
         . $phases_html
@@ -5283,7 +5267,7 @@ function session_build_switchlist_train_print_all($dbc, $session_nbr, $job, $roo
         . $session_nav
         . '<div class="page">'
         . '<div class="noprint" style="margin-bottom:12px;">'
-        . '<button type="button" onclick="stsSafePrint()">PRINT ALL SWITCH LISTS</button>'
+        . '<button type="button" data-sts-click="sessPrint">PRINT ALL SWITCH LISTS</button>'
         . '<p style="margin:8px 0 0; color:#555; font-size:14px;">All phases for '
         . htmlspecialchars($train_label) . '. Pick a style above to print in that layout — each switch list starts on a new printed page.</p>'
         . '</div>'
@@ -5351,31 +5335,15 @@ function session_print_all_style_controls($session_nbr, $selected_style, $select
 
     $cluster = '<div class="d-flex align-items-center gap-2 ms-auto">'
         . '<label for="sw-train-select" class="text-white-50 small mb-0">Train</label>'
-        . '<select id="sw-train-select" class="form-select form-select-sm" style="width:auto;">'
+        . '<select id="sw-train-select" class="form-select form-select-sm" style="width:auto;"'
+        . ' data-session="' . (int) $session_nbr . '" data-sts-change="sessSwGo">'
         . $train_options . '</select>'
         . '<label for="sw-style-select" class="text-white-50 small mb-0">Style</label>'
-        . '<select id="sw-style-select" class="form-select form-select-sm" style="width:auto;">'
+        . '<select id="sw-style-select" class="form-select form-select-sm" style="width:auto;"'
+        . ' data-sts-change="sessSwGo">'
         . $style_options . '</select>'
         . '<span id="sw-style-status" class="text-white-50 small"></span></div>';
-    $script = '<script>(function(){'
-        . 'var tr=document.getElementById("sw-train-select");'
-        . 'var el=document.getElementById("sw-style-select");'
-        . 'if(!tr||!el)return;'
-        . 'var st=document.getElementById("sw-style-status");'
-        . 'var sid=' . $session_nbr . ';'
-        . 'function go(){var job=tr.value;var style=el.value;'
-        . 'if(style===""){'
-        . 'var f=job===""?("session_"+sid+"/print_all.html"):("session_"+sid+"/train_"+encodeURIComponent(job)+".print_all.html");'
-        . 'window.location.href="/sts/so.php?f="+encodeURIComponent(f).replace(/%2F/g,"/");return;}'
-        . 'tr.disabled=true;el.disabled=true;if(st)st.textContent="Rendering\u2026";'
-        . 'var body={session:sid,style:style};if(job!=="")body.job=job;'
-        . 'fetch("/sts/operational_steps_api.php?action=build_print_all_style",{method:"POST",'
-        . 'headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})'
-        . '.then(function(r){return r.json();})'
-        . '.then(function(d){if(!d.ok||!d.url)throw new Error(d.error||"Render failed");window.location.href=d.url;})'
-        . '.catch(function(e){tr.disabled=false;el.disabled=false;if(st)st.textContent=String(e.message||e);});}'
-        . 'tr.addEventListener("change",go);el.addEventListener("change",go);'
-        . '})();</script>';
+    $script = '';
 
     return [$cluster, $script];
 }
@@ -5511,7 +5479,7 @@ function session_build_switchlist_print_all_style($dbc, $session_nbr, $style, $r
         . $session_nav
         . '<div class="page">'
         . '<div class="noprint" style="margin-bottom:12px;">'
-        . '<button type="button" onclick="stsSafePrint()">PRINT ALL SWITCH LISTS</button>'
+        . '<button type="button" data-sts-click="sessPrint">PRINT ALL SWITCH LISTS</button>'
         . '<p style="margin:8px 0 0; color:#555; font-size:14px;">Style: ' . htmlspecialchars($style_label)
         . '. Each switch list starts on a new printed page.</p>'
         . '</div>'
@@ -5622,7 +5590,7 @@ function session_build_switchlist_train_print_all_style($dbc, $session_nbr, $job
         . $session_nav
         . '<div class="page">'
         . '<div class="noprint" style="margin-bottom:12px;">'
-        . '<button type="button" onclick="stsSafePrint()">PRINT ALL SWITCH LISTS</button>'
+        . '<button type="button" data-sts-click="sessPrint">PRINT ALL SWITCH LISTS</button>'
         . '<p style="margin:8px 0 0; color:#555; font-size:14px;">All phases for '
         . htmlspecialchars($train_label) . ' · ' . htmlspecialchars($style_label)
         . '. Each switch list starts on a new printed page.</p>'
@@ -6398,6 +6366,7 @@ function session_station_report_render_html($session_nbr, array $data)
 <title>Station Car Report<?= $title_phase ?> — Session <?= $session_nbr ?></title>
 <link href="/sts/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
 <link href="/sts/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
+<?= session_safe_print_script() ?>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background:#f8f9fa; font-size:13px; }
   main { max-width: 1280px; margin: 0 auto; padding: 1rem 1rem 2.5rem; }
@@ -6467,7 +6436,7 @@ function session_station_report_render_html($session_nbr, array $data)
 <?php if (session_car_report_phases($session_nbr, 'wheel') !== []): ?>
       <a class="btn btn-outline-light btn-sm" href="wheel_report.html" title="Wheel report"><i class="bi bi-arrow-left-right"></i> Wheel Report</a>
 <?php endif; ?>
-      <button type="button" class="btn btn-outline-light btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
+      <button type="button" class="btn btn-outline-light btn-sm" data-sts-click="sessPrint"><i class="bi bi-printer"></i> Print</button>
       <a class="btn btn-outline-light btn-sm ms-auto" href="/sts/session-sitemap.php"><i class="bi bi-diagram-3"></i> Site Map</a>
     </div>
   </div>
@@ -6581,70 +6550,6 @@ function session_station_report_render_html($session_nbr, array $data)
   </div>
 <?php endforeach; ?>
 </main>
-<script>
-(function () {
-  var search = document.getElementById('srp-search');
-  var station = document.getElementById('srp-station');
-  var status = document.getElementById('srp-status');
-  var placement = document.getElementById('srp-placement');
-  var handling = document.getElementById('srp-handling');
-  var clear = document.getElementById('srp-clear');
-  var summary = document.getElementById('srp-summary');
-  var cards = Array.prototype.slice.call(document.querySelectorAll('.station-card'));
-
-  function apply() {
-    var q = (search.value || '').trim().toLowerCase();
-    var st = station.value || '';
-    var stat = status.value || '';
-    var place = placement.value || '';
-    var hand = handling.value || '';
-    var shownCars = 0, shownStations = 0;
-
-    cards.forEach(function (card) {
-      var cardStation = card.getAttribute('data-station');
-      var cardPlace = card.getAttribute('data-placement') || '';
-      var rows = Array.prototype.slice.call(card.querySelectorAll('tbody tr'));
-      var visible = 0;
-      rows.forEach(function (row) {
-        var ok = true;
-        if (q && row.getAttribute('data-search').indexOf(q) === -1) { ok = false; }
-        if (ok && stat && row.getAttribute('data-status') !== stat) { ok = false; }
-        if (ok && hand && row.getAttribute('data-handling') !== hand) { ok = false; }
-        if (ok && place && row.getAttribute('data-placement') !== place) { ok = false; }
-        row.classList.toggle('srp-hidden', !ok);
-        if (ok) { visible++; }
-      });
-      var stationHidden = (st && cardStation !== st)
-        || (place && cardPlace !== place)
-        || visible === 0;
-      card.classList.toggle('srp-hidden', stationHidden);
-      var countEl = card.querySelector('.count');
-      if (countEl) {
-        var total = countEl.getAttribute('data-total');
-        countEl.textContent = (visible === Number(total))
-          ? (total + ' car' + (total === '1' ? '' : 's') + ' · ' + countEl.getAttribute('data-stays') + ' staying')
-          : ('showing ' + visible + ' of ' + total);
-      }
-      if (!stationHidden) { shownStations++; shownCars += visible; }
-    });
-
-    var filtered = q || st || stat || place || hand;
-    summary.textContent = filtered
-      ? ('Showing ' + shownCars + ' car' + (shownCars === 1 ? '' : 's') + ' across ' + shownStations + ' station' + (shownStations === 1 ? '' : 's') + '.')
-      : '';
-  }
-
-  [search, station, status, placement, handling].forEach(function (el) {
-    el.addEventListener('input', apply);
-    el.addEventListener('change', apply);
-  });
-  clear.addEventListener('click', function () {
-    search.value = ''; station.value = ''; status.value = ''; placement.value = ''; handling.value = '';
-    apply();
-  });
-  apply();
-})();
-</script>
 </body>
 </html>
 <?php
@@ -6700,7 +6605,7 @@ function session_station_report_session_nav_html($session_nbr, $dbc = null, $roo
     $html .= $edge_btn($skip_first, 'skip-start-fill', $skip_first !== null ? 'First session (' . (int) $skip_first . ')' : 'First session');
     $html .= $edge_btn($prev, 'chevron-left', $prev !== null ? 'Session ' . (int) $prev : 'Previous');
     $html .= '<select class="form-select form-select-sm station-report-jump" aria-label="Jump to session" '
-        . 'onchange="if(this.value){window.location.href=\'so.php?f=session_\'+this.value+\'/station_report.html\';}">';
+        . 'data-sts-change="sessGoSo" data-so-prefix="session_" data-so-suffix="/station_report.html">';
     foreach ($sessions as $n) {
         $n = (int) $n;
         $html .= '<option value="' . $n . '"' . ($n === $session_nbr ? ' selected' : '') . '>'
@@ -6827,8 +6732,8 @@ function session_car_report_phase_nav_html($session_nbr, $kind, $current_phase =
     $html = '<div class="session-nav-row station-report-phase-nav noprint">';
     $html .= '<span class="station-report-nav-label">Phase</span>';
     $html .= '<select class="form-select form-select-sm station-report-jump" aria-label="Jump to report phase" '
-        . 'onchange="if(this.value){window.location.href=\'so.php?f=session_' . $session_nbr
-        . '/' . $stem . '_\'+this.value+\'.html\';}">';
+        . 'data-sts-change="sessGoSo" data-so-prefix="session_' . (int) $session_nbr
+        . '/' . $stem . '_" data-so-suffix=".html">';
     foreach ($phases as $p) {
         $sel = ((int) $p['phase'] === $current_phase) ? ' selected' : '';
         $html .= '<option value="' . session_car_report_phase_pad($p['phase']) . '"' . $sel . '>'
@@ -7565,7 +7470,7 @@ function session_wheel_report_session_nav_html($session_nbr, $dbc = null, $root 
     $html .= $edge_btn($skip_first, 'skip-start-fill', $skip_first !== null ? 'First session (' . (int) $skip_first . ')' : 'First session');
     $html .= $edge_btn($prev, 'chevron-left', $prev !== null ? 'Session ' . (int) $prev : 'Previous');
     $html .= '<select class="form-select form-select-sm station-report-jump" aria-label="Jump to session" '
-        . 'onchange="if(this.value){window.location.href=\'so.php?f=session_\'+this.value+\'/wheel_report.html\';}">';
+        . 'data-sts-change="sessGoSo" data-so-prefix="session_" data-so-suffix="/wheel_report.html">';
     foreach ($sessions as $n) {
         $n = (int) $n;
         $html .= '<option value="' . $n . '"' . ($n === $session_nbr ? ' selected' : '') . '>'
@@ -7613,6 +7518,7 @@ function session_wheel_report_render_html($session_nbr, array $data)
 <title>Wheel Report<?= $title_phase ?> — Session <?= $session_nbr ?></title>
 <link href="/sts/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
 <link href="/sts/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
+<?= session_safe_print_script() ?>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background:#f8f9fa; font-size:13px; }
   main { max-width: 1100px; margin: 0 auto; padding: 1rem 1rem 2.5rem; }
@@ -7672,7 +7578,7 @@ function session_wheel_report_render_html($session_nbr, array $data)
 <?php if (session_car_report_phases($session_nbr, 'station') !== []): ?>
       <a class="btn btn-outline-light btn-sm" href="station_report.html" title="Station car report"><i class="bi bi-arrow-left-right"></i> Station Report</a>
 <?php endif; ?>
-      <button type="button" class="btn btn-outline-light btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
+      <button type="button" class="btn btn-outline-light btn-sm" data-sts-click="sessPrint"><i class="bi bi-printer"></i> Print</button>
       <select class="form-select form-select-sm wr-train-select ms-auto" id="wr-train" aria-label="Train">
         <option value="">All trains</option>
 <?php foreach ($job_order as $job): ?>
@@ -7753,65 +7659,6 @@ function session_wheel_report_render_html($session_nbr, array $data)
 <?php endforeach; ?>
 <?php endif; ?>
 </main>
-<script>
-(function () {
-  var search = document.getElementById('wrp-search');
-  var le = document.getElementById('wrp-le');
-  var train = document.getElementById('wr-train');
-  var clear = document.getElementById('wrp-clear');
-  var summary = document.getElementById('wrp-summary');
-  if (!train) { return; }
-  var cards = Array.prototype.slice.call(document.querySelectorAll('.train-card'));
-
-  function apply() {
-    var q = (search && search.value || '').trim().toLowerCase();
-    var l = (le && le.value) || '';
-    var t = train.value || '';
-    var shownCars = 0, shownTrains = 0;
-
-    cards.forEach(function (card) {
-      var cardJob = card.getAttribute('data-job');
-      var rows = Array.prototype.slice.call(card.querySelectorAll('tbody tr'));
-      var visible = 0;
-      rows.forEach(function (row) {
-        var ok = true;
-        if (q && row.getAttribute('data-search').indexOf(q) === -1) { ok = false; }
-        if (ok && l && row.getAttribute('data-le') !== l) { ok = false; }
-        row.classList.toggle('wrp-hidden', !ok);
-        if (ok) { visible++; }
-      });
-      var cardHidden = (t && cardJob !== t) || visible === 0;
-      card.classList.toggle('wrp-hidden', cardHidden);
-      var countEl = card.querySelector('.count');
-      if (countEl) {
-        var total = countEl.getAttribute('data-total');
-        if (visible !== Number(total)) { countEl.setAttribute('data-filtered', '1'); }
-      }
-      if (!cardHidden) { shownTrains++; shownCars += visible; }
-    });
-
-    var filtered = q || l || t;
-    summary.textContent = filtered
-      ? ('Showing ' + shownCars + ' car' + (shownCars === 1 ? '' : 's') + ' across ' + shownTrains + ' train' + (shownTrains === 1 ? '' : 's') + '.')
-      : '';
-  }
-
-  [search, le, train].forEach(function (el) {
-    if (!el) { return; }
-    el.addEventListener('input', apply);
-    el.addEventListener('change', apply);
-  });
-  if (clear) {
-    clear.addEventListener('click', function () {
-      if (search) { search.value = ''; }
-      if (le) { le.value = ''; }
-      train.value = '';
-      apply();
-    });
-  }
-  apply();
-})();
-</script>
 </body>
 </html>
 <?php
