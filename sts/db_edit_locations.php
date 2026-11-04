@@ -200,11 +200,9 @@
   print $sql_msg;
 
   // generate a javascript line to set focus on the first input text box
-  print '<script>document.getElementById("obj_name").focus();</script>';
+  sts_editor_ops(array(array('id' => 'obj_name', 'focus' => true)));
   
   // generate some javascript to pre-select the locations current color on that drop-down list
-  print '<script>
-           document.getElementById("color").value = "' . sts_html($row['color']) . '";
-         </script>';
+  sts_editor_ops(array(array('id' => 'color', 'props' => array('value' => (string) $row['color']))));
 
 ?>

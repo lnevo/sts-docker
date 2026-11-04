@@ -48,7 +48,7 @@ HTML,
       if (mysqli_num_rows($rs) > 0)
       {
         print '<form action="fix_reporting_marks.php" method="get">';
-        print '<input type="submit" class="btn btn-danger" id="fix_it_btn" name="fix_it_btn" value="FIX REPORTING MARKS" onclick="return confirm(\'Fix Reporting Marks: this changes the database. Continue?\');"><br /><br />';
+        print '<input type="submit" class="btn btn-danger" id="fix_it_btn" name="fix_it_btn" value="FIX REPORTING MARKS" data-sts-confirm="Fix Reporting Marks: this changes the database. Continue?"><br /><br />';
     
         print '<table class="table table-sm table-bordered w-auto" id="car_table" name="car_table">';
         print '<thead>';

@@ -118,7 +118,7 @@
   function loadPolicy() {
     api('GET', '/admin/policy').then(function (j) {
       policy = j.data;
-      ['read_open', 'legacy_open', 'editor_open'].forEach(function (f) { $('flag-' + f).checked = !!policy[f]; });
+      ['read_open', 'legacy_open', 'editor_open', 'maint_open'].forEach(function (f) { $('flag-' + f).checked = !!policy[f]; });
       $('protected-backups').value = (policy.protected_backups || []).join(', ');
       var tb = $('policy-table').tBodies[0];
       tb.textContent = '';
@@ -143,7 +143,7 @@
     var roles = {};
     Array.prototype.forEach.call($('policy-table').querySelectorAll('select'), function (s) { roles[s.dataset.command] = s.value; });
     var body = { command_roles: roles, protected_backups: $('protected-backups').value.split(',').map(function (x) { return x.trim(); }).filter(Boolean) };
-    ['read_open', 'legacy_open', 'editor_open'].forEach(function (f) { body[f] = $('flag-' + f).checked; });
+    ['read_open', 'legacy_open', 'editor_open', 'maint_open'].forEach(function (f) { body[f] = $('flag-' + f).checked; });
     alertMsg('');
     api('PUT', '/admin/policy', body).then(function () { alertMsg('Policy saved.', 'success'); loadPolicy(); }, fail);
   });

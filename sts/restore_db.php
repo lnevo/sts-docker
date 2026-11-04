@@ -2,6 +2,10 @@
 require 'open_db.php';
 require 'credentials.php';
 require_once 'restore_sql_helpers.php';
+require_once __DIR__ . '/api/lib/web_auth.php';
+
+// Backups download through the admin API route, which needs the sign-in cookie.
+$can_download = api_role_allows(api_web_user(), 'admin');
 
 function sanitize_uploaded_name($name)
 {
@@ -56,24 +60,6 @@ $status_msg = '';
 $status_color = 'red';
 $dbc = open_db();
 
-if (isset($_GET['download'])) {
-  $download_name = basename($_GET['download']);
-  $download_path = './backups/' . $download_name;
-
-  if (is_file($download_path)) {
-    header('Content-Description: File Transfer');
-    header('Content-Type: application/octet-stream');
-    header('Content-Disposition: attachment; filename="' . $download_name . '"');
-    header('Content-Length: ' . filesize($download_path));
-    readfile($download_path);
-    exit;
-  }
-
-  http_response_code(404);
-  echo 'Backup file not found.';
-  exit;
-}
-
 if (isset($_POST['restore_btn'])) {
   if (!isset($_POST['restore_name']) || $_POST['restore_name'] === '') {
     $status_msg = 'Select a backup file before clicking RESTORE.';
@@ -127,12 +113,7 @@ sts_page_start([
     <style>
       .download-link {font-size: 16px;}
     </style>
-    <script>
-      function enable_restore_btn()
-      {
-        document.getElementById("restore_btn").disabled = false;
-      }
-    </script>
+    <script src="/sts/js/maint.js?v=1"></script>
 HTML,
 ]);
 ?>
@@ -145,22 +126,23 @@ HTML,
     <div class="alert <?php echo $status_color === 'green' ? 'alert-success' : 'alert-danger'; ?>"><?php echo $status_msg; ?></div>
   <?php } ?>
 
+  <div id="download-msg" class="alert alert-warning d-none"></div>
   <div class="mb-4">
     <form action="restore_db.php" method="post">
       Click on the radio button for the backup copy that you want to restore and then click the <b>RESTORE</b> button.<br /><br />
 
       <?php
       if (count($backup_files) > 0) {
-        print '<input id="restore_btn" name="restore_btn" value="RESTORE" type="submit" class="btn btn-danger" onclick="return confirm(\'Restore this backup? The current database contents will be erased and replaced.\');" disabled><br /><br />';
+        print '<input id="restore_btn" name="restore_btn" value="RESTORE" type="submit" class="btn btn-danger" data-sts-confirm="Restore this backup? The current database contents will be erased and replaced." disabled><br /><br />';
 
         print '<table class="table table-sm table-bordered w-auto">';
         print '<tr><th>Select</th><th>Backup File</th><th>Download</th></tr>';
         foreach ($backup_files as $file_name) {
           if (is_file('./backups/' . $file_name)) {
             print '<tr>
-                     <td><input name="restore_name" value="' . htmlspecialchars($file_name) . '" type="radio" onclick="enable_restore_btn();"></td>
+                     <td><input name="restore_name" value="' . htmlspecialchars($file_name) . '" type="radio" data-sts-click="maintEnable" data-target="restore_btn"></td>
                      <td>' . htmlspecialchars($file_name) . '</td>
-                     <td><a class="download-link" href="restore_db.php?download=' . urlencode($file_name) . '">Download</a></td>
+                     <td><a class="download-link" data-sts-click="maintDownload" data-signed-in="' . ($can_download ? '1' : '0') . '" href="/sts/api/v1/admin/backups/' . rawurlencode($file_name) . '/download">Download</a></td>
                    </tr>';
           }
         }
@@ -177,7 +159,7 @@ HTML,
     <form action="restore_db.php" method="post" enctype="multipart/form-data">
       Select a local SQL file and click <b>UPLOAD &amp; RESTORE</b>.<br /><br />
       <input type="file" class="form-control d-inline-block w-auto" name="sql_file" accept=".sql" required>
-      <input type="submit" class="btn btn-danger" name="upload_restore_btn" value="UPLOAD &amp; RESTORE" onclick="return confirm('Restore from the uploaded file? The current database contents will be erased and replaced.');">
+      <input type="submit" class="btn btn-danger" name="upload_restore_btn" value="UPLOAD &amp; RESTORE" data-sts-confirm="Restore from the uploaded file? The current database contents will be erased and replaced.">
     </form>
   </div>
 </div>

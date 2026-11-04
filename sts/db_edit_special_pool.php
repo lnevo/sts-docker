@@ -30,7 +30,7 @@
   }
   
   // generate some javascript to remove the Update/Remove radio buttons since we don't need it for this page
-  print '<script>var parent=document.getElementById("update_remove_btn").parentNode; var child=document.getElementById("update_remove_btn"); parent.removeChild(child);</script>';
+  sts_editor_ops(array(array('id' => 'update_remove_btn', 'remove' => true)));
 
   // generate some javascript to replace the boilerplate instructions with proper ones for this page
   $instructions = '<h3>Reporting Marks: ' . sts_html($obj_id) . '</h3>';
@@ -38,7 +38,7 @@
   $instructions .= 'After selecting a shipment to be added to the pool to which this car is assigned, click<br />the UPDATE button.<br /><br />';
   $instructions .= 'To remove a shipment from the list, put a check mark in the the REMOVE checkbox<br />of the car to be removed and click the Update button.<br /><br />';
   $instructions .= 'Cars in a special pool CANNOT be assigned to car orders from outside of the pool.<br /><br />';
-  print '<script>document.getElementById("instructions").innerHTML = ' . json_encode($instructions, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ';</script>';
+  sts_editor_ops(array(array('id' => 'instructions', 'html' => $instructions)));
          
   // has the submit button been clicked?
   if (isset($_GET['update_btn']))

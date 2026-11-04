@@ -527,6 +527,57 @@
           }
         }
       }
+    },
+    "/admin/backups/{name}/download": {
+      "get": {
+        "summary": "Download a backup file",
+        "description": "Role: admin. The raw backup SQL as an attachment (not the envelope). The browser carries the sign-in cookie (sign in on API Access); backups are not served directly by the web server. 422 for a name that is not a plain file name, 404 when the file does not exist (photo folders are not downloadable).",
+        "x-sts-role": "admin",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "File name in the backups directory (GET /backups). No paths."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        }
+      }
     }
   },
   "components": {

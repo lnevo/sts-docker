@@ -63,7 +63,8 @@ PHASE2 = [
     ("POST", "/workflows/compile"), ("POST", "/workflows/normalize"),
     ("POST", "/workflows/import"), ("GET", "/workflows/active"),
     ("PUT", "/workflows/active"), ("GET", "/workflows/{name}/run-options"),
-    ("GET", "/workflows/{name}/download"), ("POST", "/sessions/{n}/rerender"),
+    ("GET", "/workflows/{name}/download"), ("GET", "/admin/backups/{name}/download"),
+    ("POST", "/sessions/{n}/rerender"),
     ("POST", "/sessions/{n}/print-all"), ("GET", "/simulator/status"),
     ("DELETE", "/sessions/output"),
 ]
