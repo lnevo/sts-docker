@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/maint_lock.php'; sts_maint_require('admin');
 require 'open_db.php';
 require 'credentials.php';
 require_once 'restore_sql_helpers.php';

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/maint_lock.php'; sts_maint_require('operator');
 require_once 'page_chrome.php';
 sts_page_start([
     'title' => 'Back Up Database',
