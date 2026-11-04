@@ -125,12 +125,11 @@ Read this first when starting a session on the STS work. Last updated
   `node tests/browser/cdp_check.mjs --steps …`; `${STS_BASE}` and token
   placeholders come from the environment).
   - Stored session output written before this change still has inline scripts,
-    so it is blocked until rerendered once. After deploying, run this (the token
-    needs operator):
-    `for n in $(ls backups/session_state/sessions | sed -n 's/^session_//p'); do
-curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'
--d '{"style":"mobile"}' http://localhost:8980/sts/api/v1/sessions/$n/rerender; done`.
-    It also upgrades the stored waybill, report and index pages in place
+    so it is blocked until rerendered once. After deploying, run
+    `bin/rerender_stored_sessions.sh` (admin or operator token). It renders
+    each session in its preferred style (`mobile` when none is recorded), so no
+    session changes style. Each call also upgrades the stored waybill, report
+    and index pages in place
     (`session_output_upgrade_session()`), and it is idempotent.
   - `/sts/backups/` is no longer served, except `session_state/sessions/`.
     Dumps download through `GET /v1/admin/backups/{name}/download` (admin).
