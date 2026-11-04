@@ -3,7 +3,7 @@
 
 A containerised fork of the Shipper-Driven Traffic Simulator (STS) model railway operations software. Rather than requiring a local XAMPP or WAMP stack to be installed on your machine, everything — PHP 8, Apache, and MariaDB — runs inside Docker containers.
 
-Current project version: **0.4.14** (see [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md)).
+The current project version is in [`VERSION`](VERSION).
 
 ## Versioning and Recovery
 
@@ -17,10 +17,11 @@ Each intentional project change should update `VERSION` and `CHANGELOG.md`, then
 
 ## Getting Started — Using the pre-built image
 
-1. **Install Docker.** On Mac, open Docker Desktop (find it in Applications) or install it via Homebrew:
+1. **Install Docker Desktop.** STS needs the Docker engine and Compose, which come with Docker Desktop. On a Mac, download it from [docker.com](https://www.docker.com/products/docker-desktop/) or install it with Homebrew:
    ```
-   brew install docker
+   brew install --cask docker-desktop
    ```
+   Then open **Docker** from Applications once and wait for it to say it is running. `brew install docker` (without `--cask`) installs only the command-line client, with no engine to run containers on.
 2. **Clone this repo:**
    ```
    git clone https://github.com/aaron9589/sts-docker
@@ -29,17 +30,20 @@ Each intentional project change should update `VERSION` and `CHANGELOG.md`, then
 3. **Edit `docker-compose.yml`.** Find the `web_prebuilt` section and update the settings marked with comments to suit your setup (port, database name, etc.).
 4. **Start the containers:**
    ```
-   docker compose up --profile prebuild
+   docker compose --profile prebuilt up -d
    ```
 5. **Open your browser** and go to `http://localhost:8980/sts/` (or whichever port you mapped).
 6. **Important:** Once everything is working, set `PROVISION_DATABASE` to `0` in `docker-compose.yml` so your database is not wiped on the next update.
+7. **Sign in.** Some pages need you to sign in with an API token first (see [Signing in and API tokens](#signing-in-and-api-tokens)).
 
 ## Building your own image
 
 Follow steps 1–3 above, then run:
 ```
-docker compose up --profile build --build
+docker compose --profile build up -d --build
 ```
+
+The API tokens, sign-in and locked maintenance pages described below are in this repo's code. Use this build if you want them; the pre-built image may not include them yet.
 
 ---
 
@@ -292,21 +296,63 @@ Wipes the entire database back to a blank state.
 
 ### REST API *(new in this fork)*
 
-A JSON REST API has been added so that external tools — RFID readers, phone apps, or layout automation software — can interact with STS programmatically without screen-scraping the web pages. All five endpoints are tested and working.
+A JSON REST API lets external tools — RFID readers, phone apps, layout automation, AI agents — work with STS without scraping the web pages.
 
-**Base URL:** `http://localhost:8980/sts/api/index.php`
+- **v1** at `http://localhost:8980/sts/api/v1/` covers cars, sessions, workflows, backups and tasks. Interactive docs are at `http://localhost:8980/sts/api/docs/`.
+- The older wagon routes at `http://localhost:8980/sts/api/index.php` (`/wagon/cargo/id/:tag`, `/wagon/location/:location`, `/wagon/unload`, `/wagon/reposition`, `/wagon/details`) still work.
 
-| Endpoint | Method | What it does |
-|---|---|---|
-| `/wagon/cargo/id/:tag` | GET | Look up a wagon by reporting marks, RFID code, or car ID |
-| `/wagon/location/:location` | GET | List all wagons currently at a given location |
-| `/wagon/unload` | POST | Mark a wagon as loaded or empty (mirrors the Load/Unload page) |
-| `/wagon/reposition` | POST | Reposition an empty wagon and create an E-series waybill |
-| `/wagon/details` | GET | Return full car and order details |
+Reading needs no token by default. Changing anything through v1 needs a token (below). See [`sts/api/README.md`](sts/api/README.md) for every route, request and response.
 
-See [`sts/api/README.md`](sts/api/README.md) for full request/response documentation and curl examples.
+### Signing in and API tokens
 
-> **Security note:** The API has no authentication layer. It is designed for use on a private home network. Do not expose the port publicly without first adding authentication.
+Each person or tool gets its own token. A token has one of four roles, and each role can do everything the roles before it can:
+
+| Role | Can |
+|---|---|
+| reader | read anything |
+| operator | run operating moves, advance the session, run workflows, back up, validate the database |
+| editor | edit data, save and delete workflows, create cars |
+| admin | restore, wipe, reset and restart, warm start, the fix scripts, settings, plugins, and managing tokens |
+
+**Your first admin token.** When the web container starts and there is no admin token yet, it makes one called `bootstrap`. With the `build` profile it is saved on your computer at `../sts-docker-data/config/bootstrap_admin.token`. Otherwise read it from the container:
+
+```
+docker exec <web container> cat /var/lib/sts/bootstrap_admin.token
+```
+
+(`docker compose ps` shows the container name, e.g. `sts-docker-web-1`.)
+
+**Sign in in the browser.** Go to **Database Maintenance → API Access** (`/sts/api_admin.php`), paste the token and sign in. The sign-in lasts until you have been idle for 12 hours, and never more than 7 days.
+
+**Make more tokens.** Signed in as admin, use API Access to create a token for each person or tool, with the lowest role it needs. The token is shown once, so copy it then. Revoke tokens there too. From a terminal:
+
+```
+docker exec -u www-data sts-docker-web-1 php /var/www/html/sts/api/bin/tokens.php create my-tool operator
+docker exec -u www-data sts-docker-web-1 php /var/www/html/sts/api/bin/tokens.php list
+docker exec -u www-data sts-docker-web-1 php /var/www/html/sts/api/bin/tokens.php revoke <token id>
+```
+
+A tool sends its token in a header:
+
+```
+curl -H "Authorization: Bearer sts_..." http://localhost:8980/sts/api/v1/admin/tokens
+```
+
+Tokens are kept in `/var/lib/sts` (`../sts-docker-data/config` with the `build` profile), not in the database, so restoring a backup does not remove them. Only a hash of each token is stored. Keep token files out of Git; `*.token` is already ignored.
+
+**Pages that need a sign-in.** If you are not signed in, these pages show a notice with a link to API Access and do nothing else:
+
+| Page | Role needed |
+|---|---|
+| Backup DB, Validate DB | operator |
+| Restore DB, Import Tables, Remove backup, Wipe DB, Reset DB, Restart Session, Settings, Plugins and plugin settings, all the Fix scripts | admin |
+| Workflow editor: run | operator, plus whatever each step's command needs |
+| Workflow editor: save, import, delete, set active | editor |
+| Downloading a backup file | admin |
+
+When the editor runs a workflow, each step is checked as it runs. The run stops at the first step whose command needs a higher role than yours. An admin can change the role each command needs, and turn these locks off, on the API Access page.
+
+> **Security note:** STS is designed for a private home network. Do not make its port reachable from the internet.
 
 ---
 
