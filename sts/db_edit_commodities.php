@@ -121,7 +121,7 @@
     </table>';
 
   // generate a javascript line to set focus on the first input text box
-  print '<script>document.getElementById("obj_name").focus();</script>';
+  sts_editor_ops(array(array('id' => 'obj_name', 'focus' => true)));
 
   // display a status message
   print $sql_msg;

@@ -7,26 +7,7 @@
   
 
   // generate some javascript that will mark the shipment as being turned off by adding one million (1000000) to the last ship date
-  print '<script>
-           function set_ship_off()
-           {
-             var old_ship_date = parseInt(document.getElementById("old_last_ship_date").innerHTML, 10) || 0;
-             document.getElementById("last_ship_date").value = old_ship_date + 1000000;
-             document.getElementById("last_ship_date").readOnly = true;
-           }
-           
-           function set_ship_on()
-           {
-             var old_ship_date = parseInt(document.getElementById("old_last_ship_date").innerHTML, 10) || 0;
-             if (old_ship_date < 1000000)
-             {
-               old_ship_date = old_ship_date + 1000000;
-             }
-             document.getElementById("last_ship_date").value = old_ship_date - 1000000;
-             document.getElementById("last_ship_date").readOnly = false;
-           }
-           
-         </script>';
+  print '<script src="/sts/js/db_edit_shipments.js?v=1"></script>';
 
   // get a database connection
   $dbc = open_db();
@@ -391,8 +372,8 @@
       <tr>
         <td>Shipment On/Off</td>
         <td id="ship_status" name="ship_status">' . $ship_status . '</td>
-        <td>ON <input class="form-check-input" id="ship_on" name="ship_on_off" type="radio" value="True" onchange="set_ship_on(); " '. $ship .'>
-            OFF <input class="form-check-input" id="ship_off" name="ship_on_off" type="radio" value="False" onchange="set_ship_off(); " ' . $no_ship . '>
+        <td>ON <input class="form-check-input" id="ship_on" name="ship_on_off" type="radio" value="True" data-sts-change="shipOn" '. $ship .'>
+            OFF <input class="form-check-input" id="ship_off" name="ship_on_off" type="radio" value="False" data-sts-change="shipOff" ' . $no_ship . '>
       </tr>
       <tr>
         <td>Min Load Time</td>
@@ -455,6 +436,6 @@
   print $sql_msg;
 
   // generate a javascript line to set focus on the first input text box
-  print '<script>document.getElementById("obj_name").focus();</script>';
+  sts_editor_ops(array(array('id' => 'obj_name', 'focus' => true)));
 
 ?>

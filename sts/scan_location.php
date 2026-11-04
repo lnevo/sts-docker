@@ -4,7 +4,6 @@ sts_page_start([
     'title' => 'Scan Locations',
     'icon' => 'bi-upc-scan',
     'section' => 'data',
-    'body_attrs' => 'onload=\'document.getElementById("location").focus();\'',
 ]);
 ?>
 <div class="sts-card">
@@ -16,7 +15,7 @@ sts_page_start([
     </div>
 <form action="scan_location.php" method="get">
       <div class="d-flex gap-2 mb-3">
-        <input id="location" name="location" type="text" class="form-control form-control-lg" autocomplete="off" autofocus>
+        <input id="location" name="location" type="text" class="form-control form-control-lg" autocomplete="off" autofocus data-sts-autofocus>
         <input name="scan_btn" value="SCAN" type="submit" class="btn btn-primary btn-lg">
       </div>
 

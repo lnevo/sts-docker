@@ -8,10 +8,10 @@
   // clicked and if there is a code in the station code text box.
 
   // generate some javascript to display the table name, identify this table to the form, and set the update button's tab index
-  print '<script>
-           document.getElementById("tbl_name").value = "routing";
-           document.getElementById("update_btn").tabIndex = "5";
-         </script>';
+  sts_editor_ops(array(
+    array('id' => 'tbl_name', 'props' => array('value' => 'routing')),
+    array('id' => 'update_btn', 'props' => array('tabIndex' => '5'))
+  ));
 
   // get a database connection
   $dbc = open_db();
@@ -78,11 +78,11 @@
   print '</table>';
 
   // add some extra lines to the instructions div
-  print '<script>
-           document.getElementById("instructions").innerHTML = document.getElementById("instructions").innerHTML + "Click on column titles shown in <i>italics</i> to sort the table<br /><br />";
-         </script>';
+  sts_editor_ops(array(
+    array('id' => 'instructions', 'appendHtml' => 'Click on column titles shown in <i>italics</i> to sort the table<br /><br />')
+  ));
   
   // generate a javascript line to set focus on the first input text box
-  print '<script>document.getElementById("station_code").focus();</script>';
+  sts_editor_ops(array(array('id' => 'station_code', 'focus' => true)));
 
 ?>
