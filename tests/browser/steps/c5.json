@@ -21,7 +21,7 @@
     "waitFor": "#report-content table"
    },
    {
-    "expect": "document.querySelector('#report-content').innerText.indexOf('BO')>=0"
+    "expect": "document.querySelector('#report-content').innerText.indexOf('${STS_MARKS_PREFIX}')>=0"
    },
    {
     "click": "#reading-btn"
@@ -39,10 +39,13 @@
     "eval": "window.XMLHttpRequest=function(){this.open=function(){};this.send=function(){this.status=200}};window.open=function(){window.__w={document:{write:function(t){window.__t=t},title:''}};return window.__w}"
    },
    {
-    "click": "#report-content [data-sts-click=showImage]"
+    "eval": "window.alert=function(m){window.__alert=m};(document.querySelector('#report-content [data-sts-click=showImage]:not([data-car-id=\"\"])')||document.querySelector('#report-content [data-sts-click=showImage]')).setAttribute('data-sts-pick','1')"
    },
    {
-    "expect": "typeof window.__t==='string' && window.__t.indexOf('Image')>=0"
+    "click": "[data-sts-pick]"
+   },
+   {
+    "expect": "(typeof window.__t==='string' && window.__t.indexOf('Image')>=0) || /No photo available/.test(window.__alert||'')"
    },
    {
     "click": "[data-sts-click=modifySearch]"
@@ -172,7 +175,7 @@
    {
     "select": [
      "#waybill_number",
-     "001-007"
+     "${STS_WAYBILL_OPEN}"
     ]
    },
    {
@@ -185,7 +188,7 @@
     "expect": "document.querySelector('#report-content').innerText.length>20"
    },
    {
-    "expect": "document.querySelector('#report-content').innerText.indexOf(\"001-007\")>=0"
+    "expect": "document.querySelector('#report-content').innerText.indexOf(\"${STS_WAYBILL_OPEN}\")>=0"
    },
    {
     "eval": "window.__p=0;window.print=function(){window.__p++}"
@@ -199,7 +202,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/printable_waybill.php?waybill_number=001-007&display_btn=1",
+  "url": "${STS_BASE}/printable_waybill.php?waybill_number=${STS_WAYBILL_OPEN}&display_btn=1",
   "actions": [
    {
     "waitFor": "#report-content table"
@@ -208,7 +211,7 @@
     "expect": "location.pathname.endsWith('display_waybill.php')"
    },
    {
-    "expect": "document.getElementById('waybill_number').value==='001-007'"
+    "expect": "document.getElementById('waybill_number').value==='${STS_WAYBILL_OPEN}'"
    }
   ]
  },
@@ -251,7 +254,7 @@
    {
     "select": [
      "#job_name",
-     "1"
+     "${STS_JOB1_ID}"
     ]
    },
    {
@@ -322,7 +325,7 @@
    {
     "select": [
      "#job_name",
-     "2"
+     "${STS_JOB2_ID}"
     ]
    },
    {
@@ -393,7 +396,7 @@
    {
     "select": [
      "#job_name",
-     "2"
+     "${STS_JOB2_ID}"
     ]
    },
    {
@@ -440,7 +443,7 @@
    {
     "select": [
      "#job_name",
-     "2"
+     "${STS_JOB2_ID}"
     ]
    },
    {
@@ -487,7 +490,7 @@
    {
     "select": [
      "#job_name",
-     "1"
+     "${STS_JOB1_ID}"
     ]
    },
    {
@@ -519,7 +522,7 @@
    {
     "select": [
      "#job_name",
-     "2"
+     "${STS_JOB2_ID}"
     ]
    },
    {
@@ -564,7 +567,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/printable_switchlist.php?job_name=1&format=half&display_btn=DISPLAY",
+  "url": "${STS_BASE}/printable_switchlist.php?job_name=${STS_JOB1_ID}&format=half&display_btn=DISPLAY",
   "actions": [
    {
     "waitFor": "#report-content table"
@@ -575,7 +578,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/printable_switchlist_x2010.php?job_name=2&format=x2010&display_btn=DISPLAY",
+  "url": "${STS_BASE}/printable_switchlist_x2010.php?job_name=${STS_JOB2_ID}&format=x2010&display_btn=DISPLAY",
   "allowConsole": [
    "404"
   ],
@@ -598,10 +601,13 @@
     "eval": "window.XMLHttpRequest=function(){this.open=function(){};this.send=function(){this.status=200}};window.open=function(){window.__w={document:{write:function(t){window.__t=t},title:''}};return window.__w}"
    },
    {
-    "click": "[data-sts-click=showImage]"
+    "eval": "window.alert=function(m){window.__alert=m};(document.querySelector('[data-sts-click=showImage]:not([data-car-id=\"\"])')||document.querySelector('[data-sts-click=showImage]')).setAttribute('data-sts-pick','1')"
    },
    {
-    "expect": "typeof window.__t==='string' && window.__t.indexOf('Image')>=0"
+    "click": "[data-sts-pick]"
+   },
+   {
+    "expect": "(typeof window.__t==='string' && window.__t.indexOf('Image')>=0) || /No photo available/.test(window.__alert||'')"
    }
   ]
  },

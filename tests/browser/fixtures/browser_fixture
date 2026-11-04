@@ -1,0 +1,397 @@
+drop table if exists `LOC`;
+#
+CREATE TABLE `LOC` (
+  `step_number` int(11) NOT NULL,
+  `station` int(11) DEFAULT NULL,
+  `pickup` char(1) DEFAULT NULL,
+  `setout` char(1) DEFAULT NULL,
+  `remarks` varchar(256) DEFAULT NULL,
+  PRIMARY KEY (`step_number`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+#
+insert into `LOC` values("10","1","T","T","Alpha Yard: pick up and set out");
+#
+insert into `LOC` values("20","2","T","T","Beta Siding: pick up and set out");
+#
+
+#
+drop table if exists `TURN`;
+#
+CREATE TABLE `TURN` (
+  `step_number` int(11) NOT NULL,
+  `station` int(11) DEFAULT NULL,
+  `pickup` char(1) DEFAULT NULL,
+  `setout` char(1) DEFAULT NULL,
+  `remarks` varchar(256) DEFAULT NULL,
+  PRIMARY KEY (`step_number`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+#
+insert into `TURN` values("10","2","T","T","Beta Siding: pick up and set out");
+#
+insert into `TURN` values("20","3","T","T","Gamma Works: pick up and set out");
+#
+insert into `TURN` values("30","1","T","F","Alpha Yard: pick up");
+#
+
+#
+drop table if exists `blocks`;
+#
+CREATE TABLE `blocks` (
+  `id` int(11) DEFAULT NULL,
+  `job_id` int(11) DEFAULT NULL,
+  `seq_nbr` int(11) DEFAULT NULL,
+  `code` varchar(256) DEFAULT NULL,
+  `description` varchar(256) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+#
+
+#
+drop table if exists `car_codes`;
+#
+CREATE TABLE `car_codes` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `code` tinytext NOT NULL,
+  `description` tinytext DEFAULT NULL,
+  `remarks` text DEFAULT NULL,
+  PRIMARY KEY (`Id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+#
+insert into `car_codes` values("1","XM","Boxcar","");
+#
+insert into `car_codes` values("2","GB","Gondola","");
+#
+insert into `car_codes` values("3","HT","Hopper","");
+#
+
+#
+drop table if exists `car_orders`;
+#
+CREATE TABLE `car_orders` (
+  `waybill_number` varchar(16) NOT NULL,
+  `shipment` int(11) NOT NULL,
+  `car` int(11) NOT NULL,
+  PRIMARY KEY (`waybill_number`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+#
+
+#
+drop table if exists `cars`;
+#
+CREATE TABLE `cars` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `reporting_marks` varchar(16) NOT NULL,
+  `car_code_id` int(11) NOT NULL,
+  `current_location_id` int(11) NOT NULL,
+  `position` int(11) DEFAULT NULL,
+  `status` varchar(256) NOT NULL,
+  `handled_by_job_id` int(11) DEFAULT NULL,
+  `remarks` text DEFAULT NULL,
+  `load_count` int(11) NOT NULL,
+  `home_location` int(11) DEFAULT NULL,
+  `RFID_code` char(255) DEFAULT NULL,
+  `block_id` int(11) DEFAULT NULL,
+  `last_spotted` int(11) DEFAULT NULL,
+  PRIMARY KEY (`Id`)
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+#
+insert into `cars` values("1","TST 1001","1","1","1","Empty","0","browser-test","0","1","RFID1001","","");
+#
+insert into `cars` values("2","TST 1002","1","1","2","Empty","0","browser-test","0","1","RFID1002","","");
+#
+insert into `cars` values("3","TST 1003","1","1","3","Empty","0","browser-test","0","1","RFID1003","","");
+#
+insert into `cars` values("4","TST 1004","1","1","4","Empty","0","browser-test","0","1","RFID1004","","");
+#
+insert into `cars` values("5","TST 1005","1","4","1","Empty","0","browser-test","0","4","RFID1005","","");
+#
+insert into `cars` values("6","TST 1006","1","4","2","Empty","0","browser-test","0","4","RFID1006","","");
+#
+insert into `cars` values("7","TST 1007","1","4","3","Empty","0","browser-test","0","4","RFID1007","","");
+#
+insert into `cars` values("8","TST 1008","1","2","1","Empty","0","browser-test","0","2","RFID1008","","");
+#
+insert into `cars` values("9","TST 1009","1","2","2","Empty","0","browser-test","0","2","RFID1009","","");
+#
+insert into `cars` values("10","TST 1010","1","2","3","Empty","0","browser-test","0","2","RFID1010","","");
+#
+insert into `cars` values("11","TST 1101","2","3","1","Empty","0","browser-test","0","3","RFID1101","","");
+#
+insert into `cars` values("12","TST 1102","2","3","2","Empty","0","browser-test","0","3","RFID1102","","");
+#
+insert into `cars` values("13","TST 1103","2","3","3","Empty","0","browser-test","0","3","RFID1103","","");
+#
+insert into `cars` values("14","TST 1104","2","3","4","Empty","0","browser-test","0","3","RFID1104","","");
+#
+insert into `cars` values("15","TST 1105","2","6","1","Empty","0","browser-test","0","6","RFID1105","","");
+#
+insert into `cars` values("16","TST 1106","2","6","2","Empty","0","browser-test","0","6","RFID1106","","");
+#
+insert into `cars` values("17","TST 1107","2","6","3","Empty","0","browser-test","0","6","RFID1107","","");
+#
+insert into `cars` values("18","TST 1108","2","4","4","Empty","0","browser-test","0","4","RFID1108","","");
+#
+insert into `cars` values("19","TST 1109","2","4","5","Empty","0","browser-test","0","4","RFID1109","","");
+#
+insert into `cars` values("20","TST 1110","2","3","5","Empty","0","browser-test","0","3","RFID1110","","");
+#
+insert into `cars` values("21","TST 1201","3","5","1","Empty","0","browser-test","0","5","RFID1201","","");
+#
+insert into `cars` values("22","TST 1202","3","5","2","Empty","0","browser-test","0","5","RFID1202","","");
+#
+insert into `cars` values("23","TST 1203","3","5","3","Empty","0","browser-test","0","5","RFID1203","","");
+#
+insert into `cars` values("24","TST 1204","3","5","4","Empty","0","browser-test","0","5","RFID1204","","");
+#
+insert into `cars` values("25","TST 1205","3","2","4","Empty","0","browser-test","0","2","RFID1205","","");
+#
+insert into `cars` values("26","TST 1206","3","2","5","Empty","0","browser-test","0","2","RFID1206","","");
+#
+insert into `cars` values("27","TST 1207","3","2","6","Empty","0","browser-test","0","2","RFID1207","","");
+#
+insert into `cars` values("28","TST 1208","3","1","5","Empty","0","browser-test","0","1","RFID1208","","");
+#
+insert into `cars` values("29","TST 1209","3","5","5","Empty","0","browser-test","0","5","RFID1209","","");
+#
+insert into `cars` values("30","TST 1210","3","5","6","Empty","0","browser-test","0","5","RFID1210","","");
+#
+
+#
+drop table if exists `commodities`;
+#
+CREATE TABLE `commodities` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Code` tinytext NOT NULL,
+  `Description` tinytext DEFAULT NULL,
+  `Remarks` text DEFAULT NULL,
+  PRIMARY KEY (`Id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+#
+insert into `commodities` values("1","WIDGETS","Widgets","");
+#
+insert into `commodities` values("2","GRAVEL","Gravel","");
+#
+insert into `commodities` values("3","COAL","Coal","");
+#
+
+#
+drop table if exists `empty_locations`;
+#
+CREATE TABLE `empty_locations` (
+  `shipment` int(11) NOT NULL,
+  `priority` int(11) NOT NULL,
+  `location` int(11) NOT NULL,
+  PRIMARY KEY (`shipment`,`priority`,`location`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+#
+insert into `empty_locations` values("1","1","1");
+#
+insert into `empty_locations` values("2","1","4");
+#
+insert into `empty_locations` values("3","1","3");
+#
+insert into `empty_locations` values("4","1","6");
+#
+insert into `empty_locations` values("5","1","5");
+#
+insert into `empty_locations` values("6","1","2");
+#
+
+#
+drop table if exists `history`;
+#
+CREATE TABLE `history` (
+  `car_id` int(11) DEFAULT NULL,
+  `session_nbr` int(11) DEFAULT NULL,
+  `event_date` datetime DEFAULT NULL,
+  `event` varchar(256) DEFAULT NULL,
+  `location` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+#
+
+#
+drop table if exists `jobs`;
+#
+CREATE TABLE `jobs` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` tinytext NOT NULL,
+  `description` text DEFAULT NULL,
+  PRIMARY KEY (`Id`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+#
+insert into `jobs` values("1","LOC","Local switcher between Alpha and Beta");
+#
+insert into `jobs` values("2","TURN","Turn from Alpha to Gamma and back");
+#
+
+#
+drop table if exists `locations`;
+#
+CREATE TABLE `locations` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `code` tinytext NOT NULL,
+  `station` int(11) NOT NULL,
+  `track` tinytext DEFAULT NULL,
+  `spot` tinytext DEFAULT NULL,
+  `rpt_station` tinytext DEFAULT NULL,
+  `remarks` text DEFAULT NULL,
+  `color` tinytext DEFAULT NULL,
+  PRIMARY KEY (`Id`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+#
+insert into `locations` values("1","ALPHA-1","1","1","1","Alpha Yard","","");
+#
+insert into `locations` values("2","ALPHA-2","1","2","1","Alpha Yard","","");
+#
+insert into `locations` values("3","BETA-1","2","1","1","Beta Siding","","");
+#
+insert into `locations` values("4","BETA-2","2","2","1","Beta Siding","","");
+#
+insert into `locations` values("5","GAMMA-1","3","1","1","Gamma Works","","");
+#
+insert into `locations` values("6","GAMMA-2","3","2","1","Gamma Works","","");
+#
+
+#
+drop table if exists `owners`;
+#
+CREATE TABLE `owners` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(256) DEFAULT NULL,
+  `remarks` varchar(256) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+#
+insert into `owners` values("1","Test Owner","");
+#
+
+#
+drop table if exists `ownership`;
+#
+CREATE TABLE `ownership` (
+  `car_id` int(11) NOT NULL,
+  `owner_id` int(11) NOT NULL,
+  `on_off_rr` varchar(256) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+#
+insert into `ownership` values("1","1","On");
+#
+
+#
+drop table if exists `pool`;
+#
+CREATE TABLE `pool` (
+  `car_id` int(11) NOT NULL,
+  `shipment_id` int(11) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+#
+insert into `pool` values("3","2");
+#
+insert into `pool` values("4","2");
+#
+
+#
+drop table if exists `pu_criteria`;
+#
+CREATE TABLE `pu_criteria` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `job_id` varchar(64) DEFAULT NULL,
+  `step_nbr` int(11) DEFAULT NULL,
+  `car_status` varchar(256) DEFAULT NULL,
+  `commodity_id` int(11) DEFAULT NULL,
+  `car_code_id` int(11) DEFAULT NULL,
+  `dest_station_id` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+#
+insert into `pu_criteria` values("1","LOC","10","","0","0","2");
+#
+insert into `pu_criteria` values("2","LOC","20","","0","0","1");
+#
+insert into `pu_criteria` values("3","TURN","10","","0","0","3");
+#
+insert into `pu_criteria` values("4","TURN","20","","0","0","2");
+#
+insert into `pu_criteria` values("5","TURN","30","","0","0","1");
+#
+
+#
+drop table if exists `routing`;
+#
+CREATE TABLE `routing` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `station` tinytext NOT NULL,
+  `station_nbr` int(11) DEFAULT NULL,
+  `instructions` text DEFAULT NULL,
+  `sort_seq` int(11) DEFAULT NULL,
+  `color1` int(11) DEFAULT NULL,
+  `color2` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+#
+insert into `routing` values("1","Alpha Yard","1","Main yard","1","0","0");
+#
+insert into `routing` values("2","Beta Siding","2","Industrial siding","2","0","0");
+#
+insert into `routing` values("3","Gamma Works","3","Works and loading dock","3","0","0");
+#
+
+#
+drop table if exists `settings`;
+#
+CREATE TABLE `settings` (
+  `setting_name` varchar(256) NOT NULL,
+  `setting_desc` varchar(256) NOT NULL,
+  `setting_value` varchar(256) NOT NULL,
+  PRIMARY KEY (`setting_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+#
+insert into `settings` values("max_history","Max History Entries Per Car","24");
+#
+insert into `settings` values("print_width","Print Width","7.5in");
+#
+insert into `settings` values("railroad_initials","Initials of the railroad","");
+#
+insert into `settings` values("railroad_name","Name of the railroad","");
+#
+insert into `settings` values("session_nbr","Session Number","0");
+#
+
+#
+drop table if exists `shipments`;
+#
+CREATE TABLE `shipments` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `code` tinytext NOT NULL,
+  `description` tinytext NOT NULL,
+  `consignment` int(11) NOT NULL,
+  `car_code` int(11) NOT NULL,
+  `loading_location` int(11) NOT NULL,
+  `unloading_location` int(11) NOT NULL,
+  `last_ship_date` int(11) NOT NULL,
+  `min_interval` int(11) NOT NULL,
+  `max_interval` int(11) NOT NULL,
+  `min_amount` int(11) NOT NULL,
+  `max_amount` int(11) NOT NULL,
+  `special_instructions` tinytext DEFAULT NULL,
+  `remarks` text DEFAULT NULL,
+  `min_load_time` int(11) DEFAULT NULL,
+  `max_load_time` int(11) DEFAULT NULL,
+  `min_unload_time` int(11) DEFAULT NULL,
+  `max_unload_time` int(11) DEFAULT NULL,
+  PRIMARY KEY (`Id`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+#
+insert into `shipments` values("1","WIDGETS-AB","Widgets Alpha to Beta","1","1","1","3","0","1","1","1","2","","","","","","");
+#
+insert into `shipments` values("2","WIDGETS-BA","Widgets Beta to Alpha","1","1","4","2","0","1","1","1","2","","","","","","");
+#
+insert into `shipments` values("3","GRAVEL-BG","Gravel Beta to Gamma","2","2","3","5","0","1","1","1","2","","","","","","");
+#
+insert into `shipments` values("4","GRAVEL-GB","Gravel Gamma to Beta","2","2","6","4","0","1","1","1","2","","","","","","");
+#
+insert into `shipments` values("5","COAL-GA","Coal Gamma to Alpha","3","3","5","1","0","1","1","1","2","","","","","","");
+#
+insert into `shipments` values("6","COAL-AG","Coal Alpha to Gamma","3","3","2","6","0","1","1","1","2","","","","","","");
+#
+
+#

@@ -8,7 +8,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/session.php?session=4",
+  "url": "${STS_BASE}/session.php?session=${STS_SESSION}",
   "actions": [
    {
     "expect": "!!document.getElementById('session-select')"
@@ -19,7 +19,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/backups/session_state/sessions/session_4/index.php",
+  "url": "${STS_BASE}/backups/session_state/sessions/session_${STS_SESSION}/index.php",
   "actions": [
    {
     "expect": "!!document.getElementById('session-select')"
@@ -30,7 +30,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/job.php?session=4&job=CK1",
+  "url": "${STS_BASE}/job.php?session=${STS_SESSION}&job=${STS_SESSION_JOB}",
   "actions": [
    {
     "expect": "document.querySelectorAll('.switchlist-leg').length >= 1"
@@ -67,7 +67,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/so.php?f=session_4/phase_02/CK1/phase_01_mobile.html",
+  "url": "${STS_BASE}/so.php?f=session_${STS_SESSION}/${STS_SESSION_PHASE}/${STS_SESSION_JOB}/phase_01_mobile.html",
   "actions": [
    {
     "expect": "typeof window.stsSafePrint === 'function'"
@@ -81,11 +81,11 @@
   ]
  },
  {
-  "url": "${STS_BASE}/so.php?f=session_4/phase_02/CK1/phase_01_half.html&embed=1",
+  "url": "${STS_BASE}/so.php?f=session_${STS_SESSION}/${STS_SESSION_PHASE}/${STS_SESSION_JOB}/phase_01_half.html&embed=1",
   "actions": []
  },
  {
-  "url": "${STS_BASE}/so.php?f=session_4/phase_02/CK1/print_all.html",
+  "url": "${STS_BASE}/so.php?f=session_${STS_SESSION}/${STS_SESSION_PHASE}/${STS_SESSION_JOB}/print_all.html",
   "actions": [
    {
     "expect": "document.querySelector('[data-sts-click=sessPrint]') !== null"
@@ -93,7 +93,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/so.php?f=session_4/phase_02/CK1/index.html",
+  "url": "${STS_BASE}/so.php?f=session_${STS_SESSION}/${STS_SESSION_PHASE}/${STS_SESSION_JOB}/index.html",
   "actions": [
    {
     "expect": "document.querySelectorAll('.phase-list a, a').length > 1"
@@ -107,7 +107,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/so.php?f=session_4/station_report.html",
+  "url": "${STS_BASE}/so.php?f=session_${STS_SESSION}/station_report.html",
   "actions": [
    {
     "waitFor": "#srp-search"
@@ -139,7 +139,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/so.php?f=session_4/wheel_report.html",
+  "url": "${STS_BASE}/so.php?f=session_${STS_SESSION}/wheel_report.html",
   "actions": [
    {
     "waitFor": "#wrp-search"
@@ -162,7 +162,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/so.php?f=session_4/waybills/index.html",
+  "url": "${STS_BASE}/so.php?f=session_${STS_SESSION}/waybills/index.html",
   "actions": [
    {
     "expect": "document.querySelectorAll('.wb-pick').length > 0"
@@ -182,7 +182,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/so.php?f=session_4/waybills/print_all.html",
+  "url": "${STS_BASE}/so.php?f=session_${STS_SESSION}/waybills/print_all.html",
   "actions": [
    {
     "expect": "document.querySelectorAll('.waybill-sheet').length > 0"
@@ -205,7 +205,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/so.php?f=session_4/waybills/print_all.html&wb=001-002",
+  "url": "${STS_BASE}/so.php?f=session_${STS_SESSION}/waybills/print_all.html&wb=${STS_SESSION_WAYBILL}",
   "actions": [
    {
     "expect": "document.body.textContent.indexOf('selected waybill') >= 0"
@@ -213,7 +213,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/so.php?f=session_4/waybills/001-002.html",
+  "url": "${STS_BASE}/so.php?f=session_${STS_SESSION}/waybills/${STS_SESSION_WAYBILL}.html",
   "actions": [
    {
     "expect": "document.querySelector('[data-sts-click=sessPrint]') !== null"
@@ -221,7 +221,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/backups/session_state/sessions/session_4/waybills/001-002.html",
+  "url": "${STS_BASE}/backups/session_state/sessions/session_${STS_SESSION}/waybills/${STS_SESSION_WAYBILL}.html",
   "actions": [
    {
     "expect": "typeof window.stsSafePrint === 'function'"
@@ -229,7 +229,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/backups/session_state/sessions/session_4/station_report.html",
+  "url": "${STS_BASE}/backups/session_state/sessions/session_${STS_SESSION}/station_report.html",
   "actions": [
    {
     "type": [

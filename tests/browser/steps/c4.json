@@ -18,11 +18,11 @@
     "expect": "document.body.innerText.indexOf('Backup complete') >= 0"
    }
   ],
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}"
  },
  {
   "url": "${STS_BASE}/restore_db.php",
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}",
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}",
   "actions": [
    {
     "expect": "!!document.querySelector('a.download-link[href$=\"/admin/backups/c4probe/download\"]')"
@@ -61,7 +61,7 @@
  },
  {
   "url": "${STS_BASE}/restore_db.php",
-  "cookie": "sts_api_sandbox=signedout",
+  "cookie": "${STS_COOKIE_NAME}=signedout",
   "actions": [
    {
     "expect": "!!document.getElementById('maint-lock-notice')"
@@ -93,7 +93,7 @@
     "expect": "!document.querySelector('input[name=remove_name][value=c4probe]')"
    }
   ],
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}"
  },
  {
   "url": "${STS_BASE}/validate_db.php",
@@ -102,7 +102,7 @@
     "expect": "document.body.innerText.length > 100"
    }
   ],
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}"
  },
  {
   "url": "${STS_BASE}/fix_reporting_marks.php",
@@ -120,52 +120,52 @@
     "expect": "!document.getElementById('fix_it_btn')"
    }
   ],
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}"
  },
  {
   "url": "${STS_BASE}/fix_cars_trains_loc.php",
   "actions": [],
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}"
  },
  {
   "url": "${STS_BASE}/fix_empty_commodity.php",
   "actions": [],
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}"
  },
  {
   "url": "${STS_BASE}/fix_ghost_cars.php",
   "actions": [],
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}"
  },
  {
   "url": "${STS_BASE}/fix_ghost_locations.php",
   "actions": [],
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}"
  },
  {
   "url": "${STS_BASE}/fix_ghost_steps.php",
   "actions": [],
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}"
  },
  {
   "url": "${STS_BASE}/fix_ghost_trains.php",
   "actions": [],
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}"
  },
  {
   "url": "${STS_BASE}/fix_orphans.php",
   "actions": [],
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}"
  },
  {
   "url": "${STS_BASE}/fix_waybills.php",
   "actions": [],
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}"
  },
  {
   "url": "${STS_BASE}/fix_win2linux.php",
   "actions": [],
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}"
  },
  {
   "url": "${STS_BASE}/reset.php",
@@ -192,7 +192,7 @@
     "click": "#restart_btn"
    }
   ],
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}"
  },
  {
   "url": "${STS_BASE}/restart.php",
@@ -210,7 +210,7 @@
     "click": "#restart_btn"
    }
   ],
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}"
  },
  {
   "url": "${STS_BASE}/wipe.php",
@@ -246,6 +246,6 @@
     "click": "#wipe_btn"
    }
   ],
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}"
  }
 ]

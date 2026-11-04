@@ -120,7 +120,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/db_edit.php?tbl_name=jobs&obj_id=4&obj_name=CK1",
+  "url": "${STS_BASE}/db_edit.php?tbl_name=jobs&obj_id=${STS_JOB1_ID}&obj_name=${STS_JOB1_NAME}",
   "actions": [
    {
     "expect": "document.activeElement.id === 'obj_name'"
@@ -135,7 +135,7 @@
     "click": "#update_btn"
    },
    {
-    "expect": "fetch('db_edit.php?tbl_name=jobs&obj_id=4&obj_name=CK1').then(r => r.text()).then(t => t.indexOf('step edited by csp test') > 0)"
+    "expect": "fetch('db_edit.php?tbl_name=jobs&obj_id=${STS_JOB1_ID}&obj_name=${STS_JOB1_NAME}').then(r => r.text()).then(t => t.indexOf('step edited by csp test') > 0)"
    }
   ]
  },
@@ -225,7 +225,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/db_edit.php?tbl_name=shipments&obj_id=4&obj_name=ARIS-CHEM-IN-DOW-EA",
+  "url": "${STS_BASE}/db_edit.php?tbl_name=shipments&obj_id=${STS_SHIP_ID}&obj_name=${STS_SHIP_CODE}",
   "actions": [
    {
     "click": "#ship_off"
@@ -242,7 +242,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/db_edit.php?tbl_name=empty_locations&obj_id=4&obj_name=ARIS-CHEM-IN-DOW-EA",
+  "url": "${STS_BASE}/db_edit.php?tbl_name=empty_locations&obj_id=${STS_SHIP_ID}&obj_name=${STS_SHIP_CODE}",
   "actions": [
    {
     "expect": "!document.getElementById('update_remove_btn') && document.getElementById('instructions').innerHTML.indexOf('Shipment ID') > 0"
@@ -250,7 +250,7 @@
   ]
  },
  {
-  "url": "${STS_BASE}/db_edit.php?tbl_name=pool&obj_name=9&obj_id=BO10389",
+  "url": "${STS_BASE}/db_edit.php?tbl_name=pool&obj_name=${STS_CAR_ID}&obj_id=${STS_CAR_MARKS_ENC}",
   "actions": [
    {
     "expect": "!document.getElementById('update_remove_btn') && document.getElementById('instructions').innerHTML.indexOf('Reporting Marks') > 0"
@@ -387,7 +387,7 @@
     "expect": "document.body.innerHTML.indexOf('<td>ZZ</td>') > 0"
    }
   ],
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}"
  },
  {
   "url": "${STS_BASE}/car_forecast.php",
@@ -433,7 +433,7 @@
     "click": "input[name=import]"
    }
   ],
-  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}"
  },
  {
   "url": "${STS_BASE}/import_img.php?obj_id=10&obj_name=x&image=1",
