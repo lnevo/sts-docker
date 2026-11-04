@@ -1,4 +1,16 @@
 <?php
+  // Converts a legacy "handlerName();" argument into a data-sts-change attribute
+  // (strict CSP forbids inline onchange/onclick). Anything that is not a plain
+  // handler name is ignored; register the handler with STS.action() in the page script.
+  function sts_dd_handler_attr($on_click)
+  {
+    if (!is_string($on_click) || !preg_match('/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(\(\s*\))?\s*;?\s*$/', $on_click, $m))
+    {
+      return '';
+    }
+    return ' data-sts-change="' . $m[1] . '"';
+  }
+
   // this file contains functions that return the contents of various
   // tables to be used in building drop down lists
 
@@ -70,7 +82,7 @@
       }
     }
 
-    $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '" onclick="' . $on_click . '" style="width: 100px;">';
+    $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '"' . sts_dd_handler_attr($on_click) . ' style="width: 100px;">';
     $select_string .= '<option value=""></option>';
 
     if (mysqli_num_rows($rs) > 0)
@@ -111,7 +123,7 @@
     // retrieve the rows and put them into an array
     $rs = mysqli_query($dbc, $sql);
 
-    $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '" onclick="' . $on_click . '" style="width: 100px;">';
+    $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '"' . sts_dd_handler_attr($on_click) . ' style="width: 100px;">';
     $select_string .= '<option value=""></option>';
 
     if (mysqli_num_rows($rs) > 0)
@@ -238,9 +250,7 @@
 
     if ((isset($on_click) && strlen($on_click) > 0))
     {
-      // "onclick" won't work with touch screen devices
-      // $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '" onclick="' . $on_click . '">';
-      $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '" onchange="' . $on_click . '">';
+      $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '"' . sts_dd_handler_attr($on_click) . '>';
     }
     else
     {
@@ -748,8 +758,7 @@
 
     if ((isset($on_click) && strlen($on_click) > 0))
     {
-      // $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" onclick="' . $on_click . '">';
-      $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '" onchange="' . $on_click . '">';
+      $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '"' . sts_dd_handler_attr($on_click) . '>';
     }
     else
     {

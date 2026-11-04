@@ -111,7 +111,6 @@
                      <th>Unloading Station / Location</th>
                    </tr></thead>';
     $data_table .= '<tbody id="car_table_body">';
-    $js_flags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
     while ($row = mysqli_fetch_array($rs))
     {
       // generate the table rows
@@ -126,13 +125,13 @@
       // column 3 - reporting marks
       if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row['id'] . '.jpg'))
       {
-        $parm_string = json_encode((string) $row['id'], $js_flags) . ', ' . json_encode((string) $row['reporting_marks'], $js_flags);
+        $parm_string = ' data-car-id="' . sts_h((string) $row['id']) . '" data-marks="' . sts_h((string) $row['reporting_marks']) . '"';
       }
       else
       {
-        $parm_string = '"", ' . json_encode((string) $row['reporting_marks'], $js_flags);
+        $parm_string = ' data-car-id="" data-marks="' . sts_h((string) $row['reporting_marks']) . '"';
       }
-      $data_table .= '<td onclick="show_image(' . sts_h($parm_string) . ');">' . sts_h($row['reporting_marks'])
+      $data_table .= '<td data-sts-click="showImage"' . $parm_string . '>' . sts_h($row['reporting_marks'])
                   . '<input name="car' . $row_count . '" value="' . sts_h($row['id']) . '" type="hidden"></td>';
 
       // column 4 - car code

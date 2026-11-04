@@ -16,6 +16,7 @@ $dbc = open_db();
   <script src="vendor/jquery/jquery-3.6.0.min.js"></script>
   <script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
   <script src="sorttable.js"></script>
+  <script src="/sts/js/sts-actions.js?v=1"></script>
   <style>
     body {
       background-color: #f8f9fa;
