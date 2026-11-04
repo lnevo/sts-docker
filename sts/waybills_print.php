@@ -93,6 +93,7 @@ foreach ($numbers as $num) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><?php echo $title; ?></title>
   <style><?php echo waybill_print_page_styles(); ?></style>
+  <script src="/sts/js/sts-actions.js?v=1"></script>
   <style>
     .wb-toolbar { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 12px; }
     .wb-toolbar a, .wb-toolbar button { font-size: 14px; }
@@ -104,7 +105,7 @@ foreach ($numbers as $num) {
 <body>
   <div class="noprint wb-toolbar">
     <span class="wb-title"><?php echo htmlspecialchars($job); ?> — <?php echo htmlspecialchars($scope_label); ?></span>
-    <button type="button" onclick="window.print()">Print all waybills</button>
+    <button type="button" data-sts-print>Print all waybills</button>
     &nbsp; <a href="<?php echo htmlspecialchars($back_href); ?>">&larr; Back to switch lists</a>
   </div>
   <?php if ($missing): ?>

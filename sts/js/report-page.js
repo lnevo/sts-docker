@@ -61,4 +61,24 @@
       });
     }
   };
+
+  // A form that declares data-report-endpoint is wired up without page code:
+  //   data-all-select="id"   adds an "All" entry to that drop-down
+  //   data-enable-display    the first drop-down's change (or a prefill) enables #display_btn
+  STS.ready(function () {
+    var form = document.querySelector('form[data-report-endpoint]');
+    if (!form) return;
+    var allSelect = form.getAttribute('data-all-select');
+    if (allSelect && window.stsAddAllOption) window.stsAddAllOption(allSelect);
+    var enable = form.hasAttribute('data-enable-display');
+    if (enable) {
+      var sel = form.querySelector('select');
+      if (sel) sel.addEventListener('change', window.stsEnableDisplay);
+    }
+    window.stsReportInit({
+      formId: form.id,
+      endpoint: form.getAttribute('data-report-endpoint'),
+      onPrefill: enable ? window.stsEnableDisplay : null
+    });
+  });
 })();

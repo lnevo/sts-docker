@@ -102,7 +102,7 @@ sts_page_start([
 ]);
 ?>
     <div class="sts-card report-screen-only">
-    <form id="report-form" method="get">
+    <form id="report-form" method="get" data-report-endpoint="display_fleet_report.php" data-all-select="car_code">
     <p>Select a car type and then click the <b>Display</b> button.</p>
     <p>A list of cars of that type and their location will be displayed below, formatted for printing.</p>
 
@@ -116,26 +116,17 @@ sts_page_start([
       print drop_down_car_codes('car_code', '0', 'wild_ok');
       print '</div>';
       print '<button name="display_btn" value="DISPLAY" type="submit" class="btn btn-primary"><i class="bi bi-eye"></i> Display</button>';
-
-      // generate some javascript that adds "All" to the top of the car code drop-down list
-      print '<script>
-               var drop_down_list = document.getElementById("car_code");
-               var option = document.createElement("option");
-               option.value = "0";
-               option.text = "All";
-               drop_down_list.add(option, drop_down_list[1]);
-             </script>';
     ?>
     </form>
     </div>
 
     <div id="report-card" class="sts-card report-card" hidden>
       <div class="report-controls report-screen-only">
-        <button type="button" class="btn btn-primary btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
+        <button type="button" class="btn btn-primary btn-sm" data-sts-print><i class="bi bi-printer"></i> Print</button>
         <button type="button" class="btn btn-outline-secondary btn-sm" id="report-modify"><i class="bi bi-pencil"></i> Modify Search</button>
       </div>
       <div id="report-content" class="report-output"></div>
     </div>
-<script src="report_page.js?v=1"></script>
-<script>stsReportInit({ formId: 'report-form', endpoint: 'display_fleet_report.php' });</script>
+<script src="/sts/js/report-common.js?v=1"></script>
+<script src="/sts/js/report-page.js?v=3"></script>
 <?php sts_page_end(); ?>

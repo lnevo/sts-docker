@@ -16,37 +16,9 @@
     <?php
       $max_lines = ((ini_get('max_input_vars') - 3) / 3) - 1;
     ?>
-    <script>
-      // this javascript function is triggered by the user changing the "All" checkbox
-      function checkall()
-      {
-        <?php
-          print 'var max_rows = ' . $max_lines . ';';
-        ?>
-        var row_count = document.getElementById('shipment_list').rows.length-1;
-        if (document.getElementById('check_all').checked == true)
-        {
-          // don't check more than 3 boxes to prevent exceeding the POST limit
-          if (row_count > max_rows)
-          {
-            row_count = max_rows;
-          }
-          for (var i=0; i < row_count; i++)
-          {
-            var checkbox_name = "check" + i.toString();
-            document.getElementById(checkbox_name).checked = true;
-          }
-        }
-        else
-        {
-          for (var i=0; i < row_count; i++)
-          {
-            var checkbox_name = "check" + i.toString();
-            document.getElementById(checkbox_name).checked = false;
-          }
-        }
-      }
-    </script>
+    <script type="application/json" id="sts-data-ccwaybill"><?= json_encode(['maxRows' => $max_lines]) ?></script>
+    <script src="/sts/js/sts-actions.js?v=1"></script>
+    <script src="/sts/js/report-ccwaybill.js?v=1"></script>
   </head>
   <body>
 <div class="noprint"> <img src="ImageStore/GUI/Menu/report.jpg" width="715" height="144" border="0" usemap="#MapMap">
@@ -71,7 +43,7 @@
       {
         print '<div class="noprint">';
         // display the Print button with a prompt
-        print '<button onclick="window.print()">PRINT</button>&nbsp;&nbsp;';
+        print '<button type="button" data-sts-print>PRINT</button>&nbsp;&nbsp;';
         print '<a href="printable_ccwaybill2.php">Return to the Shipment Selection</a><br /><br />';
         print '</div>';        
         
@@ -153,7 +125,7 @@
         $row_count=0;
         print '<table id="shipment_list">';
         print '<th style="width: 110px">Select<br /><hr />
-                   Check All <input id="check_all" name="check_all" type="checkbox" onchange="checkall();">
+                   Check All <input id="check_all" name="check_all" type="checkbox" data-sts-change="checkAll">
                </th>
                <th>Shipment ID</th>
                <th>Shipment</th>
