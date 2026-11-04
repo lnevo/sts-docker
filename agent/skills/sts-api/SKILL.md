@@ -17,8 +17,8 @@ STS is a car-forwarding simulator: shippers have shipments, shipments become
 **car orders** (waybills), orders are filled with cars, cars are moved by
 **jobs** (switch lists) between **locations** grouped into **stations**, then
 loaded or unloaded. One pass is a **session**; the session number advances at
-the end. Checked against sts-docker commit `b5f9f9a` (API v1 phase 2: policy,
-sign-in, editor endpoints; see `docs/plans/2026-11-03-api-v1.md`). If a tool answers 404, that
+the end. Checked against sts-docker commit `314118c` (API v1 phase 2 plus maintenance
+lock, strict CSP, protected backups; see `docs/plans/2026-11-03-api-v1.md`). If a tool answers 404, that
 route is not live yet; `GET /sts/api/v1/openapi.json` lists what is.
 
 ## Which stack
@@ -42,8 +42,8 @@ and `/sts/api_admin.php`) is for people; do not use it from tools.
   workflows, rerender and print-all, clear session output.
 - editor: edit cars, jobs, shipments, ownership, settings; save, delete, import
   workflows and set the active one.
-- admin: backup, restore, warm start, session begin/play, tokens, the policy,
-  and failing stuck tasks (`sts_task_fail`).
+- admin: backup, backup download, restore, warm start, session begin/play,
+  tokens, the policy, and failing stuck tasks (`sts_task_fail`).
 - Bootstrap admin token, on the docker host:
   `../sts-docker-data/config/bootstrap_admin.token` (sandbox:
   `sts-docker-data/sandbox/config/bootstrap_admin.token`). Prefer minting a
@@ -54,10 +54,36 @@ and `/sts/api_admin.php`) is for people; do not use it from tools.
 The minimum role per catalog command is a policy, not a fixed list. Defaults:
 `restore_database`, `wipe_database`, `reset_session`, `remove_backup` need **admin**; every other
 command (including `backup_database` and `restart_session`) needs **operator**.
-Admins change it on `/sts/api_admin.php` (Database Maintenance) or with
-`sts_policy`. With an admin token, `sts_policy get` (`GET /admin/policy`) shows
+Admins change it on `/sts/api_admin.php` (API Access) or with
+`sts_policy`. The policy also holds the flags `read_open`, `legacy_open`,
+`editor_open`, `maint_open` (all `null` = default) and `protected_backups`
+(globs, default `*seed*`, `*_locked*`). With an admin token, `sts_policy get` (`GET /admin/policy`) shows
 the effective map; otherwise assume the defaults, and always trust the server's
 403 over your assumption. Do not work around a 403 by another route.
+
+Per-step role checks and `role_warnings` (see Running a workflow) are unchanged.
+
+## Maintenance pages and backups
+
+- The Database Maintenance web pages need a sign-in (`sts/maint_lock.php`):
+  backup and validate need operator; restore, remove backup, reset, restart,
+  wipe, fix pages, import tables and settings need admin. The policy flag
+  `maint_open` reopens them. The operations pages and Database Management
+  pages stay open. Agents should use the API, not these pages.
+- Backups are not web-served. Download with `sts_backup_download` (admin; `name`
+  from `sts_list backups`, `path` file or directory, default current dir;
+  refuses to overwrite unless `overwrite=true`; returns `{path, bytes}`), i.e.
+  `GET /admin/backups/{name}/download`.
+- Protected backups (`*seed*`, `*_locked*`, see `protected_backups`) cannot be
+  overwritten by non-admins, including through commands and workflow steps.
+- After restoring an old backup run `bin/rerender_stored_sessions.sh` (repo
+  script, on the docker host) so stored session output matches.
+
+## Editing STS pages (code work)
+
+The web app sends a strict CSP: no inline scripts or handlers. Do not add
+`<script>` blocks or `onclick`; use `data-sts-*` attributes and a file in
+`sts/js/*.js`. Check a page with `node tests/browser/cdp_check.mjs`.
 
 ## Running a session
 
@@ -118,8 +144,10 @@ Follow with `sts_task` (`wait_seconds` up to 600, `log_lines`). Statuses:
 queued, running, succeeded, failed. Only one admin task runs at a time (409
 `conflict` otherwise). Do not start the next step until the task has succeeded. A stuck task keeps the
 maintenance lock; an admin can release it with `sts_task_fail` (`force` when its
-process is still alive; the process is not killed). Tasks can carry
-`timeout_seconds`.
+process is still alive; the process is not killed). Every task has a
+timeout: `timeout_seconds` (1-86400; non-admins 60 or more for workflows), else the
+server default `STS_API_TASK_DEFAULT_TIMEOUT` (21600 s = 6 hours, `0` = none);
+on expiry the task is `failed`, "timed out after N seconds".
 While a restore, warm start, begin, play, workflow run or destructive command is
 queued or running, every other write returns 409
 `maintenance task <id> running`; wait for the task. `sts_task` needs the
