@@ -1,6 +1,9 @@
 // db_edit_shipments.php: switching a shipment off adds one million to its last ship date.
 (function () {
   'use strict';
+  if (!window.STS) {
+    return; // this body is only ever included by db_edit.php, which loads sts-actions.js
+  }
 
   function oldDate() {
     return parseInt(document.getElementById('old_last_ship_date').innerHTML, 10) || 0;
