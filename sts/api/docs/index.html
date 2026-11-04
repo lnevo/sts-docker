@@ -26,17 +26,6 @@
   <div id="swagger-ui"></div>
   <script src="../../vendor/swagger-ui/swagger-ui-bundle.min.js"></script>
   <script src="../../vendor/swagger-ui/swagger-ui-standalone-preset.min.js"></script>
-  <script>
-    window.onload = function () {
-      window.ui = SwaggerUIBundle({
-        url: '../v1/openapi.json',
-        dom_id: '#swagger-ui',
-        deepLinking: true,
-        persistAuthorization: true,
-        presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
-        layout: 'StandaloneLayout'
-      });
-    };
-  </script>
+  <script src="/sts/js/api_docs.js?v=1"></script>
 </body>
 </html>

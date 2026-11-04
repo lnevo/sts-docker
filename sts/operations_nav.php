@@ -102,10 +102,7 @@ function ops_render_step_bar($current, $session_nbr = null)
            . ($session_nbr !== null ? ops_h($session_nbr) : '&hellip;') . '</span></a>';
     $html .= '</div></div>';
     if ($session_nbr === null) {
-        $html .= '<script>(function(){var el=document.currentScript.previousElementSibling'
-               . '.querySelector(".ops-session-nbr");fetch("get_session_nbr.php",{cache:"no-cache"})'
-               . '.then(function(r){return r.text();}).then(function(t){el.textContent=t.trim()||"?";})'
-               . '.catch(function(){el.textContent="?";});})();</script>';
+        $html .= '<script src="/sts/js/ops_nav.js?v=1"></script>';
     }
     return $html;
 }

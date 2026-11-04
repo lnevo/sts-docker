@@ -1,0 +1,242 @@
+[
+ {
+  "url": "${STS_BASE}/index.html",
+  "actions": [
+   {
+    "waitFor": "#os_number"
+   },
+   {
+    "wait": 800
+   },
+   {
+    "expect": "document.getElementById('os_number').innerText.trim().length>0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/index-t.html",
+  "actions": [
+   {
+    "wait": 800
+   },
+   {
+    "expect": "document.getElementById('session_number').innerText.includes('Operating Session')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/operations.html",
+  "actions": []
+ },
+ {
+  "url": "${STS_BASE}/about.html",
+  "actions": []
+ },
+ {
+  "url": "${STS_BASE}/club_index.html",
+  "actions": []
+ },
+ {
+  "url": "${STS_BASE}/database.html",
+  "actions": []
+ },
+ {
+  "url": "${STS_BASE}/db-maint.html",
+  "actions": []
+ },
+ {
+  "url": "${STS_BASE}/reports.html",
+  "actions": []
+ },
+ {
+  "url": "${STS_BASE}/session-sitemap.php",
+  "actions": [
+   {
+    "wait": 800
+   },
+   {
+    "expect": "document.getElementById('session_number').textContent !== null"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/build_switchlists.php",
+  "actions": [
+   {
+    "wait": 800
+   },
+   {
+    "expect": "document.querySelector('.ops-session-nbr').textContent.trim()!=='\u2026'"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/api/docs/",
+  "actions": [
+   {
+    "waitFor": ".opblock"
+   },
+   {
+    "click": ".opblock-tag"
+   },
+   {
+    "wait": 300
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/operational_steps_api-docs.html",
+  "actions": [
+   {
+    "waitFor": ".opblock"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/api_admin.php",
+  "actions": [
+   {
+    "type": [
+     "#login-token",
+     "${STS_TEST_TOKEN}"
+    ]
+   },
+   {
+    "click": "#login-form button[type=submit]"
+   },
+   {
+    "waitFor": "#admin-area:not(.d-none)"
+   },
+   {
+    "waitFor": "#tokens-table tbody tr"
+   },
+   {
+    "type": [
+     "#new-name",
+     "c1tmp"
+    ]
+   },
+   {
+    "click": "#create-form button[type=submit]"
+   },
+   {
+    "waitFor": "#new-secret-box:not(.d-none)"
+   },
+   {
+    "click": "#copy-secret"
+   },
+   {
+    "wait": 500
+   },
+   {
+    "waitFor": "#policy-table select"
+   },
+   {
+    "click": "#policy-save"
+   },
+   {
+    "wait": 800
+   },
+   {
+    "expect": "document.getElementById('api-alert').textContent.includes('Policy saved')"
+   },
+   {
+    "click": "#tasks-refresh"
+   },
+   {
+    "wait": 500
+   },
+   {
+    "click": "#tokens-table tbody tr:last-child button"
+   },
+   {
+    "wait": 800
+   },
+   {
+    "click": "#logout-btn"
+   },
+   {
+    "wait": 500
+   },
+   {
+    "expect": "!document.getElementById('signed-out').classList.contains('d-none')"
+   }
+  ],
+  "allowConsole": [
+   "status of 401",
+   "401 \\(Unauthorized\\)"
+  ]
+ },
+ {
+  "url": "${STS_BASE}/editor.html",
+  "actions": [
+   {
+    "waitFor": "#auth-signed-out:not([hidden])"
+   },
+   {
+    "type": [
+     "#auth-token",
+     "${STS_TEST_TOKEN}"
+    ]
+   },
+   {
+    "click": "#auth-signin"
+   },
+   {
+    "waitFor": "#auth-signed-in:not([hidden])"
+   },
+   {
+    "click": "#btn-workflow-more"
+   },
+   {
+    "wait": 300
+   },
+   {
+    "expect": "document.querySelector('#btn-workflow-more + .dropdown-menu').classList.contains('show')"
+   },
+   {
+    "click": "#btn-workflow-more"
+   },
+   {
+    "click": "#btn-add"
+   },
+   {
+    "wait": 300
+   },
+   {
+    "click": "#tab-run"
+   },
+   {
+    "wait": 500
+   },
+   {
+    "expect": "document.getElementById('tabpane-run').classList.contains('show')"
+   },
+   {
+    "click": "#tab-steps"
+   },
+   {
+    "wait": 500
+   },
+   {
+    "click": "#btn-preview"
+   },
+   {
+    "wait": 300
+   },
+   {
+    "click": "#btn-preview"
+   },
+   {
+    "click": "#auth-signout"
+   },
+   {
+    "wait": 500
+   }
+  ],
+  "allowConsole": [
+   "status of 401",
+   "401 \\(Unauthorized\\)"
+  ]
+ }
+]
