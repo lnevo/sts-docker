@@ -38,6 +38,14 @@ function session_output_data_block($name, $data = [])
  */
 function session_output_upgrade_html($html)
 {
+    // Output stored before the assets were vendored links Bootstrap from a CDN,
+    // which the CSP (and the private-network rule) blocks: point it at sts/vendor/.
+    $html = strtr($html, [
+        'https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css' => '/sts/vendor/bootstrap/bootstrap.min.css',
+        'https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js' => '/sts/vendor/bootstrap/bootstrap.bundle.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css' => '/sts/vendor/bootstrap-icons/bootstrap-icons.min.css',
+        'https://code.jquery.com/jquery-3.6.0.min.js' => '/sts/vendor/jquery/jquery-3.6.0.min.js',
+    ]);
     $had_inline = preg_match('#<script(?![^>]*\bsrc=)(?![^>]*type="application/json")[^>]*>#i', $html) === 1;
     $had_attr = preg_match('#\son(?:click|change|submit|error|load)="#i', $html) === 1;
     if (!$had_inline && !$had_attr) {
