@@ -74,6 +74,6 @@
   ));
   
   // generate a javascript line to set focus on the first input text box
-  sts_editor_ops(array(array('id' => 'car_code', 'focus' => true)));
+  sts_editor_ops(array(array('id' => 'commodity_code', 'focus' => true)));
 
 ?>
