@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -54,7 +55,8 @@ class Stub(BaseHTTPRequestHandler):
         if path == "/v1/admin/policy":
             Stub.policy_hits = getattr(Stub, "policy_hits", 0) + 1
             return self.reply(200, {"data": {"command_roles": {"backup_database": "editor", "wipe_database": "admin"},
-                                             "read_open": True, "legacy_open": True, "editor_open": False}})
+                                             "protected_backups": ["*seed*", "*_locked*"], "read_open": True,
+                                             "legacy_open": True, "editor_open": False, "maint_open": False}})
         if path == "/v1/cars/nope":
             return self.reply(404, {"error": {"code": "not_found", "message": "no such car"}})
         if path == "/v1/commands/generate_orders":
@@ -91,6 +93,14 @@ class Stub(BaseHTTPRequestHandler):
             return self.reply(200, {"data": {"id": "t1", "status": "failed"}})
         if path == "/v1/locations/SCL":
             return self.reply(200, {"data": {"code": "SCL", "cars": []}})
+        if path == "/v1/admin/backups/seed_1.sql/download":
+            blob = bytes(range(256)) + b"\x00\xff"
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(blob)))
+            self.end_headers()
+            return self.wfile.write(blob)
+        if path == "/v1/admin/backups/gone.sql/download":
+            return self.reply(404, {"error": {"code": "not_found", "message": "no such backup"}})
         if path == "/v1/cars/RF1/reposition":
             return self.reply(200, {"data": {"ok": True}})
         self.reply(404, {"error": {"code": "not_found", "message": "stub"}})
@@ -143,7 +153,9 @@ class ServerTests(unittest.TestCase):
             self.assertFalse(tools[name]["annotations"]["readOnlyHint"], name)
             self.assertTrue(tools[name]["annotations"]["destructiveHint"], name)
         self.assertFalse(tools["sts_create_car"]["annotations"]["destructiveHint"])
-        self.assertEqual(len(tools), 33)
+        self.assertEqual(len(tools), 34)
+        self.assertFalse(tools["sts_backup_download"]["annotations"]["readOnlyHint"])
+        self.assertFalse(tools["sts_backup_download"]["annotations"]["destructiveHint"])
         self.assertTrue(tools["sts_policy"]["annotations"]["destructiveHint"])
 
     def test_policy_tool_get_and_put(self):
@@ -378,6 +390,96 @@ class Phase2Tests(unittest.TestCase):
         out = run_server(self.env, INIT, call("sts_get", {"entity": "locations", "id": "SCL"}))
         self.assertEqual(json.loads(self.text(out))["code"], "SCL")
         self.assertEqual(Stub.seen[0][:2], ("GET", "/v1/locations/SCL"))
+
+
+class BackupDownloadTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.http = HTTPServer(("127.0.0.1", 0), Stub)
+        threading.Thread(target=cls.http.serve_forever, daemon=True).start()
+        cls.env = {"STS_API_URL": f"http://127.0.0.1:{cls.http.server_port}/v1", "STS_API_TOKEN": "sts_abc"}
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.http.shutdown()
+
+    def setUp(self):
+        Stub.seen.clear()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def run_tool(self, args):
+        out = run_server(self.env, INIT, call("sts_backup_download", args))
+        res = out[1]["result"]
+        return res.get("isError", False), res["content"][0]["text"]
+
+    def test_saves_binary_body_into_directory(self):
+        err, text = self.run_tool({"name": "seed_1.sql", "path": self.tmp.name})
+        self.assertFalse(err)
+        info = json.loads(text)
+        dest = Path(self.tmp.name) / "seed_1.sql"
+        self.assertEqual(info, {"path": os.path.abspath(dest), "bytes": 258})
+        self.assertEqual(dest.read_bytes(), bytes(range(256)) + b"\x00\xff")
+        self.assertEqual(Stub.seen[0][:3], ("GET", "/v1/admin/backups/seed_1.sql/download", "Bearer sts_abc"))
+
+    def test_default_path_is_current_directory(self):
+        out = subprocess.run([sys.executable, str(SERVER)], cwd=self.tmp.name, capture_output=True, text=True,
+                             input="".join(json.dumps(m) + "\n" for m in (INIT, call("sts_backup_download", {"name": "seed_1.sql"}))),
+                             env={**os.environ, **self.env}, timeout=30, check=True)
+        info = json.loads(json.loads(out.stdout.splitlines()[1])["result"]["content"][0]["text"])
+        self.assertEqual(Path(info["path"]).name, "seed_1.sql")
+        self.assertTrue((Path(self.tmp.name) / "seed_1.sql").exists())
+
+    def test_refuses_overwrite_unless_asked(self):
+        target = Path(self.tmp.name) / "keep.sql"
+        target.write_bytes(b"old")
+        err, text = self.run_tool({"name": "seed_1.sql", "path": str(target)})
+        self.assertTrue(err)
+        self.assertIn("overwrite", text)
+        self.assertEqual(target.read_bytes(), b"old")
+        self.assertEqual(Stub.seen, [])
+        err, text = self.run_tool({"name": "seed_1.sql", "path": str(target), "overwrite": True})
+        self.assertFalse(err)
+        self.assertEqual(len(target.read_bytes()), 258)
+
+    def test_rejects_bad_names_without_a_request(self):
+        for bad in ("../x.sql", "a/b.sql", "..", ".hidden"):
+            err, _ = self.run_tool({"name": bad, "path": self.tmp.name})
+            self.assertTrue(err, bad)
+        self.assertEqual(Stub.seen, [])
+
+    def test_404_writes_nothing(self):
+        err, text = self.run_tool({"name": "gone.sql", "path": self.tmp.name})
+        self.assertTrue(err)
+        self.assertIn("404", text)
+        self.assertEqual(os.listdir(self.tmp.name), [])
+
+
+class PolicyFlagTests(unittest.TestCase):
+    def test_policy_fields_and_description(self):
+        out = run_server({"STS_API_URL": "http://127.0.0.1:9/v1"}, INIT, LIST)
+        tool = {t["name"]: t for t in out[1]["result"]["tools"]}["sts_policy"]
+        props = set(tool["inputSchema"]["properties"])
+        flags = {"command_roles", "protected_backups", "read_open", "legacy_open", "editor_open", "maint_open"}
+        self.assertTrue(flags <= props)
+        for name in flags:
+            self.assertIn(name, tool["description"])
+
+    def test_put_forwards_every_field(self):
+        srv = HTTPServer(("127.0.0.1", 0), Stub)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        Stub.seen.clear()
+        env = {"STS_API_URL": f"http://127.0.0.1:{srv.server_port}/v1", "STS_API_TOKEN": "sts_abc"}
+        args = {"action": "put", "protected_backups": ["*seed*"], "maint_open": True, "read_open": None,
+                "legacy_open": False, "editor_open": True, "command_roles": {"wipe_database": "admin"}}
+        run_server(env, INIT, call("sts_policy", args))
+        body = Stub.seen[-1][3]
+        self.assertEqual(body, {k: v for k, v in args.items() if k != "action"})
+        out = run_server(env, INIT, call("sts_policy", {"action": "get"}))
+        got = json.loads(out[1]["result"]["content"][0]["text"])
+        for k in ("maint_open", "protected_backups", "read_open", "legacy_open", "editor_open", "command_roles"):
+            self.assertIn(k, got)
 
 
 class PortableTests(unittest.TestCase):

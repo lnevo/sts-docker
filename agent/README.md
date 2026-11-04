@@ -48,13 +48,18 @@ operator role (task records are never open); so does `sts_list`/`sts_get` on
 `tasks`.
 Operator: `sts_command` (the policy sets the role per command; defaults make
 `restore_database`, `wipe_database`, `reset_session` admin), `sts_car_action`,
-`sts_advance_session`, `sts_workflow_run` (check `sts_workflow_run_options`
+`sts_advance_session`, `sts_workflow_run` (`timeout_seconds`, check `sts_workflow_run_options`
 first; the 202 repeats `role_warnings`), `sts_session_rerender`,
 `sts_session_print_all`, `sts_clear_session_output` (destructive). Editor:
 `sts_update`, `sts_create_car`, `sts_workflow_save`, `sts_workflow_delete`,
 `sts_workflow_import`, `sts_workflow_active` (set). Admin: `sts_backup`,
-`sts_restore`, `sts_warm_start`, `sts_session_begin`, `sts_session_play`,
-`sts_tokens`, `sts_policy`, `sts_task_fail`.
+`sts_backup_download` (saves a backup locally; no overwrite unless
+`overwrite=true`), `sts_restore`, `sts_warm_start`, `sts_session_begin`, `sts_session_play`,
+`sts_tokens`, `sts_policy` (command roles, `protected_backups`, and the
+`read_open`, `legacy_open`, `editor_open`, `maint_open` flags), `sts_task_fail`.
+Tasks time out after `timeout_seconds` (`sts_workflow_run`, `sts_command`,
+`sts_warm_start`; non-admins 60 or more), default `STS_API_TASK_DEFAULT_TIMEOUT`
+(6 hours). The Database Maintenance web pages need a sign-in unless `maint_open`.
 
 Agents use a bearer token (`STS_API_TOKEN`); the browser sign-in cookie is for
 people. The server decides roles: with an admin token the plugin reads
