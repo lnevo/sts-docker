@@ -372,23 +372,25 @@ function waybill_print_render_page($dbc, $waybill_number, array $options = [])
     $nav = $options['nav_html'] ?? '';
     $controls = '';
     if (!empty($options['show_controls'])) {
-        $controls = '<div class="noprint"><button type="button" onclick="window.print()">Print</button>'
+        $controls = '<div class="noprint"><button type="button" data-sts-print>Print</button>'
             . ($nav !== '' ? ' &nbsp; ' . $nav : '') . '<br /><br /></div>';
     }
     return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>'
-        . htmlspecialchars($title) . '</title><style>' . waybill_print_page_styles() . '</style></head><body>'
+        . htmlspecialchars($title) . '</title><style>' . waybill_print_page_styles() . '</style>'
+        . '<script src="/sts/js/sts-actions.js?v=1"></script></head><body>'
         . $controls . waybill_print_wrap_sheets($body) . '</body></html>';
 }
 
 function waybill_print_render_bundle_page($title, $sheets_html, array $options = [])
 {
     $back = $options['back_href'] ?? '';
-    $controls = '<div class="noprint"><button type="button" onclick="window.print()">Print all</button>';
+    $controls = '<div class="noprint"><button type="button" data-sts-print>Print all</button>';
     if ($back !== '') {
         $controls .= ' &nbsp; <a href="' . htmlspecialchars($back) . '">Back</a>';
     }
     $controls .= '<br /><br /></div>';
     return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>'
-        . htmlspecialchars($title) . '</title><style>' . waybill_print_page_styles() . '</style></head><body>'
+        . htmlspecialchars($title) . '</title><style>' . waybill_print_page_styles() . '</style>'
+        . '<script src="/sts/js/sts-actions.js?v=1"></script></head><body>'
         . $controls . $sheets_html . '</body></html>';
 }

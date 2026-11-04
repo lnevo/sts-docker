@@ -8,7 +8,7 @@
 // Fragment rules: no <style> or <script> here (innerHTML never runs scripts and
 // CSS would bleed into the page). Styles live in report_switchlist.css and the
 // behaviour (job instructions toggle, blank line insert, strike-out) in
-// report_switchlist.js.
+// js/report-switchlist.js.
 
 // Maximum visual "lines" of content that fit in the data area of one A5
 // landscape page (x2010). Tune this value if content clips or pages are
@@ -297,7 +297,7 @@ if (isset($_GET['generate_report'])) {
 
             print '<div class="noprint">';
             // generate a check box that when checked displays the job instructions
-            print '<input type="checkbox" checked id="half_sheet_checkbox" onchange=toggle_half_sheet();>Show Job Instructions&nbsp;&nbsp;';
+            print '<input type="checkbox" checked id="half_sheet_checkbox" data-sts-change="toggleJobInstructions" data-target="half_sheet_job_instructions" data-shown="table-cell">Show Job Instructions&nbsp;&nbsp;';
             print '<br /><br />';
             // generate a drop-down list, a text box, and a button to insert a blank line
             // after the specified reporting marks with an optional text comment
@@ -309,7 +309,7 @@ if (isset($_GET['generate_report'])) {
             }
             print '</select>&nbsp;';
             print 'With comment:&nbsp; <input type="text" name="comment" id="comment">&nbsp;';
-            print '<button onclick="find_car(document.getElementById(\'reporting_marks_list\').value, 1);">Insert</button>&nbsp;';
+            print '<button type="button" data-sts-click="findCar" data-start="1">Insert</button>&nbsp;';
             print '<br /><br />';
             print '</div><br />';
 
@@ -671,7 +671,7 @@ else if ($format == 'x2010') {
 
             print '<div class="noprint">';
             // generate a check box that when checked displays the job instructions
-            print '<input type="checkbox" checked id="full_sheet_checkbox" onchange=toggle_full_sheet();>Show Job Instructions&nbsp;&nbsp;';
+            print '<input type="checkbox" checked id="full_sheet_checkbox" data-sts-change="toggleJobInstructions" data-target="full_sheet_job_instructions" data-shown="block">Show Job Instructions&nbsp;&nbsp;';
             // generate a button that will insert a blank row into the list
             print '<br /><br />';
             print 'Insert blank line before this car:&nbsp';
@@ -682,7 +682,7 @@ else if ($format == 'x2010') {
             }
             print '</select>&nbsp;';
             print 'With comment:&nbsp; <input type="text" name="comment" id="comment">&nbsp;';
-            print '<button onclick="find_car(document.getElementById(\'reporting_marks_list\').value, 5);">Insert</button>&nbsp;';
+            print '<button type="button" data-sts-click="findCar" data-start="5">Insert</button>&nbsp;';
             print '<br /><br />';
             print '</div><br />';
 
@@ -889,9 +889,9 @@ else if ($format == 'x2010') {
 
             print '<div class="noprint">';
             // generate a check box that when checked displays the job instructions
-            print '<input type="checkbox" checked id="dot_matrix_checkbox" onchange=toggle_dot_matrix();>Show Job Instructions&nbsp;&nbsp;';
+            print '<input type="checkbox" checked id="dot_matrix_checkbox" data-sts-change="toggleJobInstructions" data-target="dot_matrix_job_instructions" data-shown="block">Show Job Instructions&nbsp;&nbsp;';
             // generate a button that will insert a blank row into the list
-            print '<button onclick="insert_blank_row(5);">Add Blank Row</button><br /><br />';
+            print '<button type="button" data-sts-click="insertBlankRow" data-where="5">Add Blank Row</button><br /><br />';
             
             print '</div><br />';
 
@@ -1128,7 +1128,7 @@ else if ($format == 'x2010') {
 
             print '<div class="noprint">';
             // generate a check box that when checked displays the job instructions
-            print '<input type="checkbox" checked id="workorder_checkbox" onchange=toggle_workorder();>Show Job Instructions&nbsp;&nbsp;';
+            print '<input type="checkbox" checked id="workorder_checkbox" data-sts-change="toggleJobInstructions" data-target="workorder_job_instructions" data-shown="block">Show Job Instructions&nbsp;&nbsp;';
             
             print '</div><br />';
 
@@ -1380,7 +1380,7 @@ sts_page_start([
 
       // generate a drop-down list of jobs and the submit button
       print '<div class="mb-3"><label class="form-label" for="job_name">Job</label>';
-      print drop_down_jobs('job_name', '', 'activate_button()');
+      print drop_down_jobs('job_name', '', '');
       print '</div>';
       print '<div class="mb-3">';
       print '<div class="form-check"><input class="form-check-input" type="radio" name="format" id="mobile" value="mobile"> <label class="form-check-label" for="mobile">Mobile</label></div>';
@@ -1397,19 +1397,11 @@ sts_page_start([
 
     <div id="report-card" class="sts-card report-card" hidden>
       <div class="report-controls report-screen-only">
-        <button type="button" class="btn btn-primary btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
+        <button type="button" class="btn btn-primary btn-sm" data-sts-print><i class="bi bi-printer"></i> Print</button>
         <button type="button" class="btn btn-outline-secondary btn-sm" id="report-modify"><i class="bi bi-pencil"></i> Modify Search</button>
       </div>
       <div id="report-content" class="report-output"></div>
     </div>
-<script src="report_page.js?v=2"></script>
-<script src="report_switchlist.js?v=1"></script>
-<script>
-  stsReportInit({
-    formId: 'report-form',
-    endpoint: 'display_switchlist.php',
-    onPrefill: function () { activate_button(); },
-    onLoaded: stsSwitchlistLoaded
-  });
-</script>
+<script src="/sts/js/report-page.js?v=3"></script>
+<script src="/sts/js/report-switchlist.js?v=2"></script>
 <?php sts_page_end(); ?>

@@ -1,0 +1,636 @@
+[
+ {
+  "url": "${STS_BASE}/display_station_report.php",
+  "actions": [
+   {
+    "select": [
+     "#station_name",
+     "0"
+    ]
+   },
+   {
+    "expect": "!document.getElementById('display_btn').disabled"
+   },
+   {
+    "expect": "document.querySelector('#station_name option[value=\"0\"]').text==='All'"
+   },
+   {
+    "click": "#display_btn"
+   },
+   {
+    "waitFor": "#report-content table"
+   },
+   {
+    "expect": "document.querySelector('#report-content').innerText.indexOf('BO')>=0"
+   },
+   {
+    "click": "#reading-btn"
+   },
+   {
+    "expect": "document.body.classList.contains('reading-mode')"
+   },
+   {
+    "click": "#reading-btn-report"
+   },
+   {
+    "expect": "!document.body.classList.contains('reading-mode')"
+   },
+   {
+    "eval": "window.XMLHttpRequest=function(){this.open=function(){};this.send=function(){this.status=200}};window.open=function(){window.__w={document:{write:function(t){window.__t=t},title:''}};return window.__w}"
+   },
+   {
+    "click": "#report-content [data-sts-click=showImage]"
+   },
+   {
+    "expect": "typeof window.__t==='string' && window.__t.indexOf('Image')>=0"
+   },
+   {
+    "click": "[data-sts-click=modifySearch]"
+   },
+   {
+    "expect": "!document.getElementById('report-container').classList.contains('show')"
+   },
+   {
+    "eval": "window.__p=0;window.print=function(){window.__p++}"
+   },
+   {
+    "click": ".print-controls [data-sts-print]"
+   },
+   {
+    "expect": "window.__p===1"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/display_fleet_report.php",
+  "actions": [
+   {
+    "expect": "!!document.querySelector('#report-form')"
+   },
+   {
+    "select": [
+     "#car_code",
+     "0"
+    ]
+   },
+   {
+    "click": "button[type=submit]"
+   },
+   {
+    "waitFor": "#report-content table"
+   },
+   {
+    "expect": "document.querySelector('#report-content').innerText.length>20"
+   },
+   {
+    "eval": "window.__p=0;window.print=function(){window.__p++}"
+   },
+   {
+    "click": "[data-sts-print]"
+   },
+   {
+    "expect": "window.__p===1"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/display_car_qr_report.php",
+  "actions": [
+   {
+    "expect": "!!document.querySelector('#report-form')"
+   },
+   {
+    "select": [
+     "#station_name",
+     "0"
+    ]
+   },
+   {
+    "click": "button[type=submit]"
+   },
+   {
+    "waitFor": "#report-content img"
+   },
+   {
+    "expect": "document.querySelector('#report-content').innerText.length>20"
+   },
+   {
+    "expect": "!document.getElementById('display_btn').disabled"
+   },
+   {
+    "eval": "window.__p=0;window.print=function(){window.__p++}"
+   },
+   {
+    "click": "[data-sts-print]"
+   },
+   {
+    "expect": "window.__p===1"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/display_station_qr_code_report.php",
+  "actions": [
+   {
+    "expect": "!!document.querySelector('#report-form')"
+   },
+   {
+    "select": [
+     "#station_name",
+     "0"
+    ]
+   },
+   {
+    "click": "button[type=submit]"
+   },
+   {
+    "waitFor": "#report-content img"
+   },
+   {
+    "expect": "document.querySelector('#report-content').innerText.length>20"
+   },
+   {
+    "expect": "!document.getElementById('display_btn').disabled"
+   },
+   {
+    "eval": "window.__p=0;window.print=function(){window.__p++}"
+   },
+   {
+    "click": "[data-sts-print]"
+   },
+   {
+    "expect": "window.__p===1"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/display_waybill.php",
+  "actions": [
+   {
+    "expect": "!!document.querySelector('#report-form')"
+   },
+   {
+    "select": [
+     "#waybill_number",
+     "001-007"
+    ]
+   },
+   {
+    "click": "button[type=submit]"
+   },
+   {
+    "waitFor": "#report-content table"
+   },
+   {
+    "expect": "document.querySelector('#report-content').innerText.length>20"
+   },
+   {
+    "expect": "document.querySelector('#report-content').innerText.indexOf(\"001-007\")>=0"
+   },
+   {
+    "eval": "window.__p=0;window.print=function(){window.__p++}"
+   },
+   {
+    "click": "[data-sts-print]"
+   },
+   {
+    "expect": "window.__p===1"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/printable_waybill.php?waybill_number=001-007&display_btn=1",
+  "actions": [
+   {
+    "waitFor": "#report-content table"
+   },
+   {
+    "expect": "location.pathname.endsWith('display_waybill.php')"
+   },
+   {
+    "expect": "document.getElementById('waybill_number').value==='001-007'"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/printable_station_qr_code_report.php?station_name=0&code_type=qr&display_btn=1",
+  "actions": [
+   {
+    "waitFor": "#report-content img"
+   },
+   {
+    "expect": "location.pathname.endsWith('display_station_qr_code_report.php')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/printable_car_qr_report.php?station_name=0&code_type=qr&display_btn=1",
+  "actions": [
+   {
+    "waitFor": "#report-content img"
+   },
+   {
+    "expect": "location.pathname.endsWith('display_car_qr_report.php')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/printable_fleet_report.php?car_code=0&display_btn=1",
+  "actions": [
+   {
+    "waitFor": "#report-content table"
+   },
+   {
+    "expect": "location.pathname.endsWith('display_fleet_report.php')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/display_switchlist.php",
+  "actions": [
+   {
+    "select": [
+     "#job_name",
+     "1"
+    ]
+   },
+   {
+    "expect": "!document.getElementById('display_btn').disabled"
+   },
+   {
+    "click": "#half"
+   },
+   {
+    "click": "#display_btn"
+   },
+   {
+    "waitFor": "#report-content .sw-report"
+   },
+   {
+    "expect": "document.getElementById('half_sheet_job_instructions').style.display!=='none'"
+   },
+   {
+    "click": "#half_sheet_checkbox"
+   },
+   {
+    "expect": "document.getElementById('half_sheet_job_instructions').style.display==='none'"
+   },
+   {
+    "click": "#half_sheet_checkbox"
+   },
+   {
+    "expect": "document.getElementById('half_sheet_job_instructions').style.display!=='none'"
+   },
+   {
+    "eval": "window.__n=document.getElementById('consist').rows.length"
+   },
+   {
+    "type": [
+     "#comment",
+     "BLANK ROW"
+    ]
+   },
+   {
+    "click": "[data-sts-click=findCar][data-start='1']"
+   },
+   {
+    "expect": "document.getElementById('consist').rows.length===window.__n+1"
+   },
+   {
+    "expect": "document.querySelector('#consist [data-sts-click=moveRow]')!==null"
+   },
+   {
+    "click": "#consist [data-sts-click=moveRow][data-move='1']"
+   },
+   {
+    "expect": "document.querySelector('#consist [data-sts-click=moveRow]')!==null"
+   },
+   {
+    "eval": "window.__p=0;window.print=function(){window.__p++}"
+   },
+   {
+    "click": "[data-sts-print]"
+   },
+   {
+    "expect": "window.__p===1"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/display_switchlist.php",
+  "actions": [
+   {
+    "select": [
+     "#job_name",
+     "2"
+    ]
+   },
+   {
+    "expect": "!document.getElementById('display_btn').disabled"
+   },
+   {
+    "click": "#full"
+   },
+   {
+    "click": "#display_btn"
+   },
+   {
+    "waitFor": "#report-content .sw-report"
+   },
+   {
+    "expect": "document.getElementById('full_sheet_job_instructions').style.display!=='none'"
+   },
+   {
+    "click": "#full_sheet_checkbox"
+   },
+   {
+    "expect": "document.getElementById('full_sheet_job_instructions').style.display==='none'"
+   },
+   {
+    "click": "#full_sheet_checkbox"
+   },
+   {
+    "expect": "document.getElementById('full_sheet_job_instructions').style.display!=='none'"
+   },
+   {
+    "eval": "window.__n=document.getElementById('consist').rows.length"
+   },
+   {
+    "type": [
+     "#comment",
+     "BLANK ROW"
+    ]
+   },
+   {
+    "click": "[data-sts-click=findCar][data-start='5']"
+   },
+   {
+    "expect": "document.getElementById('consist').rows.length===window.__n+1"
+   },
+   {
+    "expect": "document.querySelector('#consist [data-sts-click=moveRow]')!==null"
+   },
+   {
+    "click": "#consist [data-sts-click=moveRow][data-move='1']"
+   },
+   {
+    "expect": "document.querySelector('#consist [data-sts-click=moveRow]')!==null"
+   },
+   {
+    "eval": "window.__p=0;window.print=function(){window.__p++}"
+   },
+   {
+    "click": "[data-sts-print]"
+   },
+   {
+    "expect": "window.__p===1"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/display_switchlist.php",
+  "actions": [
+   {
+    "select": [
+     "#job_name",
+     "2"
+    ]
+   },
+   {
+    "expect": "!document.getElementById('display_btn').disabled"
+   },
+   {
+    "click": "#dmp"
+   },
+   {
+    "click": "#display_btn"
+   },
+   {
+    "waitFor": "#report-content .sw-report"
+   },
+   {
+    "expect": "document.getElementById('dot_matrix_job_instructions').style.display!=='none'"
+   },
+   {
+    "click": "#dot_matrix_checkbox"
+   },
+   {
+    "expect": "document.getElementById('dot_matrix_job_instructions').style.display==='none'"
+   },
+   {
+    "click": "#dot_matrix_checkbox"
+   },
+   {
+    "expect": "document.getElementById('dot_matrix_job_instructions').style.display!=='none'"
+   },
+   {
+    "eval": "window.__p=0;window.print=function(){window.__p++}"
+   },
+   {
+    "click": "[data-sts-print]"
+   },
+   {
+    "expect": "window.__p===1"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/display_switchlist.php",
+  "actions": [
+   {
+    "select": [
+     "#job_name",
+     "2"
+    ]
+   },
+   {
+    "expect": "!document.getElementById('display_btn').disabled"
+   },
+   {
+    "click": "#wo"
+   },
+   {
+    "click": "#display_btn"
+   },
+   {
+    "waitFor": "#report-content .sw-report"
+   },
+   {
+    "expect": "document.getElementById('workorder_job_instructions').style.display!=='none'"
+   },
+   {
+    "click": "#workorder_checkbox"
+   },
+   {
+    "expect": "document.getElementById('workorder_job_instructions').style.display==='none'"
+   },
+   {
+    "click": "#workorder_checkbox"
+   },
+   {
+    "expect": "document.getElementById('workorder_job_instructions').style.display!=='none'"
+   },
+   {
+    "eval": "window.__p=0;window.print=function(){window.__p++}"
+   },
+   {
+    "click": "[data-sts-print]"
+   },
+   {
+    "expect": "window.__p===1"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/display_switchlist.php",
+  "actions": [
+   {
+    "select": [
+     "#job_name",
+     "1"
+    ]
+   },
+   {
+    "expect": "!document.getElementById('display_btn').disabled"
+   },
+   {
+    "click": "#mobile"
+   },
+   {
+    "click": "#display_btn"
+   },
+   {
+    "waitFor": "#report-content .sw-report"
+   },
+   {
+    "eval": "window.__p=0;window.print=function(){window.__p++}"
+   },
+   {
+    "click": "[data-sts-print]"
+   },
+   {
+    "expect": "window.__p===1"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/display_switchlist.php",
+  "actions": [
+   {
+    "select": [
+     "#job_name",
+     "2"
+    ]
+   },
+   {
+    "expect": "!document.getElementById('display_btn').disabled"
+   },
+   {
+    "click": "#x2010"
+   },
+   {
+    "click": "#display_btn"
+   },
+   {
+    "waitFor": "#report-content .sw-report"
+   },
+   {
+    "expect": "!!document.getElementById('sw-page-style')"
+   },
+   {
+    "click": "#report-content tr[data-row-id] input[type=checkbox]"
+   },
+   {
+    "expect": "document.querySelector('#report-content tr.strikethrough')!==null"
+   },
+   {
+    "click": ".clear-strikes-button"
+   },
+   {
+    "expect": "document.querySelector('#report-content tr.strikethrough')===null"
+   },
+   {
+    "eval": "window.__p=0;window.print=function(){window.__p++}"
+   },
+   {
+    "click": "[data-sts-print]"
+   },
+   {
+    "expect": "window.__p===1"
+   }
+  ],
+  "allowConsole": [
+   "404"
+  ]
+ },
+ {
+  "url": "${STS_BASE}/printable_switchlist.php?job_name=1&format=half&display_btn=DISPLAY",
+  "actions": [
+   {
+    "waitFor": "#report-content table"
+   },
+   {
+    "expect": "location.pathname.endsWith('display_switchlist.php')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/printable_switchlist_x2010.php?job_name=2&format=x2010&display_btn=DISPLAY",
+  "allowConsole": [
+   "404"
+  ],
+  "actions": [
+   {
+    "waitFor": "#report-content .sw-fmt-x2010"
+   },
+   {
+    "expect": "location.pathname.endsWith('display_switchlist.php')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/wheel_report.php",
+  "actions": [
+   {
+    "expect": "document.querySelector('table')!==null"
+   },
+   {
+    "eval": "window.XMLHttpRequest=function(){this.open=function(){};this.send=function(){this.status=200}};window.open=function(){window.__w={document:{write:function(t){window.__t=t},title:''}};return window.__w}"
+   },
+   {
+    "click": "[data-sts-click=showImage]"
+   },
+   {
+    "expect": "typeof window.__t==='string' && window.__t.indexOf('Image')>=0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/printable_ccwaybill.php",
+  "actions": [
+   {
+    "expect": "!!document.getElementById('check_all')"
+   },
+   {
+    "click": "#check_all"
+   },
+   {
+    "expect": "document.getElementById('check0').checked===true"
+   },
+   {
+    "click": "#check_all"
+   },
+   {
+    "expect": "document.getElementById('check0').checked===false"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/printable_ccwaybill2.php",
+  "actions": [
+   {
+    "expect": "document.title.length>0"
+   }
+  ]
+ }
+]
