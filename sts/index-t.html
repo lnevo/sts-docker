@@ -86,20 +86,10 @@
       }
     }
   </style>
-  <script>
-    function get_session_nbr() {
-      const xmlhttp = new XMLHttpRequest();
-      xmlhttp.onreadystatechange = function() {
-        if (this.readyState == 4 && this.status == 200) {
-          document.getElementById("session_number").innerText = " Operating Session " + this.responseText;
-        }
-      }
-      xmlhttp.open('GET', 'get_session_nbr.php', true);
-      xmlhttp.send();
-    }
-  </script>
+  <script src="/sts/js/sts-actions.js?v=1"></script>
+  <script src="/sts/js/hub.js?v=1"></script>
 </head>
-<body onload="get_session_nbr();">
+<body>
   <nav class="navbar navbar-dark navbar-sitemap noprint">
     <div class="container-fluid">
       <span class="navbar-brand"><i class="bi bi-diagram-3"></i> Site Map</span>
