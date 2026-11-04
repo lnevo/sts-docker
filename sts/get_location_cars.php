@@ -83,13 +83,13 @@
       // column 3 - reporting marks
       if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row['id'] . '.jpg'))
       {
-        $parm_string = '\'' . $row['id'] . '\', \'' . $row['reporting_marks'] . '\'';
+        $parm_string = ' data-car-id="' . htmlspecialchars((string)$row['id'], ENT_QUOTES) . '" data-marks="' . htmlspecialchars((string)$row['reporting_marks'], ENT_QUOTES) . '"';
       }
       else
       {
-        $parm_string = '\'\',\'' . $row['reporting_marks'] . '\'';
+        $parm_string = ' data-car-id="" data-marks="' . htmlspecialchars((string)$row['reporting_marks'], ENT_QUOTES) . '"';
       }
-      $data_table .= '<td onclick="show_image(' . $parm_string . ');">' . $row['reporting_marks']
+      $data_table .= '<td data-sts-click="showImage"' . $parm_string . '>' . $row['reporting_marks']
                   . '<input name="car' . $row_count . '" value="' . sts_html($row['id']) . '" type="hidden"></td>';
 
       // column 4 - car code

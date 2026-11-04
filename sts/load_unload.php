@@ -8,90 +8,8 @@
     <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
     <link href="operations_ui.css?v=3" rel="stylesheet">
     <script src="sorttable.js"></script>
-    <script>
-      function show_image(car_id, reporting_marks)
-      {
-        if (car_id.length > 0)
-        {
-          // find the upper right corner of the browser window
-          var upper_right_x = window.screenX + window.parent.outerWidth;
-          var upper_right_y = window.screenY;
-
-          // calculate the upper left corner of the new window
-          var upper_left_x = upper_right_x - 700;
-          var upper_left_y = upper_right_y + 30;
-
-          // open the window
-          window.open("./ImageStore/DB_Images/RollingStock/" + car_id + ".jpg", "image_window", "width=660,height=500,left=" + upper_left_x + ",top=" + upper_left_y);
-        }
-        else
-        {
-          alert("No photo available for " + reporting_marks);
-        }
-      }
-    </script>
-    <script>
-      function getLoadUnloadDataRows()
-      {
-        var table = document.getElementById('car_table');
-        if (!table) return [];
-        return Array.from(table.rows).filter(function(row, index) {
-          return index > 0;
-        });
-      }
-
-      function isLoadUnloadRowVisible(row)
-      {
-        return row.style.display !== 'none';
-      }
-
-      function syncLoadUnloadHiddenRows()
-      {
-        getLoadUnloadDataRows().forEach(function(row) {
-          var checkbox = row.querySelector('input[type="checkbox"][name^="check"]');
-          if (!checkbox) return;
-          if (!isLoadUnloadRowVisible(row)) {
-            checkbox.checked = false;
-            checkbox.disabled = true;
-          } else {
-            checkbox.disabled = false;
-          }
-        });
-        updateLoadUnloadCheckAllState();
-      }
-
-      function updateLoadUnloadCheckAllState()
-      {
-        var checkAll = document.getElementById('check_all');
-        if (!checkAll) return;
-        var visibleChecks = getLoadUnloadDataRows()
-          .filter(isLoadUnloadRowVisible)
-          .map(function(row) { return row.querySelector('input[type="checkbox"][name^="check"]'); })
-          .filter(function(checkbox) { return checkbox && !checkbox.disabled; });
-        checkAll.checked = visibleChecks.length > 0 && visibleChecks.every(function(checkbox) { return checkbox.checked; });
-      }
-
-      function prepareLoadUnloadSubmit()
-      {
-        syncLoadUnloadHiddenRows();
-        return true;
-      }
-
-      // this javascript function is triggered by the user changing the "All" checkbox
-      function checkall()
-      {
-        var checked = document.getElementById('check_all').checked;
-        getLoadUnloadDataRows().forEach(function(row) {
-          if (!isLoadUnloadRowVisible(row)) return;
-          var checkbox = row.querySelector('input[type="checkbox"][name^="check"]');
-          if (checkbox && !checkbox.disabled) {
-            checkbox.checked = checked;
-          }
-        });
-        updateLoadUnloadCheckAllState();
-      }
-    </script>
-
+    <script src="/sts/js/sts-actions.js?v=1"></script>
+    <script src="/sts/js/load_unload.js?v=1"></script>
   </head>
   <body class="bg-light ops-steppage ops-page-load_unload">
     <?php
@@ -105,45 +23,11 @@
     The cars shown on this page are in the process of being loaded or unloaded. To complete the loading or unloading process,
     click on the desired car's check box and then click the UPDATE button. Cars are color-coded based on their status.<br /><br />
     </div>
-    <form method="POST" action="load_unload.php" onsubmit="return prepareLoadUnloadSubmit();">
+    <form method="POST" action="load_unload.php" data-sts-submit="prepareLoadUnloadSubmit">
     <?php
       // this program displays all cars that are in the process of being loaded or unloaded and
       // updates all cars that have been checked off by the user
 
-    print '<script type="text/javascript">
-             function filter_rows(tbl_col, needle)
-             {
-               // confirm that a non-blank option has been selected
-               if (needle.length > 0)
-               {
-                 // convert drop-down locations (station - location) to table locations (station\nlocation)
-                 var hyphen_loc = needle.search(" - ");
-                 if (hyphen_loc >= 0)
-                 {
-                   var new_needle = needle.substr(0, hyphen_loc) + "\n" + needle.substr(hyphen_loc + 3, needle.length);
-                   needle = new_needle;
-                 }
-
-                 var table = document.getElementById("car_table");
-
-                 //iterate through rows
-                 for (var i = 1, row; row = table.rows[i]; i++)
-                 {
-                   var haystack_length = row.cells[tbl_col].innerText.length;
-                   var needle_length = needle.length;
-                   var match_start = haystack_length - needle_length;
-
-                   var haystack = row.cells[tbl_col].innerText.substr(match_start);
-
-                   if (haystack != needle)
-                   {
-                     row.style.display = "none"
-                   }
-                 }
-                 syncLoadUnloadHiddenRows();
-               }
-             }
-           </script>';
 
       // bring in the function files
       require 'open_db.php';
@@ -298,7 +182,7 @@
                        drop_down_locations('unloading_loc_filter', '', '') . '
                      </div>
                      <div class="col-sm-auto">
-                       <button type="button" class="btn btn-outline-secondary btn-sm" onclick="location.reload();">Clear Filters</button>
+                       <button type="button" class="btn btn-outline-secondary btn-sm" data-sts-click="reloadPage">Clear Filters</button>
                      </div>
                    </div>
                  </div>
@@ -309,7 +193,7 @@
                      <th class="sorttable_nosort">
                        Load/Unload Cars
                        <div class="form-check mt-1">
-                         <input class="form-check-input" id="check_all" name="check_all" type="checkbox" onchange="checkall();">
+                         <input class="form-check-input" id="check_all" name="check_all" type="checkbox" data-sts-change="checkall">
                          <label class="form-check-label" for="check_all">Check/Uncheck All</label>
                        </div>
                      </th>
@@ -346,11 +230,11 @@
           $unload_loc_name = 'unload' . $row_count;
           if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row['id'] . '.jpg'))
           {
-            $parm_string = json_encode((string) $row['id'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ', ' . json_encode((string) $row['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+            $parm_string = ' data-car-id="' . sts_html((string) $row['id']) . '" data-marks="' . sts_html((string) $row['reporting_marks']) . '"';
           }
           else
           {
-            $parm_string = '"", ' . json_encode((string) $row['reporting_marks'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+            $parm_string = ' data-car-id="" data-marks="' . sts_html((string) $row['reporting_marks']) . '"';
           }
 
           if ($row['status'] ==  'Loading')
@@ -443,7 +327,7 @@
                    <td style="' . $row_style . '">' .
                      sts_html($row['position']) . '
                    </td>
-                   <td style="' . $row_style . '" onclick="show_image(' . sts_html($parm_string) . ');">' .
+                   <td style="' . $row_style . '" data-sts-click="showImage"' . $parm_string . '>' .
                      sts_html($row['reporting_marks']) . '<input name="' . $car_name . '" value="' . $row[0] . '" type="hidden">
                    </td>
                    <td style="' . $row_style . '">' .
@@ -471,38 +355,14 @@
       }
       else
       {
-        print '<script>document.getElementById("instructions").innerHTML = "";</script>';
+        print '<script type="application/json" id="sts-data-load-unload">{"noCars":true}</script>';
         print "<br />There are no cars currently in the process of  being loaded or unloaded.";
       }
-      // add some extra lines to the instructions div
-      print '<script>
-               document.getElementById("instructions").innerHTML = document.getElementById("instructions").innerHTML + "Filters can be used to hide rows. ";
-               document.getElementById("instructions").innerHTML = document.getElementById("instructions").innerHTML + "Click on column titles to sort the table<br />";
-             </script>';
 
     ?>
     </form>
   </div>
   <script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
   <script src="vendor/jquery/jquery-3.6.0.min.js"></script>
-  <script>
-    document.addEventListener("DOMContentLoaded", function() {
-      document.querySelectorAll("select").forEach(function(el) {
-        el.classList.add("form-select", "form-select-sm");
-        el.style.removeProperty("width");
-      });
-      [['current_loc_filter',1],['car_code_filter',4],['status_filter',5],['commodity_filter',6],['loading_loc_filter',7],['unloading_loc_filter',8]].forEach(function(f) {
-        var el = document.getElementById(f[0]);
-        if (el) { el.addEventListener('change', function() { filter_rows(f[1], this.options[this.selectedIndex].text); this.disabled = true; }); }
-      });
-      getLoadUnloadDataRows().forEach(function(row) {
-        var checkbox = row.querySelector('input[type="checkbox"][name^="check"]');
-        if (checkbox) {
-          checkbox.addEventListener('change', updateLoadUnloadCheckAllState);
-        }
-      });
-      updateLoadUnloadCheckAllState();
-    });
-  </script>
   </body>
 </html>

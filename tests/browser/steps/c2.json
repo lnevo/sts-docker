@@ -1,0 +1,687 @@
+[
+ {
+  "url": "${STS_BASE}/operations.php",
+  "actions": [
+   {
+    "expect": "document.querySelectorAll('a.op-btn, .op-btn').length>0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/generate.php",
+  "actions": [
+   {
+    "click": "[data-sts-click=showAuto]"
+   },
+   {
+    "expect": "document.getElementById('automatic').style.display==='block' && document.getElementById('manual').style.display==='none'"
+   },
+   {
+    "click": "[data-sts-click=showManual]"
+   },
+   {
+    "expect": "document.getElementById('manual').style.display==='block'"
+   },
+   {
+    "eval": "(()=>{var s=document.querySelector(\"#commodity_filter\");s.value=s.options[1].value;s.dispatchEvent(new Event('change',{bubbles:true}))})()"
+   },
+   {
+    "expect": "document.getElementById('commodity_filter').disabled===true && [...document.querySelectorAll('#ship_tbl tbody tr')].some(r=>r.style.display==='none')"
+   },
+   {
+    "click": "[data-sts-click=clearFilters]"
+   },
+   {
+    "wait": 800
+   },
+   {
+    "expect": "document.getElementById('commodity_filter').disabled===false"
+   },
+   {
+    "click": "#selectAllShipments"
+   },
+   {
+    "expect": "document.querySelectorAll('.shipment-select:checked').length>0"
+   },
+   {
+    "click": "input[name=mangenerate_btn]"
+   },
+   {
+    "wait": 1000
+   },
+   {
+    "expect": "document.body.innerText.includes('manual car orders generated')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/generate.php",
+  "actions": [
+   {
+    "click": "[data-sts-click=showManual]"
+   },
+   {
+    "click": ".next-session-btn"
+   },
+   {
+    "wait": 500
+   },
+   {
+    "click": "#nextSessionConfirmCheck"
+   },
+   {
+    "click": "#nextSessionConfirmBtn"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "expect": "document.body.innerText.includes('Operating session advanced')"
+   },
+   {
+    "expect": "document.getElementById('manual').style.display==='block'"
+   },
+   {
+    "click": "[data-sts-click=showAuto]"
+   },
+   {
+    "click": "#autogenerate_no_session_btn"
+   },
+   {
+    "wait": 1000
+   },
+   {
+    "expect": "/car orders generated/.test(document.body.innerText)"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/fill_orders.php",
+  "actions": [
+   {
+    "expect": "document.querySelectorAll('.order-card').length>3"
+   },
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return j.data.filter(c=>c.status==='Ordered').length})().then(n=>{window.__o0=n;return true})"
+   },
+   {
+    "eval": "window.__n0=document.querySelectorAll('.order-card').length"
+   },
+   {
+    "click": ".order-card .order-header"
+   },
+   {
+    "waitFor": ".order-card .car-row"
+   },
+   {
+    "expect": "getComputedStyle(document.querySelector('.order-card .order-details')).display!=='none'"
+   },
+   {
+    "click": ".order-card .car-row"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "expect": "document.querySelectorAll('.order-card').length===window.__n0-1"
+   },
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return j.data.filter(c=>c.status==='Ordered').length})().then(n=>n===window.__o0+1)"
+   },
+   {
+    "click": "#checkAllOrders"
+   },
+   {
+    "expect": "document.querySelectorAll('.order-row-check:checked').length===document.querySelectorAll('.order-card').length"
+   },
+   {
+    "click": "[data-sts-click=expandCheckedOrders]"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "expect": "document.querySelectorAll('.order-card .car-row').length>0"
+   },
+   {
+    "click": "[data-sts-click=collapseCheckedOrders]"
+   },
+   {
+    "wait": 300
+   },
+   {
+    "click": "#checkAllOrders"
+   },
+   {
+    "expect": "document.querySelectorAll('.order-row-check:checked').length===0"
+   },
+   {
+    "click": ".order-card .order-row-check"
+   },
+   {
+    "expect": "document.getElementById('checkAllOrders').checked===false && document.querySelector('.order-row-check').checked"
+   },
+   {
+    "click": "[data-sts-click=cancelCheckedOrders]"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "expect": "document.querySelectorAll('.order-card').length===window.__n0-2"
+   },
+   {
+    "click": "[data-sts-click=clearOrderFilters]"
+   },
+   {
+    "click": "[data-sts-click=clearCarFilters]"
+   },
+   {
+    "click": "#checkAllOrders"
+   },
+   {
+    "click": "#autoAssignBtn"
+   },
+   {
+    "wait": 5000
+   },
+   {
+    "expect": "document.querySelectorAll('.order-card').length<window.__n0-2"
+   },
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return j.data.filter(c=>c.status==='Ordered').length})().then(n=>n>window.__o0+1)"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/index.html",
+  "actions": [
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/commands/fill_orders',{method:'POST',headers:{Authorization:'Bearer ${STS_TEST_TOKEN}','Content-Type':'application/json'},body:JSON.stringify({})}).then(r=>r.json());return !!j.data})()"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/reposition.php",
+  "actions": [
+   {
+    "expect": "document.querySelectorAll('tr.repo-car-row').length>0"
+   },
+   {
+    "eval": "sessionStorage.car=document.querySelector('tr.repo-car-row').dataset.carId"
+   },
+   {
+    "eval": "(()=>{var s=document.querySelector(\"#repo_car_code_filter\");s.value=s.options[1].value;s.dispatchEvent(new Event('change',{bubbles:true}))})()"
+   },
+   {
+    "expect": "document.getElementById('repo_filter_count').textContent.includes(' of ') && [...document.querySelectorAll('tr.repo-car-row')].some(r=>r.hidden)"
+   },
+   {
+    "click": "[data-sts-click=clearRepositionFilters]"
+   },
+   {
+    "expect": "[...document.querySelectorAll('tr.repo-car-row')].every(r=>!r.hidden)"
+   },
+   {
+    "type": [
+     "#repo_marks_filter",
+     "zzzzz"
+    ]
+   },
+   {
+    "expect": "[...document.querySelectorAll('tr.repo-car-row')].every(r=>r.hidden)"
+   },
+   {
+    "click": "[data-sts-click=clearRepositionFilters]"
+   },
+   {
+    "click": "[data-sts-click=toggleOffHomeOnly]"
+   },
+   {
+    "expect": "document.getElementById('repo_off_home_btn').classList.contains('active')"
+   },
+   {
+    "click": "[data-sts-click=clearRepositionFilters]"
+   },
+   {
+    "eval": "(()=>{var s=document.querySelector('tr.repo-car-row select[name^=list]');s.value='1'})()"
+   },
+   {
+    "click": "input[name=update_btn]"
+   },
+   {
+    "wait": 800
+   },
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>d.find(c=>String(c.id)===sessionStorage.car).status=='Ordered')(j.data)})()"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/reposition.php",
+  "actions": [
+   {
+    "expect": "document.querySelectorAll('tr.repo-car-row').length>0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/build_switchlists.php",
+  "actions": [
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>{sessionStorage.j2=d.filter(c=>c.job_id==2).length;return true})(j.data)})()"
+   },
+   {
+    "select": [
+     "#station_list",
+     "all"
+    ]
+   },
+   {
+    "waitFor": "#car_table tr.job-car-row"
+   },
+   {
+    "expect": "!document.getElementById('instructions').classList.contains('d-none')"
+   },
+   {
+    "expect": "document.getElementById('bulk_job').options.length>1"
+   },
+   {
+    "eval": "window.__rows=document.querySelectorAll('#car_table tr.job-car-row').length"
+   },
+   {
+    "expect": "document.getElementById('station_filter_count').textContent.includes('cars shown')"
+   },
+   {
+    "eval": "(()=>{var s=document.querySelector(\"#car_code_filter\");s.value=s.options[1].value;s.dispatchEvent(new Event('change',{bubbles:true}))})()"
+   },
+   {
+    "expect": "[...document.querySelectorAll('#car_table tr.job-car-row')].some(r=>r.hidden)"
+   },
+   {
+    "click": "[data-sts-click=clearStationFilters]"
+   },
+   {
+    "expect": "[...document.querySelectorAll('#car_table tr.job-car-row')].every(r=>!r.hidden)"
+   },
+   {
+    "eval": "(()=>{var s=document.getElementById('bulk_job');s.value='2';s.dispatchEvent(new Event('change',{bubbles:true}))})()"
+   },
+   {
+    "click": "#check_all"
+   },
+   {
+    "expect": "document.querySelectorAll('#car_table .bulk-assign-row:checked').length===window.__rows"
+   },
+   {
+    "click": "#build_btn"
+   },
+   {
+    "wait": 1000
+   },
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>d.filter(c=>c.job_id==2).length>Number(sessionStorage.j2))(j.data)})()"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/build_switchlists.php",
+  "actions": [
+   {
+    "select": [
+     "#auto_assign_job",
+     "1"
+    ]
+   },
+   {
+    "click": "[data-sts-click=go_to_auto_assign]"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "expect": "location.pathname.endsWith('auto_assign.php') && location.search.includes('job=1')"
+   },
+   {
+    "expect": "!!document.getElementById('check_all') || document.body.innerText.length>0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/auto_assign.php?job=1",
+  "actions": [
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>{sessionStorage.j1=d.filter(c=>c.job_id==1).length;return true})(j.data)})()"
+   },
+   {
+    "expect": "document.querySelectorAll('input.pu_car').length>0"
+   },
+   {
+    "click": "#check_all"
+   },
+   {
+    "expect": "document.querySelectorAll('input.pu_car:checked').length===0"
+   },
+   {
+    "click": "#check_all"
+   },
+   {
+    "expect": "document.querySelectorAll('input.pu_car:checked').length===document.querySelectorAll('input.pu_car').length"
+   },
+   {
+    "click": "#assign_cars"
+   },
+   {
+    "wait": 1000
+   },
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>d.filter(c=>c.job_id==1).length>Number(sessionStorage.j1))(j.data)})()"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/pick_up.php",
+  "actions": [
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>{sessionStorage.inTrain=d.filter(c=>c.job_id==2&&c.location_id==0).length;return true})(j.data)})()"
+   },
+   {
+    "select": [
+     "#job_list",
+     "2"
+    ]
+   },
+   {
+    "waitFor": "#job_table tr.job-car-row"
+   },
+   {
+    "expect": "document.getElementById('finish_btn').disabled===false && !document.getElementById('instructions').classList.contains('d-none')"
+   },
+   {
+    "expect": "document.querySelectorAll('#job_table tr.job-car-row').length>0"
+   },
+   {
+    "wait": 300
+   },
+   {
+    "eval": "(()=>{var s=document.querySelector(\"#car_code_filter\");s.value=s.options[1].value;s.dispatchEvent(new Event('change',{bubbles:true}))})()"
+   },
+   {
+    "expect": "document.getElementById('station_filter_count').textContent.includes('cars shown')"
+   },
+   {
+    "click": "[data-sts-click=clearStationFilters]"
+   },
+   {
+    "click": "#check_all"
+   },
+   {
+    "expect": "document.querySelectorAll('#job_table .pickup-row-check:checked').length===document.querySelectorAll('#job_table tr.job-car-row').length"
+   },
+   {
+    "click": "#finish_btn"
+   },
+   {
+    "wait": 1000
+   },
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>d.filter(c=>c.job_id==2&&c.location_id==0).length>Number(sessionStorage.inTrain))(j.data)})()"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/set_out.php",
+  "actions": [
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>{sessionStorage.inTrain=d.filter(c=>c.job_id==2&&c.location_id==0).length;return sessionStorage.inTrain>0})(j.data)})()"
+   },
+   {
+    "select": [
+     "#job_list",
+     "2"
+    ]
+   },
+   {
+    "waitFor": "#job_table tr.job-car-row"
+   },
+   {
+    "wait": 300
+   },
+   {
+    "expect": "document.getElementById('finish_btn').disabled===false"
+   },
+   {
+    "eval": "(()=>{var s=document.querySelector(\"#car_code_filter\");s.value=s.options[1].value;s.dispatchEvent(new Event('change',{bubbles:true}))})()"
+   },
+   {
+    "expect": "document.getElementById('station_filter_count').textContent.includes('cars shown')"
+   },
+   {
+    "click": "[data-sts-click=clearStationFilters]"
+   },
+   {
+    "click": "#check_all"
+   },
+   {
+    "expect": "document.querySelectorAll('#job_table .setout-row-check:checked').length===document.querySelectorAll('#job_table tr.job-car-row').length"
+   },
+   {
+    "click": "[data-sts-click=assignFinalDestinations]"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "eval": "(()=>{var s=document.getElementById('bulk_location');if(s.options.length>1){s.value=s.options[1].value;s.dispatchEvent(new Event('change',{bubbles:true}))}})()"
+   },
+   {
+    "eval": "(()=>{document.querySelectorAll('#job_table tr.job-car-row').forEach(r=>{var s=r.querySelector('select[name^=station_list]');if(s&&!s.value&&s.options.length>1){s.value=s.options[1].value}})})()"
+   },
+   {
+    "click": "#finish_btn"
+   },
+   {
+    "wait": 1200
+   },
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>d.filter(c=>c.job_id==2&&c.location_id==0).length<Number(sessionStorage.inTrain))(j.data)})()"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/organize_cars.php",
+  "actions": [
+   {
+    "expect": "document.getElementById('org_job').disabled===true && document.getElementById('update_pos').disabled===true"
+   },
+   {
+    "select": [
+     "#job_list",
+     "1"
+    ]
+   },
+   {
+    "expect": "document.getElementById('org_job').disabled===false"
+   },
+   {
+    "click": "#org_job"
+   },
+   {
+    "waitFor": "#car_table_body tr"
+   },
+   {
+    "expect": "document.querySelectorAll('#car_table_body tr').length>1 && document.getElementById('update_pos').disabled===false"
+   },
+   {
+    "eval": "(()=>{\n var rows=[...document.querySelectorAll('#car_table_body tr')];\n var a=rows[0].querySelector('.drag-handle'), r0=rows[0].getBoundingClientRect(), r1=rows[1].getBoundingClientRect();\n sessionStorage.dragged=rows[0].querySelector('td[data-car-id]').dataset.carId;\n var y0=(r0.top+r0.bottom)/2, y1=(r1.top+r1.bottom)/2+4;\n a.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true,clientX:20,clientY:y0}));\n document.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,cancelable:true,clientX:20,clientY:y1}));\n document.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,cancelable:true,clientX:20,clientY:y1}));\n})()"
+   },
+   {
+    "expect": "document.querySelector('#car_table_body tr:nth-child(2) td[data-car-id]').dataset.carId===sessionStorage.dragged"
+   },
+   {
+    "expect": "document.querySelector('#car_table_body tr:nth-child(2)').cells[1].textContent.trim()==='2'"
+   },
+   {
+    "click": "#update_pos"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "expect": "document.getElementById('update_feedback').textContent.includes('saved')"
+   },
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>d.find(c=>String(c.id)===sessionStorage.dragged).position==2)(j.data)})()"
+   },
+   {
+    "select": [
+     "#location_list",
+     "3"
+    ]
+   },
+   {
+    "expect": "document.getElementById('org_loc').disabled===false"
+   },
+   {
+    "click": "#org_loc"
+   },
+   {
+    "wait": 1200
+   },
+   {
+    "expect": "!!document.getElementById('car_section').innerText.length"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/index.html",
+  "actions": [
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/commands/pick_up_cars',{method:'POST',headers:{Authorization:'Bearer ${STS_TEST_TOKEN}','Content-Type':'application/json'},body:JSON.stringify({})}).then(r=>r.json());return !!j.data})()"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/index.html",
+  "actions": [
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/commands/set_out_cars',{method:'POST',headers:{Authorization:'Bearer ${STS_TEST_TOKEN}','Content-Type':'application/json'},body:JSON.stringify({})}).then(r=>r.json());return !!j.data})()"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/load_unload.php",
+  "actions": [
+   {
+    "expect": "document.querySelectorAll('#car_table tr').length>1"
+   },
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>{sessionStorage.lu=d.filter(c=>c.status=='Loading'||c.status=='Unloading').length;return sessionStorage.lu>0})(j.data)})()"
+   },
+   {
+    "click": "td[data-sts-click=showImage]"
+   },
+   {
+    "eval": "(()=>{var s=document.querySelector(\"#car_code_filter\");s.value=s.options[1].value;s.dispatchEvent(new Event('change',{bubbles:true}))})()"
+   },
+   {
+    "expect": "document.getElementById('car_code_filter').disabled===true"
+   },
+   {
+    "click": "[data-sts-click=reloadPage]"
+   },
+   {
+    "wait": 1000
+   },
+   {
+    "click": "#check_all"
+   },
+   {
+    "expect": "document.querySelectorAll('#car_table input[name^=check]:checked').length===0"
+   },
+   {
+    "click": "#check_all"
+   },
+   {
+    "expect": "document.querySelectorAll('#car_table input[name^=check]:checked').length>0"
+   },
+   {
+    "click": "button[name=update_btn]"
+   },
+   {
+    "wait": 1200
+   },
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>d.filter(c=>c.status=='Loading'||c.status=='Unloading').length<Number(sessionStorage.lu))(j.data)})()"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/list_cars.php",
+  "actions": [
+   {
+    "expect": "document.querySelectorAll('td.editable-cell').length>0"
+   },
+   {
+    "eval": "sessionStorage.car=document.querySelector('td.editable-cell[data-field=remarks]').getAttribute('data-car-id')"
+   },
+   {
+    "click": "td.editable-cell[data-field=remarks]"
+   },
+   {
+    "waitFor": ".cell-editor-overlay input"
+   },
+   {
+    "type": [
+     ".cell-editor-overlay input",
+     "c2-edit"
+    ]
+   },
+   {
+    "click": ".cell-editor-panel .btn-primary"
+   },
+   {
+    "wait": 1200
+   },
+   {
+    "expect": "document.querySelector('td.editable-cell[data-field=remarks]').textContent.includes('c2-edit')"
+   },
+   {
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>d.find(c=>String(c.id)===sessionStorage.car).remarks=='c2-edit')(j.data)})()"
+   },
+   {
+    "eval": "(()=>{var s=document.querySelector(\"#car_code_filter\");s.value=s.options[1].value;s.dispatchEvent(new Event('change',{bubbles:true}))})()"
+   },
+   {
+    "expect": "document.getElementById('car_code_filter').disabled===true && [...document.querySelectorAll('#car_tbl tbody tr')].some(r=>r.style.display==='none')"
+   },
+   {
+    "click": "#hide_unavail"
+   },
+   {
+    "type": [
+     "#reporting_marks_filter",
+     "ZZ"
+    ]
+   },
+   {
+    "click": "#add-tab"
+   },
+   {
+    "expect": "document.getElementById('update_btn').style.display==='inline-block'"
+   },
+   {
+    "click": "#filter-tab"
+   },
+   {
+    "expect": "document.getElementById('update_btn').style.display==='none'"
+   },
+   {
+    "click": "[data-sts-click=clear_filters]"
+   },
+   {
+    "wait": 1000
+   }
+  ]
+ }
+]

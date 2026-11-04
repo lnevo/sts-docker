@@ -6,6 +6,7 @@
     <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
     <link href="operations_ui.css?v=3" rel="stylesheet">
+    <script src="/sts/js/sts-actions.js?v=1"></script>
     <style>
       body {font: normal 20px Verdana, Arial, sans-serif;}
       table {border-collapse: collapse;}
@@ -22,16 +23,7 @@
     ?>
   <h2>Simulation Operations</h2>
   
-  <script>
-    function toggle_all_checkboxes(source)
-    {
-      checkboxes = document.getElementsByClassName('pu_car');
-      for(var i=0, n=checkboxes.length;i<n;i++)
-      {
-        checkboxes[i].checked = source.checked;
-      }
-    }
-  </script>
+  <script src="/sts/js/auto_assign.js?v=1"></script>
 <?php
   // bring in the utility files
   require 'open_db.php';
@@ -275,7 +267,7 @@
       print '<br /><b>Pickup List</b><br /><br />';
       print $pickup_list_counter . ' cars on the Pickup List<br /><br />';
       print '<input type="submit" name="assign_cars" id="assign_cars" value="ASSIGN CARS">&nbsp;&nbsp;';
-      print '<input type="checkbox" name="check_all" id="check_all" checked onClick="toggle_all_checkboxes(this)">
+      print '<input type="checkbox" name="check_all" id="check_all" checked data-sts-click="toggle_all_checkboxes">
              Click to check or uncheck all cars in the list.<br /><br />';
       print '<table>';
       print '<tr>

@@ -8,6 +8,7 @@
     <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
     <link href="operations_ui.css?v=3" rel="stylesheet">
     <script src="sorttable.js"></script>
+    <script src="/sts/js/sts-actions.js?v=1"></script>
   </head>
   <body class="bg-light ops-steppage ops-page-generate">
     <?php
@@ -18,63 +19,7 @@
 <div class="px-4 py-3">
 <h5 class="mb-3">Generate Car Orders</h5>
 
-<script type="text/javascript">
-  function show_auto()
-  {
-    document.getElementById("automatic").style.display = "block";
-    document.getElementById("manual").style.display = "none";
-  }
 
-  function show_manual()
-  {
-    document.getElementById("manual").style.display = "block";
-    document.getElementById("automatic").style.display = "none";
-  }
-
-  function confirm_manual_order()
-  {
-    return confirm('Click OK to order these cars. Click Cancel to go back without ordering.');
-  }
-
-  // generate some javascript that will hide rows
-  // - filter_rows() is called to hide cars that don't have the selected property
-  function filter_rows(tbl_col, needle)
-  {
-    // confirm that a non-blank option has been selected
-    if (needle.length > 0)
-    {
-      // convert drop-down locations (station - location) to table locations (station\nlocation)
-      var hyphen_loc = needle.search(" - ");
-      if (hyphen_loc >= 0)
-      {
-        var new_needle = needle.substr(0, hyphen_loc) + "\n" + needle.substr(hyphen_loc + 3, needle.length);
-        needle = new_needle;
-      }
-
-      var table = document.getElementById("ship_tbl");
-
-      //iterate through rows
-      for (var i = 1, row; row = table.rows[i]; i++)
-      {
-        var haystack_length = row.cells[tbl_col].innerText.length;
-        var needle_length = needle.length;
-        var match_start = haystack_length - needle_length;
-
-        var haystack = row.cells[tbl_col].innerText.substr(match_start);
-
-        if (haystack != needle)
-        {
-          row.style.display = "none"
-        }
-      }
-    }
-  }
-
-  function clear_filters()
-  {
-    document.location.reload();
-  }
-</script>
 
 <?php
       // this program generates car orders
@@ -161,7 +106,7 @@
           print '<div class="alert alert-info noprint">Operating session advanced from '
               . htmlspecialchars((string)$previous_session) . ' to '
               . htmlspecialchars((string)$session_number) . '.</div>';
-          print '<script>document.addEventListener("DOMContentLoaded", function() { show_manual(); });</script>';
+          print '<script type="application/json" id="sts-data-generate">{"showManual":true}</script>';
         }
       }
       elseif (isset($_POST['mangenerate_btn']))         // -------------------------------- was the "Manual Generate" button clicked?
@@ -240,7 +185,7 @@
                      <div class="card-body d-flex flex-column">
                        <h6 class="card-title"><i class="bi bi-lightning-charge"></i> Automatic Generation</h6>
                        <p class="card-text text-muted small">Increment the operating session number and automatically generate car orders based on shipment schedules.</p>
-                       <button type="button" class="btn btn-success mt-auto w-100" onclick="show_auto();">AUTOMATIC</button>
+                       <button type="button" class="btn btn-success mt-auto w-100" data-sts-click="showAuto">AUTOMATIC</button>
                      </div>
                    </div>
                  </div>
@@ -249,7 +194,7 @@
                      <div class="card-body d-flex flex-column">
                        <h6 class="card-title"><i class="bi bi-list-check"></i> Manual Generation</h6>
                        <p class="card-text text-muted small">Choose specific shipments and click MANUAL to generate car orders for those shipments only.</p>
-                       <button type="button" class="btn btn-success mt-auto w-100" onclick="show_manual();">MANUAL</button>
+                       <button type="button" class="btn btn-success mt-auto w-100" data-sts-click="showManual">MANUAL</button>
                      </div>
                    </div>
                  </div>
@@ -326,7 +271,7 @@
       {
         print '<p class="text-muted">Check Shipments to order cars for session <strong>' . htmlspecialchars((string)$session_number) . '</strong>, then click MANUAL.</p>';
         print '<div class="d-flex gap-2 flex-wrap mb-3">';
-        print '<input name="mangenerate_btn" value="MANUAL" type="submit" form="manualOrderForm" onclick="return confirm_manual_order();"
+        print '<input name="mangenerate_btn" value="MANUAL" type="submit" form="manualOrderForm" data-sts-click="confirmManualOrder"
                class="btn btn-success btn-lg">';
         print '<form method="post" action="generate.php" class="mb-0 next-session-form" data-next-session="' . htmlspecialchars((string)$next_session_number) . '">';
         print '<input type="hidden" name="increment_session_btn" value="Next Session">';
@@ -359,7 +304,7 @@
                        drop_down_locations('unloading_loc_filter', '', '') . '
                      </div>
                      <div class="col-sm-auto">
-                       <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clear_filters();">Clear Filters</button>
+                       <button type="button" class="btn btn-outline-secondary btn-sm" data-sts-click="clearFilters">Clear Filters</button>
                      </div>
                    </div>
                  </div>
@@ -415,7 +360,7 @@
         // save the row count for the next time around
         print '<input type="hidden" name="row_count" id="row_count" value="' . $row_count . '">';
         // put a submit button at the bottom as well as the top of the div
-        print '<br /><input name="mangenerate_btn" value="MANUAL" type="submit" onclick="return confirm_manual_order();" class="btn btn-success btn-lg mt-2"><br /><br />';
+        print '<br /><input name="mangenerate_btn" value="MANUAL" type="submit" data-sts-click="confirmManualOrder" class="btn btn-success btn-lg mt-2"><br /><br />';
       }
       else
       {
@@ -449,105 +394,7 @@
 </div>
   <script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
   <script src="vendor/jquery/jquery-3.6.0.min.js"></script>
-  <script>
-    document.addEventListener("DOMContentLoaded", function() {
-      var pendingNextSessionForm = null;
-      var nextSessionModalEl = document.getElementById('nextSessionModal');
-      var nextSessionModal = nextSessionModalEl ? new bootstrap.Modal(nextSessionModalEl) : null;
-      var nextSessionConfirmCheck = document.getElementById('nextSessionConfirmCheck');
-      var nextSessionConfirmBtn = document.getElementById('nextSessionConfirmBtn');
-      var nextSessionModalMessage = document.getElementById('nextSessionModalMessage');
-      var nextSessionConfirmLabel = document.getElementById('nextSessionConfirmLabel');
+  <script src="/sts/js/generate.js?v=1"></script>
 
-      function openNextSessionConfirm(form) {
-        if (!nextSessionModal || !form) {
-          return;
-        }
-
-        pendingNextSessionForm = form;
-        var nextSession = form.dataset.nextSession || '';
-        nextSessionModalMessage.textContent = 'Are you ready to start session ' + nextSession + '?';
-        nextSessionConfirmLabel.textContent = 'Confirm';
-        nextSessionConfirmCheck.checked = false;
-        nextSessionConfirmBtn.disabled = true;
-        nextSessionModal.show();
-      }
-
-      document.querySelectorAll('.next-session-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-          openNextSessionConfirm(btn.closest('.next-session-form'));
-        });
-      });
-
-      if (nextSessionConfirmCheck && nextSessionConfirmBtn) {
-        nextSessionConfirmCheck.addEventListener('change', function() {
-          nextSessionConfirmBtn.disabled = !nextSessionConfirmCheck.checked;
-        });
-
-        nextSessionConfirmBtn.addEventListener('click', function() {
-          if (pendingNextSessionForm && nextSessionConfirmCheck.checked) {
-            nextSessionModal.hide();
-            pendingNextSessionForm.submit();
-          }
-        });
-      }
-
-      document.querySelectorAll("select").forEach(function(el) {
-        el.classList.add("form-select", "form-select-sm");
-        el.style.removeProperty("width");
-      });
-      [['commodity_filter',3],['car_code_filter',4],['loading_loc_filter',5],['unloading_loc_filter',6]].forEach(function(f) {
-        var el = document.getElementById(f[0]);
-        if (el) { el.addEventListener('change', function() { filter_rows(f[1], this.options[this.selectedIndex].text); this.disabled = true; updateSelectAllState(); }); }
-      });
-
-      var selectAll = document.getElementById('selectAllShipments');
-      if (selectAll) {
-        selectAll.addEventListener('change', function() {
-          document.querySelectorAll('#ship_tbl tbody tr').forEach(function(row) {
-            if (row.style.display === 'none') {
-              return;
-            }
-            var cb = row.querySelector('.shipment-select');
-            if (cb) {
-              cb.checked = selectAll.checked;
-            }
-          });
-        });
-
-        document.querySelectorAll('.shipment-select').forEach(function(cb) {
-          cb.addEventListener('change', updateSelectAllState);
-        });
-      }
-
-      function updateSelectAllState() {
-        var selectAll = document.getElementById('selectAllShipments');
-        if (!selectAll) {
-          return;
-        }
-
-        var visible = [];
-        document.querySelectorAll('#ship_tbl tbody tr').forEach(function(row) {
-          if (row.style.display === 'none') {
-            return;
-          }
-          var cb = row.querySelector('.shipment-select');
-          if (cb) {
-            visible.push(cb);
-          }
-        });
-
-        if (visible.length === 0) {
-          selectAll.checked = false;
-          selectAll.indeterminate = false;
-          return;
-        }
-
-        var checkedCount = visible.filter(function(cb) { return cb.checked; }).length;
-        selectAll.checked = checkedCount === visible.length;
-        selectAll.indeterminate = checkedCount > 0 && checkedCount < visible.length;
-      }
-    });
-  </script>
 </body>
 </html>

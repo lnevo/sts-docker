@@ -103,7 +103,7 @@
     $data_table .= '  </td>
                    </tr>';
     $data_table .= '<tr style="position: sticky; top: 0; background-color: #F5F5F5">
-                     <th style="text-align: center;">Check All <input id="check_all" name="check_all" type="checkbox" onchange="checkall_setout();"></th>
+                     <th style="text-align: center;">Check All <input id="check_all" name="check_all" type="checkbox" data-sts-change="checkall_setout"></th>
                      <th>Set-out Location</th>
                      <th>Position</th>
                      <th>Reporting Marks</th>
@@ -195,7 +195,7 @@
       {
         $current_pickup_group = $group_key;
         $data_table .= '<tr class="table-dark setout-group-header" data-group-key="' . htmlspecialchars($group_key, ENT_QUOTES) . '">'
-            . '<td class="text-center"><input class="form-check-input location-group-check" type="checkbox" onchange="toggleSetoutLocationGroup(this);" aria-label="Check all cars at this location"></td>'
+            . '<td class="text-center"><input class="form-check-input location-group-check" type="checkbox" data-sts-change="toggleSetoutLocationGroup" aria-label="Check all cars at this location"></td>'
             . '<td colspan="8" class="fw-semibold">' . $group_label . '</td></tr>';
       }
 
@@ -228,13 +228,13 @@
       // column 3 - reporting marks
       if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row['id'] . '.jpg'))
       {
-        $parm_string = '\'' . $row['id'] . '\', \'' . $row['reporting_marks'] . '\'';
+        $parm_string = ' data-car-id="' . htmlspecialchars((string)$row['id'], ENT_QUOTES) . '" data-marks="' . htmlspecialchars((string)$row['reporting_marks'], ENT_QUOTES) . '"';
       }
       else
       {
-        $parm_string = '\'\',\'' . $row['reporting_marks'] . '\'';
+        $parm_string = ' data-car-id="" data-marks="' . htmlspecialchars((string)$row['reporting_marks'], ENT_QUOTES) . '"';
       }
-      $data_table .= '<td onclick="show_image(' . $parm_string . ');">' . $row['reporting_marks'] . '<input name="car' . $row_count . '" value="' . $row['id'] . '" type="hidden"></td>';
+      $data_table .= '<td data-sts-click="showImage"' . $parm_string . '>' . $row['reporting_marks'] . '<input name="car' . $row_count . '" value="' . $row['id'] . '" type="hidden"></td>';
 
       // column 4 - car code
       $data_table .= '<td>' . sts_html($row['car_code']) . '</td>';

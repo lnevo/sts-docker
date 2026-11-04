@@ -29,6 +29,12 @@
   'use strict';
 
   var STS = (window.STS = window.STS || {});
+  // Loaded twice (two includes on one page) would bind every listener twice and
+  // run each handler twice; the second copy does nothing.
+  if (STS._installed) {
+    return;
+  }
+  STS._installed = true;
   var handlers = STS._handlers || (STS._handlers = {});
 
   STS.action = function (name, fn) {
