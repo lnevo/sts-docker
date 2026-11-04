@@ -1,135 +1,465 @@
 [
- {"url": "${STS_BASE}/db_list.php?tbl_name=car_codes", "actions": [
-  {"expect": "document.getElementById('tbl_name').value === 'car_codes' && document.getElementById('update_btn').tabIndex === 4"},
-  {"expect": "document.getElementById('instructions').innerHTML.indexOf('sort the table') > 0"},
-  {"expect": "document.activeElement.id === 'car_code'"},
-  {"type": ["#car_code", "ZZT"]}, {"type": ["input[name=description]", "csp test"]},
-  {"click": "#update_btn"},
-  {"expect": "!!document.querySelector('a[href*=\"obj_name=ZZT\"]')"}
- ]},
- {"url": "${STS_BASE}/db_list.php?tbl_name=car_codes", "actions": [
-  {"click": "a[href*='obj_name=ZZT']"},
-  {"expect": "document.getElementById('update_btn').value === 'UPDATE' && !document.getElementById('update_remove_btn') === false"},
-  {"click": "input[name=update_remove_btn][value=remove]"},
-  {"expect": "document.getElementById('update_btn').value === 'REMOVE' && document.getElementById('update_btn').className.indexOf('btn-danger') >= 0"},
-  {"click": "input[name=update_remove_btn][value=update]"},
-  {"expect": "document.getElementById('update_btn').value === 'UPDATE'"},
-  {"click": "input[name=update_remove_btn][value=remove]"},
-  {"click": "#update_btn"},
-  {"expect": "fetch('db_list.php?tbl_name=car_codes').then(r => r.text()).then(t => t.indexOf('obj_name=ZZT') < 0)"}
- ]},
- {"url": "${STS_BASE}/db_list.php?tbl_name=commodities", "actions": [
-  {"expect": "document.getElementById('update_btn').tabIndex === 4 && document.activeElement.id === 'commodity_code'"},
-  {"type": ["#commodity_code", "ZZCOM"]},
-  {"click": "#update_btn"},
-  {"expect": "!!document.querySelector('a[href*=\"obj_name=ZZCOM\"]')"}
- ]},
- {"url": "${STS_BASE}/db_list.php?tbl_name=locations", "actions": [
-  {"expect": "document.getElementById('tbl_name').value === 'locations' && document.getElementById('update_btn').tabIndex === 8"}
- ]},
- {"url": "${STS_BASE}/db_list.php?tbl_name=routing", "actions": [
-  {"expect": "document.getElementById('tbl_name').value === 'routing' && document.activeElement.id === 'station_name'"}
- ]},
- {"url": "${STS_BASE}/db_list.php?tbl_name=jobs", "actions": [
-  {"expect": "document.getElementById('tbl_name').value === 'jobs' && document.activeElement.id === 'name'"},
-  {"type": ["#name", "ZJOB"]},
-  {"click": "#update_btn"},
-  {"expect": "!!document.querySelector('a[href*=\"obj_name=ZJOB\"]')"}
- ]},
- {"url": "${STS_BASE}/db_edit.php?tbl_name=jobs&obj_id=4&obj_name=CK1", "actions": [
-  {"expect": "document.activeElement.id === 'obj_name'"},
-  {"type": ["input[name=step_remarks0]", "step edited by csp test"]},
-  {"click": "#update_btn"},
-  {"expect": "fetch('db_edit.php?tbl_name=jobs&obj_id=4&obj_name=CK1').then(r => r.text()).then(t => t.indexOf('step edited by csp test') > 0)"}
- ]},
- {"url": "${STS_BASE}/db_list.php?tbl_name=shipments", "actions": [
-  {"expect": "document.getElementById('update_btn').disabled && document.getElementById('code').disabled && document.getElementById('tbl_name').value === 'shipments'"},
-  {"click": "[data-sts-click=addShipments]"},
-  {"expect": "!document.getElementById('update_btn').disabled && !document.getElementById('code').disabled && document.getElementById('commodity_filter').disabled"},
-  {"click": "[data-sts-click=filterShipments]"},
-  {"expect": "document.getElementById('code').disabled && !document.getElementById('commodity_filter').disabled"},
-  {"click": "[data-sts-click=addShipments]"},
-  {"type": ["#code", "ZZSHIP"]},
-  {"type": ["#min_interval", "5"]}, {"type": ["#max_interval", "2"]},
-  {"type": ["#max_interval", "9"]}, {"type": ["#min_amount", "1"]}, {"type": ["#max_amount", "3"]},
-  {"eval": "['consignment','car_code','loading_location','unloading_location'].forEach(function(id){var s=document.getElementById(id);s.selectedIndex=1;})"},
-  {"click": "#update_btn"},
-  {"expect": "!!document.querySelector('a[href*=\"obj_name=ZZSHIP\"]')"}
- ]},
- {"url": "${STS_BASE}/db_list.php?tbl_name=shipments", "actions": [
-  {"eval": "(function(){var s=document.getElementById('commodity_filter');s.selectedIndex=1;s.dispatchEvent(new Event('change',{bubbles:true}));})()"},
-  {"expect": "document.getElementById('commodity_filter').disabled"},
-  {"click": "[data-sts-click=clearFilters]"},
-  {"expect": "location.search.indexOf('shipments') > 0"}
- ]},
- {"url": "${STS_BASE}/db_edit.php?tbl_name=shipments&obj_id=4&obj_name=ARIS-CHEM-IN-DOW-EA", "actions": [
-  {"click": "#ship_off"},
-  {"expect": "parseInt(document.getElementById('last_ship_date').value, 10) >= 1000000 && document.getElementById('last_ship_date').readOnly"},
-  {"click": "#ship_on"},
-  {"expect": "parseInt(document.getElementById('last_ship_date').value, 10) < 1000000 && !document.getElementById('last_ship_date').readOnly"}
- ]},
- {"url": "${STS_BASE}/db_edit.php?tbl_name=empty_locations&obj_id=4&obj_name=ARIS-CHEM-IN-DOW-EA", "actions": [
-  {"expect": "!document.getElementById('update_remove_btn') && document.getElementById('instructions').innerHTML.indexOf('Shipment ID') > 0"}
- ]},
- {"url": "${STS_BASE}/db_edit.php?tbl_name=pool&obj_name=9&obj_id=BO10389", "actions": [
-  {"expect": "!document.getElementById('update_remove_btn') && document.getElementById('instructions').innerHTML.indexOf('Reporting Marks') > 0"}
- ]},
- {"url": "${STS_BASE}/db_edit.php?tbl_name=locations&obj_id=1&obj_name=x", "actions": []},
- {"url": "${STS_BASE}/db_edit.php?tbl_name=routing&obj_id=1&obj_name=x", "actions": [{"expect": "document.activeElement.id === 'obj_name'"}]},
- {"url": "${STS_BASE}/db_edit.php?tbl_name=commodities&obj_id=1&obj_name=x", "actions": [{"expect": "document.activeElement.id === 'obj_name'"}]},
- {"url": "${STS_BASE}/db_edit.php?tbl_name=cars&obj_id=9&obj_name=x", "actions": [{"expect": "document.getElementById('home_location').options[1].text === 'None'"}]},
- {"url": "${STS_BASE}/db_list.php?tbl_name=car_orders", "actions": []},
- {"url": "${STS_BASE}/add_remove.php", "allowConsole": ["404"], "actions": [
-  {"click": "#select"},
-  {"click": "#check_all"},
-  {"expect": "document.getElementById('check0') && document.getElementById('check0').checked"},
-  {"click": "#check_all"},
-  {"expect": "!document.getElementById('check0').checked"},
-  {"eval": "window.open = function(){ return {document: {write: function(t){ window.__written = t; }}}; }"},
-  {"click": "td[data-sts-click=showImage]:not([data-car-id=''])"},
-  {"expect": "window.__written && window.__written.indexOf('<img') > 0"}
- ]},
- {"url": "${STS_BASE}/ownership.php", "allowConsole": ["404"], "actions": [
-  {"eval": "window.open = function(){ return {document: {write: function(t){ window.__written = t; }}}; }"},
-  {"click": "td[data-sts-click=showImage]:not([data-car-id=''])"},
-  {"expect": "window.__written && window.__written.indexOf('Available') > 0"}
- ]},
- {"url": "${STS_BASE}/owners.php", "actions": [
-  {"type": ["#new_name", "ZZOWNER"]},
-  {"click": "#submit01"},
-  {"expect": "fetch('owners.php').then(r => r.text()).then(t => t.indexOf('ZZOWNER') > 0)"}
- ]},
- {"url": "${STS_BASE}/scan_car.php", "actions": [
-  {"expect": "document.activeElement.id === 'scan_code'"}
- ]},
- {"url": "${STS_BASE}/scan_location.php", "actions": [
-  {"expect": "document.activeElement.id === 'location'"}
- ]},
- {"url": "${STS_BASE}/settings.php", "actions": [
-  {"type": ["input[name=railroad_initials]", "ZZ"]},
-  {"click": "input[name=update_btn]"},
-  {"expect": "document.body.innerHTML.indexOf('<td>ZZ</td>') > 0"}
- ]},
- {"url": "${STS_BASE}/car_forecast.php", "actions": [
-  {"click": "#refresh_btn"},
-  {"eval": "window.print = function(){ window.__printed = true; }"},
-  {"click": "[data-sts-print]"},
-  {"expect": "window.__printed === true"}
- ]},
- {"url": "${STS_BASE}/shipment_forecast.php", "actions": [
-  {"click": "#refresh_btn"},
-  {"eval": "window.print = function(){ window.__printed = true; }"},
-  {"click": "[data-sts-print]"},
-  {"expect": "window.__printed === true"}
- ]},
- {"url": "${STS_BASE}/import_tables.php", "actions": [
-  {"click": "input[name=add_replace][value=replace]"},
-  {"click": "input[name=import]"}
- ]},
- {"url": "${STS_BASE}/import_img.php?obj_id=10&obj_name=x&image=1", "actions": []},
- {"url": "${STS_BASE}/remove_img.php?obj_id=10&obj_name=x&image=1", "allowConsole": ["404"], "actions": []},
- {"url": "${STS_BASE}/pu_criteria.php", "actions": []},
- {"url": "${STS_BASE}/rollingstock_album.php", "actions": []},
- {"url": "${STS_BASE}/car_history.php", "actions": []},
- {"url": "${STS_BASE}/manage_cargo.php", "actions": []}
+ {
+  "url": "${STS_BASE}/db_list.php?tbl_name=car_codes",
+  "actions": [
+   {
+    "expect": "document.getElementById('tbl_name').value === 'car_codes' && document.getElementById('update_btn').tabIndex === 4"
+   },
+   {
+    "expect": "document.getElementById('instructions').innerHTML.indexOf('sort the table') > 0"
+   },
+   {
+    "expect": "document.activeElement.id === 'car_code'"
+   },
+   {
+    "type": [
+     "#car_code",
+     "ZZT"
+    ]
+   },
+   {
+    "type": [
+     "input[name=description]",
+     "csp test"
+    ]
+   },
+   {
+    "click": "#update_btn"
+   },
+   {
+    "expect": "!!document.querySelector('a[href*=\"obj_name=ZZT\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/db_list.php?tbl_name=car_codes",
+  "actions": [
+   {
+    "click": "a[href*='obj_name=ZZT']"
+   },
+   {
+    "expect": "document.getElementById('update_btn').value === 'UPDATE' && !document.getElementById('update_remove_btn') === false"
+   },
+   {
+    "click": "input[name=update_remove_btn][value=remove]"
+   },
+   {
+    "expect": "document.getElementById('update_btn').value === 'REMOVE' && document.getElementById('update_btn').className.indexOf('btn-danger') >= 0"
+   },
+   {
+    "click": "input[name=update_remove_btn][value=update]"
+   },
+   {
+    "expect": "document.getElementById('update_btn').value === 'UPDATE'"
+   },
+   {
+    "click": "input[name=update_remove_btn][value=remove]"
+   },
+   {
+    "click": "#update_btn"
+   },
+   {
+    "expect": "fetch('db_list.php?tbl_name=car_codes').then(r => r.text()).then(t => t.indexOf('obj_name=ZZT') < 0)"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/db_list.php?tbl_name=commodities",
+  "actions": [
+   {
+    "expect": "document.getElementById('update_btn').tabIndex === 4 && document.activeElement.id === 'commodity_code'"
+   },
+   {
+    "type": [
+     "#commodity_code",
+     "ZZCOM"
+    ]
+   },
+   {
+    "click": "#update_btn"
+   },
+   {
+    "expect": "!!document.querySelector('a[href*=\"obj_name=ZZCOM\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/db_list.php?tbl_name=locations",
+  "actions": [
+   {
+    "expect": "document.getElementById('tbl_name').value === 'locations' && document.getElementById('update_btn').tabIndex === 8"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/db_list.php?tbl_name=routing",
+  "actions": [
+   {
+    "expect": "document.getElementById('tbl_name').value === 'routing' && document.activeElement.id === 'station_name'"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/db_list.php?tbl_name=jobs",
+  "actions": [
+   {
+    "expect": "document.getElementById('tbl_name').value === 'jobs' && document.activeElement.id === 'name'"
+   },
+   {
+    "type": [
+     "#name",
+     "ZJOB"
+    ]
+   },
+   {
+    "click": "#update_btn"
+   },
+   {
+    "expect": "!!document.querySelector('a[href*=\"obj_name=ZJOB\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/db_edit.php?tbl_name=jobs&obj_id=4&obj_name=CK1",
+  "actions": [
+   {
+    "expect": "document.activeElement.id === 'obj_name'"
+   },
+   {
+    "type": [
+     "input[name=step_remarks0]",
+     "step edited by csp test"
+    ]
+   },
+   {
+    "click": "#update_btn"
+   },
+   {
+    "expect": "fetch('db_edit.php?tbl_name=jobs&obj_id=4&obj_name=CK1').then(r => r.text()).then(t => t.indexOf('step edited by csp test') > 0)"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/db_list.php?tbl_name=shipments",
+  "actions": [
+   {
+    "expect": "document.getElementById('update_btn').disabled && document.getElementById('code').disabled && document.getElementById('tbl_name').value === 'shipments'"
+   },
+   {
+    "click": "[data-sts-click=addShipments]"
+   },
+   {
+    "expect": "!document.getElementById('update_btn').disabled && !document.getElementById('code').disabled && document.getElementById('commodity_filter').disabled"
+   },
+   {
+    "click": "[data-sts-click=filterShipments]"
+   },
+   {
+    "expect": "document.getElementById('code').disabled && !document.getElementById('commodity_filter').disabled"
+   },
+   {
+    "click": "[data-sts-click=addShipments]"
+   },
+   {
+    "type": [
+     "#code",
+     "ZZSHIP"
+    ]
+   },
+   {
+    "type": [
+     "#min_interval",
+     "5"
+    ]
+   },
+   {
+    "type": [
+     "#max_interval",
+     "2"
+    ]
+   },
+   {
+    "type": [
+     "#max_interval",
+     "9"
+    ]
+   },
+   {
+    "type": [
+     "#min_amount",
+     "1"
+    ]
+   },
+   {
+    "type": [
+     "#max_amount",
+     "3"
+    ]
+   },
+   {
+    "eval": "['consignment','car_code','loading_location','unloading_location'].forEach(function(id){var s=document.getElementById(id);s.selectedIndex=1;})"
+   },
+   {
+    "click": "#update_btn"
+   },
+   {
+    "expect": "!!document.querySelector('a[href*=\"obj_name=ZZSHIP\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/db_list.php?tbl_name=shipments",
+  "actions": [
+   {
+    "eval": "(function(){var s=document.getElementById('commodity_filter');s.selectedIndex=1;s.dispatchEvent(new Event('change',{bubbles:true}));})()"
+   },
+   {
+    "expect": "document.getElementById('commodity_filter').disabled"
+   },
+   {
+    "click": "[data-sts-click=clearFilters]"
+   },
+   {
+    "expect": "location.search.indexOf('shipments') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/db_edit.php?tbl_name=shipments&obj_id=4&obj_name=ARIS-CHEM-IN-DOW-EA",
+  "actions": [
+   {
+    "click": "#ship_off"
+   },
+   {
+    "expect": "parseInt(document.getElementById('last_ship_date').value, 10) >= 1000000 && document.getElementById('last_ship_date').readOnly"
+   },
+   {
+    "click": "#ship_on"
+   },
+   {
+    "expect": "parseInt(document.getElementById('last_ship_date').value, 10) < 1000000 && !document.getElementById('last_ship_date').readOnly"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/db_edit.php?tbl_name=empty_locations&obj_id=4&obj_name=ARIS-CHEM-IN-DOW-EA",
+  "actions": [
+   {
+    "expect": "!document.getElementById('update_remove_btn') && document.getElementById('instructions').innerHTML.indexOf('Shipment ID') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/db_edit.php?tbl_name=pool&obj_name=9&obj_id=BO10389",
+  "actions": [
+   {
+    "expect": "!document.getElementById('update_remove_btn') && document.getElementById('instructions').innerHTML.indexOf('Reporting Marks') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/db_edit.php?tbl_name=locations&obj_id=1&obj_name=x",
+  "actions": []
+ },
+ {
+  "url": "${STS_BASE}/db_edit.php?tbl_name=routing&obj_id=1&obj_name=x",
+  "actions": [
+   {
+    "expect": "document.activeElement.id === 'obj_name'"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/db_edit.php?tbl_name=commodities&obj_id=1&obj_name=x",
+  "actions": [
+   {
+    "expect": "document.activeElement.id === 'obj_name'"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/db_edit.php?tbl_name=cars&obj_id=9&obj_name=x",
+  "actions": [
+   {
+    "expect": "document.getElementById('home_location').options[1].text === 'None'"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/db_list.php?tbl_name=car_orders",
+  "actions": []
+ },
+ {
+  "url": "${STS_BASE}/add_remove.php",
+  "allowConsole": [
+   "404"
+  ],
+  "actions": [
+   {
+    "click": "#select"
+   },
+   {
+    "click": "#check_all"
+   },
+   {
+    "expect": "document.getElementById('check0') && document.getElementById('check0').checked"
+   },
+   {
+    "click": "#check_all"
+   },
+   {
+    "expect": "!document.getElementById('check0').checked"
+   },
+   {
+    "eval": "window.open = function(){ return {document: {write: function(t){ window.__written = t; }}}; }"
+   },
+   {
+    "click": "td[data-sts-click=showImage]:not([data-car-id=''])"
+   },
+   {
+    "expect": "window.__written && window.__written.indexOf('<img') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/ownership.php",
+  "allowConsole": [
+   "404"
+  ],
+  "actions": [
+   {
+    "eval": "window.open = function(){ return {document: {write: function(t){ window.__written = t; }}}; }"
+   },
+   {
+    "click": "td[data-sts-click=showImage]:not([data-car-id=''])"
+   },
+   {
+    "expect": "window.__written && window.__written.indexOf('Available') > 0"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/owners.php",
+  "actions": [
+   {
+    "type": [
+     "#new_name",
+     "ZZOWNER"
+    ]
+   },
+   {
+    "click": "#submit01"
+   },
+   {
+    "expect": "fetch('owners.php').then(r => r.text()).then(t => t.indexOf('ZZOWNER') > 0)"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/scan_car.php",
+  "actions": [
+   {
+    "expect": "document.activeElement.id === 'scan_code'"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/scan_location.php",
+  "actions": [
+   {
+    "expect": "document.activeElement.id === 'location'"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/settings.php",
+  "actions": [
+   {
+    "type": [
+     "input[name=railroad_initials]",
+     "ZZ"
+    ]
+   },
+   {
+    "click": "input[name=update_btn]"
+   },
+   {
+    "expect": "document.body.innerHTML.indexOf('<td>ZZ</td>') > 0"
+   }
+  ],
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+ },
+ {
+  "url": "${STS_BASE}/car_forecast.php",
+  "actions": [
+   {
+    "click": "#refresh_btn"
+   },
+   {
+    "eval": "window.print = function(){ window.__printed = true; }"
+   },
+   {
+    "click": "[data-sts-print]"
+   },
+   {
+    "expect": "window.__printed === true"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/shipment_forecast.php",
+  "actions": [
+   {
+    "click": "#refresh_btn"
+   },
+   {
+    "eval": "window.print = function(){ window.__printed = true; }"
+   },
+   {
+    "click": "[data-sts-print]"
+   },
+   {
+    "expect": "window.__printed === true"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/import_tables.php",
+  "actions": [
+   {
+    "click": "input[name=add_replace][value=replace]"
+   },
+   {
+    "click": "input[name=import]"
+   }
+  ],
+  "cookie": "sts_api_sandbox=${STS_TEST_COOKIE}"
+ },
+ {
+  "url": "${STS_BASE}/import_img.php?obj_id=10&obj_name=x&image=1",
+  "actions": []
+ },
+ {
+  "url": "${STS_BASE}/remove_img.php?obj_id=10&obj_name=x&image=1",
+  "allowConsole": [
+   "404"
+  ],
+  "actions": []
+ },
+ {
+  "url": "${STS_BASE}/pu_criteria.php",
+  "actions": []
+ },
+ {
+  "url": "${STS_BASE}/rollingstock_album.php",
+  "actions": []
+ },
+ {
+  "url": "${STS_BASE}/car_history.php",
+  "actions": []
+ },
+ {
+  "url": "${STS_BASE}/manage_cargo.php",
+  "actions": []
+ }
 ]

@@ -105,7 +105,7 @@
       }
     }
 
-    $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '"' . sts_action_attr($on_click, 'click') . ' style="width: 100px;">';
+    $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '"' . sts_action_attr($on_click, 'change') . ' style="width: 100px;">';
     $select_string .= '<option value=""></option>';
 
     if (mysqli_num_rows($rs) > 0)
@@ -146,7 +146,7 @@
     // retrieve the rows and put them into an array
     $rs = mysqli_query($dbc, $sql);
 
-    $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '"' . sts_action_attr($on_click, 'click') . ' style="width: 100px;">';
+    $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '"' . sts_action_attr($on_click, 'change') . ' style="width: 100px;">';
     $select_string .= '<option value=""></option>';
 
     if (mysqli_num_rows($rs) > 0)

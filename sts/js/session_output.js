@@ -255,6 +255,7 @@
       });
 
       var filtered = q || l || t;
+      if (!summary) { return; } // older stored wheel reports have no summary line
       summary.textContent = filtered
         ? ('Showing ' + shownCars + ' car' + (shownCars === 1 ? '' : 's') + ' across ' + shownTrains + ' train' + (shownTrains === 1 ? '' : 's') + '.')
         : '';
