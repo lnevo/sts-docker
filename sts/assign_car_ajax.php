@@ -14,9 +14,21 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $input = json_decode(file_get_contents('php://input'), true);
 
-if (!isset($input['waybill_number']) || !isset($input['car_id'])) {
+if (!is_array($input) || !isset($input['waybill_number']) || !isset($input['car_id'])) {
     http_response_code(400);
     echo json_encode(['error' => 'Missing required parameters']);
+    exit;
+}
+
+if (!is_array($input) || !is_scalar($input['waybill_number']) || !is_scalar($input['car_id'])) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Invalid parameters']);
+    exit;
+}
+
+if (sts_id($input['car_id']) <= 0) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Invalid car_id']);
     exit;
 }
 

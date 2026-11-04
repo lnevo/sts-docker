@@ -195,7 +195,9 @@ Literal paths such as `/workflows/compile` win over `/workflows/{name}` (the
 router tries patterns with fewer placeholders first). Rerender and print-all run
 synchronously. Tasks accept `timeout_seconds` (60-86400 for non-admins, 422 below; admins from 1): the runner re-executes
 itself as a child in its own process group and kills the group on expiry (the child's pid is recorded in the task; failing a running task as admin kills the group too); the task is `failed`, "timed out after
-N seconds". `GET /locations/{code}` also resolves plugin location aliases.
+N seconds". A task without `timeout_seconds` gets the server default,
+env `STS_API_TASK_DEFAULT_TIMEOUT` seconds (default 21600 = 6 hours; `0` = no limit), and
+the effective value is recorded in the task's `spec.timeout_seconds`. `GET /locations/{code}` also resolves plugin location aliases.
 
 `operational_steps_api.php`, `simulator_api.php` and `save_operational_steps.php`
 keep answering reads (catalog, list_workflows, recipe, run_options, compile,

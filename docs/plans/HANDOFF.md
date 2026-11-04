@@ -118,36 +118,36 @@ Read this first when starting a session on the STS work. Last updated
     `cache/` is kept because `QR_CACHEABLE` reads it. Railroad logos are kept
     because they are chosen by name at run time.
   - Branch `workflow-editor-legacy` deleted on origin.
-- Open: `get_car_data_ajax.php` and the `fill_order_*` parsers still use
-  `real_escape_string`; no wall-clock limit on tasks without
-  `timeout_seconds`; a stricter CSP would need the inline scripts moved out.
-- Strict CSP, part C6 (branch `csp-c6`): session pages, `so.php` and all
-  generated session output run with no inline code; the `'unsafe-inline'`
-  carve-out for `so.php` and `backups/session_state/sessions/` is gone. Stored
-  output written before this change still has inline scripts and is blocked
-  until it is rerendered once. After deploying, run (token needs operator):
-  `for n in $(ls backups/session_state/sessions | sed -n 's/^session_//p'); do
-  curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'
-  -d '{"style":"mobile"}' http://localhost:8980/sts/api/v1/sessions/$n/rerender; done`.
-  The rerender call also upgrades the stored waybill, report and index pages in
-  place (`session_output_upgrade_session()`); it is idempotent.
-- Cleanups from the 2026-11-03 review, not scheduled:
-  - SQL injection in the CRUD family (`db_list_jobs.php:32` runs
-    `create table` on a raw POST value; the `db_edit_*` pages delete by GET).
-  - `remove_img.php` unlinks a path built from a POST value.
-  - `get_table_guts.php:14` calls `$mysql_error(...)`.
-  - `open_db.php` hides query errors.
-  - Duplicate escape helpers and navbar builders.
-  - Large inline `<style>` blocks on the step pages.
-  - `printable_*` and the `db_list_*`/`db_edit_*` bodies are still legacy.
+- Strict CSP (2026-11-04, branch `strict-csp`): every `/sts/` page runs with
+  `script-src 'self'`. There is no inline code; markup uses `data-sts-*` with
+  `sts/js/sts-actions.js`. `/sts/api/docs/` only adds `'unsafe-eval'`. Browser
+  regression checks are in `tests/browser/steps/*.json` (run with
+  `node tests/browser/cdp_check.mjs --steps …`; `${STS_BASE}` and token
+  placeholders come from the environment).
+  - Stored session output written before this change still has inline scripts,
+    so it is blocked until rerendered once. After deploying, run this (the token
+    needs operator):
+    `for n in $(ls backups/session_state/sessions | sed -n 's/^session_//p'); do
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'
+-d '{"style":"mobile"}' http://localhost:8980/sts/api/v1/sessions/$n/rerender; done`.
+    It also upgrades the stored waybill, report and index pages in place
+    (`session_output_upgrade_session()`), and it is idempotent.
+  - `/sts/backups/` is no longer served, except `session_state/sessions/`.
+    Dumps download through `GET /v1/admin/backups/{name}/download` (admin).
+  - The Database Maintenance pages need a sign-in (`sts/maint_lock.php`):
+    backup and validate need operator; restore, remove backup, reset, restart,
+    wipe, the fix pages, import tables and settings need admin. The policy flag
+    `maint_open` (API Access page) reopens them. The operations and Database
+    Management pages stay open by owner decision.
+- Closed: `get_car_data_ajax.php` and the fill-order path use prepared
+  statements and reject array inputs with a JSON 400. Tasks without
+  `timeout_seconds` get `STS_API_TASK_DEFAULT_TIMEOUT` (default 21600, 0 means
+  none).
 - Aaron's v2 is reference only ([2026-11-03-v2-notes.md](2026-11-03-v2-notes.md));
   the roadmap does not converge on it.
-- Pre-existing, untouched: `sts/db_edit.php` requires a missing
-  `db_edit_waybills.php`; the QR and barcode libraries live outside `sts/`
-  (phpstan cannot see them); a few include fragments and CLI scripts fatal when
-  fetched directly over HTTP.
-- Archive tags `archive/*` preserve the pre-consolidation feature branches;
-  `workflow-editor-legacy` on origin was never reviewed for deletion.
+- Pre-existing, untouched: the QR and barcode libraries live outside `sts/`
+  (phpstan can't see them), and a few include fragments and CLI scripts fatal
+  when fetched directly over HTTP.
 
 ## Working agreements for agents
 

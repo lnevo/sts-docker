@@ -1,8 +1,23 @@
 <?php
 
+require_once __DIR__ . '/sql_safe.php';
+
+/** Prepared statements return native types; the page and API JSON expect the text-protocol strings. */
+function fill_order_stringify_row($row)
+{
+    if (!is_array($row)) {
+        return $row;
+    }
+    foreach ($row as $k => $v) {
+        if ($v !== null) {
+            $row[$k] = (string) $v;
+        }
+    }
+    return $row;
+}
+
 function fill_order_get_details($dbc, $waybill_number)
 {
-    $waybill_number = mysqli_real_escape_string($dbc, $waybill_number);
     $sql = 'SELECT car_orders.shipment as shipment_id,
                    shipments.code as shipment,
                    shipments.description as description,
@@ -25,22 +40,22 @@ function fill_order_get_details($dbc, $waybill_number)
             LEFT JOIN locations loc02 ON loc02.id = shipments.unloading_location
             LEFT JOIN routing sta01 ON sta01.id = loc01.station
             LEFT JOIN routing sta02 ON sta02.id = loc02.station
-            WHERE car_orders.waybill_number = "' . $waybill_number . '"';
+            WHERE car_orders.waybill_number = ?';
 
-    $rs = mysqli_query($dbc, $sql);
-    if (!$rs || mysqli_num_rows($rs) <= 0) {
+    $rs = sts_q($dbc, $sql, [$waybill_number]);
+    if (!($rs instanceof mysqli_result) || mysqli_num_rows($rs) <= 0) {
         return null;
     }
 
-    return mysqli_fetch_array($rs);
+    return fill_order_stringify_row(mysqli_fetch_array($rs));
 }
 
 function fill_order_get_available_cars($dbc, $order_row)
 {
     $shipment_id = $order_row['shipment_id'];
-    $car_code = mysqli_real_escape_string($dbc, $order_row['car_code']);
-    $loading_station = mysqli_real_escape_string($dbc, $order_row['loading_station']);
-    $shipment = mysqli_real_escape_string($dbc, $order_row['shipment']);
+    $car_code = (string) $order_row['car_code'];
+    $loading_station = (string) $order_row['loading_station'];
+    $shipment = (string) $order_row['shipment'];
 
     $sql_pool = 'SELECT cars.reporting_marks as reporting_marks,
                         car_codes.code as car_code,
@@ -57,15 +72,15 @@ function fill_order_get_available_cars($dbc, $order_row)
                  LEFT JOIN car_codes ON car_codes.id = cars.car_code_id
                  WHERE cars.status = "Empty"
                    AND cars.id NOT IN (SELECT car FROM car_orders)
-                   AND car_codes.code LIKE REPLACE("' . $car_code . '", "*", "%")
+                   AND car_codes.code LIKE REPLACE(?, "*", "%")
                    AND pool.car_id = cars.id
-                   AND pool.shipment_id = "' . mysqli_real_escape_string($dbc, $shipment_id) . '"
+                   AND pool.shipment_id = ?
                  ORDER BY cars.load_count';
 
     $pool_cars = [];
-    $rs_pool = mysqli_query($dbc, $sql_pool);
-    while ($row = mysqli_fetch_array($rs_pool)) {
-        $pool_cars[] = array_merge($row, ['category' => 'pool']);
+    $rs_pool = sts_q($dbc, $sql_pool, [$car_code, (string) $shipment_id]);
+    while ($rs_pool instanceof mysqli_result && $row = mysqli_fetch_array($rs_pool)) {
+        $pool_cars[] = array_merge(fill_order_stringify_row($row), ['category' => 'pool']);
     }
 
     $sql_station = 'SELECT cars.reporting_marks as reporting_marks,
@@ -83,16 +98,16 @@ function fill_order_get_available_cars($dbc, $order_row)
                     WHERE cars.status = "Empty"
                       AND cars.id NOT IN (SELECT car FROM car_orders)
                       AND cars.id NOT IN (SELECT car_id FROM pool)
-                      AND car_codes.code LIKE REPLACE("' . $car_code . '", "*", "%")
+                      AND car_codes.code LIKE REPLACE(?, "*", "%")
                       AND cars.current_location_id IN (SELECT locations.id
                                                        FROM locations, routing
-                                                       WHERE locations.station = routing.id AND routing.station = "' . $loading_station . '")
+                                                       WHERE locations.station = routing.id AND routing.station = ?)
                     ORDER BY priority, cars.load_count';
 
     $station_cars = [];
-    $rs_station = mysqli_query($dbc, $sql_station);
-    while ($row = mysqli_fetch_array($rs_station)) {
-        $station_cars[] = array_merge($row, ['category' => 'station']);
+    $rs_station = sts_q($dbc, $sql_station, [$car_code, $loading_station]);
+    while ($rs_station instanceof mysqli_result && $row = mysqli_fetch_array($rs_station)) {
+        $station_cars[] = array_merge(fill_order_stringify_row($row), ['category' => 'station']);
     }
 
     $sql_priority = 'SELECT cars.reporting_marks as reporting_marks,
@@ -110,19 +125,19 @@ function fill_order_get_available_cars($dbc, $order_row)
                      WHERE cars.status = "Empty"
                        AND cars.id NOT IN (SELECT car FROM car_orders)
                        AND cars.id NOT IN (SELECT car_id FROM pool)
-                       AND car_codes.code LIKE REPLACE("' . $car_code . '", "*", "%")
+                       AND car_codes.code LIKE REPLACE(?, "*", "%")
                        AND cars.current_location_id = empty_locations.location
                        AND empty_locations.shipment = shipments.id
-                       AND shipments.code = "' . $shipment . '"
+                       AND shipments.code = ?
                        AND cars.current_location_id NOT IN (SELECT locations.id
                                                         FROM locations, routing
-                                                        WHERE locations.station = routing.id AND routing.station = "' . $loading_station . '")
+                                                        WHERE locations.station = routing.id AND routing.station = ?)
                      ORDER BY priority, cars.load_count';
 
     $priority_cars = [];
-    $rs_priority = mysqli_query($dbc, $sql_priority);
-    while ($row = mysqli_fetch_array($rs_priority)) {
-        $priority_cars[] = array_merge($row, ['category' => 'priority']);
+    $rs_priority = sts_q($dbc, $sql_priority, [$car_code, $shipment, $loading_station]);
+    while ($rs_priority instanceof mysqli_result && $row = mysqli_fetch_array($rs_priority)) {
+        $priority_cars[] = array_merge(fill_order_stringify_row($row), ['category' => 'priority']);
     }
 
     $sql_system = 'SELECT DISTINCT cars.reporting_marks as reporting_marks,
@@ -140,31 +155,31 @@ function fill_order_get_available_cars($dbc, $order_row)
                    WHERE cars.status = "Empty"
                      AND cars.id NOT IN (SELECT car FROM car_orders)
                      AND cars.id NOT IN (SELECT car_id FROM pool)
-                     AND car_codes.code LIKE REPLACE("' . $car_code . '", "*", "%")
+                     AND car_codes.code LIKE REPLACE(?, "*", "%")
                      AND cars.reporting_marks NOT IN
                      (SELECT cars.reporting_marks
                       FROM cars
                       WHERE cars.status = "Empty"
-                        AND car_codes.code LIKE REPLACE("' . $car_code . '", "*", "%")
+                        AND car_codes.code LIKE REPLACE(?, "*", "%")
                         AND cars.current_location_id IN (SELECT locations.id
                                                          FROM locations, routing
-                                                         WHERE locations.station = routing.id AND routing.station = "' . $loading_station . '")
+                                                         WHERE locations.station = routing.id AND routing.station = ?)
                                                      UNION
                                                      SELECT cars.reporting_marks
                                                      FROM (cars, empty_locations)
                                                      WHERE cars.status = "Empty"
-                                                       AND car_codes.code LIKE REPLACE("' . $car_code . '", "*", "%")
+                                                       AND car_codes.code LIKE REPLACE(?, "*", "%")
                                                        AND cars.current_location_id = empty_locations.location
-                                                       AND empty_locations.shipment = "' . $shipment . '"
+                                                       AND empty_locations.shipment = ?
                                                        AND cars.current_location_id NOT IN (SELECT locations.id
                                                                                       FROM locations, routing
-                                                                                      WHERE locations.station = routing.id AND routing.station = "' . $loading_station . '"))
+                                                                                      WHERE locations.station = routing.id AND routing.station = ?))
                    ORDER BY priority, cars.load_count';
 
     $system_cars = [];
-    $rs_system = mysqli_query($dbc, $sql_system);
-    while ($row = mysqli_fetch_array($rs_system)) {
-        $system_cars[] = array_merge($row, ['category' => 'system']);
+    $rs_system = sts_q($dbc, $sql_system, [$car_code, $car_code, $loading_station, $car_code, $shipment, $loading_station]);
+    while ($rs_system instanceof mysqli_result && $row = mysqli_fetch_array($rs_system)) {
+        $system_cars[] = array_merge(fill_order_stringify_row($row), ['category' => 'system']);
     }
 
     return array_merge($pool_cars, $station_cars, $priority_cars, $system_cars);
@@ -569,89 +584,80 @@ function fill_order_heal_orphan_ordered_cars($dbc)
 
 function fill_order_assign_car($dbc, $waybill_number, $car_id)
 {
-    $waybill_number = mysqli_real_escape_string($dbc, $waybill_number);
-    $car_id = mysqli_real_escape_string($dbc, $car_id);
+    $waybill_number = is_scalar($waybill_number) ? (string) $waybill_number : '';
+    // car_id must be a positive integer: 0 and "" mean "unfilled" in car_orders.
+    $car_id = sts_id($car_id);
+    if ($car_id <= 0) {
+        return ['success' => false, 'error' => 'Invalid car_id'];
+    }
+    $car_id = (string) $car_id;
 
     // If this waybill already points at another car, clear that car's Ordered
-    // status before stealing the slot — otherwise the prior car is left Ordered
+    // status before stealing the slot - otherwise the prior car is left Ordered
     // with no order row (orphan Ordered).
-    $prev_rs = mysqli_query(
-        $dbc,
-        'SELECT car FROM car_orders WHERE waybill_number = "' . $waybill_number . '" LIMIT 1'
-    );
-    $prev_row = $prev_rs ? mysqli_fetch_assoc($prev_rs) : null;
+    $prev_rs = sts_q($dbc, 'SELECT car FROM car_orders WHERE waybill_number = ? LIMIT 1', [$waybill_number]);
+    $prev_row = ($prev_rs instanceof mysqli_result) ? mysqli_fetch_assoc($prev_rs) : null;
     $prev_car = (string) ($prev_row['car'] ?? '');
-    if ($prev_car !== '' && $prev_car !== '0' && $prev_car !== (string) $car_id) {
-        $prev_esc = mysqli_real_escape_string($dbc, $prev_car);
-        mysqli_query(
+    if ($prev_car !== '' && $prev_car !== '0' && $prev_car !== $car_id) {
+        sts_q(
             $dbc,
             'UPDATE cars SET status = "Empty", last_spotted = 0
-             WHERE id = "' . $prev_esc . '"
-               AND status = "Ordered"'
+             WHERE id = ?
+               AND status = "Ordered"',
+            [$prev_car]
         );
     }
 
-    $sql = 'UPDATE car_orders SET car = "' . $car_id . '"
-            WHERE waybill_number = "' . $waybill_number . '"';
-
-    if (!mysqli_query($dbc, $sql)) {
-        return ['success' => false, 'error' => 'Update error: ' . mysqli_error($dbc)];
+    if (sts_q($dbc, 'UPDATE car_orders SET car = ? WHERE waybill_number = ?', [$car_id, $waybill_number]) === false) {
+        return ['success' => false, 'error' => 'Update error: ' . sts_err($dbc)];
     }
 
-    $sql = 'SELECT setting_value FROM settings WHERE setting_name = "session_nbr"';
-    $rs = mysqli_query($dbc, $sql);
-    $row = mysqli_fetch_array($rs);
+    $rs = sts_q($dbc, 'SELECT setting_value FROM settings WHERE setting_name = "session_nbr"');
+    $row = fill_order_stringify_row(mysqli_fetch_array($rs));
     $session_nbr = $row['setting_value'];
 
-    $sql = 'SELECT current_location_id FROM cars WHERE id = "' . $car_id . '"';
-    $rs = mysqli_query($dbc, $sql);
+    $rs = sts_q($dbc, 'SELECT current_location_id FROM cars WHERE id = ?', [$car_id]);
     $row = mysqli_fetch_array($rs);
     $location = $row['current_location_id'];
 
-    $sql = 'INSERT INTO history(car_id, session_nbr, event_date, event, location)
-            VALUES ("' . $car_id . '",
-                    "' . $session_nbr . '",
-                    "' . date("Y-m-d H:i:s") . '",
-                    "Filled car order ' . $waybill_number . '",
-                    "' . $location . '")';
-
-    if (!mysqli_query($dbc, $sql)) {
-        return ['success' => false, 'error' => 'History insert error: ' . mysqli_error($dbc)];
+    $ok = sts_q(
+        $dbc,
+        'INSERT INTO history(car_id, session_nbr, event_date, event, location)
+         VALUES (?, ?, ?, ?, ?)',
+        [$car_id, $session_nbr, date("Y-m-d H:i:s"), 'Filled car order ' . $waybill_number, $location]
+    );
+    if ($ok === false) {
+        return ['success' => false, 'error' => 'History insert error: ' . sts_err($dbc)];
     }
 
-    $sql = 'SELECT COUNT(*) as count_at_loading
-            FROM cars, shipments, car_orders
-            WHERE car_orders.waybill_number = "' . $waybill_number . '"
-              AND shipments.id = car_orders.shipment
-              AND cars.id = "' . $car_id . '"
-              AND cars.current_location_id = shipments.loading_location
-              AND cars.status = "Empty"';
-
-    $rs = mysqli_query($dbc, $sql);
+    $rs = sts_q(
+        $dbc,
+        'SELECT COUNT(*) as count_at_loading
+         FROM cars, shipments, car_orders
+         WHERE car_orders.waybill_number = ?
+           AND shipments.id = car_orders.shipment
+           AND cars.id = ?
+           AND cars.current_location_id = shipments.loading_location
+           AND cars.status = "Empty"',
+        [$waybill_number, $car_id]
+    );
     $row = mysqli_fetch_array($rs);
 
-    if ($row['count_at_loading'] > 0) {
-        $sql = 'UPDATE cars
-                SET status = "Loaded",
-                    load_count = load_count + 1
-                WHERE id = "' . $car_id . '"';
-    } else {
-        $sql = 'UPDATE cars
-                SET status = "Ordered",
-                    load_count = load_count + 1
-                WHERE id = "' . $car_id . '"';
+    $new_status = ($row['count_at_loading'] > 0) ? 'Loaded' : 'Ordered';
+    $ok = sts_q($dbc, 'UPDATE cars SET status = ?, load_count = load_count + 1 WHERE id = ?', [$new_status, $car_id]);
+    if ($ok === false) {
+        return ['success' => false, 'error' => 'Car status update error: ' . sts_err($dbc)];
     }
 
-    if (!mysqli_query($dbc, $sql)) {
-        return ['success' => false, 'error' => 'Car status update error: ' . mysqli_error($dbc)];
-    }
-
-    $sql = 'SELECT cars.reporting_marks, car_codes.code as car_code
-            FROM cars
-            LEFT JOIN car_codes ON car_codes.id = cars.car_code_id
-            WHERE cars.id = "' . $car_id . '"';
-    $rs = mysqli_query($dbc, $sql);
-    $car_row = mysqli_fetch_array($rs);
+    $rs = sts_q(
+        $dbc,
+        'SELECT cars.reporting_marks, car_codes.code as car_code
+         FROM cars
+         LEFT JOIN car_codes ON car_codes.id = cars.car_code_id
+         WHERE cars.id = ?',
+        [$car_id]
+    );
+    $car_row = fill_order_stringify_row(mysqli_fetch_array($rs));
 
     return [
         'success' => true,
@@ -714,22 +720,24 @@ function fill_order_is_unfilled($car_value)
 
 function fill_order_cancel_order($dbc, $waybill_number)
 {
-    $waybill_number = mysqli_real_escape_string($dbc, $waybill_number);
-
-    $sql = 'SELECT car FROM car_orders WHERE waybill_number = "' . $waybill_number . '"';
-    $rs = mysqli_query($dbc, $sql);
-    if (!$rs || mysqli_num_rows($rs) <= 0) {
+    $waybill_number = is_scalar($waybill_number) ? (string) $waybill_number : '';
+    // A blank waybill must never reach the DELETE: it would match every blank-waybill row.
+    if (trim($waybill_number) === '') {
         return ['success' => false, 'error' => 'Order not found'];
     }
 
-    $row = mysqli_fetch_array($rs);
+    $rs = sts_q($dbc, 'SELECT car FROM car_orders WHERE waybill_number = ?', [$waybill_number]);
+    if (!($rs instanceof mysqli_result) || mysqli_num_rows($rs) <= 0) {
+        return ['success' => false, 'error' => 'Order not found'];
+    }
+
+    $row = fill_order_stringify_row(mysqli_fetch_array($rs));
     if (!fill_order_is_unfilled($row['car'])) {
         return ['success' => false, 'error' => 'Order already has a car assigned'];
     }
 
-    $sql = 'DELETE FROM car_orders WHERE waybill_number = "' . $waybill_number . '"';
-    if (!mysqli_query($dbc, $sql)) {
-        return ['success' => false, 'error' => 'Delete error: ' . mysqli_error($dbc)];
+    if (sts_q($dbc, 'DELETE FROM car_orders WHERE waybill_number = ?', [$waybill_number]) === false) {
+        return ['success' => false, 'error' => 'Delete error: ' . sts_err($dbc)];
     }
 
     return [
