@@ -52,7 +52,7 @@ Read this first when starting a session on the STS work. Last updated
      `Catalog tests OK` (then `git checkout -- docs/WORKFLOW_TEST_ALL_TYPES.recipe.json`
      there and `git checkout -- sts/operational_steps_catalog.openapi.generated.yaml`
      here if they changed).
-  2b. Browser checks on the sandbox (also run in CI by `browser-tests.yml`):
+     2b. Browser checks on the sandbox (also run in CI by `browser-tests.yml`):
      `STS_BASE=http://localhost:8981/sts STS_API_TOKEN_FILE=$STS_SANDBOX_DATA/config/bootstrap_admin.token STS_API_BACKUPS_DIR=$STS_SANDBOX_DATA/backups STS_PHOTOS_DIR=$STS_SANDBOX_DATA/photos tests/browser/run.sh`
      prints PASS for every steps file (`tests/browser/README.md`).
   3. Lint sweep in the container:
@@ -145,6 +145,16 @@ Read this first when starting a session on the STS work. Last updated
   statements and reject array inputs with a JSON 400. Tasks without
   `timeout_seconds` get `STS_API_TASK_DEFAULT_TIMEOUT` (default 21600, 0 means
   none).
+- 2026-11-04 loose ends: favicon at `/favicon.ico`; `sts/touch.css` (touch
+  screens only) brings controls to about 44px; `tests/browser/run.sh` prepares
+  its own data (a committed fixture, or `STS_BROWSER_BACKUP=hart_seed`) and runs
+  in CI (`browser-tests.yml`); the agent plugin has `sts_backup_download`. The
+  tablet checks run under Chrome touch emulation, not on a real tablet.
+- Known: list parameters of catalog commands (e.g. `auto_assign_locals.jobs`)
+  take a comma-separated string; a JSON array arrives as "Array" and assigns
+  nothing. On the HART seed the tablet file's Pick Up and Organize checks find
+  no cars (auto-assign loads none for the job they pick); on the fixture they
+  pass.
 - Aaron's v2 is reference only ([2026-11-03-v2-notes.md](2026-11-03-v2-notes.md));
   the roadmap does not converge on it.
 - Pre-existing, untouched: the QR and barcode libraries live outside `sts/`

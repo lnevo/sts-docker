@@ -291,6 +291,15 @@ async function cmdData(level, tweaks) {
   if (tweaks.includes('marks')) for (const c of empties.slice(-2)) {
     await must(call('PATCH', '/cars/' + c.id, { reporting_marks: 'AB&' + c.id }), 'bad marks');
   }
+  // ops: an operating state for touch checks: open orders (half left unfilled for the
+  // fill page) and cars assigned to jobs (pick up / organize)
+  if (tweaks.includes('ops')) {
+    await must(call('POST', '/commands/generate_orders', { params: {} }), 'generate orders');
+    await must(call('POST', '/commands/fill_orders', { params: { percent: 50 } }), 'fill half');
+    // The jobs parameter is a comma-separated string (an array arrives as "Array").
+    await must(call('POST', '/commands/auto_assign_locals', { params: { jobs: jobs.map((j) => j.name).join(',') } }), 'assign cars');
+    ({ jobs } = await discover(false)); // re-read jobs after the assignment
+  }
   // offhome: empty cars away from home (reposition page, off-home filter)
   const locs = (await must(call('GET', '/locations?limit=500'), 'locations')).data;
   const away = tweaks.includes('offhome') ? empties.slice(0, 3) : [];

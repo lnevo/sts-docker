@@ -49,6 +49,7 @@ profile() {
   case "$1" in
     c2) echo "base offhome" ;;
     c4) echo "base marks" ;;
+    tablet) echo "base ops" ;;
     c5|c6) echo "session" ;;
     *) echo "base" ;;
   esac

@@ -151,7 +151,7 @@
     "expect": "document.documentElement.scrollWidth<=innerWidth+1"
    },
    {
-    "eval": "(function(){var s=document.querySelector(\"#job_list\");var o=[].slice.call(s.options).filter(function(o){return o.value!==''});var t=o.filter(function(x){return /D749/.test(x.text)})[0]||o[0];s.value=t.value;s.dispatchEvent(new Event('change',{bubbles:true}));s.dispatchEvent(new Event('input',{bubbles:true}))})()"
+    "eval": "(function(){var s=document.querySelector(\"#job_list\");var o=[].slice.call(s.options).filter(function(o){return o.value!==''});var t=o.filter(function(x){return x.value==='${STS_JOB1_ID}'})[0]||o[0];s.value=t.value;s.dispatchEvent(new Event('change',{bubbles:true}));s.dispatchEvent(new Event('input',{bubbles:true}))})()"
    },
    {
     "waitFor": "#job_table_div table input[type=checkbox]"
@@ -176,7 +176,7 @@
     "expect": "document.documentElement.scrollWidth<=innerWidth+1"
    },
    {
-    "eval": "(function(){var s=document.querySelector(\"#job_list\");var o=[].slice.call(s.options).filter(function(o){return o.value!==''});var t=o.filter(function(x){return /D749/.test(x.text)})[0]||o[0];s.value=t.value;s.dispatchEvent(new Event('change',{bubbles:true}));s.dispatchEvent(new Event('input',{bubbles:true}))})()"
+    "eval": "(function(){var s=document.querySelector(\"#job_list\");var o=[].slice.call(s.options).filter(function(o){return o.value!==''});var t=o.filter(function(x){return x.value==='${STS_JOB1_ID}'})[0]||o[0];s.value=t.value;s.dispatchEvent(new Event('change',{bubbles:true}));s.dispatchEvent(new Event('input',{bubbles:true}))})()"
    },
    {
     "tap": "#org_job"
