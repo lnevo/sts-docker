@@ -14,7 +14,7 @@ $sts_headings = array(
   'car_orders' => 'Car Orders', 'jobs' => 'Jobs'
 );
 $page_heading = isset($sts_headings[$tbl_name]) ? $sts_headings[$tbl_name] : '';
-sts_page_start(['title' => 'Database Management', 'icon' => 'bi-table', 'section' => 'data']);
+sts_page_start(['title' => 'Database Management', 'icon' => 'bi-table', 'section' => 'data', 'head_extra' => '<script src="/sts/js/data_editor.js?v=1"></script>']);
 ?>
 <div class="sts-card">
     <h3 id="table_name"><?php echo htmlspecialchars($page_heading); ?></h3>

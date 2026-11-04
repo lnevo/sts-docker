@@ -30,7 +30,7 @@
   }
   
   // generate some javascript to remove the Update/Remove radio buttons since we don't need it for this page
-  print '<script>var parent=document.getElementById("update_remove_btn").parentNode; var child=document.getElementById("update_remove_btn"); parent.removeChild(child);</script>';
+  sts_editor_ops(array(array('id' => 'update_remove_btn', 'remove' => true)));
 
   // generate some javascript to replace the boilerplate instructions with proper ones for this page
   $instructions = '<h3>Shipment ID: ' . sts_html($obj_name) . '</h3>';
@@ -38,7 +38,7 @@
   $instructions .= '1 is the highest priority, 2 is the second highest, etc...<br /><br />';
   $instructions .= 'To remove a location from the list of locations being searched for empty<br />';
   $instructions .= 'cars, set the priority to 0 (Zero) and click the Update button.</p>';
-  print '<script>document.getElementById("instructions").innerHTML = ' . json_encode($instructions, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ';</script>';
+  sts_editor_ops(array(array('id' => 'instructions', 'html' => $instructions)));
          
   // initiate a database response message
   $sql_msg = '<br />Transaction completed';

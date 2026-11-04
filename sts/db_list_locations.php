@@ -8,20 +8,10 @@
   // clicked and if there is a code in the location code text box.
 
   // generate some javascript to display the table name, identify this table to the form, and set the update button's tab index
-  print '<script>
-           document.getElementById("tbl_name").value = "locations";
-           document.getElementById("update_btn").tabIndex = "8";
-
-           function display_msg()
-           {
-             document.getElementById("sort_msg").innerHTML = "Sorting...";
-           }
-
-           function clear_msg()
-           {
-             document.getElementById("sort_msg").innerHTML = "&nbsp;";
-           }
-         </script>';
+  sts_editor_ops(array(
+    array('id' => 'tbl_name', 'props' => array('value' => 'locations')),
+    array('id' => 'update_btn', 'props' => array('tabIndex' => '8'))
+  ));
 
 
   // get a database connection
@@ -110,10 +100,10 @@
   print "</table>";
 
   // add some extra lines to the instructions div
-  print '<script>
-           document.getElementById("instructions").innerHTML = document.getElementById("instructions").innerHTML + "Click on column titles shown in <i>italics</i> to sort the table<br /><br />";
-         </script>';
+  sts_editor_ops(array(
+    array('id' => 'instructions', 'appendHtml' => 'Click on column titles shown in <i>italics</i> to sort the table<br /><br />')
+  ));
 
   // generate a javascript line to set focus on the first input text box
-  print '<script>document.getElementById("code").focus();</script>';
+  sts_editor_ops(array(array('id' => 'code', 'focus' => true)));
 ?>

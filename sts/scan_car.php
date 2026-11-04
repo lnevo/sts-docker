@@ -4,7 +4,6 @@ sts_page_start([
     'title' => 'Scan Cars',
     'icon' => 'bi-upc-scan',
     'section' => 'data',
-    'body_attrs' => 'onload=\'document.getElementById("scan_code").focus();\'',
 ]);
 ?>
 <div class="sts-card">
@@ -17,7 +16,7 @@ sts_page_start([
 <form action="scan_car.php" method="get">
     <label for="scan_code" class="form-label">Scan QR code, Bar code, or RFID tag:</label>
     <div class="d-flex gap-2 mb-3">
-      <input id="scan_code" name="scan_code" type="text" class="form-control form-control-lg" autocomplete="off" autofocus>
+      <input id="scan_code" name="scan_code" type="text" class="form-control form-control-lg" autocomplete="off" autofocus data-sts-autofocus>
       <input name="scan_btn" value="SCAN" type="submit" class="btn btn-primary btn-lg">
     </div>
     <?php

@@ -6,10 +6,10 @@
   // also creates a table using the name of the job that will contain the job's steps
 
   // generate some javascript to display the table name, identify this table to the form, and set the update button's tab index
-  print '<script>
-           document.getElementById("tbl_name").value = "jobs";
-           document.getElementById("update_btn").tabIndex = "3";
-         </script>';
+  sts_editor_ops(array(
+    array('id' => 'tbl_name', 'props' => array('value' => 'jobs')),
+    array('id' => 'update_btn', 'props' => array('tabIndex' => '3'))
+  ));
 
   // get a database connection
   $dbc = open_db();
@@ -89,6 +89,6 @@
   print $sql_msg;
 
   // generate a javascript line to set focus on the first text box
-  print '<script>document.getElementById("name").focus();</script>';
+  sts_editor_ops(array(array('id' => 'name', 'focus' => true)));
 
 ?>

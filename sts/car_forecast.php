@@ -41,7 +41,7 @@ sts_page_start([
       </div>
     </div>
     <form action="car_forecast.php" method="get">
-    <input id="refresh_btn" name="refresh_btn" value="REFRESH" type="submit" class="btn btn-primary">&nbsp;&nbsp;<button type="button" class="btn btn-outline-secondary" onclick="window.print();">PRINT</button>
+    <input id="refresh_btn" name="refresh_btn" value="REFRESH" type="submit" class="btn btn-primary">&nbsp;&nbsp;<button type="button" class="btn btn-outline-secondary" data-sts-print>PRINT</button>
     <br /><br />
     <?php
 
