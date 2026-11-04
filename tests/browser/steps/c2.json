@@ -513,7 +513,7 @@
     "expect": "document.querySelectorAll('#car_table_body tr').length>1 && document.getElementById('update_pos').disabled===false"
    },
    {
-    "eval": "(()=>{\n var rows=[...document.querySelectorAll('#car_table_body tr')];\n var a=rows[0].querySelector('.drag-handle'), r0=rows[0].getBoundingClientRect(), r1=rows[1].getBoundingClientRect();\n sessionStorage.dragged=rows[0].querySelector('td[data-sts-click=showImage] input[type=hidden]').value;\n var y0=(r0.top+r0.bottom)/2, y1=(r1.top+r1.bottom)/2+4;\n a.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true,clientX:20,clientY:y0}));\n document.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,cancelable:true,clientX:20,clientY:y1}));\n document.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,cancelable:true,clientX:20,clientY:y1}));\n})()"
+    "eval": "(()=>{\n var rows=[...document.querySelectorAll('#car_table_body tr')];\n rows[0].scrollIntoView({block:'center'});\n var a=rows[0].querySelector('.drag-handle'), r0=rows[0].getBoundingClientRect(), r1=rows[1].getBoundingClientRect();\n sessionStorage.dragged=rows[0].querySelector('td[data-sts-click=showImage] input[type=hidden]').value;\n var y0=(r0.top+r0.bottom)/2, y1=(r1.top+r1.bottom)/2+4;\n a.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true,clientX:20,clientY:y0}));\n document.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,cancelable:true,clientX:20,clientY:y1}));\n document.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,cancelable:true,clientX:20,clientY:y1}));\n})()"
    },
    {
     "expect": "document.querySelector('#car_table_body tr:nth-child(2) td[data-sts-click=showImage] input[type=hidden]').value===sessionStorage.dragged"
