@@ -47,3 +47,9 @@ sts/plugins/*
 !sts/plugins/README.md
 __pycache__/
 .claude/worktrees/
+
+# Secrets: API tokens and local env files never belong in the repo.
+# (Tokens live in ../sts-docker-data/config/, which the hart hub ignores.)
+*.token
+.env
+.env.*
