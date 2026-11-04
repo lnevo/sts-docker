@@ -1,0 +1,34 @@
+[
+ {
+  "url": "${STS_BASE}/db-maint.html",
+  "actions": [
+   {
+    "expect": "!!document.querySelector('a[href=\"plugin_settings.php\"]')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/plugin_settings.php",
+  "cookie": "${STS_COOKIE_NAME}=signedout",
+  "allowConsole": [
+   "Failed to load resource"
+  ],
+  "actions": [
+   {
+    "expect": "!!document.getElementById('maint-lock-notice') && !document.querySelector('.list-group')"
+   }
+  ]
+ },
+ {
+  "url": "${STS_BASE}/plugin_settings.php",
+  "cookie": "${STS_COOKIE_NAME}=${STS_TEST_COOKIE}",
+  "actions": [
+   {
+    "expect": "!document.getElementById('maint-lock-notice') && !!document.querySelector('.list-group, .alert-secondary')"
+   },
+   {
+    "expect": "Array.from(document.querySelectorAll('.list-group a')).every(a => /^plugin\\.php\\?id=[a-z0-9_]+&page=settings$/.test(a.getAttribute('href')))"
+   }
+  ]
+ }
+]

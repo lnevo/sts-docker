@@ -47,6 +47,9 @@ Map of page slug to a PHP file relative to the plugin directory.
 ```
 
 Served by `sts/plugin.php?id=<plugin>&page=<slug>` (slug defaults to `index`).
+A page with the slug `settings` is listed on Maintenance → Plugin Settings
+(`sts/plugin_settings.php`, admin sign-in), so a plugin's settings are reachable
+without a link of their own.
 The router validates the id and slug against the manifest, `chdir`s to `sts/`
 so relative includes keep working, and `require`s the file. `operations_buttons`
 `href` values point at the router. Root stubs `sts/track_scale.php` and
