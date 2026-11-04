@@ -33,6 +33,8 @@ RUN printf '%s\n' \
 COPY php-barcode /var/www/html/php-barcode
 COPY phpqrcode /var/www/html/phpqrcode
 COPY sts /var/www/html/sts
+# Site icon at the web root (browsers request /favicon.ico on every page).
+COPY docker/favicon.ico /var/www/html/favicon.ico
 
 # Make all copied files readable by Apache (www-data)
 RUN find /var/www/html -type f -exec chmod 644 {} \; && \
