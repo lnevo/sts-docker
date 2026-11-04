@@ -75,6 +75,7 @@ sts_page_start([
       <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="flag-read_open"><label class="form-check-label" for="flag-read_open">Reads need no token (read_open)</label></div>
       <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="flag-legacy_open"><label class="form-check-label" for="flag-legacy_open">Legacy wagon / RFID routes need no token (legacy_open)</label></div>
       <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" id="flag-editor_open"><label class="form-check-label" for="flag-editor_open">Workflow editor needs no sign-in (editor_open)</label></div>
+      <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" id="flag-maint_open"><label class="form-check-label" for="flag-maint_open">Database Maintenance pages need no sign-in (maint_open)</label></div>
       <div class="mb-3">
         <label class="form-label" for="protected-backups">Protected backups (comma-separated name patterns; only an admin may overwrite a backup that matches)</label>
         <input class="form-control" type="text" id="protected-backups" placeholder="*seed*, *_locked*">
