@@ -1,7 +1,7 @@
 # STS handoff
 
 Read this first when starting a session on the STS work. Last updated
-2026-11-03. Keep it current: it is the one file that says where things stand.
+2026-11-04. Keep it current: it is the one file that says where things stand.
 
 ## Where things stand
 
