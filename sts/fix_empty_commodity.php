@@ -80,7 +80,7 @@ HTML,
       if (mysqli_num_rows($rs) > 0)
       {
         print '<form action="fix_empty_commodity.php" method="get">';
-        print '<input type="submit" class="btn btn-danger" id="fix_it_btn" name="fix_it_btn" value="FIX STATUS" onclick="return confirm(\'Fix Status: this changes the database. Continue?\');">&nbsp;<input type="reset" class="btn btn-secondary" value="RESET"><br /><br />';
+        print '<input type="submit" class="btn btn-danger" id="fix_it_btn" name="fix_it_btn" value="FIX STATUS" data-sts-confirm="Fix Status: this changes the database. Continue?">&nbsp;<input type="reset" class="btn btn-secondary" value="RESET"><br /><br />';
     
         print '<table class="table table-sm table-bordered w-auto" id="car_table" name="car_table">';
         print '<thead>';

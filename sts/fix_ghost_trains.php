@@ -6,29 +6,7 @@ sts_page_start([
     'section' => 'maint',
     'links' => [['href' => 'validate_db.php', 'label' => 'Validate Database', 'icon' => 'bi-check2-square']],
     'head_extra' => <<<'HTML'
-    <script>
-      // this javascript function is triggered by the user changing the "All" checkbox
-      function checkall()
-      {
-        var row_count = document.getElementById('step_table').rows.length-1;
-        if (document.getElementById('check_all').checked == true)
-        {
-          for (var i=0; i < row_count; i++)
-          {
-            var checkbox_name = "check" + i.toString();
-            document.getElementById(checkbox_name).checked = true;
-          }
-        }
-        else
-        {
-          for (var i=0; i < row_count; i++)
-          {
-            var checkbox_name = "check" + i.toString();
-            document.getElementById(checkbox_name).checked = false;
-          }
-        }
-      }
-    </script>
+    <script src="/sts/js/maint.js?v=1"></script>
 HTML,
 ]);
 ?>
@@ -106,9 +84,9 @@ HTML,
               </div>';
 
         print '<form action="fix_ghost_trains.php" method="get">';
-        print '<input type="submit" class="btn btn-danger" id="fix_ghosts_btn" name="fix_ghosts_btn" value="FIX GHOSTS" onclick="return confirm(\'Fix Ghosts: this changes the database. Continue?\');">&nbsp;';
+        print '<input type="submit" class="btn btn-danger" id="fix_ghosts_btn" name="fix_ghosts_btn" value="FIX GHOSTS" data-sts-confirm="Fix Ghosts: this changes the database. Continue?">&nbsp;';
     
-        print 'Check/Uncheck all ghost trains: <input type="checkbox" id="check_all" name="check_all" onchange="checkall();"><br /><br />';
+        print 'Check/Uncheck all ghost trains: <input type="checkbox" id="check_all" name="check_all" data-sts-change="maintCheckAll"><br /><br />';
         print '<table class="table table-sm table-bordered w-auto" id="step_table" name="step_table">';
         print '<th>Fix?</th>
                <th>Job Name</th>';
