@@ -80,10 +80,8 @@
       .status-empty { background-color: #ffeaa7; padding: 2px 6px; border-radius: 3px; }
       .status-loaded { background-color: #a8e6cf; padding: 2px 6px; border-radius: 3px; }
     </style>
-    <?php
-      // bring in the javascript function that shows rollingstock photos
-      require 'show_image.php';
-    ?>
+    <script src="/sts/js/sts-actions.js?v=1"></script>
+    <script src="/sts/js/show_image.js?v=1"></script>
   </head>
   <body>
     <!-- Navigation Bar -->
@@ -231,11 +229,11 @@
                 // set up a link to this car's image if it exists
                 if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row2['car_id'] . '.jpg'))
                 {
-                  $parm_string = '\'' . $row2['car_id'] . '\', \'' . $row2['reporting_marks'] . '\'';
+                  $img_id = $row2['car_id'];
                 }
                 else
                 {
-                  $parm_string = '\'\',\'' . $row2['reporting_marks'] . '\'';
+                  $img_id = '';
                 }
 
                 // compress the load/empty column
@@ -289,7 +287,7 @@
 
                 print '<tr>
                          <td class="text-center">' . $row2['position'] . '</td>
-                         <td style="cursor: pointer;" onclick="show_image(' . $parm_string . ');">' . $row2['reporting_marks'] . '</td>
+                         <td style="cursor: pointer;" data-sts-click="showImage" data-car-id="' . htmlspecialchars($img_id) . '" data-marks="' . htmlspecialchars($row2['reporting_marks']) . '">' . $row2['reporting_marks'] . '</td>
                          <td class="text-center">' . $row2['car_code'] . '</td>
                          <td class="text-center">' . $car_status . '</td>
                          <td>' . $commodity . '</td>

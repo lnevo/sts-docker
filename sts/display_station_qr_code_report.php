@@ -136,17 +136,11 @@ sts_page_start([
   'title' => 'Location QR/Bar Code Report',
   'icon' => 'bi-qr-code',
   'section' => 'report',
-  'head_extra' => '<link href="report_page.css?v=1" rel="stylesheet">
-    <script>
-      function enable_display_btn()
-      {
-        document.getElementById("display_btn").disabled = false;
-      }
-    </script>',
+  'head_extra' => '<link href="report_page.css?v=1" rel="stylesheet">',
 ]);
 ?>
     <div class="sts-card report-screen-only">
-    <form id="report-form" method="get">
+    <form id="report-form" method="get" data-report-endpoint="display_station_qr_code_report.php" data-enable-display data-all-select="station_name">
     <p>Select a station, the desired type of code, and then click the Display button. The QR or bar codes for all of the named locations at the selected station will be displayed below, formatted for printing.</p>
 
     <?php
@@ -155,7 +149,7 @@ sts_page_start([
       require 'open_db.php';
 
       // generate a drop-down list of stations, radio buttons for the type of codes, and the submit button
-      print '<div class="mb-3"><label class="form-label" for="station_name">Station</label>' . drop_down_stations('station_name', '', 'enable_display_btn()') . '</div>';
+      print '<div class="mb-3"><label class="form-label" for="station_name">Station</label>' . drop_down_stations('station_name', '', '') . '</div>';
 
       print '<div class="mb-3">
                <div class="form-check form-check-inline"><input class="form-check-input" id="code_type_qr" name="code_type" type="radio" value="qr" checked> <label class="form-check-label" for="code_type_qr">QR Code</label></div>
@@ -163,26 +157,17 @@ sts_page_start([
              </div>';
 
       print '<button id="display_btn" name="display_btn" value="Display" type="submit" class="btn btn-primary" disabled><i class="bi bi-eye"></i> Display</button>';
-
-      // generate some javascript that adds "All" to the top of the station drop-down list
-      print '<script>
-               var drop_down_list = document.getElementById("station_name");
-               var option = document.createElement("option");
-               option.value = "0";
-               option.text = "All";
-               drop_down_list.add(option, drop_down_list[1]);
-             </script>';
     ?>
     </form>
     </div>
 
     <div id="report-card" class="sts-card report-card" hidden>
       <div class="report-controls report-screen-only">
-        <button type="button" class="btn btn-primary btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
+        <button type="button" class="btn btn-primary btn-sm" data-sts-print><i class="bi bi-printer"></i> Print</button>
         <button type="button" class="btn btn-outline-secondary btn-sm" id="report-modify"><i class="bi bi-pencil"></i> Modify Search</button>
       </div>
       <div id="report-content" class="report-output"></div>
     </div>
-<script src="report_page.js?v=1"></script>
-<script>stsReportInit({ formId: 'report-form', endpoint: 'display_station_qr_code_report.php', onPrefill: enable_display_btn });</script>
+<script src="/sts/js/report-common.js?v=1"></script>
+<script src="/sts/js/report-page.js?v=3"></script>
 <?php sts_page_end(); ?>

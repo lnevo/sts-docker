@@ -12,6 +12,48 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+// Request values are plain strings (or, for categories/waybills, lists of
+// them); anything else is malformed.
+function auto_fill_all_scalar($v)
+{
+    if (!is_array($v)) {
+        return false;
+    }
+    foreach ($v as $item) {
+        if (!is_scalar($item)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+$auto_fill_bad = null;
+foreach (['categories', 'waybills'] as $key) {
+    if (isset($_POST[$key]) && !auto_fill_all_scalar($_POST[$key])) {
+        $auto_fill_bad = $key;
+    }
+}
+foreach (['filters', 'car_filters'] as $key) {
+    if (!isset($_POST[$key])) {
+        continue;
+    }
+    if (!is_array($_POST[$key])) {
+        $auto_fill_bad = $key;
+        continue;
+    }
+    foreach ($_POST[$key] as $field => $value) {
+        $ok = ($key === 'car_filters' && $field === 'categories') ? auto_fill_all_scalar($value) : is_scalar($value);
+        if (!$ok) {
+            $auto_fill_bad = $key;
+        }
+    }
+}
+if ($auto_fill_bad !== null) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Invalid ' . $auto_fill_bad]);
+    exit;
+}
+
 $categories = fill_order_parse_categories($_POST['categories'] ?? null);
 $filters = fill_order_parse_filters($_POST['filters'] ?? null);
 $car_filters = fill_order_parse_car_filters($_POST['car_filters'] ?? null);

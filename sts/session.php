@@ -211,13 +211,6 @@ session_render_nav_bar([
       ); ?>
     </div>
   </main>
-  <script>
-    (function () {
-      const sessionSelect = document.getElementById('session-select');
-      sessionSelect?.addEventListener('change', function () {
-        document.getElementById('session-select-form')?.submit();
-      });
-    })();
-  </script>
+  <script src="/sts/js/session_page.js?v=1"></script>
 </body>
 </html>

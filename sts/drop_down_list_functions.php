@@ -4,6 +4,41 @@
 
   ///////////////////////////////////////////////////////////////////////
 
+  // Strict CSP: $on_click is the name of an action registered by the page script with
+  // STS.action(name, fn) (see js/sts-actions.js). A legacy "name();" call string is
+  // reduced to "name". Returns the data-sts-<event> attribute, or '' when empty.
+  if (!function_exists('sts_action_attr'))
+  {
+    function sts_action_attr($on_click, $event)
+    {
+      $on_click = trim((string) $on_click);
+      if (preg_match('/^([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)\s*;?$/', $on_click, $m))
+      {
+        $on_click = $m[1];
+      }
+      if (!preg_match('/^[A-Za-z_][A-Za-z0-9_ -]*$/', $on_click))
+      {
+        return '';
+      }
+      return ' data-sts-' . $event . '="' . $on_click . '"';
+    }
+  }
+
+  // Page setup that used to be printed as inline <script> code: a data block of DOM
+  // operations that js/data_editor.js applies on load. Each op is
+  //   {id, props?, style?, html?, appendHtml?, focus?, remove?, addOption?{text,value,index}}
+  if (!function_exists('sts_editor_ops'))
+  {
+    function sts_editor_ops(array $ops)
+    {
+      print '<script type="application/json" class="sts-editor-ops">'
+          . json_encode($ops, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)
+          . '</script>';
+    }
+  }
+
+  ///////////////////////////////////////////////////////////////////////
+
   // car_codes
   function drop_down_car_codes($list_name, $tab_index, $wild_cards)
   {
@@ -70,7 +105,7 @@
       }
     }
 
-    $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '" onclick="' . $on_click . '" style="width: 100px;">';
+    $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '"' . sts_action_attr($on_click, 'change') . ' style="width: 100px;">';
     $select_string .= '<option value=""></option>';
 
     if (mysqli_num_rows($rs) > 0)
@@ -111,7 +146,7 @@
     // retrieve the rows and put them into an array
     $rs = mysqli_query($dbc, $sql);
 
-    $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '" onclick="' . $on_click . '" style="width: 100px;">';
+    $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '"' . sts_action_attr($on_click, 'change') . ' style="width: 100px;">';
     $select_string .= '<option value=""></option>';
 
     if (mysqli_num_rows($rs) > 0)
@@ -239,8 +274,7 @@
     if ((isset($on_click) && strlen($on_click) > 0))
     {
       // "onclick" won't work with touch screen devices
-      // $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '" onclick="' . $on_click . '">';
-      $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '" onchange="' . $on_click . '">';
+      $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '"' . sts_action_attr($on_click, 'change') . '>';
     }
     else
     {
@@ -748,8 +782,7 @@
 
     if ((isset($on_click) && strlen($on_click) > 0))
     {
-      // $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" onclick="' . $on_click . '">';
-      $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '" onchange="' . $on_click . '">';
+      $select_string = '<select id="' . $list_name . '" name="' . $list_name . '" tabindex="' . $tab_index . '"' . sts_action_attr($on_click, 'change') . '>';
     }
     else
     {

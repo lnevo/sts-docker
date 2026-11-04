@@ -1,9 +1,11 @@
 <?php
+require_once __DIR__ . '/maint_lock.php'; sts_maint_require('admin');
 require_once 'page_chrome.php';
 sts_page_start([
     'title' => 'Import Data from a File',
     'icon' => 'bi-upload',
     'section' => 'maint',
+    'head_extra' => '<script src="/sts/js/import_tables.js?v=1"></script>',
 ]);
 ?>
 <div class="sts-card">
@@ -340,7 +342,7 @@ sts_page_start([
           </td>
           <td style="valign: top";>
             <input type="file" class="form-control" name="import_file" id="import_file" accept=".csv"><br /><br />
-            <input type="submit" class="btn btn-danger" value="IMPORT" name="import" onclick="var r = document.querySelector('input[name=add_replace]:checked'); if (r &amp;&amp; r.value === 'replace') { return confirm('Replace will erase all existing data in the selected table. There is no undo. Continue?'); }">
+            <input type="submit" class="btn btn-danger" value="IMPORT" name="import" data-sts-click="importConfirm">
           </td>
         </tr>
       </table>

@@ -35,7 +35,7 @@ sts_page_start([
     Click on the <b>REFRESH</b> button to generate another set of random numbers. Click on the <b>PRINT</b> button to generate a printable report.<br /><br />
     </div>
     <form action="shipment_forecast.php" method="get">
-    <input id="refresh_btn" name="refresh_btn" value="REFRESH" type="submit" class="btn btn-primary">&nbsp;&nbsp;<button type="button" class="btn btn-outline-secondary" onclick="window.print();">PRINT</button>
+    <input id="refresh_btn" name="refresh_btn" value="REFRESH" type="submit" class="btn btn-primary">&nbsp;&nbsp;<button type="button" class="btn btn-outline-secondary" data-sts-print>PRINT</button>
     <br /><br />
     <?php
 

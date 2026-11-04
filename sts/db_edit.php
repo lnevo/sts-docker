@@ -16,7 +16,7 @@ $sts_ep = isset($sts_edit_pages[sts_get('tbl_name')]) ? $sts_edit_pages[sts_get(
 $page_heading = $sts_ep[0];
 $return_label = $sts_ep[1];
 $return_href = $sts_ep[2] === '' ? '' : 'db_list.php?tbl_name=' . $sts_ep[2];
-sts_page_start(['title' => 'Edit Database Object', 'icon' => 'bi-pencil-square', 'section' => 'data']);
+sts_page_start(['title' => 'Edit Database Object', 'icon' => 'bi-pencil-square', 'section' => 'data', 'head_extra' => '<script src="/sts/js/data_editor.js?v=1"></script>']);
 ?>
 <div class="sts-card">
 <?php if ($return_href !== '') { ?><a id="return_link" href="<?php echo htmlspecialchars($return_href); ?>"><?php echo htmlspecialchars($return_label); ?></a><?php } ?>
@@ -42,19 +42,13 @@ sts_page_start(['title' => 'Edit Database Object', 'icon' => 'bi-pencil-square',
       // generate the <form> tag
       print '<form method="get" action="db_edit.php">'; print "\n";
 
-      // generate some javascript that changes the caption on the update/remove button when the radio buttons are clicked
-      print '<script>
-               function enable_update(){var b=document.getElementById("update_btn");b.value="UPDATE";b.className="btn btn-primary btn-sm";}
-               function enable_remove(){var b=document.getElementById("update_btn");b.value="REMOVE";b.className="btn btn-danger btn-sm";}
-             </script>';
-
       // put the radio buttons, update/remove button, and reset button on one line
       print '<div class="d-flex flex-wrap align-items-center gap-3 mb-3">';
 
       // generate the two radio buttons that determine if this is an update or a remove operation
       print '<div id="update_remove_btn">
-             <label class="me-3"><input class="form-check-input" name="update_remove_btn" value="update" type="radio" checked onclick="enable_update()"> Update</label>
-             <label><input class="form-check-input" name="update_remove_btn" value="remove" type="radio" onclick="enable_remove()"> Remove</label>
+             <label class="me-3"><input class="form-check-input" name="update_remove_btn" value="update" type="radio" checked data-sts-click="updateRemoveMode"> Update</label>
+             <label><input class="form-check-input" name="update_remove_btn" value="remove" type="radio" data-sts-click="updateRemoveMode"> Remove</label>
              </div>';
 
       // generate the submit button

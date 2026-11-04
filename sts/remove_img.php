@@ -1,7 +1,7 @@
 <?php
 require_once 'page_chrome.php';
 sts_page_start(['title' => 'Remove Rolling Stock Image', 'icon' => 'bi-image', 'section' => 'data', 'back_href' => '', 'nav' => false,
-  'head_extra' => '<script>window.onunload = refreshParent; function refreshParent() { window.opener.location.reload(); }</script>']);
+  'head_extra' => '<script src="/sts/js/image_popup.js?v=1"></script>']);
 ?>
 <div class="sts-card">
     <?php
@@ -34,7 +34,7 @@ sts_page_start(['title' => 'Remove Rolling Stock Image', 'icon' => 'bi-image', '
         {
           print 'Unable to remove the file for ' . sts_html(sts_post('obj_id')) . '. Contact the development team.<br /><br />';
         }
-        //print 'Click on the CLOSE button to return to the Edit Car screen. <input type="button" value="CLOSE" onclick="window.close();">';
+        //print 'Click on the CLOSE button to return to the Edit Car screen. <input type="button" value="CLOSE" data-sts-close>';
         print '<br /><br />Close this window to return to the Edit Car Screen<br /><br />';
       }
       else
@@ -53,7 +53,7 @@ sts_page_start(['title' => 'Remove Rolling Stock Image', 'icon' => 'bi-image', '
         print '<p>To remove this image for ' . sts_html(sts_get('obj_id')) . ' click the REMOVE button.</p>';
                
         print '<input type="submit" name="remove_btn" id="remove_btn" value="REMOVE" class="btn btn-danger btn-sm">&nbsp;';
-               //<input type="submit" name="close_win" id="close_win" value="CANCEL" onclick="window.close();"><br /><br />';
+               //<input type="submit" name="close_win" id="close_win" value="CANCEL" data-sts-close><br /><br />';
         print '<br /><br />Close this window to return to the Edit Car Screen<br /><br />';
 
         if ($img_ok)

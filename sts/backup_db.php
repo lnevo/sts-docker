@@ -1,16 +1,12 @@
 <?php
+require_once __DIR__ . '/maint_lock.php'; sts_maint_require('operator');
 require_once 'page_chrome.php';
 sts_page_start([
     'title' => 'Back Up Database',
     'icon' => 'bi-cloud-upload',
     'section' => 'maint',
     'head_extra' => <<<'HTML'
-    <script>
-      function display_msg1()
-      {
-        document.getElementById("msg1").innerHTML = "Processing...";
-      }
-    </script>
+    <script src="/sts/js/maint.js?v=1"></script>
 HTML,
 ]);
 ?>
@@ -24,7 +20,7 @@ HTML,
     <br />
     <input id="backup_name" name="backup_name" type="text" class="form-control d-inline-block w-auto">
     &nbsp; 
-    <input id="backup_btn" name="backup_btn" value="BACK UP" type="submit" class="btn btn-primary" onclick="display_msg1();">
+    <input id="backup_btn" name="backup_btn" value="BACK UP" type="submit" class="btn btn-primary" data-sts-click="maintBusy">
     <br />
     <br />
     <?php

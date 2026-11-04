@@ -1,4 +1,5 @@
 """Catalog commands (sync and async), task lifecycle, maintenance lock."""
+import os
 import unittest
 
 import helpers as h
@@ -54,6 +55,15 @@ class TaskLifecycle(h.ApiTestCase):
         self.assertIsNotNone(t["started_at"])
         self.assertIsNotNone(t["finished_at"])
         self.assertIn("log", t)
+
+    def test_task_default_timeout_recorded(self):
+        # Server default (STS_API_TASK_DEFAULT_TIMEOUT, 21600 s unless the stack
+        # sets it; set the same value in this process if it differs, 0 = none).
+        want = int(os.environ.get("STS_API_TASK_DEFAULT_TIMEOUT", "21600"))
+        r = self.post("/commands/drain_unfilled_orders", {"async": True}, self.operator)
+        self.assertOk(r, 202)
+        t = h.wait_task(r.data["task_id"], self.operator, log=20)
+        self.assertEqual(t["spec"].get("timeout_seconds"), want if want > 0 else None, t["spec"])
 
     def test_slow_commands_always_run_as_tasks(self):
         r = self.post("/commands/generate_waybills", {}, self.operator)

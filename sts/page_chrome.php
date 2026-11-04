@@ -39,7 +39,7 @@ function sts_page_sections()
  *   links       Extra navbar links: [['href' => ..., 'label' => ..., 'icon' => ...], ...].
  *   print       true adds a Print button.
  *   head_extra  Raw HTML appended inside <head> (page-specific <link>/<style>/<script>).
- *   body_attrs  Raw attributes for <body>, e.g. 'onload="..."'. Caller escapes.
+ *   body_attrs  Raw attributes for <body>, e.g. 'class="x"'. Caller escapes.
  *   container   'fluid' (default) or 'narrow' (max-width 960px, centred).
  *   nav         false omits the navbar (popup windows).
  */
@@ -64,6 +64,8 @@ function sts_page_start(array $opts = [])
     echo "  <link href=\"vendor/bootstrap/bootstrap.min.css\" rel=\"stylesheet\">\n";
     echo "  <link href=\"vendor/bootstrap-icons/bootstrap-icons.min.css\" rel=\"stylesheet\">\n";
     echo "  <link href=\"page_chrome.css?v=2\" rel=\"stylesheet\">\n";
+    // Delegated handlers for data-sts-* attributes (strict CSP: no inline scripts).
+    echo "  <script src=\"/sts/js/sts-actions.js?v=1\"></script>\n";
     if (!empty($opts['head_extra'])) {
         echo $opts['head_extra'] . "\n";
     }
@@ -157,7 +159,7 @@ function sts_navbar_html(array $opts = [])
         $spacer_used = true;
     }
     if (!empty($opts['print'])) {
-        $html .= "      <button type=\"button\" class=\"btn btn-light btn-sm\" onclick=\"window.print()\"><i class=\"bi bi-printer\"></i> Print</button>\n";
+        $html .= "      <button type=\"button\" class=\"btn btn-light btn-sm\" data-sts-print><i class=\"bi bi-printer\"></i> Print</button>\n";
     }
     if (!empty($opts['extra_html'])) {
         $html .= $opts['extra_html'];

@@ -185,14 +185,12 @@ if (isset($_GET['generate_report'])) {
             echo '<tr>';
 
             // Determine image parameter string
-            $parm_string = file_exists('./ImageStore/DB_Images/RollingStock/' . $row['id'] . '.jpg')
-              ? "'" . $row['id'] . "', '" . $row['reporting_marks'] . "'"
-              : "'', '" . $row['reporting_marks'] . "'";
+            $img_id = file_exists('./ImageStore/DB_Images/RollingStock/' . $row['id'] . '.jpg') ? $row['id'] : '';
 
             if (substr($row['waybill_number'], 4, 1) == "E") {
               // Non-revenue waybill
               echo '<td>' . htmlspecialchars($row['current_location']) . '</td>';
-              echo '<td onclick="show_image(' . $parm_string . ');" style="cursor: pointer;">' . htmlspecialchars($row['reporting_marks']) . '</td>';
+              echo '<td data-sts-click="showImage" data-car-id="' . htmlspecialchars($img_id) . '" data-marks="' . htmlspecialchars($row['reporting_marks']) . '" style="cursor: pointer;">' . htmlspecialchars($row['reporting_marks']) . '</td>';
               echo '<td>' . htmlspecialchars($row['car_code']) . '</td>';
               echo '<td><span class="status-' . strtolower($row['status']) . '">' . htmlspecialchars($row['status']) . '</span></td>';
               echo '<td>Non-Revenue</td>';
@@ -203,7 +201,7 @@ if (isset($_GET['generate_report'])) {
             } else {
               // Revenue waybill
               echo '<td>' . htmlspecialchars($row['current_location']) . '</td>';
-              echo '<td onclick="show_image(' . $parm_string . ');" style="cursor: pointer;">' . htmlspecialchars($row['reporting_marks']) . '</td>';
+              echo '<td data-sts-click="showImage" data-car-id="' . htmlspecialchars($img_id) . '" data-marks="' . htmlspecialchars($row['reporting_marks']) . '" style="cursor: pointer;">' . htmlspecialchars($row['reporting_marks']) . '</td>';
               echo '<td>' . htmlspecialchars($row['car_code']) . '</td>';
               echo '<td><span class="status-' . strtolower($row['status']) . '">' . htmlspecialchars($row['status']) . '</span></td>';
               echo '<td>' . htmlspecialchars($row['consignment']) . '</td>';
@@ -405,15 +403,13 @@ if (isset($_GET['generate_report'])) {
             echo '<tr>';
 
             // Determine image parameter string
-            $parm_string = file_exists('./ImageStore/DB_Images/RollingStock/' . $row['id'] . '.jpg')
-              ? "'" . $row['id'] . "', '" . $row['reporting_marks'] . "'"
-              : "'', '" . $row['reporting_marks'] . "'";
+            $img_id = file_exists('./ImageStore/DB_Images/RollingStock/' . $row['id'] . '.jpg') ? $row['id'] : '';
 
             if (substr($row['waybill_number'], 4, 1) == "E") {
               // Non-revenue waybill
               echo '<td>' . htmlspecialchars($row['station_name']) . '</td>';
               echo '<td>' . htmlspecialchars($row['current_location']) . '</td>';
-              echo '<td onclick="show_image(' . $parm_string . ');" style="cursor: pointer;">' . htmlspecialchars($row['reporting_marks']) . '</td>';
+              echo '<td data-sts-click="showImage" data-car-id="' . htmlspecialchars($img_id) . '" data-marks="' . htmlspecialchars($row['reporting_marks']) . '" style="cursor: pointer;">' . htmlspecialchars($row['reporting_marks']) . '</td>';
               echo '<td>' . htmlspecialchars($row['car_code']) . '</td>';
               echo '<td><span class="status-' . strtolower($row['status']) . '">' . htmlspecialchars($row['status']) . '</span></td>';
               echo '<td>Non-Revenue</td>';
@@ -425,7 +421,7 @@ if (isset($_GET['generate_report'])) {
               // Revenue waybill
               echo '<td>' . htmlspecialchars($row['station_name']) . '</td>';
               echo '<td>' . htmlspecialchars($row['current_location']) . '</td>';
-              echo '<td onclick="show_image(' . $parm_string . ');" style="cursor: pointer;">' . htmlspecialchars($row['reporting_marks']) . '</td>';
+              echo '<td data-sts-click="showImage" data-car-id="' . htmlspecialchars($img_id) . '" data-marks="' . htmlspecialchars($row['reporting_marks']) . '" style="cursor: pointer;">' . htmlspecialchars($row['reporting_marks']) . '</td>';
               echo '<td>' . htmlspecialchars($row['car_code']) . '</td>';
               echo '<td><span class="status-' . strtolower($row['status']) . '">' . htmlspecialchars($row['status']) . '</span></td>';
               echo '<td>' . htmlspecialchars($row['consignment']) . '</td>';
@@ -932,17 +928,14 @@ if (isset($_GET['generate_report'])) {
       }
     }
   </style>
-  <?php
-    // bring in the javascript function that shows rollingstock photos
-    require 'show_image.php';
-  ?>
+  <script src="/sts/js/sts-actions.js?v=1"></script>
 </head>
 <body>
   <!-- Navigation Bar -->
   <?php require_once __DIR__ . '/page_chrome.php'; echo sts_navbar_html([
       'title' => 'Station Report', 'icon' => 'bi-graph-up', 'nav_class' => 'bg-primary',
       'links' => [
-          ['html' => '<button id="reading-btn" class="btn btn-outline-light btn-sm" onclick="toggleReadingMode()" title="Toggle easy reading mode"><i class="bi bi-eye"></i> Aa</button>'],
+          ['html' => '<button id="reading-btn" class="btn btn-outline-light btn-sm" data-sts-click="toggleReadingMode" title="Toggle easy reading mode"><i class="bi bi-eye"></i> Aa</button>'],
           ['href' => 'index.html', 'label' => 'Home', 'icon' => 'bi-house'],
           ['href' => 'reports.html', 'label' => 'Reports', 'icon' => 'bi-file-text'],
           ['href' => 'index-t.html', 'label' => 'Site Map', 'icon' => 'bi-diagram-3'],
@@ -976,16 +969,7 @@ if (isset($_GET['generate_report'])) {
                   require "open_db.php";
 
                   // generate a drop-down list of stations and the submit button
-                  print drop_down_stations("station_name", "form-select", "document.getElementById('display_btn').disabled = false;");
-
-                  // generate some javascript that adds "All" to the top of the station drop-down list
-                  print '<script>
-                   var drop_down_list = document.getElementById("station_name");
-                   var option = document.createElement("option");
-                   option.value = "0";
-                   option.text = "All";
-                   drop_down_list.add(option, drop_down_list[1]);
-                 </script>';
+                  print drop_down_stations("station_name", "form-select", "");
                 ?>
               </div>
 
@@ -1029,13 +1013,13 @@ if (isset($_GET['generate_report'])) {
           <div class="card">
             <div class="card-body" style="padding: 0.75rem;">
               <div class="print-controls">
-                <button type="button" class="btn btn-primary btn-sm" onclick="window.print();">
+                <button type="button" class="btn btn-primary btn-sm" data-sts-print>
                   <i class="bi bi-printer"></i> Print Report
                 </button>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('report-container').classList.remove('show'); document.querySelector('.form-card').scrollIntoView({behavior:'smooth'});">
+                <button type="button" class="btn btn-secondary btn-sm" data-sts-click="modifySearch">
                   <i class="bi bi-pencil"></i> Modify Search
                 </button>
-                <button type="button" class="btn btn-warning btn-sm" id="reading-btn-report" onclick="toggleReadingMode()" title="Toggle easy reading mode">
+                <button type="button" class="btn btn-warning btn-sm" id="reading-btn-report" data-sts-click="toggleReadingMode" title="Toggle easy reading mode">
                   <i class="bi bi-eye"></i> Reading Mode
                 </button>
               </div>
@@ -1052,57 +1036,8 @@ if (isset($_GET['generate_report'])) {
   <script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
   <script src="vendor/jquery/jquery-3.6.0.min.js"></script>
 
-  <script>
-    // ── Dyslexia mode ────────────────────────────────────────────
-    function toggleReadingMode() {
-      const enabled = document.body.classList.toggle('reading-mode');
-      localStorage.setItem('reading-mode', enabled ? '1' : '0');
-      syncDyslexiaBtns(enabled);
-    }
-    function syncDyslexiaBtns(enabled) {
-      document.querySelectorAll('#reading-btn, #reading-btn-report').forEach(btn => {
-        btn.classList.toggle('active', enabled);
-      });
-    }
-    // Restore preference on load
-    (function() {
-      const saved = localStorage.getItem('reading-mode') === '1';
-      if (saved) {
-        document.body.classList.add('reading-mode');
-        syncDyslexiaBtns(true);
-      }
-    })();
-
-    document.getElementById('station-report-form').addEventListener('submit', function(e) {
-      e.preventDefault();
-
-      const stationName = document.getElementById('station_name').value;
-      const hideUnavail = document.getElementById('hide_unavail').checked;
-
-      // Build query parameters
-      let params = new URLSearchParams();
-      params.append('station_name', stationName);
-      params.append('display_btn', '1');
-      if (hideUnavail) {
-        params.append('hide_unavail', '1');
-      }
-
-      // Fetch report content
-      fetch('display_station_report.php?generate_report=1&' + params.toString())
-        .then(response => response.text())
-        .then(html => {
-          document.getElementById('report-content').innerHTML = html;
-          document.getElementById('report-container').classList.add('show');
-
-          // Scroll to report
-          setTimeout(() => {
-            document.getElementById('report-container').scrollIntoView({behavior:'smooth'});
-          }, 100);
-        })
-        .catch(error => {
-          alert('Error loading report: ' + error);
-        });
-    });
-  </script>
+  <script src="/sts/js/show_image.js?v=1"></script>
+  <script src="/sts/js/report-common.js?v=2"></script>
+  <script src="/sts/js/report-station.js?v=1"></script>
 </body>
 </html>

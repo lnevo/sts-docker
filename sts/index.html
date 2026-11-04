@@ -7,39 +7,10 @@
   <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
   <link href="vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <link href="hub.css?v=2" rel="stylesheet">
-  <script>
-    function get_session_nbr() {
-      const xmlhttp = new XMLHttpRequest();
-      xmlhttp.onreadystatechange = function() {
-        if (this.readyState == 4 && this.status == 200) {
-          document.getElementById("os_number").innerText = this.responseText;
-        }
-      }
-      xmlhttp.open('GET', 'get_session_nbr.php', true);
-      xmlhttp.send();
-    }
-
-    function get_railroad_name() {
-      const xmlhttp = new XMLHttpRequest();
-      xmlhttp.onreadystatechange = function() {
-        if (this.readyState == 4 && this.status == 200) {
-          const railroadName = this.responseText.trim();
-          if (railroadName) {
-            document.getElementById("railroad_name").innerText = railroadName;
-          }
-        }
-      }
-      xmlhttp.open('GET', 'get_railroad_name.php', true);
-      xmlhttp.send();
-    }
-
-    function initialize_home_page() {
-      get_session_nbr();
-      get_railroad_name();
-    }
-  </script>
+  <script src="/sts/js/sts-actions.js?v=1"></script>
+  <script src="/sts/js/hub.js?v=1"></script>
 </head>
-<body onload="initialize_home_page();">
+<body>
   <nav class="navbar navbar-dark navbar-hub">
     <div class="container-fluid">
       <span class="navbar-brand"><i class="bi bi-house"></i> STS Main Menu</span>

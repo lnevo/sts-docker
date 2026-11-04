@@ -1,30 +1,12 @@
 <?php
+require_once __DIR__ . '/maint_lock.php'; sts_maint_require('admin');
 require_once 'page_chrome.php';
 sts_page_start([
     'title' => 'Wipe Database',
     'icon' => 'bi-eraser',
     'section' => 'maint',
     'head_extra' => <<<'HTML'
-    <script>
-      function toggle_wipe_check_box2()
-      {
-        if (document.getElementById("wipe_check_box2").disabled)
-          document.getElementById("wipe_check_box2").disabled = false;
-        else
-          {
-            document.getElementById("wipe_check_box2").disabled = true;
-            document.getElementById("wipe_check_box2").checked = false;
-            document.getElementById("wipe_btn").disabled = true;
-          }
-      }
-      function toggle_wipe_btn()
-      {
-        if (document.getElementById("wipe_btn").disabled)
-          document.getElementById("wipe_btn").disabled = false;
-        else
-          document.getElementById("wipe_btn").disabled = true;
-      }
-    </script>
+    <script src="/sts/js/maint.js?v=1"></script>
 HTML,
 ]);
 ?>
@@ -35,11 +17,11 @@ Click the <b>WIPE</b> button to erase the contents of the database and start ove
 There is no &quot;Undo&quot; feature.
 </div>
     <form method="get" action="wipe.php">
-      <input id="wipe_check_box1" value="reset" type="checkbox" class="form-check-input" onclick="toggle_wipe_check_box2();">
+      <input id="wipe_check_box1" value="reset" type="checkbox" class="form-check-input" data-sts-click="maintGate" data-target="wipe_check_box2">
       Yes, I'm certain I want to wipe the entire database!<br /><br />
-      <input id="wipe_check_box2" value="wipe2" type="checkbox" class="form-check-input" onclick="toggle_wipe_btn();" disabled>
+      <input id="wipe_check_box2" value="wipe2" type="checkbox" class="form-check-input" data-sts-click="maintGate" data-target="wipe_btn" disabled>
       Yes, I'm REALLY REALLY certain that I want to wipe the entire database! (No going back!)<br /><br />
-      <input id="wipe_btn" name="wipe_btn" value="WIPE" type="submit" class="btn btn-danger" onclick="return confirm('Wipe the entire database now? There is no undo.');" disabled><br /><br />
+      <input id="wipe_btn" name="wipe_btn" value="WIPE" type="submit" class="btn btn-danger" data-sts-confirm="Wipe the entire database now? There is no undo." disabled><br /><br />
     </form>
 
     <?php

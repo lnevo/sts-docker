@@ -340,48 +340,7 @@ session_render_nav_bar($overview_nav, 'Session ' . (int) $session);
 
   <?php echo session_run_stats_updated_html($run_stats); ?>
   </main>
-  <script>
-    (function () {
-      const sessionSelect = document.getElementById('session-select');
-      sessionSelect?.addEventListener('change', function () {
-        document.getElementById('session-select-form')?.submit();
-      });
-
-      const restartForm = document.getElementById('session-restart-form');
-      const confirmBase = <?php echo json_encode($restart_confirm_base); ?>;
-      restartForm?.addEventListener('submit', function (ev) {
-        const backupInput = restartForm.querySelector('[name="backup"]');
-        const backup = (backupInput && backupInput.value) ? String(backupInput.value).trim() : '';
-        if (backupInput && backupInput.tagName === 'SELECT' && backup === '') {
-          ev.preventDefault();
-          alert('Select a backup to restore before restarting.');
-          return;
-        }
-        const msg = confirmBase + (backup ? ('\n\nBackup: ' + backup) : '');
-        if (!confirm(msg)) {
-          ev.preventDefault();
-        }
-      });
-
-      const lockForm = document.getElementById('session-lock-form');
-      const lockConfirmBase = <?php echo json_encode($lock_confirm_base); ?>;
-      lockForm?.addEventListener('submit', function (ev) {
-        const backupInput = lockForm.querySelector('[name="backup"]');
-        const backup = (backupInput && backupInput.value) ? String(backupInput.value).trim() : '';
-        if (backupInput && backupInput.tagName === 'SELECT' && backup === '') {
-          ev.preventDefault();
-          alert('Select a backup to lock.');
-          return;
-        }
-        const locked = backup ? (backup.endsWith('_locked') ? backup : (backup + '_locked')) : '';
-        const msg = lockConfirmBase
-          + (backup ? ('\n\nSource: ' + backup) : '')
-          + (locked ? ('\nLocked: ' + locked) : '');
-        if (!confirm(msg)) {
-          ev.preventDefault();
-        }
-      });
-    })();
-  </script>
+  <script type="application/json" id="sts-data-session-index"><?php echo json_encode(['restartConfirm' => $restart_confirm_base, 'lockConfirm' => $lock_confirm_base], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
+  <script src="/sts/js/session_index_page.js?v=1"></script>
 </body>
 </html>

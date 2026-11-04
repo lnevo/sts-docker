@@ -4,31 +4,7 @@ require_once 'page_chrome.php';
 ob_start();
 require 'show_image.php';
 $show_image_js = ob_get_clean();
-$checkall_js = <<<'EOT'
-    <script>
-      // this javascript function is triggered by the user changing the "All" checkbox
-      function checkall()
-      {
-        var row_count = document.getElementById('car_table').rows.length-1;
-        if (document.getElementById('check_all').checked == true)
-        {
-          for (var i=0; i < row_count; i++)
-          {
-            var checkbox_name = "check" + i.toString();
-            document.getElementById(checkbox_name).checked = true;
-          }
-        }
-        else
-        {
-          for (var i=0; i < row_count; i++)
-          {
-            var checkbox_name = "check" + i.toString();
-            document.getElementById(checkbox_name).checked = false;
-          }
-        }
-      }
-    </script>
-EOT;
+$checkall_js = '<script src="/sts/js/add_remove.js?v=1"></script>';
 sts_page_start([
     'title' => 'Add / Remove Rolling Stock',
     'icon' => 'bi-plus-slash-minus',
@@ -225,7 +201,7 @@ sts_page_start([
       
       // add a 'check/uncheck all' checkbox that fires a javascript function
       print '<br /><br />Check/Uncheck all selected cars&nbsp;';
-      print '<input type="checkbox" id="check_all" name="check_all" class="form-check-input" onchange="checkall();"><br /><br />';
+      print '<input type="checkbox" id="check_all" name="check_all" class="form-check-input" data-sts-change="checkAll"><br /><br />';
       
       // put a Submit button on both the top and bottom of the table
       print '<input type="submit" id="update" name="update" value="UPDATE" class="btn btn-primary"><br /><br />';
@@ -260,18 +236,18 @@ sts_page_start([
         // generate one row per car
         if (file_exists('./ImageStore/DB_Images/RollingStock/' . sts_html($row['car_id']) . '.jpg'))
         {
-          $parm_string = '\'' . sts_html(addslashes($row['car_id'])) . '\', \'' . sts_html(addslashes($row['reporting_marks'])) . '\'';
+          $img_id = sts_html($row['car_id']);
         }
         else
         {
-          $parm_string = '\'\',\'' . sts_html(addslashes($row['reporting_marks'])) . '\'';
+          $img_id = '';
         }
         print '<tr>';
         print '  <td>' . sts_html($row['owners_name']) . '</td>
                  <td style="text-align: center;">
                    <input type="checkbox" id="check' . $row_count . '" name="check' . $row_count . '"' . $checked . '>
                  </td>
-                 <td onclick="show_image(' . $parm_string . ');">' . 
+                 <td data-sts-click="showImage" data-car-id="' . $img_id . '" data-marks="' . sts_html($row['reporting_marks']) . '">' . 
                    sts_html($row['reporting_marks']) . '
                    <input type="hidden" id="car_id' . $row_count . '" name="car_id' . $row_count . '" value="' . sts_html($row['car_id']) . '">
                  </td>

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/maint_lock.php'; sts_maint_require('admin');
 require_once 'page_chrome.php';
 sts_page_start([
     'title' => 'Fix Orphaned Cars',
@@ -6,29 +7,7 @@ sts_page_start([
     'section' => 'maint',
     'links' => [['href' => 'validate_db.php', 'label' => 'Validate Database', 'icon' => 'bi-check2-square']],
     'head_extra' => <<<'HTML'
-    <script>
-      // this javascript function is triggered by the user changing the "All" checkbox
-      function checkall()
-      {
-        var row_count = document.getElementById('car_table').rows.length-1;
-        if (document.getElementById('check_all').checked == true)
-        {
-          for (var i=0; i < row_count; i++)
-          {
-            var checkbox_name = "check" + i.toString();
-            document.getElementById(checkbox_name).checked = true;
-          }
-        }
-        else
-        {
-          for (var i=0; i < row_count; i++)
-          {
-            var checkbox_name = "check" + i.toString();
-            document.getElementById(checkbox_name).checked = false;
-          }
-        }
-      }
-    </script>
+    <script src="/sts/js/maint.js?v=1"></script>
 HTML,
 ]);
 ?>
@@ -96,9 +75,9 @@ HTML,
       if (mysqli_num_rows($rs) > 0)
       {
         print '<form action="fix_orphans.php" method="get">';
-        print '<input type="submit" class="btn btn-danger" id="fix_it_btn" name="fix_it_btn" value="FIX CARS" onclick="return confirm(\'Fix Cars: this changes the database. Continue?\');">&nbsp;';
+        print '<input type="submit" class="btn btn-danger" id="fix_it_btn" name="fix_it_btn" value="FIX CARS" data-sts-confirm="Fix Cars: this changes the database. Continue?">&nbsp;';
     
-        print 'Check/Uncheck all cars: <input type="checkbox" id="check_all" name="check_all" onchange="checkall();"><br /><br />';
+        print 'Check/Uncheck all cars: <input type="checkbox" id="check_all" name="check_all" data-sts-change="maintCheckAll"><br /><br />';
         print '<table class="table table-sm table-bordered w-auto" id="car_table" name="car_table">';
         print '<th>Fix?</th>
                <th>Reporting Marks</th>

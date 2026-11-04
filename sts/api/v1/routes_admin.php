@@ -113,6 +113,25 @@ api_route('POST', '/admin/backups', static function ($req) {
     api_ok(['name' => $name, 'size' => (int) filesize($path), 'mtime' => gmdate('c', (int) filemtime($path))], null, 201);
 }, 'admin', ['summary' => 'Back up the database (synchronous)']);
 
+api_route('GET', '/admin/backups/{name}/download', static function ($req) {
+    $name = $req['params']['name'];
+    if ($name !== basename($name) || $name[0] === '.' || !preg_match('/^[A-Za-z0-9._-]{1,128}$/', $name)) {
+        api_error(422, 'name must be a file name in the backups directory');
+    }
+    $path = admin_backups_dir() . '/' . $name;
+    if (!is_file($path)) {
+        api_error(404, 'Backup not found');
+    }
+    $GLOBALS['api_responded'] = true;
+    api_discard_output();
+    header('Content-Type: application/octet-stream');
+    header('Content-Disposition: attachment; filename="' . $name . '"');
+    header('Content-Length: ' . filesize($path));
+    header('X-Content-Type-Options: nosniff');
+    readfile($path);
+    exit;
+}, 'admin', ['summary' => 'Download a backup file (raw attachment, not an envelope)']);
+
 api_route('POST', '/admin/restore', static function ($req) {
     $body = api_body();
     $backup = $body['backup'] ?? null;

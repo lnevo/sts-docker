@@ -4,7 +4,7 @@
  *
  * File: STS_API_POLICY_FILE or /var/lib/sts/api_policy.json (same bind mount as
  * the token store). Keys: command_roles {id: role}, read_open, legacy_open,
- * editor_open. A key the file does not set falls back to its default: the env
+ * editor_open, maint_open. A key the file does not set falls back to its default: the env
  * flags STS_API_READ_OPEN / STS_API_LEGACY_OPEN (default on) and editor_open
  * (default off). api_command_required_role() is the only role lookup.
  */
@@ -25,7 +25,7 @@ const STS_API_POLICY_EXCLUSIVE_COMMANDS = [
     'wipe_database', 'reset_session', 'restart_session',
 ];
 
-const STS_API_POLICY_FLAGS = ['read_open', 'legacy_open', 'editor_open'];
+const STS_API_POLICY_FLAGS = ['read_open', 'legacy_open', 'editor_open', 'maint_open'];
 
 /** Backups matching these globs may only be overwritten by admins (policy key protected_backups). */
 const STS_API_POLICY_PROTECTED_DEFAULT = ['*seed*', '*_locked*'];
@@ -124,7 +124,7 @@ function api_command_is_exclusive($id)
     return api_command_required_role($id) === 'admin' || in_array($id, STS_API_POLICY_EXCLUSIVE_COMMANDS, true);
 }
 
-/** Effective value of read_open / legacy_open / editor_open. */
+/** Effective value of read_open / legacy_open / editor_open / maint_open (maintenance pages need no sign-in). */
 function api_policy_flag($name)
 {
     $raw = api_policy_read_raw();
@@ -178,6 +178,7 @@ function api_policy_get(array $command_ids = null)
         'read_open' => api_policy_flag_default('read_open'),
         'legacy_open' => api_policy_flag_default('legacy_open'),
         'editor_open' => false,
+        'maint_open' => false,
         'protected_backups' => STS_API_POLICY_PROTECTED_DEFAULT,
     ];
     return $out;

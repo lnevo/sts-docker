@@ -8,111 +8,17 @@
   // assigned to them
 
   // generate some javascript to display the table name, identify this table to the program, and set the update button tab index
-  print '<script>
-           document.getElementById("tbl_name").value = "car_orders";
-           document.getElementById("update_btn").tabIndex = "10";
-           document.getElementById("update_btn").value = "CANCEL ORDERS"
-         </script>';
+  sts_editor_ops(array(
+    array('id' => 'tbl_name', 'props' => array('value' => 'car_orders')),
+    array('id' => 'update_btn', 'props' => array('tabIndex' => '10', 'value' => 'CANCEL ORDERS')),
+    array('id' => 'instructions', 'style' => array('display' => 'none')),
+    array('id' => 'update', 'style' => array('display' => 'none')),
+    array('id' => 'instructions', 'html' => 'To cancel a car order, click on its checkbox and then on the <b>CANCEL ORDERS</b> button.<br />Car orders that have already been filled cannot be canceled.<br /><br />Filters can be used to hide rows. Click on column titles shown in <i>italics</i> to sort the table<br /><br />')
+  ));
+  print '<script src="/sts/js/db_list_car_orders.js?v=1"></script>';
 
-  // generate some java script to initally hide the instruction block and the SUBMIT button
-  print '<script>
-           document.getElementById("instructions").style.display = "none";
-           document.getElementById("update").style.display = "none";
-         </script>';
-
-  // generate some javascript to put some text into the prompt
-  print '<script>
-           document.getElementById("instructions").innerHTML = "To cancel a car order, click on its checkbox and then on the <b>CANCEL ORDERS</b> button.<br />" +
-           "Car orders that have already been filled cannot be canceled.<br /><br />Filters can be used to hide rows. " +
-           "Click on column titles shown in <i>italics</i> to sort the table<br /><br />";
-         </script>';
-
-  // bring in the javascript function that shows rollingstock photos
+  // bring in the rollingstock photo popup (js/show_image.js)
   require 'show_image.php';
-
-  // generate some javascript that will hide rows
-  // - hide_rows() is called to hide car orders that have been filled
-  // - filter_rows() is called to hide car orders that don't have the selected property
-  // - clear_filters() is called to show all car orders
-  print '<script>
-           function hide_rows(tbl_col)
-           {
-             // confirm that the hide_unavail checkbox is checked
-             if (document.getElementById("hide_unavail").checked == true)
-             {
-               var table = document.getElementById("wb_tbl");
-               //iterate through rows
-               for (var i = 2, row; row = table.rows[i]; i++)
-               {
-                 if (row.cells[tbl_col].innerText.length > 0)
-                 {
-                     row.style.display = "none";
-                 }
-               }
-             }
-             else
-             {
-               var table = document.getElementById("wb_tbl");
-               //iterate through rows
-               for (var i = 2, row; row = table.rows[i]; i++)
-               {
-                 if (row.cells[tbl_col].innerText.length > 0)
-                 {
-                     row.style.display = "";
-                 }
-               }
-             }
-           }
-           
-           function filter_rows(tbl_col, needle)
-           {
-             // confirm that a non-blank option has been selected
-             if (needle.length > 0)
-             {
-               // convert drop-down locations (station - location) to table locations (station\nlocation)
-               var hyphen_loc = needle.search(" - ");
-               if (hyphen_loc >= 0)
-               {
-                 var new_needle = needle.substr(0, hyphen_loc) + "\n" + needle.substr(hyphen_loc + 3, needle.length);
-                 needle = new_needle;
-               }
-
-               var table = document.getElementById("wb_tbl");
-               //iterate through rows
-               for (var i = 2, row; row = table.rows[i]; i++)
-               {
-                 // hide all car orders except the type specified (A = Automatic, E = Reposition, M = Manual)
-                 if ((tbl_col == 1) && (needle == "A"))
-                 {
-                   if((row.cells[tbl_col].innerText.substr(4,1) == "E") || (row.cells[tbl_col].innerText.substr(4,1)) == "M")
-                   {
-                     row.style.display = "none";
-                   }
-                 }
-                 else if((tbl_col == 1) && ((needle == "E") || (needle == "M")))
-                 {
-                   if (row.cells[tbl_col].innerText.substr(4,1) != needle)
-                   {
-                     row.style.display = "none";
-                   }
-                 }
-                 else
-                 {
-                   var haystack_length = row.cells[tbl_col].innerText.length;
-                   var needle_length = needle.length;
-                   var match_start = haystack_length - needle_length;
-                   
-                   var haystack = row.cells[tbl_col].innerText.substr(match_start);
-                   
-                   if (haystack != needle)
-                   {
-                     row.style.display = "none";
-                   }
-                 }
-               }
-             }
-           }
-         </script>';
          
   // get a database connection
   $dbc = open_db();
@@ -170,13 +76,13 @@
   if (mysqli_num_rows($rs) > 0)
   {
     // display a prompt and the SUBMIT button
-    print '<script>
-            document.getElementById("instructions").style.display = "block";
-            document.getElementById("update").style.display = "block";
-           </script>';
+    sts_editor_ops(array(
+      array('id' => 'instructions', 'style' => array('display' => 'block')),
+      array('id' => 'update', 'style' => array('display' => 'block'))
+    ));
 
     // generate a check box that when activated will run a javascript routine which will hide car orders that have been filled
-    print 'Hide filled car orders: <input class="form-check-input" tabindex="3" type="checkbox" id="hide_unavail" name="hide_unavail" onclick="hide_rows(2);"><br /><br />';
+    print 'Hide filled car orders: <input class="form-check-input" tabindex="3" type="checkbox" id="hide_unavail" name="hide_unavail" data-sts-click="hideRows" data-col="2"><br /><br />';
     
     // generate the table
     print '<table class="table table-sm table-bordered table-hover sts-table sortable" id="wb_tbl" style=""  style="white-space: nowrap;">
@@ -185,11 +91,10 @@
                <tr>
                  <th style="border-bottom:0px; border-right:0px;">
                    <input class="btn btn-secondary btn-sm" tabindex="4" type="button" id="clear_filters_btn" name="clear_filters_btn" value="CLEAR FILTERS"
-                   onclick="location.reload();" style="text-align:left;">
+                   data-sts-click="reloadPage" style="text-align:left;">
                  </th>
                  <th style="border-bottom:0px; border-left:0px; border-right:0px;"
-                     onchange="filter_rows(1, document.getElementById(\'wb_type_filter\').options[document.getElementById(\'wb_type_filter\').selectedIndex].value);
-                     document.getElementById(\'wb_type_filter\').disabled=true;">
+                     data-sts-change="listFilter" data-col="1" data-filter="wb_type_filter" data-use="value">
                      <select class="form-select form-select-sm" id="wb_type_filter" name="wb_type_filter" tabindex="5">
                        <option value=""></option>
                        <option value="A">Automatic</option>
@@ -200,38 +105,31 @@
                  <th style="border-bottom:0px; border-left:0px; border-right:0px;">
                  </th>
                  <th style="border-bottom:0px; border-left:0px; border-right:0px;"
-                     onchange="filter_rows(3, document.getElementById(\'car_code_filter\').options[document.getElementById(\'car_code_filter\').selectedIndex].text);
-                               document.getElementById(\'car_code_filter\').disabled=true;">' .
+                     data-sts-change="listFilter" data-col="3" data-filter="car_code_filter" data-use="text">' .
                                drop_down_car_codes('car_code_filter', '6', 'no_wild') . '
                  </th>
                  <th style="border-bottom:0px; border-left:0px; border-right:0px;"
-                     onchange="filter_rows(4, document.getElementById(\'shipment_filter\').options[document.getElementById(\'shipment_filter\').selectedIndex].text);
-                               document.getElementById(\'shipment_filter\').disabled=true;">' .
+                     data-sts-change="listFilter" data-col="4" data-filter="shipment_filter" data-use="text">' .
                                drop_down_shipments('shipment_filter', '7', '') . '
                  </th>
                  <th style="border-bottom:0px; border-left:0px; border-right:0px;"
-                     onchange="filter_rows(5, document.getElementById(\'commodity_filter\').options[document.getElementById(\'commodity_filter\').selectedIndex].text);
-                               document.getElementById(\'commodity_filter\').disabled=true;">' .
+                     data-sts-change="listFilter" data-col="5" data-filter="commodity_filter" data-use="text">' .
                                drop_down_commodities('commodity_filter', '8', '') . '
                  </th>
                  <th style="border-bottom:0px; border-left:0px; border-right:0px;"
-                     onchange="filter_rows(6, document.getElementById(\'status_filter\').options[document.getElementById(\'status_filter\').selectedIndex].text);
-                               document.getElementById(\'status_filter\').disabled=true;">' .
+                     data-sts-change="listFilter" data-col="6" data-filter="status_filter" data-use="text">' .
                                drop_down_status('status_filter', '9', '') . '
                  </th>
                  <th style="border-bottom:0px; border-left:0px; border-right:0px;"
-                     onchange="filter_rows(7, document.getElementById(\'loading_loc_filter\').options[document.getElementById(\'loading_loc_filter\').selectedIndex].text);
-                               document.getElementById(\'loading_loc_filter\').disabled=true;">' .
+                     data-sts-change="listFilter" data-col="7" data-filter="loading_loc_filter" data-use="text">' .
                                drop_down_locations('loading_loc_filter', '10', '') . '
                  </th>
                  <th style="border-bottom:0px; border-left:0px; border-right:0px;"
-                     onchange="filter_rows(8, document.getElementById(\'current_loc_filter\').options[document.getElementById(\'current_loc_filter\').selectedIndex].text);
-                               document.getElementById(\'current_loc_filter\').disabled=true;">' .
+                     data-sts-change="listFilter" data-col="8" data-filter="current_loc_filter" data-use="text">' .
                                drop_down_locations('current_loc_filter', '11', '') . '
                  </th>
                  <th style="border-bottom:0px; border-left:0px; border-right:0px;"
-                     onchange="filter_rows(9, document.getElementById(\'unloading_loc_filter\').options[document.getElementById(\'unloading_loc_filter\').selectedIndex].text);
-                               document.getElementById(\'unloading_loc_filter\').disabled=true;">' .
+                     data-sts-change="listFilter" data-col="9" data-filter="unloading_loc_filter" data-use="text">' .
                                drop_down_locations('unloading_loc_filter', '12', '') . '
                  </th>
                  <th style="border-bottom:0px; border-left:0px">
@@ -275,11 +173,11 @@
       // get the info needed to display the photo of the car associated with this waybill
       if (file_exists('./ImageStore/DB_Images/RollingStock/' . $row['car_id'] . '.jpg'))
       {
-        $parm_string = '\'' . sts_html(addslashes($row['car_id'])) . '\', \'' . sts_html(addslashes($row['car'])) . '\'';
+        $img_id = sts_html($row['car_id']);
       }
       else
       {
-        $parm_string = '\'\',\'' . sts_html(addslashes($row['car'])) . '\'';
+        $img_id = '';
       }
               
       // if a car order is for a non-revenue move (reposition) find out about it's car
@@ -304,7 +202,7 @@
                    <input class="form-check-input" name=wb' . $row_count . ' value="' . sts_html($row['waybill_number']) . '" type="checkbox" disabled>
                  </td>
                  <td>' . sts_html($row['waybill_number']) . '</td>
-                 <td onclick="show_image(' . $parm_string . ');">' . sts_html($row['car']) . '</td>
+                 <td data-sts-click="showImage" data-car-id="' . $img_id . '" data-marks="' . sts_html($row['car']) . '">' . sts_html($row['car']) . '</td>
                  <td style="text-align: center;">' . sts_html($row_car_code['car_code']) . '</td>
                  <td>Non-Revenue</td>
                  <td>N/A</td>
@@ -381,7 +279,7 @@
         }
         
         print '<td>' . sts_html($row['waybill_number']) . '</td>
-               <td onclick="show_image(' . $parm_string . ');">' . sts_html($row['car']) . '</td>
+               <td data-sts-click="showImage" data-car-id="' . $img_id . '" data-marks="' . sts_html($row['car']) . '">' . sts_html($row['car']) . '</td>
                <td style="text-align: center;">' . sts_html($row['car_code']) . '</td>
                <td>' . sts_html($row['shipment']) . '</td>
                <td>' . sts_html($row2['consignment']) . '</td>

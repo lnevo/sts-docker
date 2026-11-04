@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/maint_lock.php'; sts_maint_require('admin');
 require_once 'page_chrome.php';
 require_once 'sql_safe.php';
 sts_page_start([
@@ -6,18 +7,7 @@ sts_page_start([
     'icon' => 'bi-trash',
     'section' => 'maint',
     'head_extra' => <<<'HTML'
-    <script>
-      function enable_remove_btn()
-      {
-        document.getElementById("remove_btn").disabled = false;
-      }
-    </script>
-    <script>
-      function display_msg1()
-      {
-        document.getElementById("msg1").innerHTML = "Processing...";
-      }
-    </script>
+    <script src="/sts/js/maint.js?v=1"></script>
 HTML,
 ]);
 ?>
@@ -83,7 +73,7 @@ HTML,
       if (count($backup_names) > 0)
       {
         // since there are backup copies, we can now display the remove button
-        print '<input id="remove_btn" name="remove_btn" value="REMOVE" type="submit" class="btn btn-danger" onclick="if (!confirm(\'Permanently remove the selected backup? This cannot be undone.\')) { return false; } display_msg1();" disabled><br /><br />';
+        print '<input id="remove_btn" name="remove_btn" value="REMOVE" type="submit" class="btn btn-danger" data-sts-confirm="Permanently remove the selected backup? This cannot be undone." data-sts-click="maintBusy" disabled><br /><br />';
 
         // build a table of backup names with radio buttons
         print '<table class="table table-sm table-bordered w-auto">';
@@ -93,7 +83,7 @@ HTML,
           if (is_file('./backups/' . $name))
           {
             print '<tr>
-                     <td><input name="remove_name" value="' . sts_html($name) . '" type="radio" onclick="enable_remove_btn();"></td>
+                     <td><input name="remove_name" value="' . sts_html($name) . '" type="radio" data-sts-click="maintEnable" data-target="remove_btn"></td>
                      <td>' . sts_html($name) . '</td>
                    </tr>';
           }

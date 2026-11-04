@@ -2,7 +2,7 @@
 require_once 'page_chrome.php';
 require_once 'sql_safe.php';
 sts_page_start(['title' => 'Import Rolling Stock Image', 'icon' => 'bi-image', 'section' => 'data', 'back_href' => '', 'nav' => false,
-  'head_extra' => '<script>window.onunload = refreshParent; function refreshParent() { window.opener.location.reload(); }</script>']);
+  'head_extra' => '<script src="/sts/js/image_popup.js?v=1"></script>']);
 ?>
 <div class="sts-card">
     <?php
@@ -59,7 +59,7 @@ sts_page_start(['title' => 'Import Rolling Stock Image', 'icon' => 'bi-image', '
         {
           print sts_h(basename($upload_name)) . ' is not the correct type. It must be a jpg file.';
         }
-//        print '<br />Click on the CLOSE button to return to the Edit Car screen. <input type="button" value="CLOSE" onclick="window.close();">';
+//        print '<br />Click on the CLOSE button to return to the Edit Car screen. <input type="button" value="CLOSE" data-sts-close>';
         print '<br />Close this window to return to the Edit Car Screen';
       }
       else
@@ -83,7 +83,7 @@ sts_page_start(['title' => 'Import Rolling Stock Image', 'icon' => 'bi-image', '
                
         print '<input type="file" name="import_file" id="import_file" accept=".jpg" class="form-control form-control-sm d-inline-block w-auto">&nbsp;
                <input type="submit" name="upload_btn" id="upload_btn" value="UPLOAD" class="btn btn-primary btn-sm">&nbsp;';
-//               <input type="submit" name="close_win" id="close_win" value="CANCEL" onclick="window.close();">';
+//               <input type="submit" name="close_win" id="close_win" value="CANCEL" data-sts-close>';
         print '<br /><br />Close this window to return to the Edit Car Screen';
                
         // pass the incoming car index, car reporting marks, and image number through to this form when it's called a second time

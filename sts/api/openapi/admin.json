@@ -203,7 +203,7 @@
     "/admin/restore": {
       "post": {
         "summary": "Restore a backup",
-        "description": "Drops every table first (full, default true; pass false to restore over the existing tables), then runs sts_restore_sql_file() on backups/<backup>, optionally refreshes rolling-stock photos from backups/<backup>_photos, then runs the plugin session-reset hooks (reason restore). Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin. Optional timeout_seconds (1-86400) kills the task after that long: failed, \"timed out after N seconds\".",
+        "description": "Drops every table first (full, default true; pass false to restore over the existing tables), then runs sts_restore_sql_file() on backups/<backup>, optionally refreshes rolling-stock photos from backups/<backup>_photos, then runs the plugin session-reset hooks (reason restore). Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin. Optional timeout_seconds (1-86400) kills the task after that long: failed, \"timed out after N seconds\". Without timeout_seconds the server default applies (env STS_API_TASK_DEFAULT_TIMEOUT, seconds, default 21600; 0 = no limit) and the effective value is recorded in the task spec.",
         "x-sts-role": "admin",
         "security": [
           {
@@ -267,7 +267,7 @@
     "/admin/warm-start": {
       "post": {
         "summary": "Simulate sessions to a warm-start state",
-        "description": "Calls warm_start_run() with the same config the sts-helpers simulate_warm_start.php CLI builds; the same seed gives the same database. Omitted fields keep the warm-start defaults. Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin. Optional timeout_seconds (1-86400) kills the task after that long: failed, \"timed out after N seconds\".",
+        "description": "Calls warm_start_run() with the same config the sts-helpers simulate_warm_start.php CLI builds; the same seed gives the same database. Omitted fields keep the warm-start defaults. Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin. Optional timeout_seconds (1-86400) kills the task after that long: failed, \"timed out after N seconds\". Without timeout_seconds the server default applies (env STS_API_TASK_DEFAULT_TIMEOUT, seconds, default 21600; 0 = no limit) and the effective value is recorded in the task spec.",
         "x-sts-role": "admin",
         "security": [
           {
@@ -328,7 +328,7 @@
     "/admin/sessions/begin": {
       "post": {
         "summary": "Begin an operating session",
-        "description": "Calls warm_start_begin_operating_session(). The task fails (with its result) when the session start is blocked. Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin. Optional timeout_seconds (1-86400) kills the task after that long: failed, \"timed out after N seconds\".",
+        "description": "Calls warm_start_begin_operating_session(). The task fails (with its result) when the session start is blocked. Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin. Optional timeout_seconds (1-86400) kills the task after that long: failed, \"timed out after N seconds\". Without timeout_seconds the server default applies (env STS_API_TASK_DEFAULT_TIMEOUT, seconds, default 21600; 0 = no limit) and the effective value is recorded in the task spec.",
         "x-sts-role": "admin",
         "security": [
           {
@@ -389,7 +389,7 @@
     "/admin/sessions/play": {
       "post": {
         "summary": "Play the current operating session",
-        "description": "Calls warm_start_play_operating_session(). Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin. Optional timeout_seconds (1-86400) kills the task after that long: failed, \"timed out after N seconds\".",
+        "description": "Calls warm_start_play_operating_session(). Runs as an exclusive background task; poll GET /tasks/{id}. Only one exclusive task runs at a time (409 otherwise). Role: admin. Optional timeout_seconds (1-86400) kills the task after that long: failed, \"timed out after N seconds\". Without timeout_seconds the server default applies (env STS_API_TASK_DEFAULT_TIMEOUT, seconds, default 21600; 0 = no limit) and the effective value is recorded in the task spec.",
         "x-sts-role": "admin",
         "security": [
           {
@@ -521,6 +521,57 @@
                 }
               }
             }
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        }
+      }
+    },
+    "/admin/backups/{name}/download": {
+      "get": {
+        "summary": "Download a backup file",
+        "description": "Role: admin. The raw backup SQL as an attachment (not the envelope). The browser carries the sign-in cookie (sign in on API Access); backups are not served directly by the web server. 422 for a name that is not a plain file name, 404 when the file does not exist (photo folders are not downloadable).",
+        "x-sts-role": "admin",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "File name in the backups directory (GET /backups). No paths."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           },
           "422": {
             "$ref": "#/components/responses/Invalid"

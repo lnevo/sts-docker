@@ -138,6 +138,12 @@
               "boolean",
               "null"
             ]
+          },
+          "maint_open": {
+            "type": [
+              "boolean",
+              "null"
+            ]
           }
         }
       },
@@ -182,6 +188,9 @@
           },
           "defaults": {
             "type": "object"
+          },
+          "maint_open": {
+            "type": "boolean"
           }
         }
       }

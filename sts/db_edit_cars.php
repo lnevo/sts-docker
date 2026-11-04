@@ -434,11 +434,5 @@
   print $sql_msg;
 
   // add a "None" option to the top of the home location drop down box
-  print '<script>
-           var select = document.getElementById("home_location");
-           var option = document.createElement("option");
-           option.text = "None";
-           option.value = "0";
-           select.add(option, select[1]);
-         </script>';
+  sts_editor_ops(array(array('id' => 'home_location', 'addOption' => array('text' => 'None', 'value' => '0', 'index' => 1))));
 ?>

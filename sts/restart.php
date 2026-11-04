@@ -1,19 +1,12 @@
 <?php
+require_once __DIR__ . '/maint_lock.php'; sts_maint_require('admin');
 require_once 'page_chrome.php';
 sts_page_start([
     'title' => 'Restart Simulation',
     'icon' => 'bi-arrow-repeat',
     'section' => 'maint',
     'head_extra' => <<<'HTML'
-    <script>
-      function toggle_restart_btn()
-      {
-        if (document.getElementById("restart_btn").disabled)
-          document.getElementById("restart_btn").disabled = false;
-        else
-          document.getElementById("restart_btn").disabled = true;
-      }
-    </script>
+    <script src="/sts/js/maint.js?v=1"></script>
 HTML,
 ]);
 ?>
@@ -96,9 +89,9 @@ Click the check box to activate the <b>RESTART</b> button<br />
     ?>
 
     <form method="get" action="restart.php">
-      <input id="reset_check_box" value="reset" type="checkbox" class="form-check-input" onclick="toggle_restart_btn();">
+      <input id="reset_check_box" value="reset" type="checkbox" class="form-check-input" data-sts-click="maintGate" data-target="restart_btn">
       Yes, I'm certain I want to restart the simulation!<br /><br />
-      <input id="restart_btn" name="restart_btn" value="RESTART" type="submit" class="btn btn-danger" onclick="return confirm('Restart the simulation now? This cannot be undone.');" disabled><br /><br />
+      <input id="restart_btn" name="restart_btn" value="RESTART" type="submit" class="btn btn-danger" data-sts-confirm="Restart the simulation now? This cannot be undone." disabled><br /><br />
     </form>
 
 <?php print $msg; ?>
