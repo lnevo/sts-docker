@@ -102,7 +102,7 @@
     "expect": "document.querySelectorAll('.order-card').length>3"
    },
    {
-    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return j.data.filter(c=>c.status==='Ordered').length})().then(n=>{window.__o0=n;return true})"
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return j.data.filter(c=>c.status==='Ordered'||c.status==='Loaded').length})().then(n=>{window.__o0=n;return true})"
    },
    {
     "eval": "window.__n0=document.querySelectorAll('.order-card').length"
@@ -126,7 +126,7 @@
     "expect": "document.querySelectorAll('.order-card').length===window.__n0-1"
    },
    {
-    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return j.data.filter(c=>c.status==='Ordered').length})().then(n=>n===window.__o0+1)"
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return j.data.filter(c=>c.status==='Ordered'||c.status==='Loaded').length})().then(n=>n===window.__o0+1)"
    },
    {
     "click": "#checkAllOrders"
@@ -189,7 +189,7 @@
     "expect": "document.querySelectorAll('.order-card').length<window.__n0-2"
    },
    {
-    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return j.data.filter(c=>c.status==='Ordered').length})().then(n=>n>window.__o0+1)"
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return j.data.filter(c=>c.status==='Ordered'||c.status==='Loaded').length})().then(n=>n>window.__o0+1)"
    }
   ]
  },
@@ -269,7 +269,7 @@
   "url": "${STS_BASE}/build_switchlists.php",
   "actions": [
    {
-    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>{sessionStorage.j2=d.filter(c=>c.job_id==2).length;return true})(j.data)})()"
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>{sessionStorage.j2=d.filter(c=>c.job_id==${STS_JOB2_ID}).length;return true})(j.data)})()"
    },
    {
     "select": [
@@ -305,7 +305,7 @@
     "expect": "[...document.querySelectorAll('#car_table tr.job-car-row')].every(r=>!r.hidden)"
    },
    {
-    "eval": "(()=>{var s=document.getElementById('bulk_job');s.value='2';s.dispatchEvent(new Event('change',{bubbles:true}))})()"
+    "eval": "(()=>{var s=document.getElementById('bulk_job');s.value='${STS_JOB2_ID}';s.dispatchEvent(new Event('change',{bubbles:true}))})()"
    },
    {
     "click": "#check_all"
@@ -320,7 +320,7 @@
     "wait": 1000
    },
    {
-    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>d.filter(c=>c.job_id==2).length>Number(sessionStorage.j2))(j.data)})()"
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>d.filter(c=>c.job_id==${STS_JOB2_ID}).length>Number(sessionStorage.j2))(j.data)})()"
    }
   ]
  },
@@ -330,7 +330,7 @@
    {
     "select": [
      "#auto_assign_job",
-     "1"
+     "${STS_JOB1_ID}"
     ]
    },
    {
@@ -340,7 +340,7 @@
     "wait": 1500
    },
    {
-    "expect": "location.pathname.endsWith('auto_assign.php') && location.search.includes('job=1')"
+    "expect": "location.pathname.endsWith('auto_assign.php') && location.search.includes('job=${STS_JOB1_ID}')"
    },
    {
     "expect": "!!document.getElementById('check_all') || document.body.innerText.length>0"
@@ -348,10 +348,10 @@
   ]
  },
  {
-  "url": "${STS_BASE}/auto_assign.php?job=1",
+  "url": "${STS_BASE}/auto_assign.php?job=${STS_JOB1_ID}",
   "actions": [
    {
-    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>{sessionStorage.j1=d.filter(c=>c.job_id==1).length;return true})(j.data)})()"
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>{sessionStorage.j1=d.filter(c=>c.job_id==${STS_JOB1_ID}).length;return true})(j.data)})()"
    },
    {
     "expect": "document.querySelectorAll('input.pu_car').length>0"
@@ -375,7 +375,7 @@
     "wait": 1000
    },
    {
-    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>d.filter(c=>c.job_id==1).length>Number(sessionStorage.j1))(j.data)})()"
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>d.filter(c=>c.job_id==${STS_JOB1_ID}).length>Number(sessionStorage.j1))(j.data)})()"
    }
   ]
  },
@@ -383,12 +383,12 @@
   "url": "${STS_BASE}/pick_up.php",
   "actions": [
    {
-    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>{sessionStorage.inTrain=d.filter(c=>c.job_id==2&&c.location_id==0).length;return true})(j.data)})()"
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>{sessionStorage.inTrain=d.filter(c=>c.job_id==${STS_JOB2_ID}&&c.location_id==0).length;return true})(j.data)})()"
    },
    {
     "select": [
      "#job_list",
-     "2"
+     "${STS_JOB2_ID}"
     ]
    },
    {
@@ -425,7 +425,7 @@
     "wait": 1000
    },
    {
-    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>d.filter(c=>c.job_id==2&&c.location_id==0).length>Number(sessionStorage.inTrain))(j.data)})()"
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>d.filter(c=>c.job_id==${STS_JOB2_ID}&&c.location_id==0).length>Number(sessionStorage.inTrain))(j.data)})()"
    }
   ]
  },
@@ -433,12 +433,12 @@
   "url": "${STS_BASE}/set_out.php",
   "actions": [
    {
-    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>{sessionStorage.inTrain=d.filter(c=>c.job_id==2&&c.location_id==0).length;return sessionStorage.inTrain>0})(j.data)})()"
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>{sessionStorage.inTrain=d.filter(c=>c.job_id==${STS_JOB2_ID}&&c.location_id==0).length;return sessionStorage.inTrain>0})(j.data)})()"
    },
    {
     "select": [
      "#job_list",
-     "2"
+     "${STS_JOB2_ID}"
     ]
    },
    {
@@ -484,7 +484,7 @@
     "wait": 1200
    },
    {
-    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>d.filter(c=>c.job_id==2&&c.location_id==0).length<Number(sessionStorage.inTrain))(j.data)})()"
+    "expect": "(async()=>{const j=await fetch('${STS_BASE}/api/v1/cars?limit=1000',{headers:{Authorization:'Bearer ${STS_TEST_TOKEN}'}}).then(r=>r.json());return (d=>d.filter(c=>c.job_id==${STS_JOB2_ID}&&c.location_id==0).length<Number(sessionStorage.inTrain))(j.data)})()"
    }
   ]
  },
@@ -497,7 +497,7 @@
    {
     "select": [
      "#job_list",
-     "1"
+     "${STS_JOB1_ID}"
     ]
    },
    {
@@ -513,10 +513,10 @@
     "expect": "document.querySelectorAll('#car_table_body tr').length>1 && document.getElementById('update_pos').disabled===false"
    },
    {
-    "eval": "(()=>{\n var rows=[...document.querySelectorAll('#car_table_body tr')];\n var a=rows[0].querySelector('.drag-handle'), r0=rows[0].getBoundingClientRect(), r1=rows[1].getBoundingClientRect();\n sessionStorage.dragged=rows[0].querySelector('td[data-car-id]').dataset.carId;\n var y0=(r0.top+r0.bottom)/2, y1=(r1.top+r1.bottom)/2+4;\n a.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true,clientX:20,clientY:y0}));\n document.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,cancelable:true,clientX:20,clientY:y1}));\n document.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,cancelable:true,clientX:20,clientY:y1}));\n})()"
+    "eval": "(()=>{\n var rows=[...document.querySelectorAll('#car_table_body tr')];\n var a=rows[0].querySelector('.drag-handle'), r0=rows[0].getBoundingClientRect(), r1=rows[1].getBoundingClientRect();\n sessionStorage.dragged=rows[0].querySelector('td[data-sts-click=showImage] input[type=hidden]').value;\n var y0=(r0.top+r0.bottom)/2, y1=(r1.top+r1.bottom)/2+4;\n a.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true,clientX:20,clientY:y0}));\n document.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,cancelable:true,clientX:20,clientY:y1}));\n document.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,cancelable:true,clientX:20,clientY:y1}));\n})()"
    },
    {
-    "expect": "document.querySelector('#car_table_body tr:nth-child(2) td[data-car-id]').dataset.carId===sessionStorage.dragged"
+    "expect": "document.querySelector('#car_table_body tr:nth-child(2) td[data-sts-click=showImage] input[type=hidden]').value===sessionStorage.dragged"
    },
    {
     "expect": "document.querySelector('#car_table_body tr:nth-child(2)').cells[1].textContent.trim()==='2'"
@@ -536,7 +536,7 @@
    {
     "select": [
      "#location_list",
-     "3"
+     "${STS_LOC_ID}"
     ]
    },
    {

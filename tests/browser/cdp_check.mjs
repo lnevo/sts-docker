@@ -24,7 +24,8 @@
 // "${STS_BASE}"); they are filled from the environment so no token is committed.
 // allowConsole: console errors matching any regex are expected (e.g. a signed-out
 // 401 from /auth/me) and don't fail the page.
-// Env: CHROME (path to the Chrome binary), CDP_TIMEOUT_MS (default 15000).
+// Env: CHROME (path to the Chrome binary), CDP_TIMEOUT_MS (default 15000),
+// CDP_NO_SANDBOX=1 (pass --no-sandbox; needed on CI runners that restrict user namespaces).
 
 import { spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs';
@@ -55,7 +56,7 @@ async function launch() {
   const dir = mkdtempSync(join(tmpdir(), 'sts-cdp-'));
   const proc = spawn(CHROME, [
     '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
-    '--remote-debugging-port=0', `--user-data-dir=${dir}`, 'about:blank',
+    ...(process.env.CDP_NO_SANDBOX ? ['--no-sandbox'] : []), '--remote-debugging-port=0', `--user-data-dir=${dir}`, 'about:blank',
   ], { stdio: 'ignore' });
   const portFile = join(dir, 'DevToolsActivePort');
   for (let i = 0; i < 100 && !existsSync(portFile); i++) await sleep(100);

@@ -1,0 +1,108 @@
+name: Browser tests
+
+# Builds the sandbox stack like api-tests.yml (port 8981, throwaway DB, empty
+# plugins dir, a stateless admin token) and runs tests/browser/run.sh against it
+# in the Chrome that ships on the runner. No private data: run.sh restores the
+# committed synthetic backup tests/browser/fixtures/browser_fixture and makes the
+# rest (sessions, bad marks, off-home cars, role tokens) through the API.
+
+on:
+  push:
+    paths:
+      - "sts/**"
+      - "docker-compose*.yml"
+      - "Dockerfile"
+      - "start.sh"
+      - "docker/**"
+      - "tests/browser/**"
+      - ".github/workflows/browser-tests.yml"
+  pull_request:
+    paths:
+      - "sts/**"
+      - "docker-compose*.yml"
+      - "Dockerfile"
+      - "start.sh"
+      - "docker/**"
+      - "tests/browser/**"
+      - ".github/workflows/browser-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE_PROJECT_NAME: sts-browser-ci
+      STS_SANDBOX_DATA: ${{ github.workspace }}/.sandbox-data
+      STS_PLUGINS_DIR: ${{ github.workspace }}/.sandbox-data/plugins
+      STS_BASE: http://localhost:8981/sts
+      STS_API_BACKUPS_DIR: ${{ github.workspace }}/.sandbox-data/backups
+      STS_PHOTOS_DIR: ${{ github.workspace }}/.sandbox-data/photos
+      CDP_NO_SANDBOX: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Prepare sandbox data and a CI admin token
+        run: |
+          mkdir -p "$STS_SANDBOX_DATA"/{backups,photos,config,plugins}
+          # the container's web user must be able to write here
+          chmod -R 777 "$STS_SANDBOX_DATA"
+          # a stateless admin token the web service accepts (STS_API_ADMIN_TOKEN)
+          token="sts_$(openssl rand -hex 20)"
+          echo "::add-mask::$token"
+          echo "STS_API_TOKEN=$token" >> "$GITHUB_ENV"
+          cat > "$STS_SANDBOX_DATA/ci.yml" <<EOF
+          services:
+            web:
+              environment:
+                - STS_API_ADMIN_TOKEN=$token
+          EOF
+
+      - name: Build and start the sandbox stack
+        run: |
+          docker compose \
+            -f docker-compose.yml -f docker-compose.sandbox.yml -f "$STS_SANDBOX_DATA/ci.yml" \
+            --profile build up -d --build
+
+      - name: Wait for /health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS "$STS_BASE/api/v1/health" | grep -q '"db":"ok"'; then
+              echo "API is up"; exit 0
+            fi
+            sleep 3
+          done
+          echo "API did not come up" >&2
+          docker compose -p "$COMPOSE_PROJECT_NAME" logs --tail 100
+          exit 1
+
+      - name: Run browser tests
+        run: |
+          # the Chrome preinstalled on ubuntu-latest
+          CHROME=$(command -v google-chrome)
+          export CHROME
+          "$CHROME" --version
+          tests/browser/run.sh
+
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose -p "$COMPOSE_PROJECT_NAME" logs --tail 200
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose \
+            -f docker-compose.yml -f docker-compose.sandbox.yml -f "$STS_SANDBOX_DATA/ci.yml" \
+            --profile build down -v
