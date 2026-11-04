@@ -2,6 +2,7 @@
 // get_car_data_ajax.php - Fetch updated car data after status change
 
 require 'open_db.php';
+require_once 'sql_safe.php';
 
 header('Content-Type: application/json');
 
@@ -11,7 +12,13 @@ if (!isset($_GET['car_id'])) {
     exit;
 }
 
-$car_id = mysqli_real_escape_string(open_db(), $_GET['car_id']);
+if (!is_scalar($_GET['car_id'])) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Invalid car_id']);
+    exit;
+}
+
+$car_id = (string) sts_id($_GET['car_id']);
 $dbc = open_db();
 
 $sql = 'SELECT cars.handled_by_job_id,
@@ -35,10 +42,15 @@ $sql = 'SELECT cars.handled_by_job_id,
         LEFT JOIN locations loc03 ON shipments.unloading_location = loc03.id
         LEFT JOIN routing sta02 ON sta02.id = loc02.station
         LEFT JOIN routing sta03 ON sta03.id = loc03.station
-        WHERE cars.id = ' . $car_id;
+        WHERE cars.id = ?';
 
-$rs = mysqli_query($dbc, $sql);
-if ($row = mysqli_fetch_array($rs)) {
+$rs = sts_q($dbc, $sql, [$car_id]);
+if ($rs instanceof mysqli_result && $row = mysqli_fetch_array($rs)) {
+    foreach ($row as $k => $v) {
+        if ($v !== null) {
+            $row[$k] = (string) $v;
+        }
+    }
     $result = [
         'handled_by_job_id' => $row['handled_by_job_id'],
         'handled_by_job_name' => $row['job_name'] ?: '',

@@ -472,10 +472,31 @@ function api_task_prune()
  *                    the check and the create happen under one lock, after in-flight writes drain.
  * @return array the queued record
  */
+/**
+ * Wall-clock default for tasks whose spec carries no timeout_seconds:
+ * env STS_API_TASK_DEFAULT_TIMEOUT seconds (default 21600 = 6 h; 0 = unlimited).
+ */
+function api_task_default_timeout()
+{
+    $v = getenv('STS_API_TASK_DEFAULT_TIMEOUT');
+    if ($v === false || trim($v) === '' || !ctype_digit(trim($v))) {
+        return 21600;
+    }
+    return (int) trim($v);
+}
+
 function api_task_create($kind, array $spec, ?array $user, array $opts = [])
 {
     if (!api_task_kind_valid($kind) || !is_file(dirname(__DIR__) . '/tasks/' . $kind . '.php')) {
         throw new InvalidArgumentException('Unknown task kind');
+    }
+    if (!isset($spec['timeout_seconds'])) {
+        $dt = api_task_default_timeout();
+        if ($dt > 0) {
+            $spec['timeout_seconds'] = $dt;
+        } else {
+            unset($spec['timeout_seconds']);
+        }
     }
     $exclusive = !empty($opts['exclusive']);
     $maint = $exclusive ? api_tasks_lock_open('.maint.lock', LOCK_EX) : null;

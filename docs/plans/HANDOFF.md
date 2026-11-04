@@ -118,9 +118,9 @@ Read this first when starting a session on the STS work. Last updated
     `cache/` is kept because `QR_CACHEABLE` reads it. Railroad logos are kept
     because they are chosen by name at run time.
   - Branch `workflow-editor-legacy` deleted on origin.
-- Open: `get_car_data_ajax.php` and the `fill_order_*` parsers still use
-  `real_escape_string`; no wall-clock limit on tasks without
-  `timeout_seconds`; a stricter CSP would need the inline scripts moved out.
+- Closed (branch `c7-open-items`): `get_car_data_ajax.php` and the fill-order path
+  use prepared statements and reject array inputs with a JSON 400; tasks without
+  `timeout_seconds` get `STS_API_TASK_DEFAULT_TIMEOUT` (default 21600, 0 = none).
 - Cleanups from the 2026-11-03 review, not scheduled:
   - SQL injection in the CRUD family (`db_list_jobs.php:32` runs
     `create table` on a raw POST value; the `db_edit_*` pages delete by GET).

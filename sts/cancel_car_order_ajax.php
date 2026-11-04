@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $input = json_decode(file_get_contents('php://input'), true);
 
-if (!isset($input['waybill_number']) || trim($input['waybill_number']) === '') {
+if (!is_array($input) || !isset($input['waybill_number']) || !is_scalar($input['waybill_number']) || trim((string) $input['waybill_number']) === '') {
     http_response_code(400);
     echo json_encode(['error' => 'Missing waybill_number']);
     exit;
