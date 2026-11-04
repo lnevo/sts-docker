@@ -107,11 +107,20 @@ Read this first when starting a session on the STS work. Last updated
     tools, and the remaining helper paths moved onto the API.
   - Parity capture `phase9-final` matches `phase6-api-final` (masked dumps
     identical).
-- Open: a CSP for the legacy pages (the HttpOnly cookie doesn't stop XSS in
-  `/sts/`); `get_car_data_ajax.php` and the `fill_order_*` parsers still use
-  `real_escape_string`; `get_table_guts.php` allows a single arbitrary SELECT;
-  CI (`api-tests.yml`) has not run on GitHub yet; no wall-clock limit on tasks
-  without `timeout_seconds`.
+- 2026-11-04 cleanup:
+  - Enforced CSP on `/sts/`: same-origin only, inline scripts allowed,
+    `unsafe-eval` only for `/sts/api/docs/`. A headless-Chrome sweep of every
+    page showed no violations.
+  - `get_table_guts.php` and its client `reload_html_table.php` removed (they
+    ran arbitrary SELECTs).
+  - Removed: `secure.html`, `import_tables.php.orig`, unreferenced imagemap and
+    GUI images, and the QR library's bindings, tools, demo page and docs. Its
+    `cache/` is kept because `QR_CACHEABLE` reads it. Railroad logos are kept
+    because they are chosen by name at run time.
+  - Branch `workflow-editor-legacy` deleted on origin.
+- Open: `get_car_data_ajax.php` and the `fill_order_*` parsers still use
+  `real_escape_string`; no wall-clock limit on tasks without
+  `timeout_seconds`; a stricter CSP would need the inline scripts moved out.
 - Cleanups from the 2026-11-03 review, not scheduled:
   - SQL injection in the CRUD family (`db_list_jobs.php:32` runs
     `create table` on a raw POST value; the `db_edit_*` pages delete by GET).

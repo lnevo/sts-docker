@@ -43,7 +43,7 @@ components:
                 options_from: backups
                 allow_custom: true
                 required: true
-                default: hart_seed
+                default: api_backup_probe
           -
             id: backup_database
             category: database
@@ -2223,7 +2223,7 @@ components:
                 options_from: backups
                 allow_custom: true
                 required: true
-                default: hart_seed
+                default: api_backup_probe
           -
             id: backup_database
             category: database
@@ -2584,7 +2584,7 @@ components:
                   options_from: backups
                   allow_custom: true
                   required: true
-                  default: hart_seed
+                  default: api_backup_probe
         backup_database:
           type: object
           required: [id, label, params]
