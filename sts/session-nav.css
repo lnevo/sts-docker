@@ -581,6 +581,35 @@ pre.switchlist {
   font: normal 8px Verdana, Arial, sans-serif;
   vertical-align: middle;
 }
+/* Header at the top of each printed switch list: railroad, document name, and
+   the session / date / engineer lines the crew fills in. */
+.print-all-clip-header {
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 3px solid #222;
+}
+.print-all-clip-rr {
+  font: bold 20px Verdana, Arial, sans-serif;
+  text-align: center;
+}
+.print-all-clip-doc {
+  font: bold 14px Verdana, Arial, sans-serif;
+  letter-spacing: 0.2em;
+  text-align: center;
+  text-transform: uppercase;
+  margin: 4px 0 12px;
+}
+.print-all-clip-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 16px;
+  font: normal 12px Verdana, Arial, sans-serif;
+}
+.print-all-clip-meta span:last-child {
+  flex-basis: 100%;
+}
+
 .print-all-phase .phase-row td {
   background: #e9ecef;
   font-weight: bold;
