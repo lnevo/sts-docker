@@ -610,6 +610,12 @@ pre.switchlist {
   flex-basis: 100%;
 }
 
+/* Contents holds short words and long cargo names; keep it small and let a long
+   name break rather than run into the From column. */
+.print-all-phase td:nth-child(4) {
+  font-size: 7px;
+  overflow-wrap: anywhere;
+}
 .print-all-phase .phase-row td {
   background: #e9ecef;
   font-weight: bold;
