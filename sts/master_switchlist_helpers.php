@@ -1626,7 +1626,17 @@ function master_sw_render_print_all_phase_body($dbc, array $section, $phase_inde
 
     $heading = master_sw_phase_heading_label($display_train, $phase_index, $phase_total, $options);
 
+    $rr_name = master_sw_get_setting($dbc, 'railroad_name') ?: 'HART Railroad';
+    $session_label = master_sw_session_nbr_from_options($dbc, $options);
+    $clip_header = '<header class="print-all-clip-header">'
+        . '<div class="print-all-clip-rr">' . htmlspecialchars($rr_name) . '</div>'
+        . '<div class="print-all-clip-doc">Switchlist</div>'
+        . '<div class="print-all-clip-meta"><span>Operating Session ' . htmlspecialchars((string) $session_label) . '</span>'
+        . '<span>Date _______________</span><span>Engineer _______________</span></div>'
+        . '</header>';
+
     return '<section class="print-all-phase">
+  ' . $clip_header . '
   <h2>' . htmlspecialchars($heading) . '</h2>
   <table>
     <tr>
@@ -1670,7 +1680,7 @@ function master_sw_render_print_all($dbc, $job_name, array $sections, $job_dir, 
             $i + 1,
             $phase_total,
             $display_train,
-            $options
+            $options + ['session_override' => $session_nbr]
         );
     }
 
