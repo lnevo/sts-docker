@@ -123,6 +123,7 @@ mysqli_close($dbc);
             </div>
             <?php echo operations_render_stat_columns([['label' => 'Pending', 'value' => $stats['load_unload_pending']]]); ?>
           </a>
+          <?php echo plugins_render_operations_buttons('after', $stats); ?>
         </div>
       </div>
 
