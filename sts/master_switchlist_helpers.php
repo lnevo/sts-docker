@@ -966,12 +966,12 @@ function master_sw_render_head_assets()
 
 /**
  * Page rule for printed switch lists: 5 x 8 in portrait sheets on a 6 x 9 in
- * clipboard, so the clip covers the top inch. Keep in step with the @page rule
- * in report_switchlist.css.
+ * clipboard. The header at the top of each list sits under the clip, so there is
+ * no extra top margin. Keep in step with the @page rule in report_switchlist.css.
  */
 function master_sw_print_page_css()
 {
-    return '@page { size: 5in 8in portrait; margin: 1in 0.25in 0.25in 0.25in; }';
+    return '@page { size: 5in 8in portrait; margin: 0.25in; }';
 }
 
 function master_sw_render_nav_styles()

@@ -222,12 +222,12 @@ body.sts-page .sts-page-body .sw-report .clear-strikes-button:hover {
   background-color: #d32f2f;
 }
 
-/* Printed on 5 x 8 in portrait sheets that sit on a 6 x 9 in clipboard: the
-   clip covers the top inch, so every page keeps a 1 in top margin. The
+/* Printed on 5 x 8 in portrait sheets that sit on a 6 x 9 in clipboard. The
+   list header sits under the clip, so no extra top margin is needed. The
    print_width setting (inches) should be 4.5in or less to fit the sheet. */
 @page {
   size: 5in 8in portrait;
-  margin: 1in 0.25in 0.25in 0.25in;
+  margin: 0.25in;
 }
 
 @media print {
