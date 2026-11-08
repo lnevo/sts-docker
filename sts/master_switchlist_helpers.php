@@ -1640,14 +1640,14 @@ function master_sw_render_print_all_phase_body($dbc, array $section, $phase_inde
   <h2>' . htmlspecialchars($heading) . '</h2>
   <table>
     <tr>
-      <th style="width: 60px;">Rptg<br>Marks</th>
+      <th style="width: 50px;">Rptg<br>Marks</th>
       <th style="width: 22px; text-align: center;">Car<br>Code</th>
       <th style="width: 15px; text-align: center;">E/L</th>
-      <th>Contents</th>
+      <th style="width: 74px;">Contents</th>
       <th>From</th>
       <th>To</th>
       <th style="width: 30px">Picked<br>Up</th>
-      <th style="width: 35px">Left<br>At</th>
+      <th style="width: 30px">Left<br>At</th>
     </tr>
     <tr class="phase-row"><td colspan="8">' . htmlspecialchars($section['label']) . '</td></tr>
     ' . $car_rows . '
