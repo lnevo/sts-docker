@@ -1364,7 +1364,7 @@ sts_page_start([
   'title' => 'Switchlist',
   'icon' => 'bi-list-check',
   'section' => 'report',
-  'head_extra' => '<link href="report_page.css?v=1" rel="stylesheet"><link href="report_switchlist.css?v=1" rel="stylesheet">',
+  'head_extra' => '<link href="report_page.css?v=1" rel="stylesheet"><link href="report_switchlist.css?v=2" rel="stylesheet">',
 ]);
 ?>
     <div class="sts-card report-screen-only">
