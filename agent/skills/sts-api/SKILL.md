@@ -28,8 +28,9 @@ route is not live yet; `GET /sts/api/v1/openapi.json` lists what is.
   host. Set `STS_API_URL` accordingly and call `sts_health`: `stack` is `live`
   (the release stack), `dev` (the local build stack, a working copy) or
   `sandbox`.
-- Never write to live without the user's explicit approval for that action.
-  Rehearse in the sandbox first.
+- Never write to any stack but `sandbox` without the user's explicit approval
+  for that action: `live` is the railroad, and `dev` keeps the owner's working
+  data. Rehearse in the sandbox first.
 
 ## Tokens and roles
 

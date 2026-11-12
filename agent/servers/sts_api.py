@@ -71,7 +71,7 @@ def request(method: str, path: str, query: dict | None = None, body: object = No
     except (urllib.error.URLError, OSError) as exc:
         reason = getattr(exc, "reason", exc)
         raise ApiError(f"Cannot reach STS at {base_url()}: {reason}. Is the stack up, and is "
-                       "STS_API_URL right (live 8980, sandbox 8981)?") from None
+                       "STS_API_URL right (local 8980, sandbox 8981)?") from None
     if binary and status < 400:  # A file download: hand back the bytes untouched.
         return status, {"bytes": raw}
     try:
@@ -589,7 +589,7 @@ TOOLS = [
 ]
 
 INSTRUCTIONS = ("STS API v1 tools. Check sts_health to see whether you are on the live, dev or sandbox stack "
-                "before any write. Write tools need a bearer token (STS_API_TOKEN). Use sts_session counts "
+                "before any write; write to a stack other than sandbox only with the user's explicit approval. Write tools need a bearer token (STS_API_TOKEN). Use sts_session counts "
                 "between operating steps. Call sts_workflow_run_options before sts_workflow_run and heed role_warnings. restore, warm start, wipe and reset replace the database.")
 
 if __name__ == "__main__":
