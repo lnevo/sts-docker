@@ -1,4 +1,5 @@
-# Release stack: the live STS on a host that only runs it (HART's is the Pi).
+# Release stack: the live STS on a host that only runs it. Build profile only;
+# the prebuilt service is not changed.
 # Plugins are built into the image, so nothing on the host changes the running
 # code; only data folders are mounted. To update: git pull this repo and the
 # plugins repo, then rebuild:
@@ -6,7 +7,9 @@
 #   docker compose -f docker-compose.yml -f docker-compose.release.yml --profile build up -d --build
 #
 # Expects ../sts-plugins (the plugins repo) and ../sts-docker-data beside this
-# checkout, as the dev stack does. STS_PLUGINS_DIR and STS_DATA override them.
+# checkout, as the dev stack does. STS_PLUGINS_DIR overrides the plugins folder
+# itself (default ../sts-plugins/plugins, the folder holding <id>/plugin.php),
+# and STS_DATA the data folder.
 services:
   web:
     build:

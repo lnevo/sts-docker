@@ -40,6 +40,8 @@ COPY php-barcode /var/www/html/php-barcode
 COPY phpqrcode /var/www/html/phpqrcode
 COPY sts /var/www/html/sts
 COPY --from=plugins / /var/www/html/sts/plugins/
+# Plugin test suites are not part of a release image.
+RUN rm -rf /var/www/html/sts/plugins/*/tests
 # Site icon at the web root (browsers request /favicon.ico on every page).
 COPY docker/favicon.ico /var/www/html/favicon.ico
 
