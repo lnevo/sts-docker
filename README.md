@@ -45,6 +45,17 @@ docker compose --profile build up -d --build
 
 The API tokens, sign-in and locked maintenance pages described below are in this repo's code. Use this build if you want them; the pre-built image may not include them yet.
 
+### Release stack (a host that only runs STS)
+
+The dev stack bind-mounts `../sts-plugins/plugins` into the running container, so a change there is live at once. On a host that only runs STS, build the plugins into the image instead, so the running code changes only on a rebuild:
+
+```
+git -C ../sts-plugins pull --ff-only && git pull --ff-only
+docker compose -f docker-compose.yml -f docker-compose.release.yml --profile build up -d --build
+```
+
+Only the data folders in `../sts-docker-data` (database, backups, photos, config) are mounted, and both containers restart with the host. `STS_PLUGINS_DIR` and `STS_DATA` override the two sibling paths.
+
 ---
 
 ## Application overview

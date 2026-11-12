@@ -82,7 +82,8 @@ publishes the image via `publish-docker.yaml`.
   exist for older reports).
 - **Plugins:** addons live in the sibling repo `../sts-plugins` (under
   `plugins/<id>/plugin.php`) and are bind-mounted onto `sts/plugins/` by
-  docker-compose; the image ships that directory empty. `sts/plugin_registry.php`
+  docker-compose; the image ships that directory empty. The release stack
+  (`docker-compose.release.yml`) builds them into the image instead. `sts/plugin_registry.php`
   discovers `sts/plugins/*/plugin.php` plus the colon-separated `STS_PLUGINS_DIR`.
   Plugin pages are served by `sts/plugin.php?id=<plugin>&page=<slug>`. Core (`sts/`
   minus `sts/plugins/`) must not name a plugin or HART identifier and reaches

@@ -2,6 +2,12 @@
 # Use php:8.4.27-apache-bookworm as base image
 # 8.4.27 is the first 8.4 release patched against PHP2Shell (CVE-2026-109618 / CVE-2026-109619).
 # Do not drop below it.
+
+# Plugins built into the image. Empty by default: the dev stack bind-mounts
+# ../sts-plugins/plugins over the folder instead. A release build replaces this
+# stage with a named build context (see docker-compose.release.yml).
+FROM scratch AS plugins
+
 FROM php:8.4.27-apache-bookworm
 
 # Expose port 80
@@ -33,6 +39,7 @@ RUN printf '%s\n' \
 COPY php-barcode /var/www/html/php-barcode
 COPY phpqrcode /var/www/html/phpqrcode
 COPY sts /var/www/html/sts
+COPY --from=plugins / /var/www/html/sts/plugins/
 # Site icon at the web root (browsers request /favicon.ico on every page).
 COPY docker/favicon.ico /var/www/html/favicon.ico
 
