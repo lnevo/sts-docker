@@ -5,7 +5,8 @@
 Stdlib-only (`unittest` + `urllib`) tests for `/sts/api/v1` and the legacy wagon
 routes. They run against a live stack, so use a **throwaway sandbox**: the suite
 restores the database, runs tasks and creates and revokes tokens. Never point it
-at any stack but a sandbox: not `live`, and not a `dev` working copy on 8980.
+at any stack but a sandbox: not `live`, and not the `dev` working copy on 8980,
+since the suite replaces its database.
 
 ## Run against a sandbox
 

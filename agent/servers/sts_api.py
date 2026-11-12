@@ -589,7 +589,7 @@ TOOLS = [
 ]
 
 INSTRUCTIONS = ("STS API v1 tools. Check sts_health to see whether you are on the live, dev or sandbox stack "
-                "before any write; write to a stack other than sandbox only with the user's explicit approval. Write tools need a bearer token (STS_API_TOKEN). Use sts_session counts "
+                "before any write; on live, write only with the user's explicit approval; on dev the user's request covers writes, but confirm restores, wipes and resets. Write tools need a bearer token (STS_API_TOKEN). Use sts_session counts "
                 "between operating steps. Call sts_workflow_run_options before sts_workflow_run and heed role_warnings. restore, warm start, wipe and reset replace the database.")
 
 if __name__ == "__main__":
