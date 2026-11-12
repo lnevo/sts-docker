@@ -331,6 +331,81 @@
           }
         }
       }
+    },
+    "/car-orders/{waybill}/fill": {
+      "post": {
+        "summary": "Fill a car order with a chosen car",
+        "description": "Role: operator. The manual assign from the Fill Orders page. The car must be Empty with no other order and match the shipment's car code. It becomes Loaded at the loading location, else Ordered; loaded=true marks it Loaded. Empty-move (E) waybills are not orders and 404.",
+        "x-sts-role": "operator",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/OrderFillResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "description": "Order already filled, or the car is not Empty or holds an order; also a maintenance task blocks writes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "parameters": [
+          {
+            "name": "waybill",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Waybill number"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderFillRequest"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -450,6 +525,42 @@
             "type": "integer"
           }
         }
+      },
+      "OrderFillRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "car"
+        ],
+        "properties": {
+          "car": {
+            "type": [
+              "string",
+              "integer"
+            ],
+            "description": "Car id, reporting marks or RFID code."
+          },
+          "loaded": {
+            "type": "boolean",
+            "default": false,
+            "description": "Mark the car Loaded wherever it is (it already holds the load)."
+          }
+        }
+      },
+      "OrderFillResult": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CarOrder"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "car_status": {
+                "type": "string"
+              }
+            }
+          }
+        ]
       }
     }
   }

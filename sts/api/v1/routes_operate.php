@@ -170,6 +170,77 @@ function operate_reposition(array $req)
     return $out;
 }
 
+/* ------------------------------------------------------------ car orders */
+
+/**
+ * Fill one unfilled car order with a chosen car (the Fill Orders page's manual
+ * assign). Body {car, loaded?}. The car must be Empty, hold no other order and
+ * match the shipment's car code. The car becomes Loaded at the loading location,
+ * else Ordered; loaded=true marks it Loaded wherever it is (a car that already
+ * holds the load, e.g. one added to the railroad loaded).
+ */
+function operate_order_fill(array $req)
+{
+    $body = edit_nonempty_body();
+    foreach (array_keys($body) as $k) {
+        if (!in_array($k, ['car', 'loaded'], true)) {
+            api_error(422, "Unknown field '$k' (allowed: car, loaded)");
+        }
+    }
+    $car_ident = $body['car'] ?? null;
+    if ((!is_string($car_ident) && !is_int($car_ident)) || trim((string) $car_ident) === '') {
+        api_error(422, 'car (id, reporting marks or RFID) is required');
+    }
+    $loaded = $body['loaded'] ?? false;
+    if (!is_bool($loaded)) {
+        api_error(422, 'loaded must be a boolean');
+    }
+    $waybill = $req['params']['waybill'];
+    $car = read_find_car(trim((string) $car_ident));
+
+    $dbc = api_db();
+    $dbc->begin_transaction();
+    $order = api_db_one(
+        'SELECT car_orders.waybill_number, car_orders.car, shipments.car_code
+         FROM car_orders JOIN shipments ON shipments.Id = car_orders.shipment
+         WHERE car_orders.waybill_number = ? AND car_orders.waybill_number NOT LIKE "___-E%" FOR UPDATE',
+        's', [$waybill]
+    );
+    if (!$order) {
+        $dbc->rollback();
+        read_not_found('Car order');
+    }
+    if ((string) $order['car'] !== '' && (string) $order['car'] !== '0') {
+        $dbc->rollback();
+        api_error(409, 'Car order is already filled');
+    }
+    $fresh = api_db_one(
+        'SELECT status, car_code_id FROM cars WHERE Id = ? AND NOT EXISTS (SELECT 1 FROM car_orders WHERE car = cars.Id) FOR UPDATE',
+        'i', [$car['id']]
+    );
+    if (!$fresh || $fresh['status'] !== 'Empty') {
+        $dbc->rollback();
+        api_error(409, 'Car must be Empty with no orders to fill an order');
+    }
+    if ((int) $fresh['car_code_id'] !== (int) $order['car_code']) {
+        $dbc->rollback();
+        api_error(422, "Car's car code does not match the shipment's");
+    }
+    require_once dirname(__DIR__, 2) . '/fill_order_helpers.php';
+    $r = fill_order_assign_car($dbc, $waybill, $car['id']);
+    if (empty($r['success'])) {
+        $dbc->rollback();
+        api_internal_error($r['error'] ?? 'fill failed');
+    }
+    if ($loaded) {
+        api_db_exec("UPDATE cars SET status = 'Loaded' WHERE Id = ?", 'i', [$car['id']]);
+    }
+    $dbc->commit();
+    $out = read_order_detail(['params' => ['waybill' => $waybill]]);
+    $out['car_status'] = read_find_car((string) $car['id'])['status'];
+    return $out;
+}
+
 /* --------------------------------------------------------------- session */
 
 function operate_session_advance(array $req)
@@ -189,4 +260,5 @@ api_route('POST', '/commands/{command}', 'operate_command', 'operator', ['maint'
 api_route('POST', '/cars/{car}/load', operate_load_unload('load'), 'operator');
 api_route('POST', '/cars/{car}/unload', operate_load_unload('unload'), 'operator');
 api_route('POST', '/cars/{car}/reposition', 'operate_reposition', 'operator');
+api_route('POST', '/car-orders/{waybill}/fill', 'operate_order_fill', 'operator');
 api_route('POST', '/session/advance', 'operate_session_advance', 'operator');

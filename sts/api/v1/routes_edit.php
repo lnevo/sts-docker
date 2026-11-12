@@ -20,6 +20,7 @@ const EDIT_LOOKUPS = [
     'commodity' => ['commodities', 'Id', 'code', 'Commodity'],
     'job' => ['jobs', 'Id', 'name', 'Job'],
     'owner' => ['owners', 'id', 'name', 'Owner'],
+    'station' => ['routing', 'id', 'station', 'Station'],
 ];
 
 function edit_car_fields()
@@ -68,6 +69,20 @@ function edit_shipment_fields()
         'max_load_time' => ['max_load_time', 'nint'],
         'min_unload_time' => ['min_unload_time', 'nint'],
         'max_unload_time' => ['max_unload_time', 'nint'],
+    ];
+}
+
+function edit_location_fields()
+{
+    return [
+        'code' => ['code', 'str', 255],
+        'station_id' => ['station', 'ref', 'station'],
+        'station' => ['station', 'ref', 'station'],
+        'track' => ['track', 'nstr', 255],
+        'spot' => ['spot', 'nstr', 255],
+        'rpt_station' => ['rpt_station', 'nstr', 255],
+        'remarks' => ['remarks', 'text'],
+        'color' => ['color', 'nstr', 255],
     ];
 }
 
@@ -350,6 +365,105 @@ function edit_shipment_patch(array $req)
     return read_shipment_detail(['params' => ['id' => (string) $id]]);
 }
 
+/** INSERT one row and return its new id; 409 on a duplicate key. */
+function edit_insert($table, array $cols, $what)
+{
+    $names = [];
+    $types = '';
+    $params = [];
+    foreach ($cols as $c => [$t, $v]) {
+        $names[] = "`$c`";
+        $types .= $t;
+        $params[] = $v;
+    }
+    try {
+        api_db_exec("INSERT INTO `$table` (" . implode(', ', $names) . ') VALUES (' . implode(', ', array_fill(0, count($names), '?')) . ')', $types, $params);
+    } catch (mysqli_sql_exception $e) {
+        if ((int) $e->getCode() === 1062) {
+            api_error(409, "A $what with that key already exists");
+        }
+        throw $e;
+    }
+    return (int) api_db()->insert_id;
+}
+
+/** 422 unless every listed field (or one of its aliases) is in the body. */
+function edit_require_fields(array $body, array $groups)
+{
+    foreach ($groups as $group) {
+        $hit = false;
+        foreach ((array) $group as $f) {
+            if (array_key_exists($f, $body)) {
+                $hit = true;
+            }
+        }
+        if (!$hit) {
+            api_error(422, implode(' (or ', (array) $group) . str_repeat(')', count((array) $group) - 1) . ' is required');
+        }
+    }
+}
+
+/** 422 when a min/max pair is reversed or negative. */
+function edit_check_ranges(array $row, array $pairs)
+{
+    foreach ($pairs as [$lo, $hi]) {
+        $a = $row[$lo] ?? null;
+        $b = $row[$hi] ?? null;
+        foreach ([$lo => $a, $hi => $b] as $n => $v) {
+            if ($v !== null && (int) $v < 0) {
+                api_error(422, "$n must not be negative");
+            }
+        }
+        if ($a !== null && $b !== null && (int) $a > (int) $b) {
+            api_error(422, "$lo must not exceed $hi");
+        }
+    }
+}
+
+function edit_shipment_create(array $req)
+{
+    $body = edit_nonempty_body();
+    edit_require_fields($body, [
+        'code', 'description', ['commodity', 'commodity_id'], ['car_code', 'car_code_id'],
+        ['loading_location', 'loading_location_id'], ['unloading_location', 'unloading_location_id'],
+        'min_interval', 'max_interval', 'min_amount', 'max_amount',
+    ]);
+    $cols = edit_build_changes(edit_shipment_fields(), $body);
+    $cols['code'][1] = trim($cols['code'][1]);
+    if (api_db_value('SELECT Id FROM shipments WHERE code = ? LIMIT 1', 's', [$cols['code'][1]]) !== null) {
+        api_error(409, 'A shipment with that code already exists');
+    }
+    $vals = [];
+    foreach ($cols as $c => [, $v]) {
+        $vals[$c] = $v;
+    }
+    edit_check_ranges($vals, [
+        ['min_interval', 'max_interval'], ['min_amount', 'max_amount'],
+        ['min_load_time', 'max_load_time'], ['min_unload_time', 'max_unload_time'],
+    ]);
+    $cols += ['last_ship_date' => ['i', 0], 'special_instructions' => ['s', ''], 'remarks' => ['s', '']];
+    $id = edit_insert('shipments', $cols, 'shipment');
+    api_ok(read_shipment_detail(['params' => ['id' => (string) $id]]), null, 201);
+}
+
+function edit_location_create(array $req)
+{
+    $body = edit_nonempty_body();
+    edit_require_fields($body, ['code', ['station', 'station_id']]);
+    $cols = edit_build_changes(edit_location_fields(), $body);
+    $cols['code'][1] = trim($cols['code'][1]);
+    if (api_db_value('SELECT Id FROM locations WHERE code = ? LIMIT 1', 's', [$cols['code'][1]]) !== null) {
+        api_error(409, 'A location with that code already exists');
+    }
+    foreach (['track', 'spot', 'rpt_station', 'remarks', 'color'] as $c) {
+        if (!isset($cols[$c]) || $cols[$c][1] === null) {
+            $cols[$c] = ['s', ''];
+        }
+    }
+    $id = edit_insert('locations', $cols, 'location');
+    api_ok(read_location_detail(['params' => ['location' => (string) $id]]), null, 201);
+}
+
 /* ------------------------------------------------- ownership / settings */
 
 function edit_ownership_put(array $req)
@@ -492,6 +606,8 @@ api_route('PATCH', '/cars/{car}', 'edit_car_patch', 'editor');
 api_route('POST', '/cars', 'edit_car_create', 'editor');
 api_route('PATCH', '/jobs/{job}', 'edit_job_patch', 'editor');
 api_route('PATCH', '/shipments/{id}', 'edit_shipment_patch', 'editor');
+api_route('POST', '/shipments', 'edit_shipment_create', 'editor');
+api_route('POST', '/locations', 'edit_location_create', 'editor');
 api_route('PUT', '/ownership/{car}', 'edit_ownership_put', 'editor');
 api_route('PUT', '/settings/{name}', 'edit_setting_put', 'editor');
 api_route('PUT', '/workflows/{name}', 'edit_workflow_put', 'editor');

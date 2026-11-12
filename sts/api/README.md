@@ -58,8 +58,8 @@ curl 'http://localhost:8980/sts/api/v1/cars?status=Empty&limit=20'
 | Role     | Allowed                                                                                                               |
 | -------- | --------------------------------------------------------------------------------------------------------------------- |
 | reader   | every GET                                                                                                             |
-| operator | operating moves (load/unload/reposition, advance session, run workflows, non-destructive commands), reading tasks     |
-| editor   | data edits, saving/deleting workflows, creating cars (optional explicit `id`)                                         |
+| operator | operating moves (load/unload/reposition, fill one order, advance session, run workflows, non-destructive commands), reading tasks |
+| editor   | data edits, saving/deleting workflows, creating cars (optional explicit `id`), shipments and locations                |
 | admin    | backup/restore, warm start, begin/play session, destructive commands, token management, `POST /admin/tasks/{id}/fail` |
 
 Environment (web service):

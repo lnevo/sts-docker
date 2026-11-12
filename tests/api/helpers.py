@@ -67,6 +67,8 @@ PHASE2 = [
     ("POST", "/sessions/{n}/rerender"),
     ("POST", "/sessions/{n}/print-all"), ("GET", "/simulator/status"),
     ("DELETE", "/sessions/output"),
+    ("POST", "/shipments"), ("POST", "/locations"),
+    ("POST", "/car-orders/{waybill}/fill"),
 ]
 
 

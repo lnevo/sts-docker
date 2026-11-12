@@ -50,8 +50,9 @@ Operator: `sts_command` (the policy sets the role per command; defaults make
 `restore_database`, `wipe_database`, `reset_session` admin), `sts_car_action`,
 `sts_advance_session`, `sts_workflow_run` (`timeout_seconds`, check `sts_workflow_run_options`
 first; the 202 repeats `role_warnings`), `sts_session_rerender`,
-`sts_session_print_all`, `sts_clear_session_output` (destructive). Editor:
-`sts_update`, `sts_create_car`, `sts_workflow_save`, `sts_workflow_delete`,
+`sts_session_print_all`, `sts_clear_session_output` (destructive), `sts_fill_order`
+(fill one order with a chosen car; `loaded=true` for a car already holding the
+load). Editor: `sts_update`, `sts_create_car`, `sts_create` (shipments, locations), `sts_workflow_save`, `sts_workflow_delete`,
 `sts_workflow_import`, `sts_workflow_active` (set). Admin: `sts_backup`,
 `sts_backup_download` (saves a backup locally; no overwrite unless
 `overwrite=true`), `sts_restore`, `sts_warm_start`, `sts_session_begin`, `sts_session_play`,

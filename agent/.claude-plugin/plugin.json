@@ -1,6 +1,6 @@
 {
   "name": "sts",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Operate and inspect a Shipper-driven Traffic Simulator (STS) railroad through its REST API v1: a skill, an MCP server with read and write tools, and inspector and operator agents.",
   "author": { "name": "lnevo" },
   "repository": "https://github.com/lnevo/sts-docker"

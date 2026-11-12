@@ -540,6 +540,128 @@
           }
         ]
       }
+    },
+    "/shipments": {
+      "post": {
+        "summary": "Create a shipment",
+        "description": "Role: editor. Inserts one shipment; commodity, car code and locations take an id or a code. 409 if the code exists.",
+        "x-sts-role": "editor",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Shipment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "description": "Duplicate code; or a maintenance task blocks writes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShipmentCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/locations": {
+      "post": {
+        "summary": "Create a location",
+        "description": "Role: editor. Inserts one location at a station. 409 if the code exists. Returns the location with its (empty) car list.",
+        "x-sts-role": "editor",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/LocationDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "description": "Duplicate code; or a maintenance task blocks writes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationCreate"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1002,6 +1124,176 @@
           },
           "active_workflow": {
             "type": "string"
+          }
+        }
+      },
+      "ShipmentCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "commodity_id": {
+            "type": "integer"
+          },
+          "commodity": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "car_code_id": {
+            "type": "integer"
+          },
+          "car_code": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "loading_location_id": {
+            "type": "integer"
+          },
+          "loading_location": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "unloading_location_id": {
+            "type": "integer"
+          },
+          "unloading_location": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "last_ship_date": {
+            "type": "integer"
+          },
+          "min_interval": {
+            "type": "integer"
+          },
+          "max_interval": {
+            "type": "integer"
+          },
+          "min_amount": {
+            "type": "integer"
+          },
+          "max_amount": {
+            "type": "integer"
+          },
+          "special_instructions": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 255
+          },
+          "remarks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "min_load_time": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "max_load_time": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "min_unload_time": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "max_unload_time": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "description",
+          "min_interval",
+          "max_interval",
+          "min_amount",
+          "max_amount"
+        ],
+        "description": "Also needs commodity (or commodity_id), car_code (or car_code_id), loading_location and unloading_location (or their _id forms). last_ship_date defaults to 0. Min/max pairs must not be reversed or negative."
+      },
+      "LocationCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code"
+        ],
+        "description": "Also needs station (name or id) or station_id. Omitted text columns are stored empty.",
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "station_id": {
+            "type": "integer"
+          },
+          "station": {
+            "type": [
+              "string",
+              "integer"
+            ],
+            "description": "Station id or name."
+          },
+          "track": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 255
+          },
+          "spot": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 255
+          },
+          "rpt_station": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 255,
+            "description": "Name shown on reports, e.g. the offline shipper."
+          },
+          "remarks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 255
           }
         }
       }
