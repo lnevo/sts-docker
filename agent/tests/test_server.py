@@ -153,7 +153,9 @@ class ServerTests(unittest.TestCase):
             self.assertFalse(tools[name]["annotations"]["readOnlyHint"], name)
             self.assertTrue(tools[name]["annotations"]["destructiveHint"], name)
         self.assertFalse(tools["sts_create_car"]["annotations"]["destructiveHint"])
-        self.assertEqual(len(tools), 34)
+        self.assertFalse(tools["sts_create"]["annotations"]["destructiveHint"])
+        self.assertTrue(tools["sts_fill_order"]["annotations"]["destructiveHint"])
+        self.assertEqual(len(tools), 36)
         self.assertFalse(tools["sts_backup_download"]["annotations"]["readOnlyHint"])
         self.assertFalse(tools["sts_backup_download"]["annotations"]["destructiveHint"])
         self.assertTrue(tools["sts_policy"]["annotations"]["destructiveHint"])
@@ -275,6 +277,20 @@ class ServerTests(unittest.TestCase):
         run_server(self.env, INIT, call("sts_car_action", {"car": "RF1", "action": "reposition", "location": "YARD"}))
         self.assertEqual(Stub.seen[0][:2], ("POST", "/v1/cars/RF1/reposition"))
         self.assertEqual(Stub.seen[0][3], {"location": "YARD"})
+
+    def test_create_and_fill_order_routes(self):
+        run_server(self.env, INIT, call("sts_create", {"entity": "locations", "fields": {"code": "X", "station": 1}}))
+        self.assertEqual(Stub.seen[0][:2], ("POST", "/v1/locations"))
+        self.assertEqual(Stub.seen[0][3], {"code": "X", "station": 1})
+        Stub.seen.clear()
+        run_server(self.env, INIT, call("sts_fill_order", {"waybill": "005-M01", "car": "CSX 1", "loaded": True}))
+        self.assertEqual(Stub.seen[0][:2], ("POST", "/v1/car-orders/005-M01/fill"))
+        self.assertEqual(Stub.seen[0][3], {"car": "CSX 1", "loaded": True})
+
+    def test_create_refuses_other_entities(self):
+        out = run_server(self.env, INIT, call("sts_create", {"entity": "cars", "fields": {}}))
+        self.assertTrue(out[1]["result"]["isError"])
+        self.assertEqual(Stub.seen, [])
 
     def test_missing_argument_makes_no_request(self):
         out = run_server(self.env, INIT, call("sts_car_action", {"car": "RF1", "action": "reposition"}))

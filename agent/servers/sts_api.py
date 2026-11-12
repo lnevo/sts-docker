@@ -270,6 +270,24 @@ def t_create_car(args):
     return call("POST", "/cars", body=args["fields"], role="editor")
 
 
+CREATE_ENTITIES = ("shipments", "locations")
+
+
+def t_create(args):
+    need(args, "entity", "fields")
+    if args["entity"] not in CREATE_ENTITIES:
+        raise ApiError(f"entity must be one of: {', '.join(CREATE_ENTITIES)} (cars: sts_create_car)")
+    return call("POST", f"/{args['entity']}", body=args["fields"], role="editor")
+
+
+def t_fill_order(args):
+    need(args, "waybill", "car")
+    body = {"car": args["car"]}
+    if args.get("loaded") is not None:
+        body["loaded"] = args["loaded"]
+    return call("POST", f"/car-orders/{seg(args['waybill'])}/fill", body=body, role="operator")
+
+
 def t_wf_save(args):
     need(args, "name", "recipe")
     return call("PUT", f"/workflows/{seg(args['name'])}", body={"recipe": args["recipe"]}, role="editor")
@@ -489,6 +507,17 @@ TOOLS = [
     Tool("sts_create_car", "Role: editor. Create a car (POST /cars). Fields e.g. reporting_marks, "
          "car_code_id, location_id, status; optional id (409 if taken).",
          obj({"fields": O}, ["fields"]), t_create_car, read_only=False, destructive=False),
+    Tool("sts_create", "Role: editor. Create a shipment or a location (POST /shipments, /locations); 409 if "
+         "the code exists. shipments need code, description, commodity, car_code, loading_location, "
+         "unloading_location, min/max_interval and min/max_amount (refs take an id or code). locations need "
+         "code and station (name or id); track, spot, rpt_station, remarks, color optional.",
+         obj({"entity": {"type": "string", "enum": list(CREATE_ENTITIES)}, "fields": O}, ["entity", "fields"]),
+         t_create, read_only=False, destructive=False),
+    Tool("sts_fill_order", "Role: operator. Fill one unfilled car order with a chosen car (the Fill Orders "
+         "page's manual assign). The car must be Empty with no order and match the shipment's car code. It "
+         "becomes Loaded at the loading location, else Ordered; loaded=true marks it Loaded where it stands.",
+         obj({"waybill": S, "car": {"type": ["string", "integer"]}, "loaded": B}, ["waybill", "car"]),
+         t_fill_order, read_only=False, destructive=True),
     Tool("sts_workflow_save", "Role: editor. Create or overwrite a named workflow recipe (JSON).",
          obj({"name": S, "recipe": O}, ["name", "recipe"]), t_wf_save, read_only=False, destructive=True),
     Tool("sts_workflow_delete", "Role: editor. Delete a named workflow recipe.",
