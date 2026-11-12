@@ -1,4 +1,4 @@
-# Sandbox stack for refactor parity checks. Isolated from the local (dev) stack:
+# Sandbox stack for refactor parity checks. Isolated from the local (uat) stack:
 # separate project name, port 8981, throwaway DB (no persistent volume),
 # data under ${STS_SANDBOX_DATA}.
 #
