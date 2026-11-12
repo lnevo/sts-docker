@@ -1,4 +1,4 @@
-# Sandbox stack for refactor parity checks. Isolated from the live stack:
+# Sandbox stack for refactor parity checks. Isolated from the local (dev) stack:
 # separate project name, port 8981, throwaway DB (no persistent volume),
 # data under ${STS_SANDBOX_DATA}.
 #
@@ -6,7 +6,7 @@
 #   STS_SANDBOX_DATA=/abs/path COMPOSE_PROJECT_NAME=sts-sandbox docker compose -f docker-compose.yml -f docker-compose.sandbox.yml --profile build up -d --build
 #
 # Note: ports/volumes use !override/!reset because compose otherwise appends
-# ports and the base db service mounts the LIVE database directory.
+# ports and the base db service mounts the local stack's persistent database directory.
 services:
   web:
     ports: !override

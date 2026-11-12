@@ -15,6 +15,9 @@ services:
       # It is STRONGLY RECOMMENDED that you set this to 0 once initially deployed,
       # So you don't inadverdently wipe your database when deploying a new container instance!
       - PROVISION_DATABASE=0
+      # Reported by /sts/api/v1/health. The local stack is a working copy; the
+      # release stack (docker-compose.release.yml) names itself live.
+      - STS_STACK_NAME=dev
 
     # Uncomment below and change the path you with to store your backups for STS in. format is <Source Path on PC>:<Path on Container>
     # You only want to change the <Source Path on PC> Variable.
@@ -44,6 +47,7 @@ services:
       # It is STRONGLY RECOMMENDED that you set this to 0 once initially deployed,
       # So you don't inadverdently wipe your database when deploying a new container instance!
       - PROVISION_DATABASE=0
+      - STS_STACK_NAME=dev
 
     # Uncomment below and change the path you with to store your backups for STS in. format is <Source Path on PC>:<Path on Container>
     # You only want to change the <Source Path on PC> Variable.

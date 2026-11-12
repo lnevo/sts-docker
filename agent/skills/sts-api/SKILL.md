@@ -23,11 +23,16 @@ route is not live yet; `GET /sts/api/v1/openapi.json` lists what is.
 
 ## Which stack
 
-- Live: `http://localhost:8980/sts/api/v1`. Sandbox:
-  `http://localhost:8981/sts/api/v1`. Set `STS_API_URL` accordingly and call
-  `sts_health`: `stack` is `live` or `sandbox`.
-- Never write to live without the user's explicit approval for that action.
-  Rehearse in the sandbox first.
+- The local build stack is `http://localhost:8980/sts/api/v1` and the sandbox
+  `http://localhost:8981/sts/api/v1`; a live (release) stack may be on another
+  host. Set `STS_API_URL` accordingly and call `sts_health`: `stack` is `live`
+  (the release stack), `dev` (the local build stack, a working copy) or
+  `sandbox`.
+- `live` is the railroad: never write to it (or to an unnamed stack) without
+  the user's explicit approval for that action. `dev` is the owner's working
+  copy: a request to work there covers its writes; confirm only far-reaching or
+  complex steps (restore, warm start, wipe, reset, many records). The sandbox
+  needs no approval. Rehearse in the sandbox first.
 
 ## Tokens and roles
 
