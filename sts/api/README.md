@@ -92,8 +92,9 @@ Environment (web service):
   the policy file (below) wins.
 - `STS_API_ADMIN_TOKEN`: accepted as an admin token, not stored (CI use).
 - `GET /v1/health`, `GET /v1/openapi.json` and `/sts/api/docs/` are always open.
-- `STS_STACK_NAME` (`live` by default, `sandbox` in the sandbox compose) is
-  reported by `/health`.
+- `STS_STACK_NAME` is reported by `/health`: `dev` for the local build stack,
+  `live` for the release stack, `sandbox` for the sandbox; `live` when unset
+  (the prebuilt image).
 
 ### Browser sign-in
 

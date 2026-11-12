@@ -12,6 +12,8 @@
 # and STS_DATA the data folder.
 services:
   web:
+    environment:
+      - STS_STACK_NAME=live
     build:
       context: .
       additional_contexts:
