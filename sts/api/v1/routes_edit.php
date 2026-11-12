@@ -365,6 +365,30 @@ function edit_shipment_patch(array $req)
     return read_shipment_detail(['params' => ['id' => (string) $id]]);
 }
 
+/**
+ * Run $fn under a named database lock, so a code-uniqueness check and its INSERT
+ * cannot interleave with another create (codes have no unique index).
+ */
+function edit_with_create_lock($name, callable $fn)
+{
+    if ((int) api_db_value('SELECT GET_LOCK(?, 10)', 's', [$name]) !== 1) {
+        api_error(409, 'Another create is in progress; try again');
+    }
+    try {
+        return $fn();
+    } finally {
+        api_db_value('SELECT RELEASE_LOCK(?)', 's', [$name]);
+    }
+}
+
+/** 422 for a code made only of digits: id-or-code lookups would read it as an id. */
+function edit_check_code($code)
+{
+    if (ctype_digit($code)) {
+        api_error(422, 'code must not be only digits (it would read as an id)');
+    }
+}
+
 /** INSERT one row and return its new id; 409 on a duplicate key. */
 function edit_insert($table, array $cols, $what)
 {
@@ -430,9 +454,7 @@ function edit_shipment_create(array $req)
     ]);
     $cols = edit_build_changes(edit_shipment_fields(), $body);
     $cols['code'][1] = trim($cols['code'][1]);
-    if (api_db_value('SELECT Id FROM shipments WHERE code = ? LIMIT 1', 's', [$cols['code'][1]]) !== null) {
-        api_error(409, 'A shipment with that code already exists');
-    }
+    edit_check_code($cols['code'][1]);
     $vals = [];
     foreach ($cols as $c => [, $v]) {
         $vals[$c] = $v;
@@ -442,7 +464,12 @@ function edit_shipment_create(array $req)
         ['min_load_time', 'max_load_time'], ['min_unload_time', 'max_unload_time'],
     ]);
     $cols += ['last_ship_date' => ['i', 0], 'special_instructions' => ['s', ''], 'remarks' => ['s', '']];
-    $id = edit_insert('shipments', $cols, 'shipment');
+    $id = edit_with_create_lock('sts_api_create_shipment', static function () use ($cols) {
+        if (api_db_value('SELECT Id FROM shipments WHERE code = ? LIMIT 1', 's', [$cols['code'][1]]) !== null) {
+            api_error(409, 'A shipment with that code already exists');
+        }
+        return edit_insert('shipments', $cols, 'shipment');
+    });
     api_ok(read_shipment_detail(['params' => ['id' => (string) $id]]), null, 201);
 }
 
@@ -452,15 +479,18 @@ function edit_location_create(array $req)
     edit_require_fields($body, ['code', ['station', 'station_id']]);
     $cols = edit_build_changes(edit_location_fields(), $body);
     $cols['code'][1] = trim($cols['code'][1]);
-    if (api_db_value('SELECT Id FROM locations WHERE code = ? LIMIT 1', 's', [$cols['code'][1]]) !== null) {
-        api_error(409, 'A location with that code already exists');
-    }
+    edit_check_code($cols['code'][1]);
     foreach (['track', 'spot', 'rpt_station', 'remarks', 'color'] as $c) {
         if (!isset($cols[$c]) || $cols[$c][1] === null) {
             $cols[$c] = ['s', ''];
         }
     }
-    $id = edit_insert('locations', $cols, 'location');
+    $id = edit_with_create_lock('sts_api_create_location', static function () use ($cols) {
+        if (api_db_value('SELECT Id FROM locations WHERE code = ? LIMIT 1', 's', [$cols['code'][1]]) !== null) {
+            api_error(409, 'A location with that code already exists');
+        }
+        return edit_insert('locations', $cols, 'location');
+    });
     api_ok(read_location_detail(['params' => ['location' => (string) $id]]), null, 201);
 }
 

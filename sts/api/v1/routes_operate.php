@@ -181,7 +181,10 @@ function operate_reposition(array $req)
  */
 function operate_order_fill(array $req)
 {
-    $body = edit_nonempty_body();
+    $body = api_body();
+    if ($body === []) {
+        api_error(422, 'Request body must be a non-empty JSON object');
+    }
     foreach (array_keys($body) as $k) {
         if (!in_array($k, ['car', 'loaded'], true)) {
             api_error(422, "Unknown field '$k' (allowed: car, loaded)");
@@ -195,11 +198,23 @@ function operate_order_fill(array $req)
     if (!is_bool($loaded)) {
         api_error(422, 'loaded must be a boolean');
     }
+    // The batch fill (fill_orders) assigns cars without row locks and overwrites a
+    // filled waybill; never run beside any queued or running task.
+    foreach (api_task_list() as $rec) {
+        if (in_array($rec['status'] ?? '', ['queued', 'running'], true)) {
+            api_task_conflict($rec);
+        }
+    }
     $waybill = $req['params']['waybill'];
     $car = read_find_car(trim((string) $car_ident));
 
     $dbc = api_db();
     $dbc->begin_transaction();
+    // Car row first, then car_orders: the same lock order as operate_reposition.
+    $fresh = api_db_one(
+        'SELECT status, car_code_id, current_location_id FROM cars WHERE Id = ? AND NOT EXISTS (SELECT 1 FROM car_orders WHERE car = cars.Id) FOR UPDATE',
+        'i', [$car['id']]
+    );
     $order = api_db_one(
         'SELECT car_orders.waybill_number, car_orders.car, shipments.car_code
          FROM car_orders JOIN shipments ON shipments.Id = car_orders.shipment
@@ -214,10 +229,6 @@ function operate_order_fill(array $req)
         $dbc->rollback();
         api_error(409, 'Car order is already filled');
     }
-    $fresh = api_db_one(
-        'SELECT status, car_code_id FROM cars WHERE Id = ? AND NOT EXISTS (SELECT 1 FROM car_orders WHERE car = cars.Id) FOR UPDATE',
-        'i', [$car['id']]
-    );
     if (!$fresh || $fresh['status'] !== 'Empty') {
         $dbc->rollback();
         api_error(409, 'Car must be Empty with no orders to fill an order');
@@ -233,7 +244,12 @@ function operate_order_fill(array $req)
         api_internal_error($r['error'] ?? 'fill failed');
     }
     if ($loaded) {
-        api_db_exec("UPDATE cars SET status = 'Loaded' WHERE Id = ?", 'i', [$car['id']]);
+        // As POST /cars/{car}/load does: Loaded, last_spotted cleared, a history row.
+        api_db_exec("UPDATE cars SET status = 'Loaded', last_spotted = 0 WHERE Id = ?", 'i', [$car['id']]);
+        api_db_exec(
+            'INSERT INTO history (car_id, session_nbr, event_date, event, location) VALUES (?, ?, NOW(), ?, ?)',
+            'iisi', [$car['id'], api_session_nbr(), 'Loaded (joined loaded) on ' . $waybill, (int) $fresh['current_location_id']]
+        );
     }
     $dbc->commit();
     $out = read_order_detail(['params' => ['waybill' => $waybill]]);

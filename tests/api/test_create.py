@@ -38,6 +38,7 @@ class CreateShipment(h.ApiTestCase):
         self.assertEqual(api("POST", "/shipments", dict(SHIP, code="V-NEG", min_interval=-1), token=self.editor).status, 422)
         self.assertEqual(api("POST", "/shipments", dict(SHIP, code="V-LOC", loading_location="NOPE"), token=self.editor).status, 422)
         self.assertEqual(api("POST", "/shipments", dict(SHIP, code="V-EXTRA", id=99), token=self.editor).status, 422)
+        self.assertEqual(api("POST", "/shipments", dict(SHIP, code="123"), token=self.editor).status, 422)
 
     @h.needs_route("POST", "/shipments")
     def test_needs_editor(self):
@@ -63,6 +64,7 @@ class CreateLocation(h.ApiTestCase):
         self.assertEqual(api("POST", "/locations", {"code": "NO-STN"}, token=self.editor).status, 422)
         self.assertEqual(api("POST", "/locations", {"code": "BAD-STN", "station": "Nowhere"}, token=self.editor).status, 422)
         self.assertEqual(api("POST", "/locations", {"station_id": 1}, token=self.editor).status, 422)
+        self.assertEqual(api("POST", "/locations", {"code": "77", "station_id": 1}, token=self.editor).status, 422)
 
 
 class FillOrder(h.ApiTestCase):
@@ -97,6 +99,8 @@ class FillOrder(h.ApiTestCase):
         r = self.post("/car-orders/%s/fill" % wb2, {"car": 4, "loaded": True}, self.operator)
         self.assertOk(r)
         self.assertEqual(r.data["car_status"], "Loaded")
+        events = [e["event"] for e in api("GET", "/cars/4/history", token=self.reader).data]
+        self.assertTrue(any(e.startswith("Loaded (joined loaded)") for e in events), events)
 
     @h.needs_route("POST", "/car-orders/{waybill}/fill")
     def test_refusals(self):
