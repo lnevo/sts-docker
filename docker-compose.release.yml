@@ -7,7 +7,7 @@
 #   docker compose -f docker-compose.yml -f docker-compose.release.yml --profile build up -d --build
 #
 # Expects ../sts-plugins (the plugins repo) and ../sts-docker-data beside this
-# checkout, as the dev stack does. STS_PLUGINS_DIR overrides the plugins folder
+# checkout, as the local (uat) stack does. STS_PLUGINS_DIR overrides the plugins folder
 # itself (default ../sts-plugins/plugins, the folder holding <id>/plugin.php),
 # and STS_DATA the data folder.
 services:

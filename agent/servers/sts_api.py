@@ -456,7 +456,7 @@ LIM = {"limit": {"type": "integer", "description": "Page size, default 100, max 
 PARAMS = {"params": {"type": "object", "description": "Request body fields; see /sts/api/docs/."}}
 
 TOOLS = [
-    Tool("sts_health", "Open endpoint, no token. Returns status, version, stack (live, dev or sandbox), "
+    Tool("sts_health", "Open endpoint, no token. Returns status, version, stack (live, uat or sandbox), "
          "session_nbr and db state. Call first to confirm which stack you are on.",
          obj({}), t_health),
     Tool("sts_session", "Role: reader (open by default). Current session number and the operations hub "
@@ -617,8 +617,8 @@ TOOLS = [
          t_tokens, read_only=False, destructive=True),
 ]
 
-INSTRUCTIONS = ("STS API v1 tools. Check sts_health to see whether you are on the live, dev or sandbox stack "
-                "before any write; on live, write only with the user's explicit approval; on dev the user's request covers writes, but confirm restores, wipes and resets. Write tools need a bearer token (STS_API_TOKEN). Use sts_session counts "
+INSTRUCTIONS = ("STS API v1 tools. Check sts_health to see whether you are on the live, uat or sandbox stack "
+                "before any write; on live, write only with the user's explicit approval; on uat the user's request covers writes, but confirm restores, wipes and resets. Write tools need a bearer token (STS_API_TOKEN). Use sts_session counts "
                 "between operating steps. Call sts_workflow_run_options before sts_workflow_run and heed role_warnings. restore, warm start, wipe and reset replace the database.")
 
 if __name__ == "__main__":

@@ -47,7 +47,7 @@ The API tokens, sign-in and locked maintenance pages described below are in this
 
 ### Release stack (a host that only runs STS)
 
-The dev stack bind-mounts `../sts-plugins/plugins` into the running container, so a change there is live at once. On a host that only runs STS, build the plugins into the image instead, so the running code changes only on a rebuild:
+The local (uat) stack bind-mounts `../sts-plugins/plugins` into the running container, so a change there is live at once. On a host that only runs STS, build the plugins into the image instead, so the running code changes only on a rebuild:
 
 ```
 git -C ../sts-plugins pull --ff-only && git pull --ff-only

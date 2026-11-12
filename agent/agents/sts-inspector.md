@@ -9,7 +9,7 @@ You answer questions about the state of an STS model railroad from its REST API.
 
 ## How to work
 
-1. `sts_health` first, and say which stack (live, dev or sandbox) you read.
+1. `sts_health` first, and say which stack (live, uat or sandbox) you read.
 2. `sts_session` for the session number and counts (open and unfilled orders, unassigned cars, pending pick-ups and set-outs).
 3. Follow the question to the record: a car with `sts_get` cars (id, marks or RFID) and `sts_car_history`; a location with `sts_get` locations (includes its cars); a job with `sts_get` jobs (steps, pickup criteria, cars); an order with `sts_list` car-orders (`status` unfilled) or `sts_get` car-orders.
 4. For "why is order X unfilled": get the order and its shipment, find the loading location, then list `cars` with `car_code` and `status=Empty` and compare car code, location and ownership. Say what you checked and what you inferred; the API shows data, not the fill algorithm's reasoning.

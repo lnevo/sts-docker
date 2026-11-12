@@ -29,7 +29,7 @@ Or load it for one session: `claude --plugin-dir /path/to/sts-docker/agent`.
 
 | Variable             | Default                            | Meaning                                                    |
 | -------------------- | ---------------------------------- | ---------------------------------------------------------- |
-| `STS_API_URL`        | `http://localhost:8980/sts/api/v1` | Local stack (`dev`) 8980, sandbox 8981; a live stack may be on another host |
+| `STS_API_URL`        | `http://localhost:8980/sts/api/v1` | Local stack (`uat`) 8980, sandbox 8981; a live stack may be on another host |
 | `STS_API_TOKEN`      | none                               | Bearer token; needed for any write                         |
 | `STS_API_TOKEN_FILE` | none                               | File holding the token, used when `STS_API_TOKEN` is unset |
 | `STS_API_TIMEOUT`    | `30`                               | Seconds per request                                        |
