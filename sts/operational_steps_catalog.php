@@ -211,7 +211,7 @@ function operational_steps_sanitize_backup_basename($name)
 
 /**
  * Resolve Create Backup filename from params.
- * Prefer prefix → "{prefix}{session_nbr}" (e.g. hart_session + 2 → hart_session2).
+ * Prefer prefix → "{prefix}{session_nbr}" (e.g. session + 2 → session2).
  * Legacy recipes may still pass an absolute "backup" name when prefix is empty.
  */
 function operational_steps_resolve_create_backup_name($dbc, array $params)
@@ -423,20 +423,16 @@ function operational_steps_catalog_auto_assign_jobs_param()
     ];
 }
 
+/** Backup step prefix: the plugin's session_backup_prefix, or 'session' in the core-only catalog. */
+function operational_steps_catalog_backup_prefix()
+{
+    return defined('STS_CATALOG_CORE_ONLY') ? 'session' : plugins_session_backup_prefix();
+}
+
 function operational_steps_staging_job_names($dbc, array $config = [])
 {
-    if (function_exists('warm_start_staging_job_names')) {
-        return warm_start_staging_job_names($dbc, $config);
-    }
-    $jobs = [];
-    $rs = mysqli_query($dbc, 'SELECT name FROM jobs WHERE name LIKE "STG-%" ORDER BY name');
-    while ($rs && ($row = mysqli_fetch_array($rs))) {
-        $name = (string) ($row['name'] ?? '');
-        if ($name !== '') {
-            $jobs[] = $name;
-        }
-    }
-    return $jobs;
+    require_once __DIR__ . '/plugin_registry.php';
+    return plugins_staging_job_names($dbc, $config);
 }
 
 function operational_steps_is_staging_job($job_name, array $staging_jobs)
@@ -1620,7 +1616,7 @@ function operational_steps_catalog_definitions()
             'adder_group' => 'database',
             'label' => 'Create Backup',
             'gui_template' => 'Create Backup {prefix}<session>',
-            'description' => 'Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. HART recipe uses hart_session_pre (after orders/fill/waybills) and hart_session_post (end of session). Legacy hart_session{N} end dumps still work. Lock from the session overview freezes both pre + post to *_locked companions.',
+            'description' => 'Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. Session restart and lock look for {scheme}_pre{N} (after orders/fill/waybills) and {scheme}_post{N} (end of session), where {scheme} is the session backup prefix (default session, a plugin may set its own); legacy {scheme}{N} end dumps still work. Lock from the session overview freezes both pre + post to *_locked companions.',
             'runnable' => true,
             'dispatch' => 'backup_database',
             'gui_path' => '/sts/backup_db.php',
@@ -1628,9 +1624,9 @@ function operational_steps_catalog_definitions()
                 operational_steps_catalog_text_param(
                     'prefix',
                     'Backup prefix',
-                    'hart_session_post',
+                    operational_steps_catalog_backup_prefix() . '_post',
                     true,
-                    'hart_session_post'
+                    operational_steps_catalog_backup_prefix() . '_post'
                 ),
             ],
         ],

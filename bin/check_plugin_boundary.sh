@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Boundary lint: core (sts/ minus plugins, vendor, uploads, ImageStore,
-# *.generated.yaml) must not name plugin ids/functions or HART identifiers.
+# Boundary lint: core (sts/ minus plugins, vendor, uploads, ImageStore)
+# must not name plugin ids/functions or HART identifiers.
 # Allowlist: bin/plugin_boundary_allow.txt ("<path>" or "<path>:<token>").
 set -euo pipefail
 
@@ -8,11 +8,11 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 allow_file="bin/plugin_boundary_allow.txt"
 
-pattern='track_scale|track-scale|coke_orders|replenish_coke|keep_coke|\bCK1\b|\bD749\b|\bNVL\b|STG-SCULLY|STG-DEMMLER|Shenango|Scully|Neville|Demmler|\bCOKE-|\bSCL-|\bNIL-|SOUTH-SCALE'
+pattern='track_scale|track-scale|coke_orders|replenish_coke|keep_coke|\bCK1\b|\bD749\b|\bNVL\b|STG-SCULLY|STG-DEMMLER|Shenango|Scully|Neville|Demmler|\bCOKE-|\bSCL-|\bNIL-|SOUTH-SCALE|\bhart\b|\bhart_|\bSTG-'
 
 matches="$(grep -rnEi \
     --exclude-dir=plugins --exclude-dir=vendor --exclude-dir=uploads --exclude-dir=ImageStore \
-    --exclude='*.generated.yaml' -e "$pattern" sts || true)"
+    -e "$pattern" sts || true)"
 
 whole=()
 tokpaths=()

@@ -59,21 +59,8 @@ function session_location_id_by_code($dbc, $code)
 
 function session_staging_job_names($dbc, array $config = [])
 {
-    if (function_exists('operational_steps_staging_job_names')) {
-        return operational_steps_staging_job_names($dbc, $config);
-    }
-    if (function_exists('warm_start_staging_job_names')) {
-        return warm_start_staging_job_names($dbc, $config);
-    }
-    $jobs = [];
-    $rs = mysqli_query($dbc, 'SELECT name FROM jobs WHERE name LIKE "STG-%" ORDER BY name');
-    while ($rs && ($row = mysqli_fetch_array($rs))) {
-        $name = (string) ($row['name'] ?? '');
-        if ($name !== '') {
-            $jobs[] = $name;
-        }
-    }
-    return $jobs;
+    require_once __DIR__ . '/plugin_registry.php';
+    return plugins_staging_job_names($dbc, $config);
 }
 
 /** STS PHP application root (read-only code; not session output). */
@@ -264,7 +251,7 @@ function session_can_restart_from_overview($session_nbr, $current_session = null
 
 /**
  * *_locked backup basenames that match overview session N
- * (e.g. hart_session2_locked).
+ * (e.g. session2_locked).
  *
  * @return list<string>
  */
@@ -358,11 +345,19 @@ function session_restart_backup_name_excluded($name)
     return false;
 }
 
+/** Session dump prefix ({prefix}_pre{N}, {prefix}_post{N}, legacy {prefix}{N}); see plugins_session_backup_prefix(). */
+function session_backup_prefix()
+{
+    require_once __DIR__ . '/plugin_registry.php';
+
+    return plugins_session_backup_prefix();
+}
+
 /**
  * Preferred rolling dump basenames for session N under the pre/post scheme:
- *   hart_session_pre{N}   — after orders/fill/waybills, before morning ops
- *   hart_session_post{N}  — end of session
- * Legacy rolling end dump hart_session{N} is included last for older campaigns.
+ *   {prefix}_pre{N}   — after orders/fill/waybills, before morning ops
+ *   {prefix}_post{N}  — end of session
+ * Legacy rolling end dump {prefix}{N} is included last for older campaigns.
  *
  * @return list<string>
  */
@@ -373,10 +368,12 @@ function session_scheme_backup_names($session_nbr)
         return [];
     }
 
+    $prefix = session_backup_prefix();
+
     return [
-        'hart_session_pre' . $session_nbr,
-        'hart_session_post' . $session_nbr,
-        'hart_session' . $session_nbr,
+        $prefix . '_pre' . $session_nbr,
+        $prefix . '_post' . $session_nbr,
+        $prefix . $session_nbr,
     ];
 }
 
@@ -398,7 +395,7 @@ function session_backup_is_pre_for_session($backup_name, $session_nbr)
 /**
  * Backup basenames for restarting session N.
  *
- * Prefer same-session pre dumps (hart_session_pre{N}) when present — restore
+ * Prefer same-session pre dumps ({prefix}_pre{N}) when present — restore
  * returns to the start of the generated session without rewinding to N-1.
  * Otherwise fall back to end-of-(N-1) dumps (post / legacy).
  *
@@ -416,7 +413,7 @@ function session_restart_backup_candidates($session_nbr)
     }
 
     $pre_matches = [];
-    foreach (['hart_session_pre' . $session_nbr] as $name) {
+    foreach ([session_backup_prefix() . '_pre' . $session_nbr] as $name) {
         $path = $dir . '/' . $name;
         if (is_file($path) && !session_restart_backup_name_excluded($name)) {
             $pre_matches[] = $name;
@@ -443,12 +440,13 @@ function session_restart_backup_candidates($session_nbr)
         // Prefer post / legacy end dumps over unrelated numbered files.
         $matches[] = $name;
     }
-    usort($matches, static function ($a, $b) use ($prev) {
-        $rank = static function ($name) use ($prev) {
+    $prefix_re = preg_quote(session_backup_prefix(), '/');
+    usort($matches, static function ($a, $b) use ($prev, $prefix_re) {
+        $rank = static function ($name) use ($prev, $prefix_re) {
             if (preg_match('/(^|_)post' . preg_quote((string) $prev, '/') . '$/i', $name)) {
                 return 0;
             }
-            if (preg_match('/^hart_session' . preg_quote((string) $prev, '/') . '$/i', $name)) {
+            if (preg_match('/^' . $prefix_re . preg_quote((string) $prev, '/') . '$/i', $name)) {
                 return 1;
             }
             if ((bool) preg_match('/(?<![0-9])' . preg_quote((string) $prev, '/') . '$/', $name)) {
@@ -675,7 +673,7 @@ function session_lock_backup_candidates($session_nbr)
 
 /**
  * Scheme dumps that Lock Backup should freeze together when no single
- * backup is selected: pre + post when present. Legacy hart_session{N} is
+ * backup is selected: pre + post when present. Legacy {prefix}{N} is
  * locked only when neither scheme dump exists (older campaigns).
  *
  * @return list<string>
@@ -684,9 +682,10 @@ function session_lock_default_sources($session_nbr)
 {
     $session_nbr = (int) $session_nbr;
     $dir = session_restart_backups_dir();
-    $pre = 'hart_session_pre' . $session_nbr;
-    $post = 'hart_session_post' . $session_nbr;
-    $legacy = 'hart_session' . $session_nbr;
+    $prefix = session_backup_prefix();
+    $pre = $prefix . '_pre' . $session_nbr;
+    $post = $prefix . '_post' . $session_nbr;
+    $legacy = $prefix . $session_nbr;
     $out = [];
     if (is_file($dir . '/' . $pre)) {
         $out[] = $pre;
@@ -701,7 +700,7 @@ function session_lock_default_sources($session_nbr)
     return $out;
 }
 
-/** Locked companion name for a rolling backup (hart_session2 → hart_session2_locked). */
+/** Locked companion name for a rolling backup (session2 → session2_locked). */
 function session_lock_backup_target_name($backup_name)
 {
     $name = basename(trim((string) $backup_name));
@@ -783,7 +782,7 @@ function session_lock_one_backup($source)
 /**
  * Copy session dump(s) to *_locked companions. Filesystem only.
  * With no explicit backup, locks every scheme dump present (pre + post,
- * plus legacy hart_session{N}) so a session lock freezes both checkpoints.
+ * plus legacy {prefix}{N}) so a session lock freezes both checkpoints.
  *
  * @return array{ok:bool, message:string, source?:string, locked?:string, photos?:int, locked_list?:list<string>, sources?:list<string>}
  */
@@ -2479,7 +2478,7 @@ function session_ensure_output_stubs($session_nbr, array $manifest, $root = null
     session_ensure_writable_dir($session_dir);
 
     // The canonical session page is index.php. A stale/legacy index.html (e.g. the
-    // old "HART Switchlists" root stub) would otherwise be reached from links that
+    // old "Switchlists" root stub) would otherwise be reached from links that
     // point at session_N/index.html. Replace it with a redirect to index.php.
     $session_index_html = $session_dir . '/index.html';
     $existing_index = is_file($session_index_html) ? (string) @file_get_contents($session_index_html) : '';
@@ -4780,7 +4779,7 @@ function session_job_display_name($session_nbr, $job, $manifest = null, $root = 
 /**
  * Groups of job keys that share the same operator-facing train name, in manifest
  * order: [ display_name => [job_key, ...], ... ]. Jobs whose overwritten titles
- * collapse to the same name (e.g. STG-JOB + JOB1 both "JOB1") are grouped so
+ * collapse to the same name (e.g. YARD-JOB + JOB1 both "JOB1") are grouped so
  * the UI can present a single consolidated train.
  */
 function session_job_group_map($session_nbr, $manifest = null, $root = null)
@@ -5170,7 +5169,7 @@ function session_build_switchlist_print_all($dbc, $session_nbr, $root = null)
  * runs, in phase order, concatenated into one printable document — the switch
  * list analogue of the per-train waybill bundle (job_<job>.print_all.html). The
  * train is the consolidated group of member jobs sharing the given job's display
- * name, so multi-key trains (e.g. STG-JOB + JOB1) print as one train.
+ * name, so multi-key trains (e.g. YARD-JOB + JOB1) print as one train.
  * Returns the relative output path, or null when the train has no switch lists.
  */
 function session_build_switchlist_train_print_all($dbc, $session_nbr, $job, $root = null)

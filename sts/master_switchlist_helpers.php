@@ -1113,7 +1113,7 @@ function master_sw_render_empty_job_index($dbc, $job_name, $job_dir, $session_nb
 
 function master_sw_render_empty_session_index($dbc, $output_dir, $session_nbr, $message)
 {
-    $rr_name = ($dbc !== null) ? (master_sw_get_setting($dbc, 'railroad_name') ?: 'HART Railroad') : 'HART Railroad';
+    $rr_name = ($dbc !== null) ? (master_sw_get_setting($dbc, 'railroad_name') ?: 'Railroad') : 'Railroad';
     $nav = master_sw_nav_for_session_dir($output_dir, $session_nbr);
     $waybills_href = is_file(rtrim($output_dir, '/') . '/waybills/index.html') ? 'waybills/index.html' : '';
     ob_start();
@@ -1341,7 +1341,7 @@ function master_sw_render_session_index($dbc, array $job_summaries, $output_dir,
     if (!function_exists('session_nav_bar_html')) {
         require_once __DIR__ . '/session_helpers.php';
     }
-    $rr_name = master_sw_get_setting($dbc, 'railroad_name') ?: 'HART Railroad';
+    $rr_name = master_sw_get_setting($dbc, 'railroad_name') ?: 'Railroad';
     $cards = '';
     $total_phases = 0;
     $total_cars = 0;
@@ -1443,7 +1443,7 @@ function master_sw_discover_session_dirs($output_root, $max_session = null)
 function master_sw_render_switchlists_root_index($output_root, $max_session = null)
 {
     // The live STS app uses session.php as its dynamic sessions landing page, so
-    // the static "HART Switchlists" root index is redundant there. Skip writing
+    // the static "Switchlists" root index is redundant there. Skip writing
     // it whenever the app root provides session.php.
     $app_root = function_exists('session_app_root') ? session_app_root() : null;
     if ($app_root !== null && is_file($app_root . '/session.php')) {
@@ -1475,12 +1475,12 @@ function master_sw_render_switchlists_root_index($output_root, $max_session = nu
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>HART Switchlists</title>
+  <title>Switchlists</title>
   ' . master_sw_render_head_assets() . '
 </head>
 <body>
   <div class="page" style="padding-top:24px;">
-    <h1>HART Switchlists</h1>
+    <h1>Switchlists</h1>
     <p class="subtitle">Select an operating session or edit workflow steps</p>
     ' . $tools_card . $cards . '
   </div>
@@ -1626,7 +1626,7 @@ function master_sw_render_print_all_phase_body($dbc, array $section, $phase_inde
 
     $heading = master_sw_phase_heading_label($display_train, $phase_index, $phase_total, $options);
 
-    $rr_name = master_sw_get_setting($dbc, 'railroad_name') ?: 'HART Railroad';
+    $rr_name = master_sw_get_setting($dbc, 'railroad_name') ?: 'Railroad';
     $session_label = master_sw_session_nbr_from_options($dbc, $options);
     $clip_header = '<header class="print-all-clip-header">'
         . '<div class="print-all-clip-rr">' . htmlspecialchars($rr_name) . '</div>'
@@ -1781,7 +1781,7 @@ function master_sw_render_mobile($dbc, $job_name, array $sections, $output_path,
     }
 
     $print_width = master_sw_get_setting($dbc, 'print_width') ?: '7.5in';
-    $rr_name = master_sw_get_setting($dbc, 'railroad_name') ?: 'HART Railroad';
+    $rr_name = master_sw_get_setting($dbc, 'railroad_name') ?: 'Railroad';
     $session_nbr = master_sw_session_nbr_from_options($dbc, $options);
     $table_name = $meta['table_name'];
     $display_train = master_sw_display_train_name($table_name, $options);
@@ -2023,7 +2023,7 @@ function master_sw_render_full($dbc, $job_name, array $sections, $output_path, a
     }
     ob_start();
     $shell = master_sw_render_phase_shell_start($dbc, $job_name, 'full', $options);
-    $rr_initials = master_sw_get_setting($dbc, 'railroad_initials') ?: 'HART';
+    $rr_initials = master_sw_get_setting($dbc, 'railroad_initials') ?: 'RR';
     $loads = 0;
     $empties = 0;
     $special_instructions = [];
@@ -2056,7 +2056,7 @@ function master_sw_render_full($dbc, $job_name, array $sections, $output_path, a
 function master_sw_render_dmp($dbc, $job_name, array $sections, $output_path, array $options = [])
 {
     $print_width = master_sw_get_setting($dbc, 'print_width') ?: '7.5in';
-    $rr_name = master_sw_get_setting($dbc, 'railroad_name') ?: 'HART Railroad';
+    $rr_name = master_sw_get_setting($dbc, 'railroad_name') ?: 'Railroad';
     $page_width = (int) ((float) substr($print_width, 0, 3) * 10);
     ob_start();
     $shell = master_sw_render_phase_shell_start($dbc, $job_name, 'dmp', $options);
@@ -2093,7 +2093,7 @@ Rptg Marks  Type E/L Contents      From           To             PkUp Left<br />
 function master_sw_render_wo($dbc, $job_name, array $sections, $output_path, array $options = [])
 {
     $print_width = master_sw_get_setting($dbc, 'print_width') ?: '7.5in';
-    $rr_name = master_sw_get_setting($dbc, 'railroad_name') ?: 'HART Railroad';
+    $rr_name = master_sw_get_setting($dbc, 'railroad_name') ?: 'Railroad';
     $page_width = (int) ((float) substr($print_width, 0, 3) * 10);
     ob_start();
     $shell = master_sw_render_phase_shell_start($dbc, $job_name, 'wo', $options);
@@ -2391,9 +2391,9 @@ function master_sw_render_x2010($dbc, $job_name, array $sections, $output_path, 
             $sta = ($status === 'Loaded') ? 'L' : 'E';
             $dg = ($car_code === 'ATMF' || $car_code === 'NTAF') ? 'Y-Petroleum' : '';
 
-            // Length: HART stores a car description like "Hopper 40ft" in remarks;
+            // Length: some railroads store a car description like "Hopper 40ft" in remarks;
             // surface the trailing measurement token when present (gross mass is
-            // not tracked for HART, so that column stays blank like a blank form).
+            // often not tracked, so that column stays blank like a blank form).
             $length = '';
             $remarks = trim((string) ($row['remarks'] ?? ''));
             if ($remarks !== '' && preg_match('/(\d+(?:\.\d+)?)\s*(m|ft)\b/i', $remarks, $lm)) {
@@ -2487,7 +2487,7 @@ function master_sw_render_halfsheet($dbc, $job_name, array $sections, $output_pa
     }
 
     $print_width = master_sw_get_setting($dbc, 'print_width') ?: '7.5in';
-    $rr_initials = master_sw_get_setting($dbc, 'railroad_initials') ?: 'HART';
+    $rr_initials = master_sw_get_setting($dbc, 'railroad_initials') ?: 'RR';
     $session_nbr = master_sw_session_nbr_from_options($dbc, $options);
     $table_name = $meta['table_name'];
     $display_train = master_sw_display_train_name($table_name, $options);
@@ -2801,7 +2801,7 @@ function master_sw_generate_for_jobs($dbc, array $job_names, $output_dir, array 
     // per-phase print-all pages were redundant with the session overview
     // (session_overview.php) and the session-wide print-all
     // (session_build_switchlist_print_all → session_N/print_all.html), so they
-    // are no longer generated. The static "HART Switchlists" root index is also
+    // are no longer generated. The static "Switchlists" root index is also
     // skipped on the live app (see master_sw_render_switchlists_root_index).
 
     return $written;

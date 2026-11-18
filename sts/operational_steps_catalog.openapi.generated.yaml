@@ -51,7 +51,7 @@ components:
             adder_group: database
             label: Create Backup
             gui_template: "Create Backup {prefix}<session>"
-            description: "Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. HART recipe uses hart_session_pre (after orders/fill/waybills) and hart_session_post (end of session). Legacy hart_session{N} end dumps still work. Lock from the session overview freezes both pre + post to *_locked companions."
+            description: "Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. Session restart and lock look for {scheme}_pre{N} (after orders/fill/waybills) and {scheme}_post{N} (end of session), where {scheme} is the session backup prefix (default session, a plugin may set its own); legacy {scheme}{N} end dumps still work. Lock from the session overview freezes both pre + post to *_locked companions."
             runnable: true
             dispatch: backup_database
             gui_path: /sts/backup_db.php
@@ -60,9 +60,9 @@ components:
                 key: prefix
                 label: Backup prefix
                 type: text
-                default: hart_session_post
+                default: session_post
                 required: true
-                placeholder: hart_session_post
+                placeholder: session_post
                 visible_label: true
           -
             id: validate_database
@@ -2231,7 +2231,7 @@ components:
             adder_group: database
             label: Create Backup
             gui_template: "Create Backup {prefix}<session>"
-            description: "Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. HART recipe uses hart_session_pre (after orders/fill/waybills) and hart_session_post (end of session). Legacy hart_session{N} end dumps still work. Lock from the session overview freezes both pre + post to *_locked companions."
+            description: "Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. Session restart and lock look for {scheme}_pre{N} (after orders/fill/waybills) and {scheme}_post{N} (end of session), where {scheme} is the session backup prefix (default session, a plugin may set its own); legacy {scheme}{N} end dumps still work. Lock from the session overview freezes both pre + post to *_locked companions."
             runnable: true
             dispatch: backup_database
             gui_path: /sts/backup_db.php
@@ -2240,9 +2240,9 @@ components:
                 key: prefix
                 label: Backup prefix
                 type: text
-                default: hart_session_post
+                default: session_post
                 required: true
-                placeholder: hart_session_post
+                placeholder: session_post
                 visible_label: true
           -
             id: validate_database
@@ -2609,7 +2609,7 @@ components:
               example: "Create Backup {prefix}<session>"
             description:
               type: string
-              example: "Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. HART recipe uses hart_session_pre (after orders/fill/waybills) and hart_session_post (end of session). Legacy hart_session{N} end dumps still work. Lock from the session overview freezes both pre + post to *_locked companions."
+              example: "Export current DB to sts/backups/{prefix}{session_nbr} and copy RollingStock photos to {prefix}{session_nbr}_photos. Overwrites any prior dump with that name. Session restart and lock look for {scheme}_pre{N} (after orders/fill/waybills) and {scheme}_post{N} (end of session), where {scheme} is the session backup prefix (default session, a plugin may set its own); legacy {scheme}{N} end dumps still work. Lock from the session overview freezes both pre + post to *_locked companions."
             params:
               type: array
               items:
@@ -2619,9 +2619,9 @@ components:
                   key: prefix
                   label: Backup prefix
                   type: text
-                  default: hart_session_post
+                  default: session_post
                   required: true
-                  placeholder: hart_session_post
+                  placeholder: session_post
                   visible_label: true
         validate_database:
           type: object

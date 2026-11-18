@@ -515,6 +515,37 @@ function plugins_try_dispatch($dbc, $dispatch, array $step, array $def, array $p
  *
  * @return array<string,mixed>|null
  */
+/**
+ * First valid value of a manifest key that only one plugin may set. Plugins are
+ * scanned in discovery order; an invalid value is logged and skipped, and a
+ * second plugin setting the key is logged and ignored. Null when none sets it.
+ *
+ * @param callable(mixed):bool $valid
+ * @return mixed
+ */
+function plugins_first_manifest_value($key, callable $valid, $rule)
+{
+    $value = null;
+    $owner = '';
+    foreach (plugins_discover() as $id => $manifest) {
+        if (!array_key_exists($key, $manifest)) {
+            continue;
+        }
+        if (!$valid($manifest[$key])) {
+            error_log('STS plugins: ' . $key . ' from "' . $id . '" ignored; ' . $rule . '.');
+            continue;
+        }
+        if ($owner !== '') {
+            error_log('STS plugins: ' . $key . ' from "' . $id . '" ignored; "' . $owner . '" already set it.');
+            continue;
+        }
+        $value = $manifest[$key];
+        $owner = (string) $id;
+    }
+
+    return $value;
+}
+
 function plugins_warm_start_scenario()
 {
     static $scenario = false;
@@ -523,20 +554,7 @@ function plugins_warm_start_scenario()
     }
 
     plugins_bootstrap_all();
-    $scenario = null;
-    $owner = '';
-    foreach (plugins_discover() as $id => $manifest) {
-        $candidate = $manifest['warm_start_scenario'] ?? null;
-        if (!is_array($candidate)) {
-            continue;
-        }
-        if ($scenario === null) {
-            $scenario = $candidate;
-            $owner = (string) $id;
-        } else {
-            error_log('STS plugins: warm_start_scenario from "' . $id . '" ignored; "' . $owner . '" already registered one.');
-        }
-    }
+    $scenario = plugins_first_manifest_value('warm_start_scenario', 'is_array', 'it must be an array');
 
     return $scenario;
 }
@@ -563,6 +581,42 @@ function plugins_scenario_call($key, array $args, $default = null)
     }
 
     return $default;
+}
+
+/**
+ * Basename prefix of the session dump scheme: {prefix}_pre{N}, {prefix}_post{N}
+ * and the legacy end dump {prefix}{N}. A plugin sets it with the manifest key
+ * 'session_backup_prefix' (letters, digits, _ and - only); the default is 'session'.
+ * When two plugins set it, the first one discovered wins and the other is logged.
+ */
+function plugins_session_backup_prefix()
+{
+    static $prefix = null;
+    if ($prefix !== null) {
+        return $prefix;
+    }
+
+    $value = plugins_first_manifest_value('session_backup_prefix', static function ($v) {
+        return is_string($v) && preg_match('/^[A-Za-z0-9_-]+$/', $v) === 1;
+    }, 'it must be letters, digits, _ or -');
+    $prefix = $value ?? 'session';
+
+    return $prefix;
+}
+
+/**
+ * Staging job names: from the warm-start scenario's staging_jobs hook when a
+ * plugin registers one, else config 'staging_jobs'. Core assumes no job naming
+ * convention, so with neither the list is empty.
+ *
+ * @return list<string>
+ */
+function plugins_staging_job_names($dbc, array $config = [])
+{
+    return plugins_scenario_call('staging_jobs', [$dbc, $config], static function ($dbc, $config) {
+        $configured = $config['staging_jobs'] ?? [];
+        return array_values(array_filter(array_map('strval', (array) $configured)));
+    });
 }
 
 /**

@@ -25,7 +25,7 @@ Legacy command-line scripts (`begin_operating_session.php`, `simulate_warm_start
 
 ## Verify before build
 
-From `external/` in the hart repo:
+From the folder that holds both `sts-docker` and `sts-helpers` checkouts:
 
 ```bash
 sts-helpers/bin/verify_sts_runtime.sh

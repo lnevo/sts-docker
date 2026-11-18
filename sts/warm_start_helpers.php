@@ -20,7 +20,7 @@ require_once __DIR__ . '/warm_start_session_stats.php';
 
 /**
  * Named statistics buckets: generic accumulators that scenarios and plugins use
- * for their own counters (e.g. the HART layout keeps a "coke" bucket).
+ * for their own counters (e.g. a layout plugin keeping a bucket per commodity).
  */
 function &warm_start_stats_store()
 {
@@ -797,10 +797,7 @@ function warm_start_core_run_session_work(
 /** Staging job names: from the scenario when one is registered, else config 'staging_jobs'. */
 function warm_start_staging_job_names($dbc, $config)
 {
-    return plugins_scenario_call('staging_jobs', [$dbc, $config], static function ($dbc, $config) {
-        $configured = $config['staging_jobs'] ?? [];
-        return array_values(array_filter(array_map('strval', $configured)));
-    });
+    return plugins_staging_job_names($dbc, (array) $config);
 }
 
 function warm_start_is_staging_job($job_name, $staging_jobs)
