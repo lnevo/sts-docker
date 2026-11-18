@@ -176,11 +176,6 @@ function warm_start_location_station($dbc, $location_id)
     return $row ? (int) $row['station'] : 0;
 }
 
-function warm_start_pending_pickup_ids($dbc, $job_name)
-{
-    return array_keys(auto_assign_eligible_car_ids_for_job($dbc, $job_name, true));
-}
-
 function warm_start_car_order_targets_station($dbc, $car_id, $station_id)
 {
     $car_id = (int) $car_id;

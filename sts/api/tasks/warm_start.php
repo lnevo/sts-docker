@@ -1,6 +1,7 @@
 <?php
 /**
- * Task kind warm_start: warm_start_run(), modelled on the sts-helpers CLI simulate_warm_start.php.
+ * Task kind warm_start: warm_start_run(). A scenario plugin that cannot finish a
+ * warm start throws; the task then fails. A returned summary always means success.
  * Spec: sessions, max_sessions, seed, continue, tracked, config (array of extra overrides), backup.
  * "tracked" asks the registered warm-start scenario for its 'tracked_overrides'.
  */
@@ -46,8 +47,5 @@ function api_task_kind_warm_start(array $spec, callable $log)
         $log('backup written: ' . $out['backup']);
     }
     mysqli_close($dbc);
-    if (!empty($summary['weigh_failed'])) {
-        throw new ApiTaskFailure('Simulation stopped: weigh failed', $out);
-    }
     return $out;
 }
