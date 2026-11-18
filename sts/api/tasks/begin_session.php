@@ -1,7 +1,6 @@
 <?php
 /**
- * Task kind begin_session: warm_start_begin_operating_session(), modelled on the
- * sts-helpers CLI begin_operating_session.php.
+ * Task kind begin_session: warm_start_begin_operating_session().
  * Spec: load_unload, increment, reposition, assign, fill, generate (bools),
  * reposition_fraction, fill_fraction, config (array), options (array of extra
  * scenario options), backup.

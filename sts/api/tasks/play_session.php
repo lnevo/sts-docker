@@ -1,7 +1,6 @@
 <?php
 /**
- * Task kind play_session: warm_start_play_operating_session(), modelled on the
- * sts-helpers CLI play_operating_session.php.
+ * Task kind play_session: warm_start_play_operating_session().
  * Spec: config (array, optional), backup.
  */
 function api_task_kind_play_session(array $spec, callable $log)

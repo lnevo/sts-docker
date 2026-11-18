@@ -21,7 +21,7 @@ Recipe CSVs live on the **`sts-docker-data/backups`** bind mount (`backups/sessi
 
 ## Optional host-only CLIs
 
-Legacy command-line scripts (`begin_operating_session.php`, `simulate_warm_start.php`, etc.) remain in **`sts-docker-helpers/sts/`** for old bin wrappers. They are not required for the in-browser simulator or `simulator_api.php`.
+The old begin, play and warm-start command-line scripts are gone from **`sts-docker-helpers/sts/`**; the API tasks in `sts/api/tasks/` do that work. Nothing in the image needs a host-side CLI.
 
 ## Verify before build
 
