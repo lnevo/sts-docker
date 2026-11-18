@@ -59,13 +59,8 @@ function session_location_id_by_code($dbc, $code)
 
 function session_staging_job_names($dbc, array $config = [])
 {
-    if (function_exists('operational_steps_staging_job_names')) {
-        return operational_steps_staging_job_names($dbc, $config);
-    }
-    // Staging jobs come from the scenario plugin or config 'staging_jobs'; core
-    // assumes no job naming convention.
-    require_once __DIR__ . '/warm_start_helpers.php';
-    return warm_start_staging_job_names($dbc, $config);
+    require_once __DIR__ . '/plugin_registry.php';
+    return plugins_staging_job_names($dbc, $config);
 }
 
 /** STS PHP application root (read-only code; not session output). */

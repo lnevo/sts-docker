@@ -423,12 +423,16 @@ function operational_steps_catalog_auto_assign_jobs_param()
     ];
 }
 
+/** Backup step prefix: the plugin's session_backup_prefix, or 'session' in the core-only catalog. */
+function operational_steps_catalog_backup_prefix()
+{
+    return defined('STS_CATALOG_CORE_ONLY') ? 'session' : plugins_session_backup_prefix();
+}
+
 function operational_steps_staging_job_names($dbc, array $config = [])
 {
-    // Staging jobs come from the scenario plugin or config 'staging_jobs'; core
-    // assumes no job naming convention.
-    require_once __DIR__ . '/warm_start_helpers.php';
-    return warm_start_staging_job_names($dbc, $config);
+    require_once __DIR__ . '/plugin_registry.php';
+    return plugins_staging_job_names($dbc, $config);
 }
 
 function operational_steps_is_staging_job($job_name, array $staging_jobs)
@@ -1620,9 +1624,9 @@ function operational_steps_catalog_definitions()
                 operational_steps_catalog_text_param(
                     'prefix',
                     'Backup prefix',
-                    plugins_session_backup_prefix() . '_post',
+                    operational_steps_catalog_backup_prefix() . '_post',
                     true,
-                    plugins_session_backup_prefix() . '_post'
+                    operational_steps_catalog_backup_prefix() . '_post'
                 ),
             ],
         ],
