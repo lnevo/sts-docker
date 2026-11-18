@@ -75,8 +75,8 @@ Environment (web service):
   "step N (command) needs admin; sign in with an admin token or change the
   command's role on /sts/api_admin.php". Steps skipped by conditions, gotos,
   ranges or disabled flags are never checked, so an operator can run
-  `hart_session` past session 0 (the restore step is behind "session > 0 then
-  goto 4"). The 202 response and `GET /workflows/{name}/run-options` carry
+  a workflow past session 0 when its restore step is behind a condition such as
+  "session > 0 then goto 4". The 202 response and `GET /workflows/{name}/run-options` carry
   `caller_role` and `role_warnings` (`{step, command, label, required_role,
   conditional, note}`); `conditional` marks steps behind a forward goto or
   if_then-goto that may skip them.

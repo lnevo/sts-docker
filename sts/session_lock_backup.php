@@ -3,7 +3,7 @@
  * Lock session backup(s) from the session overview.
  *
  * With no backup selected, freezes every scheme dump for the session
- * (hart_session_pre{N} + hart_session_post{N}, plus legacy hart_session{N})
+ * ({prefix}_pre{N} + {prefix}_post{N}, plus legacy {prefix}{N}; prefix from session_backup_prefix())
  * to *_locked companions. Filesystem only — does not restore or modify the
  * live database.
  */

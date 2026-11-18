@@ -8,7 +8,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 allow_file="bin/plugin_boundary_allow.txt"
 
-pattern='track_scale|track-scale|coke_orders|replenish_coke|keep_coke|\bCK1\b|\bD749\b|\bNVL\b|STG-SCULLY|STG-DEMMLER|Shenango|Scully|Neville|Demmler|\bCOKE-|\bSCL-|\bNIL-|SOUTH-SCALE'
+pattern='track_scale|track-scale|coke_orders|replenish_coke|keep_coke|\bCK1\b|\bD749\b|\bNVL\b|STG-SCULLY|STG-DEMMLER|Shenango|Scully|Neville|Demmler|\bCOKE-|\bSCL-|\bNIL-|SOUTH-SCALE|\bhart\b|\bhart_|\bSTG-'
 
 matches="$(grep -rnEi \
     --exclude-dir=plugins --exclude-dir=vendor --exclude-dir=uploads --exclude-dir=ImageStore \

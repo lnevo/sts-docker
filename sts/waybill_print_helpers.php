@@ -18,7 +18,7 @@ function waybill_print_settings($dbc)
 {
     return [
         'print_width' => waybill_print_get_setting($dbc, 'print_width', '700px'),
-        'railroad_name' => waybill_print_get_setting($dbc, 'railroad_name', 'HART Railroad'),
+        'railroad_name' => waybill_print_get_setting($dbc, 'railroad_name', 'Railroad'),
         'session_nbr' => waybill_print_get_setting($dbc, 'session_nbr', '0'),
     ];
 }

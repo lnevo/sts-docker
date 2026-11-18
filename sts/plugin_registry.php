@@ -566,6 +566,41 @@ function plugins_scenario_call($key, array $args, $default = null)
 }
 
 /**
+ * Basename prefix of the session dump scheme: {prefix}_pre{N}, {prefix}_post{N}
+ * and the legacy end dump {prefix}{N}. A plugin sets it with the manifest key
+ * 'session_backup_prefix' (letters, digits, _ and - only); the default is 'session'.
+ * When two plugins set it, the first one discovered wins and the other is logged.
+ */
+function plugins_session_backup_prefix()
+{
+    static $prefix = null;
+    if ($prefix !== null) {
+        return $prefix;
+    }
+
+    $prefix = 'session';
+    $owner = '';
+    foreach (plugins_discover() as $id => $manifest) {
+        if (!array_key_exists('session_backup_prefix', $manifest)) {
+            continue;
+        }
+        $value = $manifest['session_backup_prefix'];
+        if (!is_string($value) || !preg_match('/^[A-Za-z0-9_-]+$/', $value)) {
+            error_log('STS plugins: session_backup_prefix from "' . $id . '" ignored; it must be letters, digits, _ or -.');
+            continue;
+        }
+        if ($owner !== '') {
+            error_log('STS plugins: session_backup_prefix from "' . $id . '" ignored; "' . $owner . '" already set it.');
+            continue;
+        }
+        $prefix = $value;
+        $owner = (string) $id;
+    }
+
+    return $prefix;
+}
+
+/**
  * Run every plugin's delivery_complete_hooks after a simulated unload completes.
  *
  * @param string $shipment_code code of the shipment the car just delivered

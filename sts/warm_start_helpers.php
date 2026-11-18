@@ -20,7 +20,7 @@ require_once __DIR__ . '/warm_start_session_stats.php';
 
 /**
  * Named statistics buckets: generic accumulators that scenarios and plugins use
- * for their own counters (e.g. the HART layout keeps a "coke" bucket).
+ * for their own counters (e.g. a layout plugin keeping a bucket per commodity).
  */
 function &warm_start_stats_store()
 {

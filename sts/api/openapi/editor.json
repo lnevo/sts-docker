@@ -266,7 +266,7 @@
     "/workflows/{name}/run-options": {
       "get": {
         "summary": "Run options for a workflow",
-        "description": "Role: reader. The simulator_api.php run_options payload for this workflow (indices, sections, compiled rows, condition_context, current_session, existing_sessions, runtime_available) plus caller_role (null when anonymous) and role_warnings: steps whose command needs a higher role than the caller has (callers below operator are compared as operator). conditional is true when a forward goto or if_then-goto earlier in the recipe may skip the step, e.g. hart_session step 3, restore_database, runs only at session 0; the note says so.",
+        "description": "Role: reader. The simulator_api.php run_options payload for this workflow (indices, sections, compiled rows, condition_context, current_session, existing_sessions, runtime_available) plus caller_role (null when anonymous) and role_warnings: steps whose command needs a higher role than the caller has (callers below operator are compared as operator). conditional is true when a forward goto or if_then-goto earlier in the recipe may skip the step, e.g. a workflow whose restore_database step runs only at session 0; the note says so.",
         "x-sts-role": "reader",
         "security": [
           {},
@@ -365,7 +365,7 @@
     "/sessions/{n}/rerender": {
       "post": {
         "summary": "Re-render a session's switch lists in a style",
-        "description": "Role: operator. Mirrors action=rerender_session_style. Synchronous (sub-second to a few seconds on a HART session).",
+        "description": "Role: operator. Mirrors action=rerender_session_style. Synchronous (sub-second to a few seconds for a typical session).",
         "x-sts-role": "operator",
         "security": [
           {
