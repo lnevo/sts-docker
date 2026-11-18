@@ -212,7 +212,9 @@ async function checkPage(port, page) {
       if (a.eval) await evaluate(s, a.eval);
       if (a.tap || a.touchDrag) {
         const centre = async (sel) => {
-          const r = await evaluate(s, `(function(){var e=document.querySelector(${JSON.stringify(sel)});if(!e)return null;e.scrollIntoView({block:'center'});var b=e.getBoundingClientRect();return {x:b.left+b.width/2,y:b.top+b.height/2};})()`);
+          // Bootstrap turns on smooth scrolling, so scroll instantly and let layout settle for two frames
+          // before measuring; a centre read mid-scroll can miss a small target such as a checkbox.
+          const r = await evaluate(s, `(function(){var e=document.querySelector(${JSON.stringify(sel)});if(!e)return null;e.scrollIntoView({block:'center',behavior:'instant'});return new Promise(function(done){requestAnimationFrame(function(){requestAnimationFrame(function(){var b=e.getBoundingClientRect();done({x:b.left+b.width/2,y:b.top+b.height/2});});});});})()`);
           if (!r) throw new Error('no element for touch: ' + sel);
           return r;
         };
