@@ -21,7 +21,7 @@ Recipe CSVs live on the **`sts-docker-data/backups`** bind mount (`backups/sessi
 
 ## Optional host-only CLIs
 
-The old begin, play and warm-start command-line scripts are gone from **`sts-docker-helpers/sts/`**; the API tasks in `sts/api/tasks/` do that work. Only two track-scale weigh test scripts, which an sts-helpers rewind script copies into the container, are left there. Nothing in the image needs a host-side CLI.
+The old begin, play and warm-start command-line scripts are gone from **`sts-docker-helpers/sts/`**; the API tasks in `sts/api/tasks/` do that work. Only two scale weigh test scripts, which an sts-helpers rewind script copies into the container, are left there. Nothing in the image needs a host-side CLI.
 
 ## Verify before build
 
