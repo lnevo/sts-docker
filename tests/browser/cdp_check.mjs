@@ -34,6 +34,8 @@ import { join } from 'node:path';
 
 const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const TIMEOUT = Number(process.env.CDP_TIMEOUT_MS || 15000);
+// How long an expect step keeps re-checking a false result before it fails.
+const EXPECT_WAIT = Number(process.env.CDP_EXPECT_WAIT_MS || 3000);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function parseArgs(argv) {
@@ -206,7 +208,14 @@ async function checkPage(port, page) {
         await sleep(300);
       }
       if (a.expect) {
-        const v = await evaluate(s, a.expect);
+        // Poll briefly: a tap's handler (or the layout it changes) can finish after the step's fixed wait on a slow
+        // runner. A real failure still fails, EXPECT_WAIT later.
+        const t0 = Date.now();
+        let v = await evaluate(s, a.expect);
+        while (!v && Date.now() - t0 < EXPECT_WAIT) {
+          await sleep(100);
+          v = await evaluate(s, a.expect);
+        }
         if (!v) throw new Error('expect failed: ' + a.expect);
       }
       if (a.eval) await evaluate(s, a.eval);
