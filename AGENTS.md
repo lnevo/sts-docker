@@ -50,7 +50,7 @@ so the committed yaml is core-only; catalog test runs regenerate it core-only to
 
 **Deploy:** Rebuild the web image after changing `sts/` (`docker compose --profile build up -d --build`). For live dev without rebuild, `sts-docker-helpers/bin/sync_operational_steps.sh` hot-copies `sts-docker/sts/` into the running container.
 
-**Runtime PHP** (workflow editor, catalog, session dispatch, track scale, switch-list helpers) lives in **`sts-docker/sts/`** and is included in the Docker image. The begin, play and warm-start CLIs that used to sit in **`sts-docker-helpers/sts/`** are gone; their work is the API tasks in `sts/api/tasks/`.
+**Runtime PHP** (workflow editor, catalog, session dispatch, track scale, switch-list helpers) lives in **`sts-docker/sts/`** and is included in the Docker image. The begin, play and warm-start CLIs that used to sit in **`sts-docker-helpers/sts/`** are gone; their work is the API tasks in `sts/api/tasks/`. Only the CK1 weigh scripts that `rewind_ck1_weigh.sh` copies into the container are left there.
 
 **Helpers:** Host-side seed/sync/validate scripts belong in **`sts-docker-helpers/`** (not under `sts-docker/sts/`).
 

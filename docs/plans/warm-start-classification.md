@@ -1,6 +1,6 @@
 # warm_start_helpers.php classification
 
-> Historical analysis. Since 2026-11-18 (sts-plugins #7) the CK1 test path (`begin_ck1_test_session`, `ck1_test`, `run_ck1_test`), `locals_secured` / `stop_when_locals_secured`, `seed_island_spotting`, `assign_nvl_scully_block`, `count_shenango_pickup_for_ck1` and the other uncalled HART functions listed below no longer exist.
+> Historical analysis. Since 2026-11-18 (sts-plugins #7) the CK1 test path (`begin_ck1_test_session`, `ck1_test`, `run_ck1_test`), `locals_secured` / `stop_when_locals_secured`, `seed_island_spotting`, `assign_nvl_scully_block`, `count_shenango_pickup_for_ck1` and the other uncalled HART functions listed below no longer exist, and core's `pending_pickup_ids` was removed with them (sts-docker #21).
 
 File: `sts/warm_start_helpers.php` (3960 lines). Prefix `ws_` below = `warm_start_`. Auto-derived: function bodies scanned for HART literals, in-file call graph, external callers (grep of `sts/**/*.php|js`). Classification by judgment.
 

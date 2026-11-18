@@ -1,6 +1,7 @@
 <?php
 /**
- * Task kind warm_start: warm_start_run().
+ * Task kind warm_start: warm_start_run(). A scenario plugin that cannot finish a
+ * warm start throws; the task then fails. A returned summary always means success.
  * Spec: sessions, max_sessions, seed, continue, tracked, config (array of extra overrides), backup.
  * "tracked" asks the registered warm-start scenario for its 'tracked_overrides'.
  */
