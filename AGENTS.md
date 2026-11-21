@@ -50,7 +50,7 @@ so the committed yaml is core-only; catalog test runs regenerate it core-only to
 
 **Deploy:** Rebuild the web image after changing `sts/` (`docker compose --profile build up -d --build`). For live dev without rebuild, `sts-docker-helpers/bin/sync_operational_steps.sh` hot-copies `sts-docker/sts/` into the running container.
 
-**Runtime PHP** (workflow editor, catalog, session dispatch, track scale, switch-list helpers) lives in **`sts-docker/sts/`** and is included in the Docker image. The begin, play and warm-start CLIs that used to sit in **`sts-docker-helpers/sts/`** are gone; their work is the API tasks in `sts/api/tasks/`. Only the CK1 weigh scripts that `rewind_ck1_weigh.sh` copies into the container are left there.
+**Runtime PHP** (workflow editor, catalog, session dispatch, track scale, switch-list helpers) lives in **`sts-docker/sts/`** and is included in the Docker image. The begin, play and warm-start CLIs that used to sit in **`sts-docker-helpers/sts/`** are gone; their work is the API tasks in `sts/api/tasks/`. The last scripts there, the CK1 weigh rewind, were deleted in lnevo/sts-docker-helpers#12 (2026-11-20), so that folder no longer exists.
 
 **Helpers:** Host-side seed/sync/validate scripts belong in **`sts-docker-helpers/`** (not under `sts-docker/sts/`).
 
@@ -62,7 +62,7 @@ The default Docker image includes the full workflow simulator runtime under `sts
 - `simulator_api.php` + `session_simulator_helpers.php` drive in-editor simulation
 - `operational_steps_api.php` + catalog dispatch run recipe steps against the live DB
 
-No hot-sync from `sts-docker-helpers/sts/` is required after rebuild. See **`sts/RUNTIME.md`** for the file list. Verify with `sts-docker-helpers/bin/verify_sts_runtime.sh`.
+No hot-sync from sts-docker-helpers is required after rebuild. See **`sts/RUNTIME.md`** for the file list. Verify with `sts-docker-helpers/bin/verify_sts_runtime.sh`.
 
 **Data model:** Workflow JSON (`*.workflow.json` or `*.recipe.json` under
 `sts-docker-data/backups/session_editor/`) is the persisted recipe. Steps are compiled
